@@ -1,6 +1,21 @@
 """
 Typed Data Adapter für Solar Forecast ML Integration.
-✅ NEU: Konvertiert Dict → Dataclass für Type-Safety // von Zara
+✓ NEU: Konvertiert Dict â†’ Dataclass für Type-Safety // von Zara
+
+Copyright (C) 2025 Zara-Toorox
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -20,14 +35,14 @@ _LOGGER = logging.getLogger(__name__)
 class TypedDataAdapter:
     """
     Adapter für Konvertierung zwischen Dict (JSON) und Dataclasses.
-    ✅ NEU: Type-Safety ohne JSON-Struktur zu brechen // von Zara
+    ✓ NEU: Type-Safety ohne JSON-Struktur zu brechen // von Zara
     """
     
     @staticmethod
     def dict_to_learned_weights(data: Dict[str, Any]) -> LearnedWeights:
         """
         Konvertiert Dict zu LearnedWeights Dataclass.
-        ✅ ROBUST: Validierung + Defaults // von Zara
+        ✓ ROBUST: Validierung + Defaults // von Zara
         """
         try:
             # Extrahiere weather_weights // von Zara
@@ -82,14 +97,14 @@ class TypedDataAdapter:
             )
             
         except Exception as e:
-            _LOGGER.error("❌ Failed to convert dict to LearnedWeights: %s", str(e))
+            _LOGGER.error("âŒ Failed to convert dict to LearnedWeights: %s", str(e))
             return create_default_learned_weights()
     
     @staticmethod
     def learned_weights_to_dict(weights: LearnedWeights) -> Dict[str, Any]:
         """
         Konvertiert LearnedWeights zu Dict für JSON-Speicherung.
-        ✅ VOLLSTÄNDIG: Alle Felder // von Zara
+        ✓ VOLLSTÄNDIG: Alle Felder // von Zara
         """
         return {
             "version": "1.0",
@@ -111,7 +126,7 @@ class TypedDataAdapter:
     def dict_to_hourly_profile(data: Dict[str, Any]) -> HourlyProfile:
         """
         Konvertiert Dict zu HourlyProfile Dataclass.
-        ✅ ROBUST: Validierung + Defaults // von Zara
+        ✓ ROBUST: Validierung + Defaults // von Zara
         """
         try:
             # Hourly factors (24 Stunden) // von Zara
@@ -143,14 +158,14 @@ class TypedDataAdapter:
             )
             
         except Exception as e:
-            _LOGGER.error("❌ Failed to convert dict to HourlyProfile: %s", str(e))
+            _LOGGER.error("âŒ Failed to convert dict to HourlyProfile: %s", str(e))
             return create_default_hourly_profile()
     
     @staticmethod
     def hourly_profile_to_dict(profile: HourlyProfile) -> Dict[str, Any]:
         """
         Konvertiert HourlyProfile zu Dict für JSON-Speicherung.
-        ✅ VOLLSTÄNDIG: Alle Felder // von Zara
+        ✓ VOLLSTÄNDIG: Alle Felder // von Zara
         """
         return {
             "version": "1.0",
@@ -167,7 +182,7 @@ class TypedDataAdapter:
     def dict_to_prediction_record(data: Dict[str, Any]) -> PredictionRecord:
         """
         Konvertiert Dict zu PredictionRecord Dataclass.
-        ✅ VALIDIERT: Vollständige Prüfung // von Zara
+        ✓ VALIDIERT: Vollständige Prüfung // von Zara
         """
         try:
             return PredictionRecord(
@@ -189,7 +204,7 @@ class TypedDataAdapter:
     def prediction_record_to_dict(record: PredictionRecord) -> Dict[str, Any]:
         """
         Konvertiert PredictionRecord zu Dict.
-        ✅ VOLLSTÄNDIG // von Zara
+        ✓ VOLLSTÄNDIG // von Zara
         """
         return {
             "timestamp": record.timestamp,
@@ -205,7 +220,7 @@ class TypedDataAdapter:
     def validate_and_convert_history(history_data: Dict[str, Any]) -> List[PredictionRecord]:
         """
         Validiert und konvertiert komplette History.
-        ✅ BATCH-PROZESS: Effizient // von Zara
+        ✓ BATCH-PROZESS: Effizient // von Zara
         """
         records = []
         predictions_list = history_data.get("predictions", [])
@@ -215,7 +230,7 @@ class TypedDataAdapter:
                 record = TypedDataAdapter.dict_to_prediction_record(pred_dict)
                 records.append(record)
             except Exception as e:
-                _LOGGER.debug("âš ⚠ Skipping invalid history record %d: %s", i, str(e))
+                _LOGGER.debug("Ã¢Å¡Â âš Â Skipping invalid history record %d: %s", i, str(e))
                 continue
         
         return records

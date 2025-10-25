@@ -4,6 +4,21 @@ Gemeinsame Basis-Klasse und Hilfsfunktionen für externe Sensoren.
 Version 1.0 - von Zara
 
 Copyright (C) 2025 Zara-Toorox
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
 """
 import logging
 from datetime import datetime
@@ -71,12 +86,12 @@ class BaseExternalSensor:
                 - default_unit: Standard-Einheit falls nicht gefunden (optional)
                 - format_string: Format-String für Anzeige (optional)
         """
-        # Muss von abgeleiteter Klasse bereits aufgerufen sein # von Zara
+        # Muss von abgeleiteter Klasse bereits aufgerufen sein
         self._sensor_config = sensor_config
         self.entry = entry
         self.coordinator = coordinator
         
-        # Attribute setzen # von Zara
+        # Attribute setzen
         self._attr_unique_id = f"{entry.entry_id}_{sensor_config['unique_id_suffix']}"
         self._attr_name = sensor_config['name']
         self._attr_icon = sensor_config['icon']
@@ -124,17 +139,17 @@ class BaseExternalSensor:
             return "Sensor nicht gefunden"
         
         try:
-            # Prüfe Verfügbarkeit # von Zara
+            # Prüfe Verfügbarkeit
             if state.state in ['unavailable', 'unknown', 'none', None]:
                 return "Sensor nicht verfügbar"
             
-            # Formatiere Zeitstempel # von Zara
+            # Formatiere Zeitstempel
             time_ago = format_time_ago(state.last_changed)
             
-            # Hole Einheit # von Zara
+            # Hole Einheit
             unit = self._get_unit(state)
             
-            # Formatiere Ausgabe # von Zara
+            # Formatiere Ausgabe
             return self._format_value(state.state, unit, time_ago)
             
         except Exception as e:
@@ -155,7 +170,7 @@ class BaseExternalSensor:
         default_unit = self._sensor_config.get('default_unit')
         
         if default_unit is None:
-            # Kein default_unit = keine Einheit verwenden # von Zara
+            # Kein default_unit = keine Einheit verwenden
             return None
         
         return state.attributes.get(unit_key, default_unit)
@@ -174,17 +189,17 @@ class BaseExternalSensor:
         """
         format_string = self._sensor_config.get('format_string', '{value} {unit} ({time})')
         
-        # Wenn spezifisches Format definiert # von Zara
+        # Wenn spezifisches Format definiert
         if '{value}' in format_string:
             result = format_string.replace('{value}', str(value))
             if unit:
                 result = result.replace('{unit}', unit)
             else:
-                result = result.replace(' {unit}', '')  # Entferne unit-Platzhalter # von Zara
+                result = result.replace(' {unit}', '')  # Entferne unit-Platzhalter
             result = result.replace('{time}', time_ago)
             return result
         
-        # Standard-Format # von Zara
+        # Standard-Format
         if unit:
             return f"{value} {unit} ({time_ago})"
         else:

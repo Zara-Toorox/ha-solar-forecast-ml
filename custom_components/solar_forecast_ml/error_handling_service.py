@@ -1,4 +1,21 @@
-"""Error handling service with circuit breaker pattern."""
+"""
+Error handling service with circuit breaker pattern.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 # Version 4.8.0 - von Zara
 from __future__ import annotations
 
@@ -271,7 +288,7 @@ class ErrorHandlingService:
         
         self.error_log.append(error_entry)
         
-        # Begrenze Log-Größe - von Zara
+        # Begrenze Log-GröÃŸe - von Zara
         if len(self.error_log) > self.max_error_log_size:
             self.error_log = self.error_log[-self.max_error_log_size:]
     

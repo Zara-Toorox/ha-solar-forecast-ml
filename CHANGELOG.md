@@ -4,7 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [5.0.0] - 2025-01-25
+## [5.0.2] - 2025-10-25
+
+- small fixes 
+- UTF-8 misstakes
+- Logger-Fix
+- stability on low power-systems "lazy loading"
+
+BUGS:
+EN Translation some issues
+
+
+credits to:
+suedschwede
+buchling
+Op3ra7or262
+73ymw
+MartyBr
+Joachim-alt
+Chris33
+users from simon24-forum
+
+
+## [5.0.0] - 2025-10-25
 
 ### 🚨 BREAKING CHANGES - COMPLETE REINSTALLATION REQUIRED
 

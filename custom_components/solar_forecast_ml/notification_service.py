@@ -1,9 +1,24 @@
 """
 Notification Service für Solar Forecast ML Integration.
-✅ PRODUCTION READY: Async Factory Pattern
-✅ FIX: Korrigierter Import ohne None-Fehler
-✅ NEU: Zeigt installierte Dependencies in Startbenachrichtigung # von Zara
-Version 4.8.3 # von Zara
+✓ PRODUCTION READY: Async Factory Pattern
+✓ FIX: Korrigierter Import ohne None-Fehler
+✓ NEU: Zeigt installierte Dependencies in Startbenachrichtigung
+Version 4.8.3
+
+Copyright (C) 2025 Zara-Toorox
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -14,7 +29,7 @@ from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
-# Notification IDs # von Zara
+# Notification IDs
 NOTIFICATION_ID_DEPENDENCIES = "solar_forecast_ml_dependencies"
 NOTIFICATION_ID_INSTALLATION = "solar_forecast_ml_installation"
 NOTIFICATION_ID_SUCCESS = "solar_forecast_ml_success"
@@ -26,22 +41,21 @@ NOTIFICATION_ID_STARTUP = "solar_forecast_ml_startup"
 class NotificationService:
     """
     Service für Persistent Notifications in Home Assistant.
-    ✅ ASYNC: Alle Methoden non-blocking
-    ✅ SAFE: Error handling für alle Notification-Operationen
-    ✅ FIX: Korrigierter Import-Mechanismus # von Zara
+    ✓ ASYNC: Alle Methoden non-blocking
+    ✓ SAFE: Error handling für alle Notification-Operationen
+    ✓ FIX: Korrigierter Import-Mechanismus
     """
     
     def __init__(self, hass: HomeAssistant):
         """
         Initialisiert Notification Service.
         
-        ⚠️ NICHT DIREKT AUFRUFEN: Verwende create_notification_service()
-        # von Zara
+        âš ï¸ NICHT DIREKT AUFRUFEN: Verwende create_notification_service()
         """
         self.hass = hass
         self._initialized = False
         self._notification_lock = asyncio.Lock()
-        _LOGGER.debug("🔧 NotificationService Instanz erstellt")
+        _LOGGER.debug("ðŸ”§ NotificationService Instanz erstellt")
     
     async def initialize(self) -> bool:
         """
@@ -49,36 +63,35 @@ class NotificationService:
         
         Returns:
             True wenn erfolgreich initialisiert
-        # von Zara
         """
         try:
             async with self._notification_lock:
                 if self._initialized:
-                    _LOGGER.debug("✔ NotificationService bereits initialisiert")
+                    _LOGGER.debug("âœ” NotificationService bereits initialisiert")
                     return True
                 
-                # Prüfe ob persistent_notification Component geladen ist # von Zara
+                # Prüfe ob persistent_notification Component geladen ist
                 if 'persistent_notification' not in self.hass.config.components:
                     _LOGGER.warning(
-                        "⚠️ persistent_notification nicht verfügbar - "
+                        "âš ï¸ persistent_notification nicht verfügbar - "
                         "Notifications werden nicht angezeigt"
                     )
                     self._initialized = True
                     return False
                 
                 self._initialized = True
-                _LOGGER.info("✅ NotificationService erfolgreich initialisiert")
+                _LOGGER.info("✓ NotificationService erfolgreich initialisiert")
                 return True
                 
         except Exception as e:
             _LOGGER.error(
-                f"❌ Fehler bei NotificationService Initialisierung: {e}",
+                f"âŒ Fehler bei NotificationService Initialisierung: {e}",
                 exc_info=True
             )
             return False
     
     # ========================================================================
-    # 🔧 FIX: Neuer Import-Mechanismus ohne None-Probleme # von Zara
+    # ðŸ”§ FIX: Neuer Import-Mechanismus ohne None-Probleme
     # ========================================================================
     async def _safe_create_notification(
         self,
@@ -89,18 +102,17 @@ class NotificationService:
         """
         Erstellt Notification mit Error Handling.
         
-        ✅ FIX: Verwendet hass.services.async_call statt direktem Import
-        # von Zara
+        ✓ FIX: Verwendet hass.services.async_call statt direktem Import
         """
         if not self._initialized:
             _LOGGER.warning(
-                f"⚠️ NotificationService nicht initialisiert - "
+                f"âš ï¸ NotificationService nicht initialisiert - "
                 f"Notification '{notification_id}' wird nicht angezeigt"
             )
             return False
         
         try:
-            # ✅ FIX: Verwende hass.services.async_call statt problematischem Import # von Zara
+            # ✓ FIX: Verwende hass.services.async_call statt problematischem Import
             await self.hass.services.async_call(
                 domain="persistent_notification",
                 service="create",
@@ -111,12 +123,12 @@ class NotificationService:
                 },
                 blocking=True,
             )
-            _LOGGER.debug(f"🔧 Notification '{notification_id}' erstellt")
+            _LOGGER.debug(f"ðŸ”§ Notification '{notification_id}' erstellt")
             return True
             
         except Exception as e:
             _LOGGER.error(
-                f"❌ Fehler beim Erstellen von Notification '{notification_id}': {e}",
+                f"âŒ Fehler beim Erstellen von Notification '{notification_id}': {e}",
                 exc_info=True
             )
             return False
@@ -125,14 +137,13 @@ class NotificationService:
         """
         Entfernt Notification mit Error Handling.
         
-        ✅ FIX: Verwendet hass.services.async_call
-        # von Zara
+        ✓ FIX: Verwendet hass.services.async_call
         """
         if not self._initialized:
             return False
         
         try:
-            # ✅ FIX: Verwende hass.services.async_call # von Zara
+            # ✓ FIX: Verwende hass.services.async_call
             await self.hass.services.async_call(
                 domain="persistent_notification",
                 service="dismiss",
@@ -141,12 +152,12 @@ class NotificationService:
                 },
                 blocking=True,
             )
-            _LOGGER.debug(f"🔧 Notification '{notification_id}' entfernt")
+            _LOGGER.debug(f"ðŸ”§ Notification '{notification_id}' entfernt")
             return True
             
         except Exception as e:
             _LOGGER.warning(
-                f"⚠️ Fehler beim Entfernen von Notification '{notification_id}': {e}"
+                f"âš ï¸ Fehler beim Entfernen von Notification '{notification_id}': {e}"
             )
             return False
     # ========================================================================
@@ -156,7 +167,7 @@ class NotificationService:
     async def show_startup_success(
         self, 
         ml_mode: bool = True,
-        installed_packages: Optional[List[str]] = None,  # von Zara
+        installed_packages: Optional[List[str]] = None,
         missing_packages: Optional[List[str]] = None
     ) -> bool:
         """
@@ -164,24 +175,23 @@ class NotificationService:
         
         Args:
             ml_mode: True wenn ML-Features aktiv, False bei Fallback
-            installed_packages: Liste installierter Pakete (informativ) # von Zara
+            installed_packages: Liste installierter Pakete (informativ)
             missing_packages: Optional - Liste fehlender Pakete bei Fallback
             
         Returns:
             True wenn erfolgreich
-        # von Zara
         """
         try:
-            # Erstelle Liste installierter Dependencies (informativ) # von Zara
+            # Erstelle Liste installierter Dependencies (informativ)
             installed_list = ""
             if installed_packages:
                 installed_items = "\n".join([f"- ✅ {pkg}" for pkg in installed_packages])
                 installed_list = f"\n**Installierte Abhängigkeiten:**\n{installed_items}\n"
             
             if ml_mode:
-                # ✅ ML-Mode aktiv - alle Dependencies vorhanden # von Zara
+                # ✓ ML-Mode aktiv - alle Dependencies vorhanden
                 message = f"""
-**🥳 Solar Forecast ML erfolgreich gestartet!**
+**🎉 Solar Forecast ML erfolgreich gestartet!**
 
 **Status: Full ML Mode ✅**
 
@@ -206,14 +216,14 @@ Das ML-Model lernt kontinuierlich aus echten Daten und verbessert sich über die
                 title = "✅ Solar Forecast ML - Erfolgreich gestartet"
                 
             else:
-                # ⚠️ Fallback-Mode - Dependencies fehlen # von Zara
+                # âš ï¸ Fallback-Mode - Dependencies fehlen
                 missing_list = ""
                 if missing_packages:
-                    missing_items = "\n".join([f"- ❌ {pkg}" for pkg in missing_packages])
+                    missing_items = "\n".join([f"- âŒ {pkg}" for pkg in missing_packages])
                     missing_list = f"\n**Fehlende Pakete:**\n{missing_items}\n"
                 
                 message = f"""
-**⚠️ Solar Forecast ML gestartet - Fallback Mode**
+**âš ï¸ Solar Forecast ML gestartet - Fallback Mode**
 
 **Status: Basis-Funktionen aktiv**
 
@@ -224,8 +234,8 @@ Die Integration läuft, aber ML-Features sind nicht verfügbar:
 ✅ Basis-Prognosen (regelbasiert)
 ✅ Wetterintegration
 ✅ Tagesproduktions-Berechnung
-❌ ML-basierte Optimierung (fehlt)
-❌ Pattern Recognition (fehlt)
+âŒ ML-basierte Optimierung (fehlt)
+âŒ Pattern Recognition (fehlt)
 
 **Lösung:**
 
@@ -236,7 +246,7 @@ Nach der Installation und Neustart:
 - Präzisere Vorhersagen
 - Automatisches Learning
 """
-                title = "⚠️ Solar Forecast ML - Fallback Mode"
+                title = "âš ï¸ Solar Forecast ML - Fallback Mode"
             
             return await self._safe_create_notification(
                 message=message,
@@ -245,7 +255,7 @@ Nach der Installation und Neustart:
             )
             
         except Exception as e:
-            _LOGGER.error(f"❌ Fehler bei show_startup_success: {e}", exc_info=True)
+            _LOGGER.error(f"âŒ Fehler bei show_startup_success: {e}", exc_info=True)
             return False
     
     async def show_dependencies_missing(self, missing_packages: List[str]) -> bool:
@@ -257,14 +267,13 @@ Nach der Installation und Neustart:
             
         Returns:
             True wenn erfolgreich
-        # von Zara
         """
         try:
-            # Erstelle Liste # von Zara
+            # Erstelle Liste
             missing_list = "\n".join([f"- {pkg}" for pkg in missing_packages])
             
             message = f"""
-**⚠️ Solar Forecast ML - Dependencies fehlen**
+**âš ï¸ Solar Forecast ML - Dependencies fehlen**
 
 Folgende Python-Pakete werden benötigt:
 
@@ -293,12 +302,12 @@ Danach Home Assistant neu starten.
             
             return await self._safe_create_notification(
                 message=message,
-                title="⚠️ Solar Forecast ML - Dependencies fehlen",
+                title="âš ï¸ Solar Forecast ML - Dependencies fehlen",
                 notification_id=NOTIFICATION_ID_DEPENDENCIES
             )
             
         except Exception as e:
-            _LOGGER.error(f"❌ Fehler bei show_dependencies_missing: {e}", exc_info=True)
+            _LOGGER.error(f"âŒ Fehler bei show_dependencies_missing: {e}", exc_info=True)
             return False
     
     async def show_installation_progress(self, status: str, progress: int) -> bool:
@@ -311,16 +320,15 @@ Danach Home Assistant neu starten.
             
         Returns:
             True wenn erfolgreich
-        # von Zara
         """
         try:
-            # Progress Bar mit Unicode-Zeichen # von Zara
+            # Progress Bar mit Unicode-Zeichen
             bar_length = 20
             filled = int(bar_length * progress / 100)
-            bar = "â–ˆ" * filled + "â–'" * (bar_length - filled)
+            bar = "Ã¢â€“Ë†" * filled + "Ã¢â€“'" * (bar_length - filled)
             
             message = f"""
-**🔧 Installation läuft...**
+**ðŸ”§ Installation läuft...**
 
 {bar} {progress}%
 
@@ -331,12 +339,12 @@ Bitte warten Sie, bis die Installation abgeschlossen ist.
             
             return await self._safe_create_notification(
                 message=message,
-                title="🔧 Solar Forecast ML - Installation",
+                title="ðŸ”§ Solar Forecast ML - Installation",
                 notification_id=NOTIFICATION_ID_INSTALLATION
             )
             
         except Exception as e:
-            _LOGGER.error(f"❌ Fehler bei show_installation_progress: {e}", exc_info=True)
+            _LOGGER.error(f"âŒ Fehler bei show_installation_progress: {e}", exc_info=True)
             return False
     
     async def show_installation_success(self) -> bool:
@@ -345,20 +353,19 @@ Bitte warten Sie, bis die Installation abgeschlossen ist.
         
         Returns:
             True wenn erfolgreich
-        # von Zara
         """
         try:
-            # Entferne Progress-Notification # von Zara
+            # Entferne Progress-Notification
             await self._safe_dismiss_notification(NOTIFICATION_ID_INSTALLATION)
             
             message = """
-**✅ Installation erfolgreich!**
+**✓ Installation erfolgreich!**
 
 Alle ML-Abhängigkeiten wurden erfolgreich installiert:
-- ✅ numpy installiert
-- ✅ aiofiles installiert
+- ✓ numpy installiert
+- ✓ aiofiles installiert
 
-**⚠️ Wichtig: Neustart erforderlich**
+**âš ï¸ Wichtig: Neustart erforderlich**
 
 Bitte starten Sie Home Assistant neu, um die ML-Features zu aktivieren.
 
@@ -370,15 +377,15 @@ Nach dem Neustart:
 Die Integration läuft dann im **Full ML Mode**.
 """
             
-            # Zeige neue Success-Notification # von Zara
+            # Zeige neue Success-Notification
             return await self._safe_create_notification(
                 message=message,
-                title="✅ Solar Forecast ML - Installation erfolgreich",
+                title="✓ Solar Forecast ML - Installation erfolgreich",
                 notification_id=NOTIFICATION_ID_SUCCESS
             )
             
         except Exception as e:
-            _LOGGER.error(f"❌ Fehler bei show_installation_success: {e}", exc_info=True)
+            _LOGGER.error(f"âŒ Fehler bei show_installation_success: {e}", exc_info=True)
             return False
     
     async def show_installation_error(
@@ -395,10 +402,9 @@ Die Integration läuft dann im **Full ML Mode**.
             
         Returns:
             True wenn erfolgreich
-        # von Zara
         """
         try:
-            # Entferne Progress-Notification # von Zara
+            # Entferne Progress-Notification
             await self._safe_dismiss_notification(NOTIFICATION_ID_INSTALLATION)
             
             failed_list = ""
@@ -407,7 +413,7 @@ Die Integration läuft dann im **Full ML Mode**.
                 failed_list = f"\n**Fehlgeschlagene Pakete:**\n{failed_list}\n"
             
             message = f"""
-**❌ Installation fehlgeschlagen**
+**âŒ Installation fehlgeschlagen**
 
 {error_message}
 {failed_list}
@@ -433,12 +439,12 @@ Prüfen Sie die Logs für Details oder kontaktieren Sie den Support.
             
             return await self._safe_create_notification(
                 message=message,
-                title="❌ Solar Forecast ML - Installation fehlgeschlagen",
+                title="âŒ Solar Forecast ML - Installation fehlgeschlagen",
                 notification_id=NOTIFICATION_ID_ERROR
             )
             
         except Exception as e:
-            _LOGGER.error(f"❌ Fehler bei show_installation_error: {e}", exc_info=True)
+            _LOGGER.error(f"âŒ Fehler bei show_installation_error: {e}", exc_info=True)
             return False
     
     async def show_ml_activated(self) -> bool:
@@ -447,19 +453,18 @@ Prüfen Sie die Logs für Details oder kontaktieren Sie den Support.
         
         Returns:
             True wenn erfolgreich
-        # von Zara
         """
         try:
             message = """
-**🥳 ML-Features aktiviert!**
+**🎉 ML-Features aktiviert!**
 
 Solar Forecast ML läuft jetzt im **Full ML Mode**:
 
-✅ Ridge Regression Model aktiv
-✅ 28 Features für Prognosen
-✅ Automatisches Learning aktiv
-✅ Pattern Recognition aktiv
-✅ Seasonal Adjustments
+✓ Ridge Regression Model aktiv
+✓ 28 Features für Prognosen
+✓ Automatisches Learning aktiv
+✓ Pattern Recognition aktiv
+✓ Seasonal Adjustments
 
 **Was bedeutet das?**
 
@@ -476,12 +481,12 @@ Das Model wird automatisch mit echten Daten trainiert und verbessert sich über 
             
             return await self._safe_create_notification(
                 message=message,
-                title="🥳 Solar Forecast ML - ML aktiviert",
+                title="🎉 Solar Forecast ML - ML aktiviert",
                 notification_id=NOTIFICATION_ID_ML_ACTIVE
             )
             
         except Exception as e:
-            _LOGGER.error(f"❌ Fehler bei show_ml_activated: {e}", exc_info=True)
+            _LOGGER.error(f"âŒ Fehler bei show_ml_activated: {e}", exc_info=True)
             return False
     
     async def dismiss_all(self) -> None:
@@ -489,7 +494,6 @@ Das Model wird automatisch mit echten Daten trainiert und verbessert sich über 
         Entfernt alle Solar Forecast ML Notifications.
         
         Nützlich beim Cleanup.
-        # von Zara
         """
         try:
             notification_ids = [
@@ -504,18 +508,18 @@ Das Model wird automatisch mit echten Daten trainiert und verbessert sich über 
             for notification_id in notification_ids:
                 await self._safe_dismiss_notification(notification_id)
                 
-            _LOGGER.debug("✅ Alle Notifications entfernt")
+            _LOGGER.debug("✓ Alle Notifications entfernt")
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Fehler beim Entfernen aller Notifications: {e}")
+            _LOGGER.warning(f"âš ï¸ Fehler beim Entfernen aller Notifications: {e}")
 
 
 async def create_notification_service(hass: HomeAssistant) -> NotificationService:
     """
     Factory-Funktion zum Erstellen eines NotificationService.
     
-    ✅ ASYNC: Korrekte Initialisierung
-    ✅ SAFE: Error Handling
+    ✓ ASYNC: Korrekte Initialisierung
+    ✓ SAFE: Error Handling
     
     Args:
         hass: HomeAssistant Instanz
@@ -525,7 +529,6 @@ async def create_notification_service(hass: HomeAssistant) -> NotificationServic
         
     Raises:
         Exception: Bei kritischen Initialisierungsfehlern
-    # von Zara
     """
     try:
         service = NotificationService(hass)
@@ -534,9 +537,9 @@ async def create_notification_service(hass: HomeAssistant) -> NotificationServic
         
     except Exception as e:
         _LOGGER.error(
-            f"❌ Fehler beim Erstellen von NotificationService: {e}",
+            f"âŒ Fehler beim Erstellen von NotificationService: {e}",
             exc_info=True
         )
-        # Gebe Service trotzdem zurück, aber nicht initialisiert # von Zara
-        # So kann Integration weiterlaufen ohne Notifications # von Zara
+        # Gebe Service trotzdem zurück, aber nicht initialisiert
+        # So kann Integration weiterlaufen ohne Notifications
         return NotificationService(hass)

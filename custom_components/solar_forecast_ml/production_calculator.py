@@ -1,11 +1,25 @@
 """
 Production Calculator für Solar Forecast ML.
 Berechnet Produktionszeit und weitere Produktions-Metriken.
-✅ STRATEGIE 2: ProductionTimeCalculator für Live-Tracking # von Zara
-Version 4.10.0 - Historische Peak-Zeit Berechnung # von Zara
+STRATEGIE 2: ProductionTimeCalculator für Live-Tracking
+Version 4.10.0 - Historische Peak-Zeit Berechnung
 
 Copyright (C) 2025 Zara-Toorox
-# von Zara
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
 """
 import asyncio
 import logging
@@ -21,7 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 class ProductionCalculator:
     """
     Berechnet Produktionszeit und verwandte Metriken.
-    # von Zara
+
     """
     
     def __init__(self, hass: HomeAssistant):
@@ -30,16 +44,16 @@ class ProductionCalculator:
         
         Args:
             hass: HomeAssistant Instanz
-        # von Zara
+
         """
         self.hass = hass
         
-        # Konstanten für Produktions-Berechnung # von Zara
-        self.MIN_PRODUCTION_POWER = 0.01  # Minimum Power (kW) für Produktion # von Zara
-        self.PRODUCTION_START_HOUR = 5   # Früheste mögliche Produktion # von Zara
-        self.PRODUCTION_END_HOUR = 21    # Späteste mögliche Produktion # von Zara
+        # Konstanten für Produktions-Berechnung
+        self.MIN_PRODUCTION_POWER = 0.01  # Minimum Power (kW) für Produktion
+        self.PRODUCTION_START_HOUR = 5   # FrÃƒÂ¼heste mÃƒÂ¶gliche Produktion
+        self.PRODUCTION_END_HOUR = 21    # SpÃƒÂ¤teste mÃƒÂ¶gliche Produktion
         
-        _LOGGER.debug("✅ ProductionCalculator initialisiert")
+        _LOGGER.debug("Ã¢Å“â€œ ProductionCalculator initialisiert")
     
     async def calculate_production_time_today(
         self,
@@ -53,19 +67,19 @@ class ProductionCalculator:
             
         Returns:
             Produktionszeit als String (z.B. "6h 30m") oder Fallback
-        # von Zara
+
         """
         try:
-            # Kein Power-Sensor konfiguriert # von Zara
+            # Kein Power-Sensor konfiguriert
             if not power_entity:
-                _LOGGER.debug("ℹ️ Kein Power-Sensor konfiguriert")
-                return "Nicht verfügbar"
+                _LOGGER.debug("ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Kein Power-Sensor konfiguriert")
+                return "Nicht verfÃƒÂ¼gbar"
             
-            # Hole History für heute # von Zara
+            # Hole History für heute
             now = dt_util.utcnow()
             start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
             
-            # Hole State History # von Zara
+            # Hole State History
             history = await self.hass.async_add_executor_job(
                 self._get_state_history,
                 power_entity,
@@ -74,35 +88,35 @@ class ProductionCalculator:
             )
             
             if not history:
-                _LOGGER.debug("ℹ️ Keine History-Daten verfügbar")
-                return "Berechnung läuft..."
+                _LOGGER.debug("ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Keine History-Daten verfÃƒÂ¼gbar")
+                return "Berechnung lÃƒÂ¤uft..."
             
-            # Zähle Zeiträume mit Produktion # von Zara
+            # ZÃƒÂ¤hle ZeitrÃƒÂ¤ume mit Produktion
             production_minutes = 0
             
             for i in range(len(history) - 1):
                 try:
-                    # Parse Power-Wert # von Zara
+                    # Parse Power-Wert
                     power = float(history[i].state)
                     
-                    # Wenn Power über Minimum # von Zara
+                    # Wenn Power ÃƒÂ¼ber Minimum
                     if power >= self.MIN_PRODUCTION_POWER:
-                        # Berechne Zeitdifferenz zum nächsten State # von Zara
+                        # Berechne Zeitdifferenz zum nÃƒÂ¤chsten State
                         time_diff = history[i + 1].last_changed - history[i].last_changed
                         production_minutes += time_diff.total_seconds() / 60
                         
                 except (ValueError, AttributeError):
-                    # Skip ungültige States # von Zara
+                    # Skip ungÃƒÂ¼ltige States
                     continue
             
-            # Konvertiere zu Stunden und Minuten # von Zara
+            # Konvertiere zu Stunden und Minuten
             hours = int(production_minutes // 60)
             minutes = int(production_minutes % 60)
             
             return f"{hours}h {minutes}m"
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Produktionszeit-Berechnung fehlgeschlagen: {e}")
+            _LOGGER.warning(f"ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Produktionszeit-Berechnung fehlgeschlagen: {e}")
             return "Berechnung fehlgeschlagen"
     
     def _get_state_history(
@@ -121,18 +135,18 @@ class ProductionCalculator:
             
         Returns:
             Liste von States
-        # von Zara
+
         """
         try:
             from homeassistant.components import recorder
             from homeassistant.components.recorder import history
             
-            # Prüfe ob Recorder verfügbar # von Zara
+            # PrÃƒÂ¼fe ob Recorder verfÃƒÂ¼gbar
             if not recorder.is_entity_recorded(self.hass, entity_id):
-                _LOGGER.debug(f"ℹ️ Entity {entity_id} wird nicht aufgezeichnet")
+                _LOGGER.debug(f"ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Entity {entity_id} wird nicht aufgezeichnet")
                 return []
             
-            # Hole History # von Zara
+            # Hole History
             states = history.state_changes_during_period(
                 self.hass,
                 start_time,
@@ -156,26 +170,26 @@ class ProductionCalculator:
     ) -> str:
         """
         Berechnet beste Stunde basierend auf historischen Power-Daten.
-        Analysiert letzte 14 Tage und findet Stunde mit höchster Durchschnittsproduktion.
+        Analysiert letzte 14 Tage und findet Stunde mit hÃƒÂ¶chster Durchschnittsproduktion.
         
         Args:
             power_entity: Power-Sensor Entity-ID (optional)
             
         Returns:
             Peak-Zeit als String (z.B. "12:00")
-        # von Zara
+
         """
         try:
-            # Fallback wenn kein Power-Sensor konfiguriert # von Zara
+            # Fallback wenn kein Power-Sensor konfiguriert
             if not power_entity:
-                _LOGGER.debug("ℹ️ Kein Power-Sensor für Peak-Berechnung")
+                _LOGGER.debug("ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Kein Power-Sensor für Peak-Berechnung")
                 return "12:00"
             
-            # Zeitraum: Letzte 14 Tage # von Zara
+            # Zeitraum: Letzte 14 Tage
             now = dt_util.now()
             start_time = now - timedelta(days=14)
             
-            # Hole historische Daten # von Zara
+            # Hole historische Daten
             states = await self.hass.async_add_executor_job(
                 self._get_state_history,
                 power_entity,
@@ -184,74 +198,74 @@ class ProductionCalculator:
             )
             
             if not states or len(states) < 10:
-                _LOGGER.debug("ℹ️ Nicht genug Daten für Peak-Berechnung")
+                _LOGGER.debug("ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Nicht genug Daten für Peak-Berechnung")
                 return "12:00"
             
-            # Sammle Produktionswerte pro Stunde # von Zara
+            # Sammle Produktionswerte pro Stunde
             hourly_production = {hour: [] for hour in range(24)}
             
             for state in states:
                 try:
-                    # Filtere ungültige States # von Zara
+                    # Filtere ungÃƒÂ¼ltige States
                     if state.state in ["unavailable", "unknown", None]:
                         continue
                     
                     power = float(state.state)
                     
-                    # Ignoriere Nacht-Werte und sehr kleine Werte # von Zara
+                    # Ignoriere Nacht-Werte und sehr kleine Werte
                     if power < self.MIN_PRODUCTION_POWER:
                         continue
                     
-                    # Konvertiere zu kW falls in W # von Zara
-                    if power > 100:  # Vermutlich Watt # von Zara
+                    # Konvertiere zu kW falls in W
+                    if power > 100:  # Vermutlich Watt
                         power = power / 1000.0
                     
-                    # Extrahiere Stunde # von Zara
+                    # Extrahiere Stunde
                     hour = state.last_changed.hour
                     
-                    # Nur Produktionsstunden berücksichtigen # von Zara
+                    # Nur Produktionsstunden berÃƒÂ¼cksichtigen
                     if self.PRODUCTION_START_HOUR <= hour <= self.PRODUCTION_END_HOUR:
                         hourly_production[hour].append(power)
                 
                 except (ValueError, TypeError, AttributeError):
                     continue
             
-            # Berechne Durchschnitt pro Stunde # von Zara
+            # Berechne Durchschnitt pro Stunde
             hourly_averages = {}
             for hour, values in hourly_production.items():
-                if values:  # Nur Stunden mit Daten # von Zara
+                if values:  # Nur Stunden mit Daten
                     avg = sum(values) / len(values)
                     hourly_averages[hour] = avg
             
-            # Finde Stunde mit höchster Durchschnittsproduktion # von Zara
+            # Finde Stunde mit hÃƒÂ¶chster Durchschnittsproduktion
             if not hourly_averages:
-                _LOGGER.debug("ℹ️ Keine gültigen Produktionsdaten gefunden")
+                _LOGGER.debug("ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Keine gÃƒÂ¼ltigen Produktionsdaten gefunden")
                 return "12:00"
             
             peak_hour = max(hourly_averages, key=hourly_averages.get)
             peak_value = hourly_averages[peak_hour]
             
             _LOGGER.info(
-                f"✅ Peak-Stunde gefunden: {peak_hour}:00 Uhr "
-                f"(Ø {peak_value:.2f} kW aus {len(hourly_production[peak_hour])} Werten)"
+                f"Ã¢Å“â€œ Peak-Stunde gefunden: {peak_hour}:00 Uhr "
+                f"(ÃƒÆ’Ã‹Å“ {peak_value:.2f} kW aus {len(hourly_production[peak_hour])} Werten)"
             )
             
             return f"{peak_hour:02d}:00"
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Peak-Zeit Berechnung fehlgeschlagen: {e}")
-            return "12:00"  # Safe fallback # von Zara
+            _LOGGER.warning(f"ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Peak-Zeit Berechnung fehlgeschlagen: {e}")
+            return "12:00"  # Safe fallback
     
     def is_production_hours(self, hour: int = None) -> bool:
         """
-        Prüft ob aktuell Produktionsstunden sind.
+        PrÃƒÂ¼ft ob aktuell Produktionsstunden sind.
         
         Args:
-            hour: Stunde zum Prüfen (optional, default: jetzt)
+            hour: Stunde zum PrÃƒÂ¼fen (optional, default: jetzt)
             
         Returns:
             True wenn Produktionsstunden
-        # von Zara
+
         """
         try:
             if hour is None:
@@ -260,50 +274,50 @@ class ProductionCalculator:
             return self.PRODUCTION_START_HOUR <= hour <= self.PRODUCTION_END_HOUR
             
         except Exception:
-            return True  # Safe fallback # von Zara
+            return True  # Safe fallback
     
     def estimate_remaining_production_hours(self) -> float:
         """
-        Schätzt verbleibende Produktionsstunden für heute.
+        SchÃƒÂ¤tzt verbleibende Produktionsstunden für heute.
         
         Returns:
-            Geschätzte verbleibende Stunden
-        # von Zara
+            GeschÃƒÂ¤tzte verbleibende Stunden
+
         """
         try:
             now = dt_util.utcnow()
             current_hour = now.hour
             
-            # Nach Produktionsende # von Zara
+            # Nach Produktionsende
             if current_hour >= self.PRODUCTION_END_HOUR:
                 return 0.0
             
-            # Vor Produktionsbeginn # von Zara
+            # Vor Produktionsbeginn
             if current_hour < self.PRODUCTION_START_HOUR:
                 return float(self.PRODUCTION_END_HOUR - self.PRODUCTION_START_HOUR)
             
-            # Während Produktion # von Zara
+            # WÃƒÂ¤hrend Produktion
             remaining = self.PRODUCTION_END_HOUR - current_hour
             
-            # Berücksichtige Minuten # von Zara
+            # BerÃƒÂ¼cksichtige Minuten
             remaining -= now.minute / 60.0
             
             return max(0.0, remaining)
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Remaining hours Berechnung fehlgeschlagen: {e}")
-            return 8.0  # Safe fallback # von Zara
+            _LOGGER.warning(f"ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Remaining hours Berechnung fehlgeschlagen: {e}")
+            return 8.0  # Safe fallback
 
 
 # ============================================================================
-# ✅ STRATEGIE 2: PRODUCTION TIME CALCULATOR MIT LIVE-TRACKING # von Zara
+# Ã¢Å“â€œ STRATEGIE 2: PRODUCTION TIME CALCULATOR MIT LIVE-TRACKING
 # ============================================================================
 
 class ProductionTimeCalculator:
     """
-    Live-Tracking der Produktionszeit über State Changes.
-    ✅ STRATEGIE 2: Echtes Live-Tracking statt History-Queries # von Zara
-    # von Zara
+    Live-Tracking der Produktionszeit ÃƒÂ¼ber State Changes.
+    Ã¢Å“â€œ STRATEGIE 2: Echtes Live-Tracking statt History-Queries
+
     """
     
     def __init__(self, hass: HomeAssistant, power_entity: Optional[str] = None):
@@ -313,12 +327,12 @@ class ProductionTimeCalculator:
         Args:
             hass: HomeAssistant Instanz
             power_entity: Power-Sensor Entity-ID (optional)
-        # von Zara
+
         """
         self.hass = hass
         self.power_entity = power_entity
         
-        # Tracking State # von Zara
+        # Tracking State
         self._is_active = False
         self._start_time: Optional[datetime] = None
         self._accumulated_hours = 0.0
@@ -326,35 +340,35 @@ class ProductionTimeCalculator:
         self._zero_power_start: Optional[datetime] = None
         self._today_total_hours = 0.0
         
-        # Konstanten # von Zara
-        self.MIN_POWER_THRESHOLD = 10.0  # Watt # von Zara
-        self.ZERO_POWER_THRESHOLD = 1.0  # Watt # von Zara
-        self.ZERO_POWER_TIMEOUT = timedelta(minutes=5)  # 5 Minuten # von Zara
+        # Konstanten
+        self.MIN_POWER_THRESHOLD = 10.0  # Watt
+        self.ZERO_POWER_THRESHOLD = 1.0  # Watt
+        self.ZERO_POWER_TIMEOUT = timedelta(minutes=5)  # 5 Minuten
         
-        # Listener Cleanup # von Zara
+        # Listener Cleanup
         self._state_listener_remove = None
         self._midnight_listener_remove = None
         
-        _LOGGER.info("✅ ProductionTimeCalculator initialisiert")
+        _LOGGER.info("Ã¢Å“â€œ ProductionTimeCalculator initialisiert")
     
-    async def start_tracking(self) -> None:
+    def start_tracking(self) -> None:
         """
         Startet Produktionszeit-Tracking.
-        # von Zara
+
         """
         if not self.power_entity:
-            _LOGGER.info("ℹ️ Kein Power-Entity - Produktionszeit-Tracking deaktiviert")
+            _LOGGER.info("ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¹ÃƒÂ¯Ã‚Â¸Ã‚Â Kein Power-Entity - Produktionszeit-Tracking deaktiviert")
             return
         
         try:
-            # State Change Listener für Power-Entity # von Zara
+            # State Change Listener für Power-Entity
             self._state_listener_remove = async_track_state_change_event(
                 self.hass,
                 [self.power_entity],
                 self._handle_power_change
             )
             
-            # Midnight Listener für Reset # von Zara
+            # Midnight Listener für Reset
             self._midnight_listener_remove = async_track_time_change(
                 self.hass,
                 self._handle_midnight_reset,
@@ -363,16 +377,16 @@ class ProductionTimeCalculator:
                 second=0
             )
             
-            _LOGGER.info(f"✅ Produktionszeit-Tracking gestartet für {self.power_entity}")
+            _LOGGER.info(f"Ã¢Å“â€œ Produktionszeit-Tracking gestartet für {self.power_entity}")
             
         except Exception as e:
-            _LOGGER.error(f"❌ Fehler beim Starten des Trackings: {e}")
+            _LOGGER.error(f"ÃƒÂ¢Ã‚ÂÃ…â€™ Fehler beim Starten des Trackings: {e}")
     
     @callback
     def _handle_power_change(self, event) -> None:
         """
         Callback für Power State Changes.
-        # von Zara
+
         """
         try:
             new_state = event.data.get("new_state")
@@ -386,62 +400,62 @@ class ProductionTimeCalculator:
             
             now = dt_util.utcnow()
             
-            # Power über Threshold → Start/Continue Tracking # von Zara
+            # Power ÃƒÂ¼ber Threshold ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Start/Continue Tracking
             if power >= self.MIN_POWER_THRESHOLD:
                 if not self._is_active:
-                    # Start neuer Produktionsphase # von Zara
+                    # Start neuer Produktionsphase
                     self._is_active = True
                     self._start_time = now
-                    _LOGGER.debug(f"🟢 Produktions-Start: {power}W")
+                    _LOGGER.debug(f"ÃƒÂ°Ã…Â¸Ã…Â¸Ã‚Â¢ Produktions-Start: {power}W")
                 
-                # Reset Zero-Power Timer # von Zara
+                # Reset Zero-Power Timer
                 self._zero_power_start = None
                 self._last_production_time = now
             
-            # Power unter Threshold # von Zara
+            # Power unter Threshold
             elif self._is_active:
-                # Prüfe ob unter Zero-Threshold # von Zara
+                # PrÃƒÂ¼fe ob unter Zero-Threshold
                 if power < self.ZERO_POWER_THRESHOLD:
-                    # Start Zero-Power Timer wenn noch nicht gestartet # von Zara
+                    # Start Zero-Power Timer wenn noch nicht gestartet
                     if self._zero_power_start is None:
                         self._zero_power_start = now
-                        _LOGGER.debug(f"⏱️ Zero-Power Timer gestartet: {power}W")
+                        _LOGGER.debug(f"ÃƒÂ¢Ã‚ÂÃ‚Â±ÃƒÂ¯Ã‚Â¸Ã‚Â Zero-Power Timer gestartet: {power}W")
                     
-                    # Prüfe Timeout # von Zara
+                    # PrÃƒÂ¼fe Timeout
                     elif now - self._zero_power_start >= self.ZERO_POWER_TIMEOUT:
-                        # Stoppe Tracking # von Zara
+                        # Stoppe Tracking
                         self._stop_production_tracking(now)
-                        _LOGGER.debug(f"🔴 Produktions-Ende nach 5 Min Timeout")
+                        _LOGGER.debug(f"ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â´ Produktions-Ende nach 5 Min Timeout")
                 
-                # Zwischen Thresholds → Continue aber kein Zero-Timer # von Zara
+                # Zwischen Thresholds ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Continue aber kein Zero-Timer
                 else:
                     self._zero_power_start = None
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Fehler in Power Change Handler: {e}")
+            _LOGGER.warning(f"ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Fehler in Power Change Handler: {e}")
     
     def _stop_production_tracking(self, stop_time: datetime) -> None:
         """
         Stoppt Produktions-Tracking und speichert Stunden.
-        # von Zara
+
         """
         if not self._is_active or not self._start_time:
             return
         
-        # Berechne Dauer # von Zara
+        # Berechne Dauer
         duration = stop_time - self._start_time
         hours = duration.total_seconds() / 3600.0
         
-        # Addiere zu akkumulierten Stunden # von Zara
+        # Addiere zu akkumulierten Stunden
         self._accumulated_hours += hours
         self._today_total_hours = self._accumulated_hours
         
         _LOGGER.info(
-            f"✅ Produktionsphase beendet: {hours:.2f}h "
+            f"Ã¢Å“â€œ Produktionsphase beendet: {hours:.2f}h "
             f"(Gesamt heute: {self._today_total_hours:.2f}h)"
         )
         
-        # Reset State # von Zara
+        # Reset State
         self._is_active = False
         self._start_time = None
         self._zero_power_start = None
@@ -450,15 +464,15 @@ class ProductionTimeCalculator:
     def _handle_midnight_reset(self, now: datetime) -> None:
         """
         Callback für Mitternacht-Reset.
-        # von Zara
+
         """
-        _LOGGER.info(f"🌙 Mitternacht-Reset: Heute {self._today_total_hours:.2f}h produziert")
+        _LOGGER.info(f"ÃƒÂ°Ã…Â¸Ã…â€™Ã¢â€žÂ¢ Mitternacht-Reset: Heute {self._today_total_hours:.2f}h produziert")
         
-        # Wenn noch aktiv, stoppe zuerst # von Zara
+        # Wenn noch aktiv, stoppe zuerst
         if self._is_active:
             self._stop_production_tracking(now)
         
-        # Reset für neuen Tag # von Zara
+        # Reset für neuen Tag
         self._accumulated_hours = 0.0
         self._today_total_hours = 0.0
         self._is_active = False
@@ -468,47 +482,47 @@ class ProductionTimeCalculator:
     
     def get_production_time(self) -> str:
         """
-        Gibt aktuelle Produktionszeit als formatierter String zurück.
+        Gibt aktuelle Produktionszeit als formatierter String zurÃƒÂ¼ck.
         
         Returns:
             String wie "6h 30m" oder Status-Meldung
-        # von Zara
+
         """
         try:
-            # Wenn keine Power-Entity konfiguriert # von Zara
+            # Wenn keine Power-Entity konfiguriert
             if not self.power_entity:
-                return "Nicht verfügbar"
+                return "Nicht verfÃƒÂ¼gbar"
             
-            # Berechne aktuelle Gesamtzeit # von Zara
+            # Berechne aktuelle Gesamtzeit
             total_hours = self._accumulated_hours
             
-            # Wenn aktuell aktiv, addiere laufende Zeit # von Zara
+            # Wenn aktuell aktiv, addiere laufende Zeit
             if self._is_active and self._start_time:
                 now = dt_util.utcnow()
                 current_duration = now - self._start_time
                 total_hours += current_duration.total_seconds() / 3600.0
             
-            # Wenn noch keine Produktion # von Zara
-            if total_hours < 0.01:  # weniger als ~30 Sekunden # von Zara
+            # Wenn noch keine Produktion
+            if total_hours < 0.01:  # weniger als ~30 Sekunden
                 return "0h 0m"
             
-            # Formatiere als Stunden und Minuten # von Zara
+            # Formatiere als Stunden und Minuten
             hours = int(total_hours)
             minutes = int((total_hours - hours) * 60)
             
             return f"{hours}h {minutes}m"
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Fehler beim Abrufen der Produktionszeit: {e}")
+            _LOGGER.warning(f"ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Fehler beim Abrufen der Produktionszeit: {e}")
             return "Fehler"
     
     def get_production_hours_float(self) -> float:
         """
-        Gibt Produktionszeit als Float (Stunden) zurück.
+        Gibt Produktionszeit als Float (Stunden) zurÃƒÂ¼ck.
         
         Returns:
             Stunden als Float
-        # von Zara
+
         """
         try:
             total_hours = self._accumulated_hours
@@ -525,18 +539,18 @@ class ProductionTimeCalculator:
     
     def is_currently_producing(self) -> bool:
         """
-        Prüft ob aktuell produziert wird.
+        PrÃƒÂ¼ft ob aktuell produziert wird.
         
         Returns:
             True wenn aktiv
-        # von Zara
+
         """
         return self._is_active
     
-    async def stop_tracking(self) -> None:
+    def stop_tracking(self) -> None:
         """
         Stoppt Tracking und räumt Listener auf.
-        # von Zara
+
         """
         if self._state_listener_remove:
             self._state_listener_remove()
@@ -546,4 +560,4 @@ class ProductionTimeCalculator:
             self._midnight_listener_remove()
             self._midnight_listener_remove = None
         
-        _LOGGER.info("✅ Produktionszeit-Tracking gestoppt")
+        _LOGGER.info("Ã¢Å“â€œ Produktionszeit-Tracking gestoppt")

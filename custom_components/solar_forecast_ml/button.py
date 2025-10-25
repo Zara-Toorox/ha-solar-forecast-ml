@@ -63,12 +63,12 @@ class ManualForecastButton(ButtonEntity):
             identifiers={(DOMAIN, entry.entry_id)},
             name="Solar Forecast ML",
             manufacturer="Zara-Toorox",
-            model="v4.4.6",
+            model="v5.0.2",
         )
 
     async def async_press(self) -> None:
         """Behandelt den Button-Druck - Nutzt existierende Coordinator-Methode - von Zara"""
-        _LOGGER.info("🔄 Manuelle Prognose ausgelöst - von Zara")
+        _LOGGER.info("ðŸ”„ Manuelle Prognose ausgelöst - von Zara")
         await self.coordinator.async_request_refresh()
 
 
@@ -89,19 +89,19 @@ class ManualLearningButton(ButtonEntity):
 
     async def async_press(self) -> None:
         """Behandelt den Button-Druck - Nutzt ML Predictor force_retrain - von Zara"""
-        _LOGGER.info("🧠 Manuelles ML-Training ausgelöst - von Zara")
+        _LOGGER.info("ðŸ§  Manuelles ML-Training ausgelöst - von Zara")
         
         # Prüfe ob ML Predictor verfügbar - von Zara
         ml_predictor = self.coordinator.ml_predictor
         
         if not ml_predictor:
-            _LOGGER.error("❌ ML Predictor nicht verfügbar - Training nicht möglich - von Zara")
+            _LOGGER.error("âŒ ML Predictor nicht verfügbar - Training nicht möglich - von Zara")
             return
         
         try:
             # Nutze existierende force_retrain Methode - von Zara
             result = await ml_predictor.force_retrain()
-            _LOGGER.info(f"✅ ML-Training abgeschlossen - Accuracy: {result.accuracy} - von Zara")
+            _LOGGER.info(f"✓ ML-Training abgeschlossen - Accuracy: {result.accuracy} - von Zara")
             
             # Update Coordinator mit Training-Ergebnis - von Zara
             if hasattr(self.coordinator, 'on_ml_training_complete'):
@@ -111,4 +111,4 @@ class ManualLearningButton(ButtonEntity):
                 )
                 
         except Exception as e:
-            _LOGGER.error(f"❌ ML-Training fehlgeschlagen: {e} - von Zara")
+            _LOGGER.error(f"âŒ ML-Training fehlgeschlagen: {e} - von Zara")

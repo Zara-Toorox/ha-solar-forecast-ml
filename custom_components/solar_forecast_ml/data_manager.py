@@ -1,6 +1,21 @@
 """
-Data Manager fÃƒÂ¼r die Solar Forecast ML Integration.
-Ã¢Å“â€¦ ERWEITERT mit fehlenden ML-Methods und Backup-System
+Data Manager die Solar Forecast ML Integration.
+ERWEITERT mit fehlenden ML-Methods und Backup-System
+
+Copyright (C) 2025 Zara-Toorox
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -37,8 +52,8 @@ _LOGGER = logging.getLogger(__name__)
 
 class DataManager:
     """
-    Data Manager fÃƒÂ¼r Solar Forecast ML.
-    Ã¢Å“â€¦ ERWEITERT mit ML-Methods und Backup-System
+    Data Manager fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r Solar Forecast ML.
+    ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ERWEITERT mit ML-Methods und Backup-System
     """
 
     def __init__(self, hass: HomeAssistant, entry_id: str, data_dir: Path):
@@ -47,42 +62,42 @@ class DataManager:
         
         Args:
             hass: Home Assistant instance
-            entry_id: Config Entry ID fÃƒÂ¼r Multi-Instance-Support # von Zara
-            data_dir: Daten-Verzeichnis fÃƒÂ¼r JSON-Dateien # von Zara
+            entry_id: Config Entry ID fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r Multi-Instance-Support
+            data_dir: Daten-Verzeichnis fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r JSON-Dateien
         
-        # GeÃƒÂ¤nderter Abschnitt von Zara - entry_id Parameter hinzugefÃƒÂ¼gt
+        # GeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤nderter Abschnitt von Zara - entry_id Parameter hinzugefÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼gt
         """
         self.hass = hass
-        self.entry_id = entry_id  # Speichere entry_id fÃƒÂ¼r zukÃƒÂ¼nftige Features # von Zara
+        self.entry_id = entry_id  # Speichere entry_id fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r zukÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼nftige Features
         self.data_dir = Path(data_dir)
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="DataManager")
         
-        # File paths # von Zara
+        # File paths
         self.prediction_history_file = self.data_dir / "prediction_history.json"
         self.learned_weights_file = self.data_dir / "learned_weights.json"
         self.hourly_profile_file = self.data_dir / "hourly_profile.json"
         self.model_state_file = self.data_dir / "model_state.json"
         
-        # Thread-safe lock fÃƒÂ¼r kritische Operations # von Zara
+        # Thread-safe lock fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r kritische Operations
         self._file_lock = asyncio.Lock()
         
-        _LOGGER.info("Ã¢Å“â€¦ DataManager initialisiert mit async I/O support (Entry: %s)", entry_id)
+        _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DataManager initialisiert mit async I/O support (Entry: %s)", entry_id)
 
     async def initialize(self) -> bool:
         """Initialize data manager and create directory structure."""
         try:
-            # Create directory structure # von Zara
+            # Create directory structure
             await self._ensure_directory_exists(self.data_dir)
             await self._ensure_directory_exists(self.data_dir / "backups")
             
-            # Initialize missing files # von Zara
+            # Initialize missing files
             await self._initialize_missing_files()
             
-            # Data migration # von Zara
+            # Data migration
             migration_success = await self.migrate_data()
             
             if migration_success:
-                _LOGGER.info("Ã¢Å“â€¦ DataManager erfolgreich initialisiert")
+                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DataManager erfolgreich initialisiert")
                 return True
             else:
                 raise DataIntegrityException(
@@ -91,7 +106,7 @@ class DataManager:
                 )
                 
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ DataManager Initialisierung fehlgeschlagen: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ DataManager Initialisierung fehlgeschlagen: %s", str(e))
             raise DataIntegrityException(
                 f"DataManager Initialisierung fehlgeschlagen: {str(e)}",
                 create_context(error=str(e), data_dir=str(self.data_dir))
@@ -103,7 +118,7 @@ class DataManager:
             await self.hass.async_add_executor_job(
                 os.makedirs, directory, 0o755, True
             )
-            _LOGGER.debug("Ã¢Å“â€¦ Directory created/verified: %s", directory)
+            _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Directory created/verified: %s", directory)
         except Exception as e:
             raise DataIntegrityException(
                 f"Fehler beim Erstellen des Verzeichnisses {directory}: {str(e)}",
@@ -121,7 +136,7 @@ class DataManager:
         
         for file_path, create_func in files_to_check:
             if not await self._file_exists(file_path):
-                _LOGGER.info("Ã°Å¸â€œÂ Erstelle fehlende Datei: %s", file_path.name)
+                _LOGGER.info("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â Erstelle fehlende Datei: %s", file_path.name)
                 await create_func()
 
     async def _file_exists(self, file_path: Path) -> bool:
@@ -199,10 +214,10 @@ class DataManager:
                     shutil.move, str(temp_file), str(file_path)
                 )
                 
-                _LOGGER.debug("Ã¢Å“â€¦ Atomic write successful: %s", file_path.name)
+                _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Atomic write successful: %s", file_path.name)
                 
             except Exception as e:
-                # Clean up temp file if it exists # von Zara
+                # Clean up temp file if it exists
                 if await self._file_exists(temp_file):
                     try:
                         await self.hass.async_add_executor_job(temp_file.unlink)
@@ -227,7 +242,7 @@ class DataManager:
                 return json.loads(content)
                 
         except json.JSONDecodeError as e:
-            _LOGGER.error("Ã¢ÂÅ’ JSON decode error in %s: %s", file_path.name, str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ JSON decode error in %s: %s", file_path.name, str(e))
             raise DataIntegrityException(
                 f"Invalid JSON in {file_path.name}: {str(e)}",
                 create_context(file=str(file_path), error=str(e))
@@ -238,7 +253,7 @@ class DataManager:
                 create_context(file=str(file_path), error=str(e))
             )
 
-    # Ã¢Å“â€¦ ERWEITERT: ML-spezifische Methoden # von Zara
+    # ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ERWEITERT: ML-spezifische Methoden
     async def add_prediction(self, prediction: PredictionRecord) -> None:
         """
         Add a new prediction to history.
@@ -247,34 +262,34 @@ class DataManager:
             prediction: PredictionRecord to add
         """
         try:
-            # Validate prediction record # von Zara
+            # Validate prediction record
             validate_prediction_record(prediction)
             
-            # Get current history # von Zara
+            # Get current history
             history = await self.get_prediction_history()
             predictions = history.get("predictions", [])
             
-            # Add new prediction # von Zara
+            # Add new prediction
             predictions.append(prediction)
             
-            # Limit history size # von Zara
+            # Limit history size
             if len(predictions) > MAX_PREDICTION_HISTORY:
                 predictions = predictions[-MAX_PREDICTION_HISTORY:]
             
-            # Update history # von Zara
+            # Update history
             history["predictions"] = predictions
             history["last_updated"] = dt_util.utcnow().isoformat()
             
-            # Create backup before writing # von Zara
+            # Create backup before writing
             await self._create_backup(self.prediction_history_file)
             
-            # Save updated history # von Zara
+            # Save updated history
             await self._atomic_write_json(self.prediction_history_file, history)
             
-            _LOGGER.debug("Ã¢Å“â€¦ Prediction added to history")
+            _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Prediction added to history")
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Failed to add prediction: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to add prediction: %s", str(e))
             raise DataIntegrityException(
                 f"Failed to add prediction: {str(e)}",
                 create_context(error=str(e))
@@ -282,8 +297,8 @@ class DataManager:
 
     async def add_prediction_record(self, record: Dict[str, Any]) -> None:
         """
-        FÃ¼gt Training-Sample als Dict zur History hinzu.
-        Alias fÃ¼r add_prediction mit Dict-Input - von Zara
+        Fügt Training-Sample als Dict zur History hinzu.
+        Alias für add_prediction mit Dict-Input - von Zara
         
         Args:
             record: Dict mit prediction data
@@ -301,10 +316,10 @@ class DataManager:
             # Nutze existierende add_prediction Methode - von Zara
             await self.add_prediction(prediction)
             
-            _LOGGER.debug("âœ… Prediction record added via add_prediction_record - von Zara")
+            _LOGGER.debug("ÃƒÂ¢Ã…â€œ... Prediction record added via add_prediction_record - von Zara")
             
         except Exception as e:
-            _LOGGER.error("âŒ Failed to add prediction record: %s - von Zara", str(e))
+            _LOGGER.error("ÃƒÂ¢Ã‚ÂÃ…â€™ Failed to add prediction record: %s - von Zara", str(e))
             raise DataIntegrityException(
                 f"Failed to add prediction record: {str(e)}",
                 create_context(error=str(e))
@@ -327,10 +342,10 @@ class DataManager:
             if not predictions:
                 return []
             
-            # Calculate cutoff time # von Zara
+            # Calculate cutoff time
             cutoff = dt_util.utcnow() - timedelta(hours=hours)
             
-            # Filter predictions by timestamp # von Zara
+            # Filter predictions by timestamp
             recent = []
             for pred in predictions:
                 try:
@@ -343,7 +358,7 @@ class DataManager:
             return recent
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Failed to get recent predictions: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to get recent predictions: %s", str(e))
             return []
 
     async def update_learned_weights(self, weights: LearnedWeights) -> None:
@@ -367,16 +382,16 @@ class DataManager:
                 "updated": dt_util.utcnow().isoformat()
             }
             
-            # Create backup before writing # von Zara
+            # Create backup before writing
             await self._create_backup(self.learned_weights_file)
             
-            # Save weights # von Zara
+            # Save weights
             await self._atomic_write_json(self.learned_weights_file, weights_dict)
             
-            _LOGGER.info("Ã¢Å“â€¦ Learned weights updated (Accuracy: %.2f%%)", weights.accuracy * 100)
+            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Learned weights updated (Accuracy: %.2f%%)", weights.accuracy * 100)
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Failed to update learned weights: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to update learned weights: %s", str(e))
             raise DataIntegrityException(
                 f"Failed to update learned weights: {str(e)}",
                 create_context(error=str(e))
@@ -400,16 +415,16 @@ class DataManager:
                 "updated": dt_util.utcnow().isoformat()
             }
             
-            # Create backup before writing # von Zara
+            # Create backup before writing
             await self._create_backup(self.hourly_profile_file)
             
-            # Save profile # von Zara
+            # Save profile
             await self._atomic_write_json(self.hourly_profile_file, profile_dict)
             
-            _LOGGER.info("Ã¢Å“â€¦ Hourly profile updated")
+            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Hourly profile updated")
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Failed to update hourly profile: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to update hourly profile: %s", str(e))
             raise DataIntegrityException(
                 f"Failed to update hourly profile: {str(e)}",
                 create_context(error=str(e))
@@ -432,7 +447,7 @@ class DataManager:
         try:
             current_state = await self.get_model_state()
             
-            # Update fields if provided # von Zara
+            # Update fields if provided
             if training_count is not None:
                 current_state["training_count"] = training_count
                 current_state["last_training"] = dt_util.utcnow().isoformat()
@@ -445,22 +460,22 @@ class DataManager:
             
             current_state["last_updated"] = dt_util.utcnow().isoformat()
             
-            # Create backup before writing # von Zara
+            # Create backup before writing
             await self._create_backup(self.model_state_file)
             
-            # Save state # von Zara
+            # Save state
             await self._atomic_write_json(self.model_state_file, current_state)
             
-            _LOGGER.debug("Ã¢Å“â€¦ Model state updated")
+            _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Model state updated")
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Failed to update model state: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to update model state: %s", str(e))
             raise DataIntegrityException(
                 f"Failed to update model state: {str(e)}",
                 create_context(error=str(e))
             )
 
-    # Ã¢Å“â€¦ BACKUP SYSTEM # von Zara
+    # ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ BACKUP SYSTEM
     async def _create_backup(self, file_path: Path) -> None:
         """Create backup of a file before modification."""
         try:
@@ -471,19 +486,19 @@ class DataManager:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_file = backup_dir / f"{file_path.stem}_{timestamp}.json"
             
-            # Copy file to backup # von Zara
+            # Copy file to backup
             await self.hass.async_add_executor_job(
                 shutil.copy2, str(file_path), str(backup_file)
             )
             
-            _LOGGER.debug("Ã¢Å“â€¦ Backup created: %s", backup_file.name)
+            _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Backup created: %s", backup_file.name)
             
-            # Cleanup old backups # von Zara
+            # Cleanup old backups
             await self._cleanup_old_backups(file_path.stem)
             
         except Exception as e:
-            # Backup failure should not break the operation # von Zara
-            _LOGGER.warning("Ã¢Å¡Â Ã¯Â¸Â Backup creation failed: %s", str(e))
+            # Backup failure should not break the operation
+            _LOGGER.warning("ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Backup creation failed: %s", str(e))
 
     async def _cleanup_old_backups(self, file_stem: str) -> None:
         """Remove old backup files."""
@@ -493,34 +508,34 @@ class DataManager:
             if not await self._file_exists(backup_dir):
                 return
             
-            # Get all backup files for this file stem # von Zara
+            # Get all backup files for this file stem
             pattern = f"{file_stem}_*.json"
             backup_files = await self.hass.async_add_executor_job(
                 lambda: sorted(backup_dir.glob(pattern), key=lambda f: f.stat().st_mtime, reverse=True)
             )
             
-            # Remove files beyond retention limit # von Zara
+            # Remove files beyond retention limit
             if len(backup_files) > MAX_BACKUP_FILES:
                 for old_backup in backup_files[MAX_BACKUP_FILES:]:
                     try:
                         await self.hass.async_add_executor_job(old_backup.unlink)
-                        _LOGGER.debug("Ã°Å¸â€”â€˜Ã¯Â¸Â Removed old backup: %s", old_backup.name)
+                        _LOGGER.debug("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Removed old backup: %s", old_backup.name)
                     except Exception as e:
-                        _LOGGER.warning("Ã¢Å¡Â Ã¯Â¸Â Failed to remove old backup: %s", str(e))
+                        _LOGGER.warning("ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to remove old backup: %s", str(e))
             
-            # Remove files older than retention period # von Zara
+            # Remove files older than retention period
             cutoff_date = datetime.now() - timedelta(days=BACKUP_RETENTION_DAYS)
             for backup_file in backup_files:
                 try:
                     file_time = datetime.fromtimestamp(backup_file.stat().st_mtime)
                     if file_time < cutoff_date:
                         await self.hass.async_add_executor_job(backup_file.unlink)
-                        _LOGGER.debug("Ã°Å¸â€”â€˜Ã¯Â¸Â Removed expired backup: %s", backup_file.name)
+                        _LOGGER.debug("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Removed expired backup: %s", backup_file.name)
                 except Exception as e:
-                    _LOGGER.warning("Ã¢Å¡Â Ã¯Â¸Â Failed to check/remove backup: %s", str(e))
+                    _LOGGER.warning("ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to check/remove backup: %s", str(e))
                     
         except Exception as e:
-            _LOGGER.warning("Ã¢Å¡Â Ã¯Â¸Â Backup cleanup failed: %s", str(e))
+            _LOGGER.warning("ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Backup cleanup failed: %s", str(e))
 
     async def restore_from_backup(self, file_path: Path, backup_timestamp: str) -> bool:
         """
@@ -538,26 +553,26 @@ class DataManager:
             backup_file = backup_dir / f"{file_path.stem}_{backup_timestamp}.json"
             
             if not await self._file_exists(backup_file):
-                _LOGGER.error("Ã¢ÂÅ’ Backup file not found: %s", backup_file.name)
+                _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Backup file not found: %s", backup_file.name)
                 return False
             
-            # Create backup of current file before restore # von Zara
+            # Create backup of current file before restore
             if await self._file_exists(file_path):
                 await self._create_backup(file_path)
             
-            # Restore from backup # von Zara
+            # Restore from backup
             await self.hass.async_add_executor_job(
                 shutil.copy2, str(backup_file), str(file_path)
             )
             
-            _LOGGER.info("Ã¢Å“â€¦ Restored from backup: %s", backup_file.name)
+            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Restored from backup: %s", backup_file.name)
             return True
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Restore from backup failed: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Restore from backup failed: %s", str(e))
             return False
 
-    # Ã¢Å“â€¦ VALIDATION METHODS # von Zara
+    # ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ VALIDATION METHODS
     async def validate_all_data(self) -> bool:
         """
         Validate all data files.
@@ -566,7 +581,7 @@ class DataManager:
             True if all validations pass
         """
         try:
-            _LOGGER.info("Ã°Å¸â€Â Starting data validation...")
+            _LOGGER.info("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Starting data validation...")
             
             validation_tasks = [
                 self._validate_prediction_history(),
@@ -579,14 +594,14 @@ class DataManager:
             
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    _LOGGER.error("Ã¢ÂÅ’ Validation failed for task %d: %s", i, str(result))
+                    _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Validation failed for task %d: %s", i, str(result))
                     return False
             
-            _LOGGER.info("Ã¢Å“â€¦ All data validations passed")
+            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ All data validations passed")
             return True
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Data validation failed: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Data validation failed: %s", str(e))
             return False
 
     async def _validate_prediction_history(self) -> None:
@@ -597,7 +612,7 @@ class DataManager:
         if not all(field in data for field in required_fields):
             raise DataIntegrityException("Invalid prediction_history schema")
         
-        # Validate each prediction record # von Zara
+        # Validate each prediction record
         for i, pred in enumerate(data.get("predictions", [])):
             try:
                 validate_prediction_record(pred)
@@ -612,7 +627,7 @@ class DataManager:
         if not all(field in data for field in required_fields):
             raise DataIntegrityException("Invalid learned_weights schema")
         
-        # Validate correction_factor bounds # von Zara
+        # Validate correction_factor bounds
         correction_factor = data.get("correction_factor", 1.0)
         if not (0.1 <= correction_factor <= 5.0):
             raise DataIntegrityException(f"correction_factor {correction_factor} out of bounds [0.1, 5.0]")
@@ -625,7 +640,7 @@ class DataManager:
         if not all(field in data for field in required_fields):
             raise DataIntegrityException("Invalid hourly_profile schema")
         
-        # Validate hourly_factors (should have 24 entries) # von Zara
+        # Validate hourly_factors (should have 24 entries)
         hourly_factors = data.get("hourly_factors", {})
         if len(hourly_factors) != 24:
             raise DataIntegrityException(f"hourly_factors must have 24 entries, got {len(hourly_factors)}")
@@ -638,11 +653,11 @@ class DataManager:
         if not all(field in data for field in required_fields):
             raise DataIntegrityException("Invalid model_state schema")
 
-    # Migration methods # von Zara
+    # Migration methods
     async def migrate_data(self) -> bool:
         """Migrate data to current version."""
         try:
-            _LOGGER.info("Ã°Å¸â€â€ž Starte Data Migration...")
+            _LOGGER.info("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ Starte Data Migration...")
             
             await self._initialize_missing_files()
             
@@ -657,14 +672,14 @@ class DataManager:
             
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    _LOGGER.error("Ã¢ÂÅ’ Migration Task %d failed: %s", i, str(result))
+                    _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Migration Task %d failed: %s", i, str(result))
                     raise result
             
-            _LOGGER.info("Ã¢Å“â€¦ Data Migration erfolgreich abgeschlossen")
+            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Data Migration erfolgreich abgeschlossen")
             return True
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Data Migration fehlgeschlagen: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Data Migration fehlgeschlagen: %s", str(e))
             if isinstance(e, DataIntegrityException):
                 raise
             else:
@@ -682,12 +697,12 @@ class DataManager:
                 data["version"] = DATA_VERSION
                 data["migrated"] = dt_util.utcnow().isoformat()
                 await self._atomic_write_json(self.prediction_history_file, data)
-                _LOGGER.info("Ã¢Å“â€¦ Prediction history migrated to version %s", DATA_VERSION)
+                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Prediction history migrated to version %s", DATA_VERSION)
             
             return True
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Prediction history migration failed: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Prediction history migration failed: %s", str(e))
             raise
 
     async def _migrate_learned_weights(self) -> bool:
@@ -699,12 +714,12 @@ class DataManager:
                 data["version"] = DATA_VERSION
                 data["migrated"] = dt_util.utcnow().isoformat()
                 await self._atomic_write_json(self.learned_weights_file, data)
-                _LOGGER.info("Ã¢Å“â€¦ Learned weights migrated to version %s", DATA_VERSION)
+                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Learned weights migrated to version %s", DATA_VERSION)
             
             return True
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Learned weights migration failed: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Learned weights migration failed: %s", str(e))
             raise
 
     async def _migrate_hourly_profile(self) -> bool:
@@ -716,12 +731,12 @@ class DataManager:
                 data["version"] = DATA_VERSION
                 data["migrated"] = dt_util.utcnow().isoformat()
                 await self._atomic_write_json(self.hourly_profile_file, data)
-                _LOGGER.info("Ã¢Å“â€¦ Hourly profile migrated to version %s", DATA_VERSION)
+                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Hourly profile migrated to version %s", DATA_VERSION)
             
             return True
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Hourly profile migration failed: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Hourly profile migration failed: %s", str(e))
             raise
 
     async def _migrate_model_state(self) -> bool:
@@ -733,21 +748,21 @@ class DataManager:
                 data["version"] = DATA_VERSION
                 data["migrated"] = dt_util.utcnow().isoformat()
                 await self._atomic_write_json(self.model_state_file, data)
-                _LOGGER.info("Ã¢Å“â€¦ Model state migrated to version %s", DATA_VERSION)
+                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Model state migrated to version %s", DATA_VERSION)
             
             return True
             
         except Exception as e:
-            _LOGGER.error("Ã¢ÂÅ’ Model state migration failed: %s", str(e))
+            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Model state migration failed: %s", str(e))
             raise
 
     async def cleanup(self) -> None:
         """Cleanup resources."""
         if hasattr(self, '_executor'):
             self._executor.shutdown(wait=True)
-        _LOGGER.info("Ã¢Å“â€¦ DataManager cleanup completed")
+        _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DataManager cleanup completed")
 
-    # Public API methods # von Zara
+    # Public API methods
     async def get_prediction_history(self) -> Dict[str, Any]:
         """Get prediction history data."""
         return await self._read_json_file(self.prediction_history_file)
@@ -781,16 +796,16 @@ class DataManager:
         await self._atomic_write_json(self.model_state_file, data)
 
     # ========================================================================
-    # Ã¢Å“â€¦ STRATEGIE 2: DATEI-STATUS METHODEN # von Zara
+    # ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STRATEGIE 2: DATEI-STATUS METHODEN
     # ========================================================================
     
     async def get_data_files_count(self) -> int:
         """
-        Ã¢Å“â€¦ STRATEGIE 2: ZÃƒÂ¤hlt vorhandene Datendateien.
+        ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STRATEGIE 2: ZÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤hlt vorhandene Datendateien.
         
         Returns:
             Anzahl vorhandener Datendateien (0-4)
-        # von Zara
+
         """
         try:
             files_to_check = [
@@ -808,16 +823,16 @@ class DataManager:
             return count
             
         except Exception as e:
-            _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Fehler beim ZÃƒÂ¤hlen der Datendateien: {e}")
+            _LOGGER.warning(f"ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Fehler beim ZÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤hlen der Datendateien: {e}")
             return 0
     
     async def get_data_status(self) -> dict[str, Any]:
         """
-        Ã¢Å“â€¦ STRATEGIE 2: Gibt detaillierten Status aller Datendateien zurÃƒÂ¼ck.
+        ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STRATEGIE 2: Gibt detaillierten Status aller Datendateien zurÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ck.
         
         Returns:
             Dict mit Status-Informationen
-        # von Zara
+
         """
         try:
             files_status = {
@@ -839,7 +854,7 @@ class DataManager:
             }
             
         except Exception as e:
-            _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Fehler beim Abrufen des Datei-Status: {e}")
+            _LOGGER.warning(f"ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Fehler beim Abrufen des Datei-Status: {e}")
             return {
                 "files": {},
                 "total": 4,
@@ -850,22 +865,22 @@ class DataManager:
     
     def get_data_directory(self) -> Path:
         """
-        Ã¢Å“â€¦ STRATEGIE 2: Gibt Data Directory Pfad zurÃƒÂ¼ck.
+        ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STRATEGIE 2: Gibt Data Directory Pfad zurÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ck.
         
         Returns:
             Path zum Data Directory
-        # von Zara
+
         """
         return self.data_dir
     
     # ========================================================================
-    # ✅ LÖSUNG 2: SAVE_ALL_ASYNC IMPLEMENTIERUNG # von Zara
+    # âœ“ LÖSUNG 2: SAVE_ALL_ASYNC IMPLEMENTIERUNG
     # ========================================================================
     
     async def save_all_async(self) -> None:
         """
         Speichert alle Datendateien asynchron.
-        ✅ LÖSUNG 2: Nun tatsächlich implementiert // von Zara
+        âœ“ LÖSUNG 2: Nun tatsächlich implementiert // von Zara
         
         Diese Methode wird vom Coordinator aufgerufen aber macht
         normalerweise nichts, da Daten nur bei Änderungen gespeichert werden.
@@ -879,7 +894,7 @@ class DataManager:
             # - save_hourly_profile() -> Speichert nach Training
             # - update_model_state() -> Speichert model state
             
-            _LOGGER.debug("✅ save_all_async aufgerufen (Daten werden bei Änderungen gespeichert)")
+            _LOGGER.debug("âœ“ save_all_async aufgerufen (Daten werden bei Änderungen gespeichert)")
             
         except Exception as e:
             _LOGGER.debug(f"save_all_async: {e}")

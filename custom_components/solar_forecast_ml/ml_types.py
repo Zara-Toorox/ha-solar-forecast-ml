@@ -1,6 +1,21 @@
 """
 ML Data Types für Solar Forecast ML Integration.
-✅ ERWEITERT: Fehlende Attribute hinzugefügt // von Zara
+✓ ERWEITERT: Fehlende Attribute hinzugefügt // von Zara
+
+Copyright (C) 2025 Zara-Toorox
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -44,7 +59,7 @@ class PredictionRecord:
 class LearnedWeights:
     """
     Learned model weights and metadata.
-    ✅ ERWEITERT: bias, weights, feature_names hinzugefügt // von Zara
+    ✓ ERWEITERT: bias, weights, feature_names hinzugefügt // von Zara
     """
     weather_weights: Dict[str, float]
     seasonal_factors: Dict[str, float]
@@ -54,9 +69,9 @@ class LearnedWeights:
     last_trained: str
     model_version: str = "1.0"
     feature_importance: Dict[str, float] = field(default_factory=dict)
-    bias: float = 0.0  # ✅ NEU: Für lineares Modell // von Zara
-    weights: Dict[str, float] = field(default_factory=dict)  # ✅ NEU: Feature weights // von Zara
-    feature_names: List[str] = field(default_factory=list)  # ✅ NEU: Feature-Namen // von Zara
+    bias: float = 0.0  # ✓ NEU: Für lineares Modell // von Zara
+    weights: Dict[str, float] = field(default_factory=dict)  # ✓ NEU: Feature weights // von Zara
+    feature_names: List[str] = field(default_factory=list)  # ✓ NEU: Feature-Namen // von Zara
     
     def __post_init__(self):
         if not (0.1 <= self.correction_factor <= 5.0):
@@ -82,14 +97,14 @@ class LearnedWeights:
 class HourlyProfile:
     """
     Hourly production profile for time-based predictions.
-    ✅ ERWEITERT: hourly_averages hinzugefügt // von Zara
+    ✓ ERWEITERT: hourly_averages hinzugefügt // von Zara
     """
     hourly_factors: Dict[str, float]
     samples_count: int
     last_updated: str
     confidence: float = 0.5
     seasonal_adjustment: Dict[str, float] = field(default_factory=dict)
-    hourly_averages: Dict[int, float] = field(default_factory=dict)  # ✅ NEU: Durchschnittswerte pro Stunde // von Zara
+    hourly_averages: Dict[int, float] = field(default_factory=dict)  # ✓ NEU: Durchschnittswerte pro Stunde // von Zara
     
     def __post_init__(self):
         # Validate hourly_factors (24 hours) // von Zara
@@ -178,7 +193,7 @@ class ModelMetrics:
         if self.mape < 0:
             raise ValueError("MAPE cannot be negative")
         if not (-1.0 <= self.r2 <= 1.0):
-            raise ValueError("R² must be between -1 and 1")
+            raise ValueError("RÂ² must be between -1 and 1")
         if not (0.0 <= self.accuracy_percentage <= 100.0):
             raise ValueError("accuracy_percentage must be between 0 and 100")
         if self.sample_count < 0:
@@ -210,7 +225,7 @@ class PredictionContext:
 def create_default_learned_weights() -> LearnedWeights:
     """
     Create default learned weights for initialization.
-    ✅ ERWEITERT: Mit neuen Feldern // von Zara
+    ✓ ERWEITERT: Mit neuen Feldern // von Zara
     """
     return LearnedWeights(
         weather_weights={
@@ -243,7 +258,7 @@ def create_default_learned_weights() -> LearnedWeights:
 def create_default_hourly_profile() -> HourlyProfile:
     """
     Create default hourly profile for initialization.
-    ✅ ERWEITERT: Mit hourly_averages // von Zara
+    ✓ ERWEITERT: Mit hourly_averages // von Zara
     """
     import math
     hourly_averages = {}

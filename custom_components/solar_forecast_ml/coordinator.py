@@ -1,12 +1,12 @@
 """
 Data Update Coordinator für Solar Forecast ML Integration.
-✓ ADVANCED VERSION: Vollständige Strategy-Integration
-✓ Nutzt ML & Rule-Based Strategies komplett
-✓ FIX: Korrektes Data-Mapping für Sensoren # von Zara
-✓ STRATEGIE 2: Zentrale Properties und Produktionszeit-Tracking # von Zara
-✓ FIX: Verbesserter Produktionszeit-Fallback # von Zara
-✓ SONNENSTAND: Next Hour Prediction basierend auf sun.sun Entity # von Zara
-Version 4.12.0 - Sonnenstand-basierte Next Hour Prediction # von Zara
+ADVANCED VERSION: Vollständige Strategy-Integration
+Nutzt ML & Rule-Based Strategies komplett
+FIX: Korrektes Data-Mapping für Sensoren
+STRATEGIE 2: Zentrale Properties und Produktionszeit-Tracking
+FIX: Verbesserter Produktionszeit-Fallback
+SONNENSTAND: Next Hour Prediction basierend auf sun.sun Entity
+Version 4.12.0 - Sonnenstand-basierte Next Hour Prediction
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -22,7 +22,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
-# von Zara
 """
 import asyncio
 import logging
@@ -45,7 +44,7 @@ from .const import (
 from .data_manager import DataManager
 from .exceptions import SolarForecastMLException, WeatherException, ModelException
 
-# Importiere Module (Flache Struktur) # von Zara
+# Importiere Module (Flache Struktur)
 from .ml_forecast_strategy import MLForecastStrategy
 from .rule_based_forecast_strategy import RuleBasedForecastStrategy
 from .service_manager import ServiceManager
@@ -58,17 +57,17 @@ _LOGGER = logging.getLogger(__name__)
 class SolarForecastMLCoordinator(DataUpdateCoordinator):
     """
     Coordinator für Solar Forecast ML Integration.
-    ✓ ADVANCED: Vollständige Strategy-Integration
-    ✓ SMART: Automatische Fallback zwischen ML und Rule-Based
-    ✓ STRATEGIE 2: Zentrale Properties für alle Sensoren # von Zara
-    # von Zara
+    Ã¢Å“â€œ ADVANCED: Vollständige Strategy-Integration
+    Ã¢Å“â€œ SMART: Automatische Fallback zwischen ML und Rule-Based
+    Ã¢Å“â€œ STRATEGIE 2: Zentrale Properties für alle Sensoren
+
     """
 
     def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        dependencies_ok: bool = False,  # 🔧 NEU: Dependencies-Status # von Zara
+        dependencies_ok: bool = False,  # Ã°Å¸â€Â§ NEU: Dependencies-Status
     ):
         """
         Initialize the coordinator.
@@ -76,8 +75,8 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         Args:
             hass: HomeAssistant Instanz
             entry: ConfigEntry
-            dependencies_ok: True wenn alle Dependencies vorhanden # von Zara
-        # von Zara
+            dependencies_ok: True wenn alle Dependencies vorhanden
+
         """
         super().__init__(
             hass,
@@ -88,32 +87,32 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         
         self.entry = entry
         
-        # ✓ DataManager mit entry_id und data_dir initialisieren # von Zara
+        # Ã¢Å“â€œ DataManager mit entry_id und data_dir initialisieren
         self.data_manager = DataManager(hass, entry.entry_id, Path(DATA_DIR))
         
-        # Configuration # von Zara
+        # Configuration
         self.solar_capacity = entry.data.get(CONF_SOLAR_CAPACITY, 5.0)
         self.learning_enabled = entry.data.get(CONF_LEARNING_ENABLED, True)
         self.power_entity = entry.data.get(CONF_POWER_ENTITY)
         self.solar_yield_today = entry.data.get(CONF_SOLAR_YIELD_TODAY)  # Tagesertrag Sensor - von Zara
         
-        # Weather Entity aus Config # von Zara
+        # Weather Entity aus Config
         self.primary_weather_entity = entry.data.get(CONF_WEATHER_ENTITY)
         self.current_weather_entity: Optional[str] = self.primary_weather_entity
         
-        # Tracking # von Zara
+        # Tracking
         self.weather_fallback_active = False
         self.enable_hourly = entry.data.get(CONF_HOURLY, entry.options.get(CONF_HOURLY, False))  # Fix: Priorität auf entry.data - von Zara
         
-        # Status tracking # von Zara
+        # Status tracking
         self._last_weather_update = None
         self._forecast_cache = {}
         
-        # ✓ STRATEGIE 2: Zentrale Timestamp-Tracking # von Zara
+        # Ã¢Å“â€œ STRATEGIE 2: Zentrale Timestamp-Tracking
         self._last_update_success_time: Optional[datetime] = None
         self.last_update_time: Optional[datetime] = None  # Für Sensoren - von Zara
         
-        # Sensor-kompatible Properties # von Zara
+        # Sensor-kompatible Properties
         self.next_hour_pred = 0.0
         self.peak_production_time_today = "12:00"
         self.production_time_today = "Initialisierung..."
@@ -123,52 +122,52 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self.last_successful_learning = None
         self.model_accuracy = None
         
-        # ✓ Initialisiere Calculators # von Zara
+        # Ã¢Å“â€œ Initialisiere Calculators
         self.weather_calculator = WeatherCalculator()
         self.production_calculator = ProductionCalculator(hass)
         
-        # ✓ STRATEGIE 2: Produktionszeit-Tracking # von Zara
+        # Ã¢Å“â€œ STRATEGIE 2: Produktionszeit-Tracking
         self.production_time_calculator = ProductionTimeCalculator(
             hass=hass,
             power_entity=self.power_entity
         )
         
-        # ✓ Service Manager für alle Services # von Zara
+        # Ã¢Å“â€œ Service Manager für alle Services
         self.service_manager = ServiceManager(
             hass=hass,
             entry=entry,
             data_manager=self.data_manager,
             weather_entity=self.current_weather_entity,
-            dependencies_ok=dependencies_ok  # 🔧 FIX: Dependencies-Status weitergeben # von Zara
+            dependencies_ok=dependencies_ok  # Ã°Å¸â€Â§ FIX: Dependencies-Status weitergeben
         )
         
-        # ✓ ADVANCED: Forecast Strategies # von Zara
+        # Ã¢Å“â€œ ADVANCED: Forecast Strategies
         self.ml_strategy: Optional[MLForecastStrategy] = None
         self.rule_based_strategy: Optional[RuleBasedForecastStrategy] = None
         self.active_strategy: Optional[str] = None
         
         
         _LOGGER.info(
-            f"✓ SolarForecastMLCoordinator (STRATEGIE 2) initialisiert - "
+            f"Ã¢Å“â€œ SolarForecastMLCoordinator (STRATEGIE 2) initialisiert - "
             f"Weather Entity: {self.primary_weather_entity}"
         )
     
     async def async_config_entry_first_refresh(self) -> None:
         """
-        ✓ Override: First Refresh mit Weather Entity Wartezeit
-        ✓ ADVANCED: Initialisiere Strategies
-        ✓ STRATEGIE 2: Starte Produktionszeit-Tracking # von Zara
-        # von Zara
+        Ã¢Å“â€œ Override: First Refresh mit Weather Entity Wartezeit
+        Ã¢Å“â€œ ADVANCED: Initialisiere Strategies
+        Ã¢Å“â€œ STRATEGIE 2: Starte Produktionszeit-Tracking
+
         """
         _LOGGER.info("=== Starting First Refresh (STRATEGIE 2) ===")
         
-        # Setze Weather Entity # von Zara
+        # Setze Weather Entity
         self.current_weather_entity = self.primary_weather_entity
-        _LOGGER.info(f"✓ Weather Entity konfiguriert: {self.current_weather_entity}")
+        _LOGGER.info(f"Ã¢Å“â€œ Weather Entity konfiguriert: {self.current_weather_entity}")
         
-        # Warte auf Weather Entity Verfügbarkeit # von Zara
+        # Warte auf Weather Entity Verfügbarkeit
         if self.current_weather_entity:
-            _LOGGER.info("⏳ Warte auf Weather Entity Verfügbarkeit...")
+            _LOGGER.info("Ã¢ÂÂ³ Warte auf Weather Entity Verfügbarkeit...")
             max_wait_time = 30
             wait_interval = 2
             total_waited = 0
@@ -176,7 +175,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             while total_waited < max_wait_time:
                 if await self._check_weather_entity_available(self.current_weather_entity):
                     _LOGGER.info(
-                        f"✓ Weather Entity '{self.current_weather_entity}' ist bereit "
+                        f"Ã¢Å“â€œ Weather Entity '{self.current_weather_entity}' ist bereit "
                         f"(nach {total_waited}s)"
                     )
                     break
@@ -186,44 +185,44 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             
             if total_waited >= max_wait_time:
                 _LOGGER.warning(
-                    f"⚠️ Weather Entity '{self.current_weather_entity}' nicht verfügbar "
+                    f"✓ Ã¯Â¸Â Weather Entity '{self.current_weather_entity}' nicht verfügbar "
                     f"nach {max_wait_time}s - starte trotzdem"
                 )
         
-        # ✓ ADVANCED: Initialisiere Strategies # von Zara
+        # Ã¢Å“â€œ ADVANCED: Initialisiere Strategies
         try:
-            # Rule-Based Strategy ist immer verfügbar # von Zara
+            # Rule-Based Strategy ist immer verfügbar
             self.rule_based_strategy = RuleBasedForecastStrategy(
                 solar_capacity=self.solar_capacity,
                 weather_calculator=self.weather_calculator
             )
-            _LOGGER.info("✓ Rule-Based Strategy initialisiert")
+            _LOGGER.info("Ã¢Å“â€œ Rule-Based Strategy initialisiert")
             
-            # ML Strategy wenn ML Predictor verfügbar # von Zara
+            # ML Strategy wenn ML Predictor verfügbar
             ml_predictor = self.service_manager.ml_predictor
             if ml_predictor:
                 self.ml_strategy = MLForecastStrategy(
                     ml_predictor=ml_predictor,
                     error_handler=self.service_manager.error_handler
                 )
-                _LOGGER.info("✓ ML Strategy initialisiert")
+                _LOGGER.info("Ã¢Å“â€œ ML Strategy initialisiert")
             else:
-                _LOGGER.info("ℹ️ ML Strategy nicht verfügbar (Predictor fehlt)")
+                _LOGGER.info("Ã¢â€žÂ¹Ã¯Â¸Â ML Strategy nicht verfügbar (Predictor fehlt)")
                 
         except Exception as e:
-            _LOGGER.error(f"❌ Strategy Initialisierung fehlgeschlagen: {e}")
+            _LOGGER.error(f"Ã¢ÂÅ’ Strategy Initialisierung fehlgeschlagen: {e}")
         
-        # ✓ STRATEGIE 2: Starte Produktionszeit-Tracking # von Zara
+        # Ã¢Å“â€œ STRATEGIE 2: Starte Produktionszeit-Tracking
         try:
             if self.power_entity:
                 self.production_time_calculator.start_tracking()
-                _LOGGER.info(f"✓ Produktionszeit-Tracking gestartet für {self.power_entity}")
+                _LOGGER.info(f"Ã¢Å“â€œ Produktionszeit-Tracking gestartet für {self.power_entity}")
             else:
-                _LOGGER.info("ℹ️ Kein Power-Sensor konfiguriert - Produktionszeit-Tracking deaktiviert")
+                _LOGGER.info("Ã¢â€žÂ¹Ã¯Â¸Â Kein Power-Sensor konfiguriert - Produktionszeit-Tracking deaktiviert")
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Produktionszeit-Tracking konnte nicht gestartet werden: {e}")
+            _LOGGER.warning(f"✓ Ã¯Â¸Â Produktionszeit-Tracking konnte nicht gestartet werden: {e}")
         
-        # Standard first refresh # von Zara
+        # Standard first refresh
         await super().async_config_entry_first_refresh()
     
     async def _check_weather_entity_available(self, entity_id: str) -> bool:
@@ -234,7 +233,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             entity_id: Entity ID zu prüfen
             
         Returns:
-            True wenn verfügbar # von Zara
+            True wenn verfügbar
         """
         if not entity_id:
             return False
@@ -256,7 +255,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             Dictionary mit Wetterdaten
             
         Raises:
-            WeatherException bei Fehlern # von Zara
+            WeatherException bei Fehlern
         """
         if not self.current_weather_entity:
             raise WeatherException("Keine Weather Entity konfiguriert")
@@ -271,11 +270,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 f"Weather Entity {self.current_weather_entity} ist {state.state}"
             )
         
-        # Extrahiere Wetterdaten aus State Attributes # von Zara
+        # Extrahiere Wetterdaten aus State Attributes
         try:
             attributes = state.attributes
             
-            # Cloud Cover aus Condition ableiten # von Zara
+            # Cloud Cover aus Condition ableiten
             condition = state.state.lower()
             cloud_cover_map = {
                 "clear-night": 0,
@@ -299,7 +298,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             }
             
             _LOGGER.debug(
-                f"✓ Weather Data: Temp={weather_data['temperature']}°C, "
+                f"Ã¢Å“â€œ Weather Data: Temp={weather_data['temperature']}Ã‚Â°C, "
                 f"Clouds={weather_data['cloud_cover']}%, "
                 f"Condition={weather_data['condition']}"
             )
@@ -313,62 +312,62 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
     
     async def _async_update_data(self) -> dict[str, Any]:
         """
-        ✓ Update Daten und erstelle Forecasts mit Strategy
-        # von Zara
+        Ã¢Å“â€œ Update Daten und erstelle Forecasts mit Strategy
+
         """
         try:
             _LOGGER.debug("=== Starting Data Update (STRATEGIE 2) ===")
             
-            # Lade Wetterdaten # von Zara
+            # Lade Wetterdaten
             weather_data = await self._get_weather_data()
             _LOGGER.debug(f"Weather Data: {weather_data}")
             
-            # Erstelle Forecast mit Strategy # von Zara
+            # Erstelle Forecast mit Strategy
             forecast = await self._create_forecast_with_strategy(weather_data)
             
             
-            # Berechne historische Peak-Zeit aus Power-Daten # von Zara
+            # Berechne historische Peak-Zeit aus Power-Daten
             try:
                 if self.power_entity:
                     historical_peak = await self.production_calculator.calculate_peak_production_time(
                         power_entity=self.power_entity
                     )
-                    # Überschreibe nur wenn Default-Wert # von Zara
+                    # Überschreibe nur wenn Default-Wert
                     if forecast.get("peak_time") == "12:00" or not forecast.get("peak_time"):
                         forecast["peak_time"] = historical_peak
-                        _LOGGER.debug(f"✓ Historische Peak-Zeit verwendet: {historical_peak}")
+                        _LOGGER.debug(f"Ã¢Å“â€œ Historische Peak-Zeit verwendet: {historical_peak}")
                     else:
-                        _LOGGER.debug(f"ℹ️ ML Peak-Zeit beibehalten: {forecast.get('peak_time')}")
+                        _LOGGER.debug(f"Ã¢â€žÂ¹Ã¯Â¸Â ML Peak-Zeit beibehalten: {forecast.get('peak_time')}")
                 else:
-                    _LOGGER.debug("ℹ️ Kein Power-Sensor - verwende Standard Peak-Zeit")
+                    _LOGGER.debug("Ã¢â€žÂ¹Ã¯Â¸Â Kein Power-Sensor - verwende Standard Peak-Zeit")
             except Exception as e:
-                _LOGGER.warning(f"⚠️ Peak-Zeit Berechnung fehlgeschlagen: {e}")
+                _LOGGER.warning(f"✓ Ã¯Â¸Â Peak-Zeit Berechnung fehlgeschlagen: {e}")
             
-            # Update Sensor Properties # von Zara
+            # Update Sensor Properties
             self._update_sensor_properties(forecast)
             
-            # Speichere Success Time # von Zara
+            # Speichere Success Time
             self._last_update_success_time = dt_util.now()
             
-            # ✓ ZUSÄTZLICHE PROPERTY-UPDATES - von Zara
+            # Ã¢Å“â€œ ZUSÄTZLICHE PROPERTY-UPDATES - von Zara
             self.last_update_time = dt_util.utcnow()  # Für Sensoren - von Zara
             
-            # ✅ Next Hour Prediction mit Sonnenstand berechnen - von Zara
+            # âœ“ Next Hour Prediction mit Sonnenstand berechnen - von Zara
             try:
                 # Hole sun.sun Entity für präzise Sonnenstand-Berechnung - von Zara
                 sun_state = self.hass.states.get("sun.sun")
                 
                 if sun_state and sun_state.state not in ['unavailable', 'unknown']:
-                    # Prüfe Sonnenhöhe (elevation in Grad: -90° bis 90°) - von Zara
+                    # Prüfe Sonnenhöhe (elevation in Grad: -90Ã‚Â° bis 90Ã‚Â°) - von Zara
                     elevation = sun_state.attributes.get("elevation", 0)
                     
                     if elevation <= 0:
-                        # Sonne unter Horizont → keine Produktion - von Zara
+                        # Sonne unter Horizont Ã¢â€ â€™ keine Produktion - von Zara
                         self.next_hour_pred = 0.0
-                        _LOGGER.debug(f"🌙 Sonne unter Horizont (elevation={elevation}°) → next_hour_pred=0.0")
+                        _LOGGER.debug(f"Ã°Å¸Å’â„¢ Sonne unter Horizont (elevation={elevation}Ã‚Â°) Ã¢â€ â€™ next_hour_pred=0.0")
                     else:
-                        # Sonne über Horizont → proportionale Berechnung - von Zara
-                        # Peak bei ~60° → Faktor 1.0, niedrig bei 5° → Faktor ~0.08 - von Zara
+                        # Sonne über Horizont Ã¢â€ â€™ proportionale Berechnung - von Zara
+                        # Peak bei ~60Ã‚Â° Ã¢â€ â€™ Faktor 1.0, niedrig bei 5Ã‚Â° Ã¢â€ â€™ Faktor ~0.08 - von Zara
                         sun_factor = min(elevation / 60.0, 1.0)
                         
                         # Verteile Tagesprognose auf ~15 produktive Sonnenstunden - von Zara
@@ -376,7 +375,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                         self.next_hour_pred = round(hourly_base * sun_factor, 2)
                         
                         _LOGGER.debug(
-                            f"☀️ Sonnenstand-Berechnung: elevation={elevation}°, "
+                            f"Ã¢Ëœâ‚¬Ã¯Â¸Â Sonnenstand-Berechnung: elevation={elevation}Ã‚Â°, "
                             f"sun_factor={sun_factor:.2f}, next_hour_pred={self.next_hour_pred} kWh"
                         )
                 else:
@@ -385,18 +384,18 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     if 21 <= now.hour or now.hour <= 5:
                         # Nachtstunden: keine Produktion - von Zara
                         self.next_hour_pred = 0.0
-                        _LOGGER.debug(f"🌙 Nacht-Fallback (Stunde={now.hour}) → next_hour_pred=0.0")
+                        _LOGGER.debug(f"Ã°Å¸Å’â„¢ Nacht-Fallback (Stunde={now.hour}) Ã¢â€ â€™ next_hour_pred=0.0")
                     else:
                         # Tagsüber: einfache Verteilung - von Zara
                         self.next_hour_pred = round(forecast.get("today", 0.0) / 15.0, 2)
-                        _LOGGER.debug(f"☀️ Tag-Fallback → next_hour_pred={self.next_hour_pred} kWh")
+                        _LOGGER.debug(f"Ã¢Ëœâ‚¬Ã¯Â¸Â Tag-Fallback Ã¢â€ â€™ next_hour_pred={self.next_hour_pred} kWh")
                         
             except Exception as e:
                 # Ultimate Fallback bei jedem Fehler - von Zara
-                _LOGGER.debug(f"⚠️ Next Hour Berechnung fehlgeschlagen: {e}")
+                _LOGGER.debug(f"✓ Ã¯Â¸Â Next Hour Berechnung fehlgeschlagen: {e}")
                 self.next_hour_pred = 0.0
             
-            # ✓ ML Training Status synchronisieren - von Zara
+            # Ã¢Å“â€œ ML Training Status synchronisieren - von Zara
             try:
                 ml_predictor = self.ml_predictor
                 if ml_predictor and hasattr(ml_predictor, 'last_training_time'):
@@ -405,7 +404,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             except Exception as e:
                 _LOGGER.debug(f"ML Status Sync fehlgeschlagen: {e}")
             
-            # ✓ JSON Auto-Save triggern - von Zara
+            # Ã¢Å“â€œ JSON Auto-Save triggern - von Zara
             try:
                 if hasattr(self, 'data_manager') and self.data_manager:
                     await self.data_manager.save_all_async()
@@ -421,15 +420,15 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 "last_update": dt_util.utcnow().isoformat()
             }
             
-            _LOGGER.debug(f"✓ Update complete: {result}")
+            _LOGGER.debug(f"Ã¢Å“â€œ Update complete: {result}")
             
             return result
             
         except WeatherException as e:
-            _LOGGER.error(f"❌ Weather Error: {e}")
+            _LOGGER.error(f"Ã¢ÂÅ’ Weather Error: {e}")
             raise UpdateFailed(f"Weather Fehler: {e}")
         except Exception as e:
-            _LOGGER.error(f"❌ Update Failed: {e}", exc_info=True)
+            _LOGGER.error(f"Ã¢ÂÅ’ Update Failed: {e}", exc_info=True)
             raise UpdateFailed(f"Update Fehler: {e}")
     
     async def _create_forecast_with_strategy(
@@ -444,15 +443,15 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             
         Returns:
             Forecast Dictionary mit today, tomorrow, peak_time, confidence, method
-        # von Zara
+
         """
-        # Sensor-Daten sammeln # von Zara
+        # Sensor-Daten sammeln
         sensor_data = {
             'solar_capacity': self.solar_capacity,
             'power_entity': self.power_entity
         }
         
-        # Optional sensors # von Zara
+        # Optional sensors
         from .const import (
             CONF_TEMP_SENSOR, CONF_WIND_SENSOR, CONF_RAIN_SENSOR,
             CONF_UV_SENSOR, CONF_LUX_SENSOR, CONF_CURRENT_POWER
@@ -474,16 +473,16 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 if state and state.state not in ['unavailable', 'unknown']:
                     try:
                         sensor_data[key] = float(state.state)
-                        _LOGGER.debug(f"✓ Sensor {key} geladen: {sensor_data[key]}")
+                        _LOGGER.debug(f"Ã¢Å“â€œ Sensor {key} geladen: {sensor_data[key]}")
                     except (ValueError, TypeError):
-                        _LOGGER.debug(f"⚠️ Sensor {key} Wert konnte nicht konvertiert werden")
+                        _LOGGER.debug(f"✓ Ã¯Â¸Â Sensor {key} Wert konnte nicht konvertiert werden")
         
         correction_factor = 1.0
         
-        # Versuche ML Strategy zuerst # von Zara
+        # Versuche ML Strategy zuerst
         if self.ml_strategy and self.ml_strategy.is_available():
             try:
-                _LOGGER.debug("🧠 Verwende ML Strategy für Forecast")
+                _LOGGER.debug("Ã°Å¸Â§Â  Verwende ML Strategy für Forecast")
                 result = await self.ml_strategy.calculate_forecast(
                     weather_data=weather_data,
                     sensor_data=sensor_data,
@@ -502,11 +501,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 }
                 
             except Exception as e:
-                _LOGGER.warning(f"⚠️ ML Strategy fehlgeschlagen: {e}, Fallback zu Rule-Based")
+                _LOGGER.warning(f"✓ Ã¯Â¸Â ML Strategy fehlgeschlagen: {e}, Fallback zu Rule-Based")
         
-        # Fallback zu Rule-Based Strategy # von Zara
+        # Fallback zu Rule-Based Strategy
         if self.rule_based_strategy:
-            _LOGGER.debug("📊 Verwende Rule-Based Strategy für Forecast")
+            _LOGGER.debug("Ã°Å¸â€œÅ  Verwende Rule-Based Strategy für Forecast")
             result = await self.rule_based_strategy.calculate_forecast(
                 weather_data=weather_data,
                 sensor_data=sensor_data,
@@ -523,8 +522,8 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 "method": result.method
             }
         
-        # Wenn nichts funktioniert, einfache Berechnung # von Zara
-        _LOGGER.warning("⚠️ Keine Strategy verfügbar, verwende einfache Berechnung")
+        # Wenn nichts funktioniert, einfache Berechnung
+        _LOGGER.warning("✓ Ã¯Â¸Â Keine Strategy verfügbar, verwende einfache Berechnung")
         return await self._simple_forecast(weather_data)
     
     async def _simple_forecast(self, weather_data: dict[str, Any]) -> dict[str, Any]:
@@ -546,7 +545,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
     def _calculate_temperature_factor(self, temperature: float) -> float:
         """
         Berechnet Temperatur-Faktor für Forecast
-        # von Zara
+
         """
         optimal_temp = 25.0
         temp_diff = abs(temperature - optimal_temp)
@@ -555,35 +554,35 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
     
     def _update_sensor_properties(self, data: Dict[str, Any]) -> None:
         """
-        ✓ STRATEGIE 2: Update zentrale Properties für Sensoren
-        ✓ FIX: Verbesserter Fallback für Produktionszeit # von Zara
-        # von Zara
+        Ã¢Å“â€œ STRATEGIE 2: Update zentrale Properties für Sensoren
+        Ã¢Å“â€œ FIX: Verbesserter Fallback für Produktionszeit
+
         """
-        # Update Peak Time # von Zara
+        # Update Peak Time
         if "peak_time" in data:
             self.peak_production_time_today = data["peak_time"]
         
-        # ✓ FIX: Update Produktionszeit mit Fallback # von Zara
+        # Ã¢Å“â€œ FIX: Update Produktionszeit mit Fallback
         try:
             production_time = self.production_time_calculator.get_production_time()
             
-            # Prüfe ob valide Zeit zurückkam # von Zara
+            # Prüfe ob valide Zeit zurückkam
             if production_time and production_time not in ["Nicht verfügbar", "Fehler"]:
                 self.production_time_today = production_time
             elif not self.power_entity:
-                # Kein Power-Sensor konfiguriert # von Zara
+                # Kein Power-Sensor konfiguriert
                 self.production_time_today = "Kein Power-Sensor"
             elif production_time == "0h 0m":
-                # Noch keine Produktion heute # von Zara
+                # Noch keine Produktion heute
                 now = dt_util.utcnow()
                 if 5 <= now.hour <= 21:
-                    # Während Tageszeit - noch keine Produktion # von Zara
+                    # Während Tageszeit - noch keine Produktion
                     self.production_time_today = "Noch keine Produktion"
                 else:
-                    # Nachts - zeige 0h 0m # von Zara
+                    # Nachts - zeige 0h 0m
                     self.production_time_today = "0h 0m"
             else:
-                # Verwende was der Calculator zurückgab # von Zara
+                # Verwende was der Calculator zurückgab
                 self.production_time_today = production_time
                 
         except Exception as e:
@@ -591,41 +590,41 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             self.production_time_today = "Berechnung läuft..."
     
     # ========================================================================
-    # ✓ STRATEGIE 2: ZENTRALE PROPERTIES FÜR SENSOREN # von Zara
+    # Ã¢Å“â€œ STRATEGIE 2: ZENTRALE PROPERTIES FÜR SENSOREN
     # ========================================================================
     
     @property
     def last_update_success_time(self) -> Optional[datetime]:
-        """✓ STRATEGIE 2: Zentrale Property für letztes erfolgreiches Update # von Zara"""
+        """Ã¢Å“â€œ STRATEGIE 2: Zentrale Property für letztes erfolgreiches Update # von Zara"""
         return self._last_update_success_time
     
     @property
     def ml_predictor(self):
-        """✓ STRATEGIE 2: Zentrale Property für ML Predictor Zugriff # von Zara"""
+        """Ã¢Å“â€œ STRATEGIE 2: Zentrale Property für ML Predictor Zugriff # von Zara"""
         if hasattr(self.service_manager, 'ml_predictor'):
             return self.service_manager.ml_predictor
         return None
     
     @property
     def weather_source(self) -> str:
-        """✓ Liefert aktuellen Weather Source für Sensor-Anzeige # von Zara"""
+        """Ã¢Å“â€œ Liefert aktuellen Weather Source für Sensor-Anzeige # von Zara"""
         return self.current_weather_entity or "Nicht verfügbar"
     
     @property
     def retry_attempts(self) -> int:
-        """✓ Liefert Anzahl Retry-Versuche für Sensor-Anzeige # von Zara"""
-        return 0  # Keine Retry-Logik # von Zara
+        """Ã¢Å“â€œ Liefert Anzahl Retry-Versuche für Sensor-Anzeige # von Zara"""
+        return 0  # Keine Retry-Logik
     
     # ========================================================================
-    # ✓ STRATEGIE 2: CALLBACKS FÜR ML-EVENTS # von Zara
+    # Ã¢Å“â€œ STRATEGIE 2: CALLBACKS FÜR ML-EVENTS
     # ========================================================================
     
     def on_ml_training_complete(self, timestamp: datetime, accuracy: float = None) -> None:
         """
-        ✓ STRATEGIE 2: Callback wenn ML-Training abgeschlossen
-        # von Zara
+        Ã¢Å“â€œ STRATEGIE 2: Callback wenn ML-Training abgeschlossen
+
         """
-        _LOGGER.info(f"✓ ML-Training abgeschlossen - Accuracy: {accuracy}")
+        _LOGGER.info(f"Ã¢Å“â€œ ML-Training abgeschlossen - Accuracy: {accuracy}")
         self.last_successful_learning = timestamp
         if accuracy is not None:
             self.model_accuracy = accuracy

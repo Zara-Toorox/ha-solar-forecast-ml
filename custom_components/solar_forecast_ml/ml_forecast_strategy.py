@@ -5,6 +5,21 @@ Version 4.8.1 - Encoding Fix von Zara
 
 Copyright (C) 2025 Zara-Toorox
 # von Zara
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
 """
 import logging
 from typing import Any, Dict, Optional
@@ -34,10 +49,10 @@ class MLForecastStrategy(ForecastStrategy):
         self.ml_predictor = ml_predictor
         self.error_handler = error_handler
         
-        # Konstanten für ML-Forecast # von Zara
+        # Konstanten für ML-Forecast
         self.PREDICTION_MIN_VALUE = 0.0
         self.PREDICTION_MAX_VALUE = 100.0
-        self.TOMORROW_DISCOUNT_FACTOR = 0.92  # Tomorrow ist etwas unsicherer # von Zara
+        self.TOMORROW_DISCOUNT_FACTOR = 0.92  # Tomorrow ist etwas unsicherer
         
     def is_available(self) -> bool:
         """
@@ -58,7 +73,7 @@ class MLForecastStrategy(ForecastStrategy):
         ML hat höchste Priorität wenn verfügbar.
         # von Zara
         """
-        return 100  # Höchste Priorität # von Zara
+        return 100  # Höchste Priorität
     
     async def calculate_forecast(
         self,
@@ -82,25 +97,25 @@ class MLForecastStrategy(ForecastStrategy):
         # von Zara
         """
         try:
-            _LOGGER.debug("🧠 Starte ML-Forecast-Berechnung...")
+            _LOGGER.debug("ðŸ§  Starte ML-Forecast-Berechnung...")
             
-            # Validiere ML Predictor # von Zara
+            # Validiere ML Predictor
             if not self.is_available():
                 raise RuntimeError("ML Predictor nicht verfügbar oder unhealthy")
             
-            # Hole ML Prediction # von Zara
+            # Hole ML Prediction
             prediction_result = await self.ml_predictor.predict(
                 weather_data,
                 sensor_data
             )
             
-            # Extrahiere Werte # von Zara
+            # Extrahiere Werte
             today_forecast = prediction_result.prediction
             
-            # Berechne Tomorrow mit Discount # von Zara
+            # Berechne Tomorrow mit Discount
             tomorrow_forecast = today_forecast * self.TOMORROW_DISCOUNT_FACTOR
             
-            # Apply Bounds # von Zara
+            # Apply Bounds
             today_forecast = self._apply_bounds(
                 today_forecast,
                 self.PREDICTION_MIN_VALUE,
@@ -112,34 +127,34 @@ class MLForecastStrategy(ForecastStrategy):
                 self.PREDICTION_MAX_VALUE
             )
             
-            # Erstelle Result # von Zara
+            # Erstelle Result
             result = ForecastResult(
                 forecast_today=today_forecast,
                 forecast_tomorrow=tomorrow_forecast,
                 confidence_today=prediction_result.confidence * 100,
-                confidence_tomorrow=prediction_result.confidence * 100 * 0.9,  # Tomorrow etwas unsicherer # von Zara
+                confidence_tomorrow=prediction_result.confidence * 100 * 0.9,  # Tomorrow etwas unsicherer
                 method=prediction_result.method,
                 calibrated=True,
                 features_used=prediction_result.features_used,
                 model_accuracy=prediction_result.model_accuracy
             )
             
-            # Log erfolgreiche Berechnung # von Zara
+            # Log erfolgreiche Berechnung
             self._log_calculation(
                 result,
                 f"(features={prediction_result.features_used}, accuracy={prediction_result.model_accuracy:.3f})"
             )
             
-            # Record Success im Error Handler # von Zara
+            # Record Success im Error Handler
             if self.error_handler:
                 self.error_handler.record_success("ml_prediction")
             
             return result
             
         except Exception as e:
-            _LOGGER.error(f"❌ ML Forecast Berechnung fehlgeschlagen: {e}", exc_info=True)
+            _LOGGER.error(f"âŒ ML Forecast Berechnung fehlgeschlagen: {e}", exc_info=True)
             
-            # Record Error im Error Handler # von Zara
+            # Record Error im Error Handler
             if self.error_handler:
                 from .exceptions import ModelException
                 await self.error_handler.handle_error(

@@ -1,8 +1,23 @@
 """
-Sensor platform fÃ¼r Solar Forecast ML Integration.
-â€¢ VOLLSTÃ„NDIG mit allen ursprÃ¼nglichen Sensoren + 13 neuen Diagnose-Sensoren
-â€¢ LIVE-Updates fÃ¼r externe Sensoren und Zeitstempel
+Sensor platform für Solar Forecast ML Integration.
+VOLLSTÄNDIG mit allen ursprünglichen Sensoren + 13 neuen Diagnose-Sensoren
+LIVE-Updates für externe Sensoren und Zeitstempel
 Version 4.9.0 - UTF-8 Fix + Status-Mapper + Erweiterte Anzeigen - von Zara
+
+Copyright (C) 2025 Zara-Toorox
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -31,23 +46,23 @@ from .const import (
     CONF_RAIN_SENSOR,
     CONF_UV_SENSOR, 
     CONF_LUX_SENSOR,
-    CONF_HOURLY,        # Fix: Import fÃ¼r Hourly Sensor Option - von Zara
+    CONF_HOURLY,        # Fix: Import für Hourly Sensor Option - von Zara
     UPDATE_INTERVAL,
-    INTEGRATION_MODEL,  # Fix: Device Info # von Zara
-    SOFTWARE_VERSION,   # Fix: Device Info # von Zara
-    ML_VERSION          # Fix: Device Info # von Zara
+    INTEGRATION_MODEL,  # Fix: Device Info
+    SOFTWARE_VERSION,   # Fix: Device Info
+    ML_VERSION          # Fix: Device Info
 )
 from .sensor_external_helpers import BaseExternalSensor, format_time_ago
 
 _LOGGER = logging.getLogger(__name__)
 
 
-# Status-Mapper fÃ¼r ML Model States - von Zara
+# Status-Mapper für ML Model States - von Zara
 ML_STATE_TRANSLATIONS = {
     "uninitialized": "Noch nicht trainiert",
-    "training": "Training lÃ¤uft",
+    "training": "Training läuft",
     "ready": "Einsatzbereit",
-    "degraded": "EingeschrÃ¤nkt",
+    "degraded": "Eingeschränkt",
     "error": "Fehler"
 }
 
@@ -60,7 +75,7 @@ async def async_setup_entry(
     """Set up Solar Forecast ML sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # â€¢ COMPLETE sensor suite - alle ursprÃ¼nglichen Sensoren - von Zara
+    # â€¢ COMPLETE sensor suite - alle ursprünglichen Sensoren - von Zara
     entities_to_add = [
         # Original Status and diagnostic sensors - von Zara
         DiagnosticStatusSensor(coordinator, entry),
@@ -77,7 +92,7 @@ async def async_setup_entry(
         AverageYieldSensor(coordinator, entry),
         AutarkySensor(coordinator, entry),
         
-        # â€¢ NEU: Zeitstempel & AktualitÃ¤t Diagnose-Sensoren (4 Sensoren) - von Zara
+        # â€¢ NEU: Zeitstempel & Aktualität Diagnose-Sensoren (4 Sensoren) - von Zara
         LastCoordinatorUpdateSensor(coordinator, entry),
         UpdateAgeSensor(coordinator, entry),
         LastMLTrainingSensor(coordinator, entry),
@@ -98,7 +113,7 @@ async def async_setup_entry(
         ExternalLuxSensor(coordinator, entry),
     ]
 
-    # â€¢ Conditional hourly sensor - prÃ¼fe entry.data UND entry.options - von Zara
+    # â€¢ Conditional hourly sensor - prüfe entry.data UND entry.options - von Zara
     enable_hourly = entry.options.get(CONF_HOURLY, entry.data.get(CONF_HOURLY, False))  # Fix: Nutze CONF_HOURLY Konstante - von Zara
     if enable_hourly:
         entities_to_add.append(NextHourSensor(coordinator, entry))
@@ -131,7 +146,7 @@ class BaseSolarSensor(CoordinatorEntity, SensorEntity):
 
 
 # ============================================================================
-# ORIGINAL SENSOREN (unverÃ¤ndert)
+# ORIGINAL SENSOREN (unverändert)
 # ============================================================================
 
 class SolarForecastSensor(BaseSolarSensor):
@@ -164,7 +179,7 @@ class NextHourSensor(BaseSolarSensor):
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_naechste_stunde"
-        self._attr_name = "Prognose nÃ¤chste Stunde"
+        self._attr_name = "Prognose nächste Stunde"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:clock-fast"
@@ -182,7 +197,7 @@ class PeakProductionHourSensor(BaseSolarSensor):
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_peak_production_hour"
-        self._attr_name = "Beste Stunde fÃ¼r Verbraucher"
+        self._attr_name = "Beste Stunde für Verbraucher"
         self._attr_icon = "mdi:battery-charging-high"
 
     @property
@@ -297,7 +312,7 @@ class YesterdayDeviationSensor(BaseSolarSensor):
 
 
 # ============================================================================
-# â€¢ NEU: ZEITSTEMPEL & AKTUALITÃ„T DIAGNOSE-SENSOREN - von Zara
+# â€¢ NEU: ZEITSTEMPEL & AKTUALITÄ DIAGNOSE-SENSOREN - von Zara
 # ============================================================================
 
 class LastCoordinatorUpdateSensor(BaseSolarSensor):
@@ -314,7 +329,7 @@ class LastCoordinatorUpdateSensor(BaseSolarSensor):
     
     @property
     def native_value(self):
-        """Gibt Zeitstempel des letzten Updates zurÃ¼ck - von Zara"""
+        """Gibt Zeitstempel des letzten Updates zurück - von Zara"""
         return self.coordinator.last_update_time
 
 
@@ -354,33 +369,79 @@ class LastMLTrainingSensor(BaseSolarSensor):
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
     
     @property
+    def available(self) -> bool:
+        """
+        ✓ VERBESSERT: Sensor nur verfügbar wenn ML trainiert wurde - von Zara
+        Zeigt "unavailable" statt "Unbekannt" wenn noch nie trainiert
+        """
+        ml_predictor = self.coordinator.ml_predictor
+        if not ml_predictor:
+            return False
+        
+        # Prüfe ob last_training_time existiert UND nicht None ist - von Zara
+        if hasattr(ml_predictor, "last_training_time"):
+            return ml_predictor.last_training_time is not None
+        
+        return False
+    
+    @property
     def native_value(self):
         """Holt letzten Trainingszeitpunkt vom ML Predictor - von Zara"""
         ml_predictor = self.coordinator.ml_predictor
-        if ml_predictor and hasattr(ml_predictor, 'last_training_time'):
+        
+        if not ml_predictor:
+            return None
+        
+        if hasattr(ml_predictor, 'last_training_time'):
             return ml_predictor.last_training_time
+        
         return None
+    
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Zusätzliche Trainingsinfos - von Zara"""
+        ml_predictor = self.coordinator.ml_predictor
+        
+        if not ml_predictor:
+            return {
+                "status": "ML nicht verfügbar",
+                "hinweis": "Installieren Sie ML-Dependencies"
+            }
+        
+        attrs = {}
+        
+        if hasattr(ml_predictor, 'last_training_time') and ml_predictor.last_training_time:
+            attrs["training_durchgeführt"] = True
+            attrs["letztes_training"] = ml_predictor.last_training_time.isoformat()
+        else:
+            attrs["training_durchgeführt"] = False
+            attrs["hinweis"] = "Noch kein Training durchgeführt"
+        
+        if hasattr(ml_predictor, 'current_accuracy'):
+            attrs["accuracy_percent"] = round(ml_predictor.current_accuracy * 100, 1)
+        
+        return attrs
 
 
 class NextScheduledUpdateSensor(BaseSolarSensor):
-    """Zeigt nÃ¤chstes geplantes Update - von Zara"""
+    """Zeigt nächstes geplantes Update - von Zara"""
     
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_next_scheduled_update"
-        self._attr_name = "NÃ¤chstes Update"
+        self._attr_name = "Nächstes Update"
         self._attr_icon = "mdi:clock-check-outline"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
     
     @property
     def native_value(self):
-        """Berechnet nÃ¤chsten Update-Zeitpunkt - von Zara"""
+        """Berechnet nächsten Update-Zeitpunkt - von Zara"""
         if not self.coordinator.last_update_time:
             return None
         
-        # NÃ¤chstes Update = letztes Update + Interval - von Zara
+        # Nächstes Update = letztes Update + Interval - von Zara
         next_update = self.coordinator.last_update_time + UPDATE_INTERVAL
         return next_update
 
@@ -409,7 +470,7 @@ class CoordinatorHealthSensor(BaseSolarSensor):
     
     @property
     def extra_state_attributes(self) -> dict:
-        """ZusÃ¤tzliche Coordinator-Infos - von Zara"""
+        """Zusätzliche Coordinator-Infos - von Zara"""
         return {
             "last_success": self.coordinator.last_update_success,
             "last_update": self.coordinator.last_update_time.isoformat() if self.coordinator.last_update_time else None,
@@ -427,43 +488,87 @@ class DataFilesStatusSensor(BaseSolarSensor):
         self._attr_unique_id = f"{entry.entry_id}_data_files_status"
         self._attr_name = "Datendateien Status"
         self._attr_icon = "mdi:file-check"
+        
+        # Cache für async Daten - von Zara
+        self._cached_status: Optional[dict] = None
+        self._cached_file_count: int = 0
+    
+    async def async_added_to_hass(self) -> None:
+        """Registriert Coordinator-Update-Listener - von Zara"""
+        await super().async_added_to_hass()
+        
+        # Initiales Laden der Daten - von Zara
+        await self._update_cached_data()
+    
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Update Cache bei Coordinator-Änderungen - von Zara"""
+        self.hass.async_create_task(self._update_cached_data())
+        super()._handle_coordinator_update()
+    
+    async def _update_cached_data(self) -> None:
+        """Lädt Daten async und cached sie - von Zara"""
+        try:
+            data_manager = getattr(self.coordinator, 'data_manager', None)
+            
+            if not data_manager:
+                self._cached_status = None
+                self._cached_file_count = 0
+                return
+            
+            # Rufe async Methoden auf - von Zara
+            if hasattr(data_manager, 'get_data_status'):
+                self._cached_status = await data_manager.get_data_status()
+            
+            if hasattr(data_manager, 'get_data_files_count'):
+                self._cached_file_count = await data_manager.get_data_files_count()
+                
+        except Exception as e:
+            _LOGGER.warning(f"Fehler beim Aktualisieren der Datendatei-Infos: {e}")
+            self._cached_status = None
+            self._cached_file_count = 0
     
     @property
     def native_value(self) -> str:
-        """PrÃ¼ft ob Datenmanager verfÃ¼gbar ist - von Zara"""
-        data_manager = getattr(self.coordinator, 'data_manager', None)
+        """Gibt gecachten Status zurück - von Zara"""
+        if self._cached_status is None:
+            return "Initialisierung..."
         
-        if not data_manager:
-            return "Nicht verfÃ¼gbar"
+        if not self._cached_status.get('all_present', False):
+            available = self._cached_status.get('available', 0)
+            total = self._cached_status.get('total', 4)
+            return f"Unvollständig ({available}/{total})"
         
-        if hasattr(data_manager, 'data_file_exists') and callable(data_manager.data_file_exists):
-            if data_manager.data_file_exists():
-                return "Vorhanden"
-            return "Fehlend"
-        
-        return "Status unbekannt"
+        return "Vollständig"
     
     @property
     def extra_state_attributes(self) -> dict:
-        """Detailinfos zu Datendateien - von Zara"""
+        """Detailinfos zu Datendateien aus Cache - von Zara"""
+        if self._cached_status is None:
+            return {"status": "Wird geladen..."}
+        
         data_manager = getattr(self.coordinator, 'data_manager', None)
         
-        if not data_manager:
-            return {"status": "Datenmanager nicht verfÃ¼gbar"}
+        attrs = {
+            "dateien_gesamt": self._cached_status.get('total', 4),
+            "dateien_vorhanden": self._cached_status.get('available', 0),
+            "status_text": self._cached_status.get('status_text', 'Unbekannt'),
+        }
         
-        attrs = {}
+        # Füge Details zu einzelnen Dateien hinzu - von Zara
+        files = self._cached_status.get('files', {})
+        for file_name, exists in files.items():
+            attrs[f"datei_{file_name}"] = "Vorhanden" if exists else "Fehlend"
         
-        if hasattr(data_manager, 'get_data_count'):
-            attrs["record_count"] = data_manager.get_data_count()
-        
-        if hasattr(data_manager, 'data_file_path'):
-            attrs["file_path"] = str(data_manager.data_file_path)
+        # Füge Verzeichnispfad hinzu - von Zara
+        if data_manager and hasattr(data_manager, 'get_data_directory'):
+            attrs["verzeichnis"] = str(data_manager.get_data_directory())
         
         return attrs
 
 
 class MLServiceStatusSensor(BaseSolarSensor):
-    """Zeigt ML Service Status mit Ã¼bersetzten States - von Zara"""
+    """Zeigt ML Service Status mit übersetzten States - von Zara"""
     
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     
@@ -475,28 +580,33 @@ class MLServiceStatusSensor(BaseSolarSensor):
     
     @property
     def native_value(self) -> str:
-        """Ãœbersetzter ML State - von Zara"""
+        """Übersetzter ML State mit detaillierten Fehlermeldungen - von Zara"""
         ml_predictor = self.coordinator.ml_predictor
         
         if not ml_predictor:
-            return "Nicht verfÃ¼gbar"
+            return "ML-Dependencies fehlen"
         
         try:
             if hasattr(ml_predictor, 'get_model_health'):
                 health = ml_predictor.get_model_health()
                 state_value = health.state.value if health.state else "unknown"
                 return ML_STATE_TRANSLATIONS.get(state_value, state_value.capitalize())
-            return "Unbekannt"
-        except Exception:
-            return "Fehler"
+            return "Status nicht abrufbar"
+        except Exception as e:
+            _LOGGER.debug(f"ML Service Status Fehler: {e}")
+            return "Fehler beim Abruf"
     
     @property
     def extra_state_attributes(self) -> dict:
-        """Basis ML-Infos - von Zara"""
+        """Basis ML-Infos mit erweiterten Diagnosedaten - von Zara"""
         ml_predictor = self.coordinator.ml_predictor
         
         if not ml_predictor:
-            return {"status": "ML Predictor nicht verfÃ¼gbar"}
+            return {
+                "status": "ML Predictor nicht initialisiert",
+                "hinweis": "Prüfen Sie ob sklearn, pandas, numpy installiert sind",
+                "model_loaded": False
+            }
         
         try:
             if hasattr(ml_predictor, 'get_model_health'):
@@ -505,16 +615,22 @@ class MLServiceStatusSensor(BaseSolarSensor):
                 
                 return {
                     "model_state_raw": state_raw,
+                    "model_state_übersetzt": ML_STATE_TRANSLATIONS.get(state_raw, state_raw),
                     "model_loaded": health.model_loaded,
                     "training_samples": health.training_samples,
+                    "initialisiert": True
                 }
             
             return {
                 "model_loaded": getattr(ml_predictor, 'model_loaded', False),
-                "status": "Basis-Info"
+                "status": "Basis-Info",
+                "initialisiert": True
             }
         except Exception as e:
-            return {"error": str(e)}
+            return {
+                "error": str(e),
+                "status": "Fehler beim Abruf"
+            }
 
 
 class MLMetricsSensor(BaseSolarSensor):
@@ -530,18 +646,18 @@ class MLMetricsSensor(BaseSolarSensor):
     
     @property
     def native_value(self) -> str:
-        """Zeigt aktuellen Model State Ã¼bersetzt - von Zara"""
+        """Zeigt aktuellen Model State übersetzt - von Zara"""
         ml_predictor = self.coordinator.ml_predictor
         
         if not ml_predictor:
-            return "Nicht verfÃ¼gbar"
+            return "ML nicht verfügbar"
         
         try:
             if hasattr(ml_predictor, 'get_model_health'):
                 health = ml_predictor.get_model_health()
                 state_value = health.state.value if health.state else "unknown"
                 return ML_STATE_TRANSLATIONS.get(state_value, state_value.capitalize())
-            return "Unbekannt"
+            return "Keine Metriken"
         except Exception:
             return "Fehler"
     
@@ -552,8 +668,9 @@ class MLMetricsSensor(BaseSolarSensor):
         
         if not ml_predictor:
             return {
-                "status": "ML Predictor nicht verfÃ¼gbar",
-                "model_loaded": False
+                "status": "ML Predictor nicht verfügbar",
+                "model_loaded": False,
+                "hinweis": "Installieren Sie: pip install scikit-learn pandas numpy"
             }
         
         try:
@@ -561,7 +678,7 @@ class MLMetricsSensor(BaseSolarSensor):
             if hasattr(ml_predictor, 'get_model_health'):
                 health = ml_predictor.get_model_health()
                 
-                # Ãœbersetze State - von Zara
+                # Übersetze State - von Zara
                 state_raw = health.state.value if health.state else "unknown"
                 state_translated = ML_STATE_TRANSLATIONS.get(state_raw, state_raw.capitalize())
                 
@@ -579,7 +696,7 @@ class MLMetricsSensor(BaseSolarSensor):
                     "memory_usage_mb": round(health.performance_metrics.get("memory_usage_mb", 0), 1),
                 }
             
-            # Fallback wenn get_model_health nicht verfÃ¼gbar - von Zara
+            # Fallback wenn get_model_health nicht verfügbar - von Zara
             return {
                 "model_loaded": getattr(ml_predictor, 'model_loaded', False),
                 "current_accuracy": round(getattr(ml_predictor, 'current_accuracy', 0) * 100, 1),
@@ -593,10 +710,6 @@ class MLMetricsSensor(BaseSolarSensor):
                 "status": "Fehler beim Abrufen der Metriken"
             }
 
-
-# ============================================================================
-# â€¢ NEU: EXTERNE SENSOR DIAGNOSE-ANZEIGE - von Zara
-# ============================================================================
 
 class ExternalTempSensor(BaseExternalSensor, BaseSolarSensor):
     """Zeigt Wert des konfigurierten Temperatur-Sensors - von Zara"""
@@ -627,11 +740,11 @@ class ExternalHumiditySensor(BaseSolarSensor):
     
     @property
     def available(self) -> bool:
-        """Sensor immer verfÃ¼gbar - von Zara"""
+        """Sensor immer verfügbar - von Zara"""
         return True
     
     async def async_added_to_hass(self) -> None:
-        """Register state change listener fÃ¼r LIVE-Updates - von Zara"""
+        """Register state change listener für LIVE-Updates - von Zara"""
         await super().async_added_to_hass()
         
         weather_entity = self.coordinator.current_weather_entity
@@ -646,7 +759,7 @@ class ExternalHumiditySensor(BaseSolarSensor):
     
     @callback
     def _handle_external_sensor_update(self, event) -> None:
-        """Update bei Ã„nderung - von Zara"""
+        """Update bei Änderung - von Zara"""
         self.async_write_ha_state()
     
     @property
@@ -659,12 +772,12 @@ class ExternalHumiditySensor(BaseSolarSensor):
         
         state = self.coordinator.hass.states.get(weather_entity)
         if not state or state.state in ['unavailable', 'unknown', 'none', None]:
-            return "Weather Entity nicht verfÃ¼gbar"
+            return "Weather Entity nicht verfügbar"
         
         try:
             humidity = state.attributes.get('humidity')
             if humidity is None:
-                return "Keine Luftfeuchtigkeit verfÃ¼gbar"
+                return "Keine Luftfeuchtigkeit verfügbar"
             
             time_ago = format_time_ago(state.last_changed)
             return f"{humidity} % ({time_ago})"

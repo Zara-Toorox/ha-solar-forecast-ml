@@ -1,5 +1,22 @@
-"""Custom exceptions for Solar Forecast ML integration."""
-# Version 4.0 - Vollständig mit allen benötigten Exceptions # von Zara
+"""
+Custom exceptions for Solar Forecast ML integration.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
+# Version 4.0 - Vollständig mit allen benötigten Exceptions
 from __future__ import annotations
 
 import logging
@@ -10,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 # ========================================================================
-# ERROR SEVERITY ENUM # von Zara
+# ERROR SEVERITY ENUM
 # ========================================================================
 
 class ErrorSeverity(Enum):
@@ -18,14 +35,14 @@ class ErrorSeverity(Enum):
     Error Severity Levels für strukturiertes Error Handling
     # von Zara
     """
-    LOW = "low"           # Informativ, keine Aktion erforderlich # von Zara
-    MEDIUM = "medium"     # Warnung, System läuft weiter # von Zara
-    HIGH = "high"         # Fehler, beeinträchtigt Funktionalität # von Zara
-    CRITICAL = "critical" # Kritisch, System-Fehler # von Zara
+    LOW = "low"           # Informativ, keine Aktion erforderlich
+    MEDIUM = "medium"     # Warnung, System läuft weiter
+    HIGH = "high"         # Fehler, beeinträchtigt Funktionalität
+    CRITICAL = "critical" # Kritisch, System-Fehler
 
 
 # ========================================================================
-# BASE EXCEPTION # von Zara
+# BASE EXCEPTION
 # ========================================================================
 
 class SolarForecastMLException(Exception):
@@ -56,7 +73,7 @@ class SolarForecastMLException(Exception):
         self.severity = severity
         self.context = context or {}
         
-        # Log jede Exception automatisch mit Severity # von Zara
+        # Log jede Exception automatisch mit Severity
         log_message = f"[{severity.value.upper()}] {message}"
         if context:
             log_message += f" | Context: {context}"
@@ -72,7 +89,7 @@ class SolarForecastMLException(Exception):
 
 
 # ========================================================================
-# CONFIGURATION EXCEPTIONS # von Zara
+# CONFIGURATION EXCEPTIONS
 # ========================================================================
 
 class ConfigurationException(SolarForecastMLException):
@@ -97,7 +114,7 @@ class ConfigurationException(SolarForecastMLException):
 
 
 # ========================================================================
-# DEPENDENCY EXCEPTIONS # von Zara
+# DEPENDENCY EXCEPTIONS
 # ========================================================================
 
 class DependencyException(SolarForecastMLException):
@@ -122,7 +139,7 @@ class DependencyException(SolarForecastMLException):
 
 
 # ========================================================================
-# WEATHER EXCEPTIONS # von Zara
+# WEATHER EXCEPTIONS
 # ========================================================================
 
 class WeatherAPIException(SolarForecastMLException):
@@ -148,7 +165,7 @@ class WeatherAPIException(SolarForecastMLException):
 
 class WeatherException(SolarForecastMLException):
     """
-    ✓ General Weather Exception
+    âœ“ General Weather Exception
     
     Wird geworfen bei:
     - Allgemeinen Wetter-Problemen
@@ -168,12 +185,12 @@ class WeatherException(SolarForecastMLException):
 
 
 # ========================================================================
-# DATA EXCEPTIONS # von Zara
+# DATA EXCEPTIONS
 # ========================================================================
 
 class DataIntegrityException(SolarForecastMLException):
     """
-    ✓ Exception für Datenintegritätsfehler
+    âœ“ Exception für Datenintegritätsfehler
     
     Wird geworfen bei:
     - Korrupten Daten
@@ -199,7 +216,7 @@ class DataValidationException(SolarForecastMLException):
     
     Wird geworfen bei:
     - Ungültigen Eingabewerten
-    - Werten außerhalb gültiger Bereiche
+    - Werten auÃŸerhalb gültiger Bereiche
     - Fehlenden Pflichtfeldern
     # von Zara
     """
@@ -216,7 +233,7 @@ class DataValidationException(SolarForecastMLException):
 
 class ValidationException(SolarForecastMLException):
     """
-    ✓ General Validation Exception
+    âœ“ General Validation Exception
     
     Wird geworfen bei:
     - Allgemeinen Validierungsfehlern
@@ -236,7 +253,7 @@ class ValidationException(SolarForecastMLException):
 
 
 # ========================================================================
-# ML MODEL EXCEPTIONS # von Zara
+# ML MODEL EXCEPTIONS
 # ========================================================================
 
 class MLModelException(SolarForecastMLException):
@@ -263,7 +280,7 @@ class MLModelException(SolarForecastMLException):
 
 class ModelException(SolarForecastMLException):
     """
-    ✓ General Model Exception
+    âœ“ General Model Exception
     
     Wird geworfen bei:
     - Allgemeinen Model-Problemen
@@ -283,7 +300,7 @@ class ModelException(SolarForecastMLException):
 
 
 # ========================================================================
-# STORAGE EXCEPTIONS # von Zara
+# STORAGE EXCEPTIONS
 # ========================================================================
 
 class StorageException(SolarForecastMLException):
@@ -309,7 +326,7 @@ class StorageException(SolarForecastMLException):
 
 
 # ========================================================================
-# FORECAST EXCEPTIONS # von Zara
+# FORECAST EXCEPTIONS
 # ========================================================================
 
 class ForecastException(SolarForecastMLException):
@@ -334,7 +351,7 @@ class ForecastException(SolarForecastMLException):
 
 
 # ========================================================================
-# CIRCUIT BREAKER EXCEPTION # von Zara
+# CIRCUIT BREAKER EXCEPTION
 # ========================================================================
 
 class CircuitBreakerOpenException(SolarForecastMLException):
@@ -359,12 +376,12 @@ class CircuitBreakerOpenException(SolarForecastMLException):
 
 
 # ========================================================================
-# HELPER FUNCTIONS # von Zara
+# HELPER FUNCTIONS
 # ========================================================================
 
 def create_context(**kwargs) -> dict[str, Any]:
     """
-    ✓ Erstellt strukturierten Error-Kontext
+    âœ“ Erstellt strukturierten Error-Kontext
     
     Helper-Funktion zum Erstellen von Error-Context-Dictionaries
     mit standardisierten Feldern.
@@ -400,7 +417,7 @@ def _get_current_timestamp() -> str:
 
 
 # ========================================================================
-# EXCEPTION FACTORY # von Zara
+# EXCEPTION FACTORY
 # ========================================================================
 
 def create_exception(

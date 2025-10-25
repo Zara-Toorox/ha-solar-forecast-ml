@@ -5,6 +5,21 @@ Version 4.8.0
 
 Copyright (C) 2025 Zara-Toorox
 # von Zara
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -28,7 +43,7 @@ class ForecastResult:
     method: str
     calibrated: bool
     
-    # Optionale Metadaten # von Zara
+    # Optionale Metadaten
     base_capacity: Optional[float] = None
     correction_factor: Optional[float] = None
     features_used: Optional[int] = None
@@ -48,7 +63,7 @@ class ForecastResult:
             "_calibrated": self.calibrated,
         }
         
-        # Füge optionale Metadaten hinzu # von Zara
+        # Füge optionale Metadaten hinzu
         if self.base_capacity is not None:
             result["_base_capacity"] = self.base_capacity
         if self.correction_factor is not None:
@@ -151,7 +166,7 @@ class ForecastStrategy(ABC):
         # von Zara
         """
         self._logger.debug(
-            f"✅ {self.name}: today={result.forecast_today:.2f}kWh, "
+            f"✓ {self.name}: today={result.forecast_today:.2f}kWh, "
             f"tomorrow={result.forecast_tomorrow:.2f}kWh, "
             f"confidence={result.confidence_today:.1f}% {details}"
         )
