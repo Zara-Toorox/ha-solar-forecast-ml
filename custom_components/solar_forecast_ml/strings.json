@@ -1,0 +1,127 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solar Forecast ML - Konfiguration",
+        "description": "Konfiguriere deine Solar Forecast ML Integration.\n\nPflichtfelder: Wettersensor, Leistungssensor und Tagesertrag\nAlle anderen Felder sind optional und können leer gelassen werden.",
+        "data": {
+          "weather_entity": "Wettersensor",
+          "power_entity": "Leistungssensor (W)",
+          "solar_yield_today": "Solar-Tagesertrag (kWh)",
+          "total_consumption_today": "Tagesverbrauch (kWh)",
+          "plant_kwp": "Anlagenleistung (kWp)",
+          "rain_sensor": "Regensensor",
+          "current_power": "Aktuelle Leistung (W)",
+          "lux_sensor": "Helligkeitssensor (Lux)",
+          "temp_sensor": "Temperatursensor",
+          "wind_sensor": "Windsensor",
+          "uv_sensor": "UV-Sensor",
+          "forecast_solar": "Forecast.Solar Sensor"
+        },
+        "data_description": {
+          "weather_entity": "Wetter-Entity für Vorhersageberechnungen (Pflichtfeld)",
+          "power_entity": "Aktueller Solar-Leistungssensor in Watt - für Produktionszeit-Berechnung (Pflichtfeld)",
+          "solar_yield_today": "Täglicher Solar-Ertrag in kWh - MUSS sich täglich um Mitternacht zurücksetzen (z.B. utility_meter daily) - Für ML-Training (Pflichtfeld)",
+          "total_consumption_today": "Tagesverbrauchssensor in kWh - für Autarkie-Berechnung (optional)",
+          "plant_kwp": "Installierte Spitzenleistung in Kilowatt Peak (optional)",
+          "rain_sensor": "Externer Regensensor (optional)",
+          "current_power": "Sensor für aktuelle Solarleistung (optional)",
+          "lux_sensor": "Externer Helligkeitssensor in Lux (optional)",
+          "temp_sensor": "Externer Temperatursensor (optional)",
+          "wind_sensor": "Externer Windsensor (optional)",
+          "uv_sensor": "Externer UV-Strahlungssensor (optional)",
+          "forecast_solar": "Forecast.Solar Integration Sensor (optional)"
+        }
+      },
+      "reconfigure": {
+        "title": "Solar Forecast ML - Neukonfiguration",
+        "description": "Ändere die Konfiguration deiner Solar Forecast ML Integration.\n\nPflichtfelder: Wettersensor, Leistungssensor und Tagesertrag\nAlle anderen Felder sind optional. Leere Felder werden gelöscht.",
+        "data": {
+          "weather_entity": "Wettersensor",
+          "power_entity": "Leistungssensor (W)",
+          "solar_yield_today": "Solar-Tagesertrag (kWh)",
+          "total_consumption_today": "Tagesverbrauch (kWh)",
+          "plant_kwp": "Anlagenleistung (kWp)",
+          "rain_sensor": "Regensensor",
+          "current_power": "Aktuelle Leistung (W)",
+          "lux_sensor": "Helligkeitssensor (Lux)",
+          "temp_sensor": "Temperatursensor",
+          "wind_sensor": "Windsensor",
+          "uv_sensor": "UV-Sensor",
+          "forecast_solar": "Forecast.Solar Sensor"
+        },
+        "data_description": {
+          "weather_entity": "Wetter-Entity für Vorhersageberechnungen (Pflichtfeld)",
+          "power_entity": "Aktueller Solar-Leistungssensor in Watt - für Produktionszeit-Berechnung (Pflichtfeld)",
+          "solar_yield_today": "Täglicher Solar-Ertrag in kWh - MUSS sich täglich um Mitternacht zurücksetzen (z.B. utility_meter daily) - Für ML-Training (Pflichtfeld)",
+          "total_consumption_today": "Tagesverbrauchssensor in kWh - für Autarkie-Berechnung (optional)",
+          "plant_kwp": "Installierte Spitzenleistung in Kilowatt Peak (optional)",
+          "rain_sensor": "Externer Regensensor (optional)",
+          "current_power": "Sensor für aktuelle Solarleistung (optional)",
+          "lux_sensor": "Externer Helligkeitssensor in Lux (optional)",
+          "temp_sensor": "Externer Temperatursensor (optional)",
+          "wind_sensor": "Externer Windsensor (optional)",
+          "uv_sensor": "Externer UV-Strahlungssensor (optional)",
+          "forecast_solar": "Forecast.Solar Integration Sensor (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Sensor fehlgeschlagen",
+      "invalid_auth": "Ungültige Authentifizierung",
+      "unknown": "Unbekannter Fehler aufgetreten",
+      "invalid_capacity": "Ungültige Kapazität (muss zwischen 0.1 und 1000 kWp liegen)",
+      "invalid_efficiency": "Ungültige Effizienz (muss zwischen 0.01 und 1.0 liegen)",
+      "invalid_input": "Ungültige Eingabe",
+      "required": "Dieses Feld ist erforderlich"
+    },
+    "abort": {
+      "already_configured": "Diese Integration ist bereits konfiguriert",
+      "reconfigure_successful": "Neukonfiguration erfolgreich abgeschlossen",
+      "not_reconfigure": "Dieser Flow ist nur für Neukonfiguration verfügbar",
+      "entry_not_found": "Konfigurationseintrag nicht gefunden"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Solar Forecast ML - Optionen",
+        "description": "Konfiguriere die erweiterten Optionen für Solar Forecast ML.",
+        "data": {
+          "update_interval": "Update-Intervall (Sekunden)",
+          "diagnostic": "Diagnose-Modus aktivieren",
+          "enable_hourly": "Stündliche Vorhersagen aktivieren",
+          "notify_startup": "Start-Benachrichtigung",
+          "notify_forecast": "Vorhersage-Benachrichtigungen",
+          "notify_learning": "Lernprozess-Benachrichtigungen",
+          "notify_successful_learning": "Erfolgreiches Learning-Benachrichtigungen"
+        },
+        "data_description": {
+          "update_interval": "Wie oft sollen Vorhersagen aktualisiert werden? (300-86400 Sekunden)",
+          "diagnostic": "Aktiviere erweiterte Diagnose-Sensoren für Fehlersuche",
+          "enable_hourly": "Aktiviere zusätzliche stündliche Vorhersagen (optional)",
+          "notify_startup": "Zeige Benachrichtigung beim Start der Integration",
+          "notify_forecast": "Zeige Benachrichtigung bei neuen Vorhersage-Updates",
+          "notify_learning": "Zeige Benachrichtigung während des ML-Trainings",
+          "notify_successful_learning": "Zeige Benachrichtigung nach erfolgreichem ML-Training"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "update_forecast": {
+        "name": "Prognose aktualisieren"
+      },
+      "retrain_model": {
+        "name": "Modell neu trainieren"
+      },
+      "calibrate_model": {
+        "name": "Modell kalibrieren"
+      },
+      "clear_errors": {
+        "name": "Fehler löschen"
+      }
+    }
+  }
+}
