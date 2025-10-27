@@ -1,6 +1,6 @@
 """
-Abstract Base Strategy für Forecast-Berechnungen.
-Definiert das Interface für ML und Rule-based Forecasts.
+Abstract Base Strategy fÃ¼r Forecast-Berechnungen.
+Definiert das Interface fÃ¼r ML und Rule-based Forecasts.
 Version 4.8.0
 
 Copyright (C) 2025 Zara-Toorox
@@ -33,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 class ForecastResult:
     """
     Ergebnis einer Forecast-Berechnung.
-    Einheitliches Format für alle Strategien.
+    Einheitliches Format fÃ¼r alle Strategien.
     # von Zara
     """
     forecast_today: float
@@ -51,7 +51,7 @@ class ForecastResult:
     
     def to_dict(self) -> Dict[str, Any]:
         """
-        Konvertiert ForecastResult zu Dictionary für Coordinator.
+        Konvertiert ForecastResult zu Dictionary fÃ¼r Coordinator.
         # von Zara
         """
         result = {
@@ -63,7 +63,7 @@ class ForecastResult:
             "_calibrated": self.calibrated,
         }
         
-        # Füge optionale Metadaten hinzu
+        # FÃ¼ge optionale Metadaten hinzu
         if self.base_capacity is not None:
             result["_base_capacity"] = self.base_capacity
         if self.correction_factor is not None:
@@ -78,8 +78,8 @@ class ForecastResult:
 
 class ForecastStrategy(ABC):
     """
-    Abstract Base Class für Forecast-Strategien.
-    Definiert das gemeinsame Interface für alle Forecast-Methoden.
+    Abstract Base Class fÃ¼r Forecast-Strategien.
+    Definiert das gemeinsame Interface fÃ¼r alle Forecast-Methoden.
     # von Zara
     """
     
@@ -121,7 +121,7 @@ class ForecastStrategy(ABC):
     @abstractmethod
     def is_available(self) -> bool:
         """
-        Prüft ob die Strategie verfügbar ist.
+        PrÃ¼ft ob die Strategie verfÃ¼gbar ist.
         
         Returns:
             True wenn Strategie verwendet werden kann
@@ -132,11 +132,11 @@ class ForecastStrategy(ABC):
     @abstractmethod
     def get_priority(self) -> int:
         """
-        Gibt Priorität der Strategie zurück.
-        Höhere Werte = höhere Priorität.
+        Gibt PrioritÃ¤t der Strategie zurÃ¼ck.
+        HÃ¶here Werte = hÃ¶here PrioritÃ¤t.
         
         Returns:
-            Priorität (0-100)
+            PrioritÃ¤t (0-100)
         # von Zara
         """
         pass
@@ -162,11 +162,11 @@ class ForecastStrategy(ABC):
         
         Args:
             result: ForecastResult
-            details: Zusätzliche Details (optional)
+            details: ZusÃ¤tzliche Details (optional)
         # von Zara
         """
         self._logger.debug(
-            f"✓ {self.name}: today={result.forecast_today:.2f}kWh, "
+            f"âœ“ {self.name}: today={result.forecast_today:.2f}kWh, "
             f"tomorrow={result.forecast_tomorrow:.2f}kWh, "
             f"confidence={result.confidence_today:.1f}% {details}"
         )

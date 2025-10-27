@@ -337,7 +337,7 @@ class ErrorHandlingService:
         if len(self.ml_operation_log) > self.max_ml_log_size:
             self.ml_operation_log = self.ml_operation_log[-self.max_ml_log_size:]
         
-        status_icon = "✅" if success else "❌"
+        status_icon = "âœ…" if success else "âŒ"
         _LOGGER.info(
             "[ML OPERATION] %s %s | Metrics: %s | Context: %s | Duration: %.2fs",
             status_icon,
@@ -371,7 +371,7 @@ class ErrorHandlingService:
         if len(self.json_operation_log) > self.max_json_log_size:
             self.json_operation_log = self.json_operation_log[-self.max_json_log_size:]
         
-        status_icon = "✅" if success else "❌"
+        status_icon = "âœ…" if success else "âŒ"
         if success:
             _LOGGER.info(
                 "[JSON OPERATION] %s %s | File: %s | Size: %s bytes | Records: %s",
@@ -412,7 +412,7 @@ class ErrorHandlingService:
         if len(self.sensor_status_log) > self.max_sensor_log_size:
             self.sensor_status_log = self.sensor_status_log[-self.max_sensor_log_size:]
         
-        status_icon = "✅" if available else "❌"
+        status_icon = "âœ…" if available else "âŒ"
         if available:
             _LOGGER.debug(
                 "[SENSOR STATUS] %s %s (%s) | Value: %s",

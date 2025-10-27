@@ -1,5 +1,5 @@
 """
-Training Logic für ML Model mit Ridge Regression.
+Training Logic fÃ¼r ML Model mit Ridge Regression.
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -107,7 +107,7 @@ class RidgeTrainer:
             if ss_tot > 1e-8:
                 r_squared = 1 - (ss_res / ss_tot)
                 accuracy = max(0.0, min(1.0, r_squared))
-                _LOGGER.info(f"R²={r_squared:.4f}, accuracy={accuracy:.4f}")
+                _LOGGER.info(f"RÂ²={r_squared:.4f}, accuracy={accuracy:.4f}")
             else:
                 accuracy = 0.0
                 _LOGGER.warning("ss_tot near zero - all target values identical?")
@@ -119,7 +119,7 @@ class RidgeTrainer:
                 )
             
             self.best_lambda = best_lambda
-            _LOGGER.info(f"Ridge Training: Lambda={best_lambda}, R²={accuracy:.4f}")
+            _LOGGER.info(f"Ridge Training: Lambda={best_lambda}, RÂ²={accuracy:.4f}")
             
             return weights_dict, float(bias), accuracy, best_lambda
             

@@ -1,5 +1,5 @@
 """
-Typed Data Adapter für Solar Forecast ML Integration.
+Typed Data Adapter fÃ¼r Solar Forecast ML Integration.
 PROGRESSIVE UPGRADE v5.1.0: Feature Normalisierung Support
 
 Copyright (C) 2025 Zara-Toorox
@@ -33,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 
 class TypedDataAdapter:
     """
-    Adapter fÃ¼r Konvertierung zwischen Dict und Typed Dataclasses.
+    Adapter fÃƒÂ¼r Konvertierung zwischen Dict und Typed Dataclasses.
     PROGRESSIVE UPGRADE: Feature Normalisierung Support
     """
     
@@ -125,7 +125,7 @@ class TypedDataAdapter:
     @staticmethod
     def learned_weights_to_dict(weights: LearnedWeights) -> Dict[str, Any]:
         """
-        Konvertiert LearnedWeights zu Dict fÃ¼r JSON-Speicherung.
+        Konvertiert LearnedWeights zu Dict fÃƒÂ¼r JSON-Speicherung.
         PROGRESSIVE UPGRADE: feature_means und feature_stds inkludiert
         """
         result = {
@@ -189,7 +189,7 @@ class TypedDataAdapter:
     
     @staticmethod
     def hourly_profile_to_dict(profile: HourlyProfile) -> Dict[str, Any]:
-        """Konvertiert HourlyProfile zu Dict fÃ¼r JSON-Speicherung."""
+        """Konvertiert HourlyProfile zu Dict fÃƒÂ¼r JSON-Speicherung."""
         return {
             "version": "1.0",
             "hourly_factors": profile.hourly_factors,
@@ -202,7 +202,7 @@ class TypedDataAdapter:
     
     @staticmethod
     def prediction_record_to_dict(record: PredictionRecord) -> Dict[str, Any]:
-        """Konvertiert PredictionRecord zu Dict fÃ¼r JSON-Speicherung."""
+        """Konvertiert PredictionRecord zu Dict fÃƒÂ¼r JSON-Speicherung."""
         return {
             "timestamp": record.timestamp,
             "predicted_value": record.predicted_value,

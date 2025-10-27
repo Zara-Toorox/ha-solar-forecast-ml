@@ -1,7 +1,7 @@
 """
-Config flow fÃ¼r die Solar Forecast ML Integration.
+Config flow fÃƒÂ¼r die Solar Forecast ML Integration.
 
-Diese Datei definiert die BenutzeroberflÃ¤che, die beim HinzufÃ¼gen und
+Diese Datei definiert die BenutzeroberflÃƒÂ¤che, die beim HinzufÃƒÂ¼gen und
 Konfigurieren der Integration in Home Assistant angezeigt wird.
 
 Copyright (C) 2025 Zara-Toorox
@@ -24,9 +24,9 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-# KORREKTUR: OptionsFlow statt OptionsFlowWithReload verwenden, wenn __init__ wegfÃ¤llt
+# KORREKTUR: OptionsFlow statt OptionsFlowWithReload verwenden, wenn __init__ wegfÃƒÂ¤llt
 # ODER OptionsFlowWithReload behalten, __init__ weglassen funktioniert auch.
-# Wir behalten OptionsFlowWithReload fÃ¼r die automatische Reload-Funktion.
+# Wir behalten OptionsFlowWithReload fÃƒÂ¼r die automatische Reload-Funktion.
 from homeassistant.config_entries import OptionsFlowWithReload, SOURCE_RECONFIGURE
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
@@ -35,7 +35,7 @@ from homeassistant.helpers import selector
 from .const import (
     # Basis-Konstanten
     DOMAIN,
-    # Config-SchlÃ¼ssel
+    # Config-SchlÃƒÂ¼ssel
     CONF_CURRENT_POWER,
     CONF_FORECAST_SOLAR,
     CONF_LUX_SENSOR,
@@ -48,7 +48,7 @@ from .const import (
     CONF_UV_SENSOR,
     CONF_WEATHER_ENTITY,
     CONF_WIND_SENSOR,
-    # Options-SchlÃ¼ssel
+    # Options-SchlÃƒÂ¼ssel
     CONF_UPDATE_INTERVAL,
     CONF_DIAGNOSTIC,
     CONF_HOURLY,
@@ -67,12 +67,12 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
         """Leitet den Benutzer zum Options-Flow."""
-        # KORREKTUR (nach Vorschlag Freund): Kein Argument mehr Ã¼bergeben!
+        # KORREKTUR (nach Vorschlag Freund): Kein Argument mehr ÃƒÂ¼bergeben!
         return SolarForecastMLOptionsFlow()
 
     def _get_schema(self, defaults: dict[str, Any] | None) -> vol.Schema:
         """
-        Gibt das Schema fÃ¼r die Konfiguration zurÃ¼ck, mit Defaults fÃ¼r Prefill.
+        Gibt das Schema fÃƒÂ¼r die Konfiguration zurÃƒÂ¼ck, mit Defaults fÃƒÂ¼r Prefill.
         """
         if defaults is None:
             defaults = {}
@@ -220,9 +220,9 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
                 pass
 
             # --- KORREKTUR (START) ---
-            # Wir dÃ¼rfen NICHT {**entry.data, **user_input} verwenden.
-            # Das fÃ¼hrt dazu, dass gelÃ¶schte (leere) Felder mit den alten
-            # Werten aus entry.data wieder aufgefÃ¼llt werden.
+            # Wir dÃƒÂ¼rfen NICHT {**entry.data, **user_input} verwenden.
+            # Das fÃƒÂ¼hrt dazu, dass gelÃƒÂ¶schte (leere) Felder mit den alten
+            # Werten aus entry.data wieder aufgefÃƒÂ¼llt werden.
             # Wir verwenden user_input.copy() als alleinige Basis.
             cleaned_data = user_input.copy()
             
@@ -249,7 +249,7 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
 
 
 class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
-    """Behandelt den Options-Flow mit automatischer Reload nach ÃƒÆ’Ã¢â‚¬Å¾nderungen."""
+    """Behandelt den Options-Flow mit automatischer Reload nach ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾nderungen."""
 
     # KORREKTUR (nach Vorschlag Freund): KEINE __init__-Methode mehr!
     # self.config_entry wird automatisch von der Basisklasse gesetzt.
@@ -295,7 +295,7 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
                 self.OPTIONS_SCHEMA,
-                self.config_entry.options # KORREKTUR (nach Vorschlag Freund): Zugriff Ã¼ber self.config_entry.options
+                self.config_entry.options # KORREKTUR (nach Vorschlag Freund): Zugriff ÃƒÂ¼ber self.config_entry.options
             ),
             errors=errors,
         )

@@ -1,7 +1,7 @@
 """
-Data Manager fÃƒÂ¼r die Solar Forecast ML Integration.
-Ã¢Å“â€œ ERWEITERT mit fehlenden ML-Methods und Backup-System
-Ã¢â‚¬Â¢ UPDATE PATCH: update_today_predictions_actual() fÃƒÂ¼r tagesbasierte actual_value Updates - von Zara
+Data Manager fÃƒÆ’Ã‚Â¼r die Solar Forecast ML Integration.
+ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ERWEITERT mit fehlenden ML-Methods und Backup-System
+ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ UPDATE PATCH: update_today_predictions_actual() fÃƒÆ’Ã‚Â¼r tagesbasierte actual_value Updates - von Zara
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -53,8 +53,8 @@ _LOGGER = logging.getLogger(__name__)
 
 class DataManager:
     """
-    Data Manager fÃƒÂ¼r Solar Forecast ML.
-    Ã¢Å“â€œ ERWEITERT mit ML-Methods und Backup-System
+    Data Manager fÃƒÆ’Ã‚Â¼r Solar Forecast ML.
+    ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ERWEITERT mit ML-Methods und Backup-System
     """
 
     def __init__(self, hass: HomeAssistant, entry_id: str, data_dir: Path, error_handler=None):
@@ -63,10 +63,10 @@ class DataManager:
         
         Args:
             hass: Home Assistant instance
-            entry_id: Config Entry ID fÃƒÂ¼r Multi-Instance-Support
-            data_dir: Daten-Verzeichnis fÃƒÂ¼r JSON-Dateien
+            entry_id: Config Entry ID fÃƒÆ’Ã‚Â¼r Multi-Instance-Support
+            data_dir: Daten-Verzeichnis fÃƒÆ’Ã‚Â¼r JSON-Dateien
         
-        # GeÃƒÂ¤nderter Abschnitt von Zara - entry_id Parameter hinzugefÃƒÂ¼gt
+        # GeÃƒÆ’Ã‚Â¤nderter Abschnitt von Zara - entry_id Parameter hinzugefÃƒÆ’Ã‚Â¼gt
         """
         self.hass = hass
         self.entry_id = entry_id
@@ -81,7 +81,7 @@ class DataManager:
         self.model_state_file = self.data_dir / "model_state.json"
         self.hourly_samples_file = self.data_dir / "hourly_samples.json"
         
-        # Thread-safe lock fÃƒÂ¼r kritische Operations
+        # Thread-safe lock fÃƒÆ’Ã‚Â¼r kritische Operations
         self._file_lock = asyncio.Lock()
         
         _LOGGER.info("DataManager initialisiert mit async I/O support (Entry: %s)", entry_id)
@@ -260,7 +260,7 @@ class DataManager:
                 context=create_context(file=str(file_path), error=str(e))
             )
 
-    # Ã¢Å“â€œ ERWEITERT: ML-spezifische Methoden
+    # ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ERWEITERT: ML-spezifische Methoden
     async def add_prediction(self, prediction: PredictionRecord) -> None:
         """
         Add a new prediction to history.
@@ -270,7 +270,7 @@ class DataManager:
         """
         try:
             # PredictionRecord hat bereits Validierung in __post_init__ - von Zara
-            # Konvertiere PredictionRecord zu Dict fÃƒÂ¼r JSON - von Zara
+            # Konvertiere PredictionRecord zu Dict fÃƒÆ’Ã‚Â¼r JSON - von Zara
             from dataclasses import asdict
             prediction_dict = asdict(prediction)
             
@@ -303,7 +303,7 @@ class DataManager:
 
     async def add_prediction_record(self, record: Dict[str, Any]) -> None:
         """
-        FÃƒÂ¼gt einen neuen Prediction Record zur History hinzu.
+        FÃƒÆ’Ã‚Â¼gt einen neuen Prediction Record zur History hinzu.
         
         Args:
             record: Dictionary mit Prediction-Daten
@@ -345,7 +345,7 @@ class DataManager:
         DEPRECATED: Verwende update_today_predictions_actual() stattdessen - von Zara
         
         Args:
-            actual_value: Tatsächlicher Tagesertrag in kWh
+            actual_value: TatsÃ¤chlicher Tagesertrag in kWh
             accuracy: Optional berechnete Genauigkeit (0-1)
         """
         try:
@@ -382,7 +382,7 @@ class DataManager:
                 )
             
             _LOGGER.info(
-                f"Ã¢Å“â€œ Latest prediction updated: "
+                f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Latest prediction updated: "
                 f"predicted={latest_record.get('predicted_value', 0):.2f}kWh, "
                 f"actual={actual_value:.2f}kWh, "
                 f"accuracy={accuracy*100:.1f}%" if accuracy else "no accuracy"
@@ -398,7 +398,7 @@ class DataManager:
     async def update_today_predictions_actual(self, actual_value: float, accuracy: float = None) -> None:
         """
         Aktualisiert ALLE Prediction Records vom heutigen Tag mit actual_value.
-        Neue Methode für tagesbasierte Aktualisierung - von Zara
+        Neue Methode fÃ¼r tagesbasierte Aktualisierung - von Zara
         
         Args:
             actual_value: Tagesertrag in kWh
@@ -410,7 +410,7 @@ class DataManager:
             predictions = history_data.get('predictions', [])
             
             if not predictions:
-                _LOGGER.warning("Keine Predictions vorhanden - Update übersprungen")
+                _LOGGER.warning("Keine Predictions vorhanden - Update Ã¼bersprungen")
                 return
             
             today = dt_util.as_local(dt_util.utcnow()).date()
@@ -426,7 +426,7 @@ class DataManager:
                     record_timestamp = dt_util.parse_datetime(record.get('timestamp', ''))
                     record_date = dt_util.as_local(record_timestamp).date()
                     
-                    # PrÃƒÂ¼fe ob Record von heute ist - von Zara
+                    # PrÃƒÆ’Ã‚Â¼fe ob Record von heute ist - von Zara
                     if record_date == today:
                         # Update actual_value - von Zara
                         record['actual_value'] = actual_value
@@ -438,7 +438,7 @@ class DataManager:
                         updated_count += 1
                         
                 except (ValueError, KeyError) as e:
-                    _LOGGER.debug(f"Konnte Record nicht parsen, überspringe: {e}")
+                    _LOGGER.debug(f"Konnte Record nicht parsen, Ã¼berspringe: {e}")
                     continue
             
             # Speichere aktualisierte History - von Zara
@@ -446,15 +446,15 @@ class DataManager:
                 await self.save_prediction_history(history_data)
                 
                 _LOGGER.info(
-                    f"Ã¢Å“â€œ {updated_count} Predictions vom heutigen Tag aktualisiert: "
+                    f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ {updated_count} Predictions vom heutigen Tag aktualisiert: "
                     f"actual={actual_value:.2f}kWh"
                     + (f", accuracy={accuracy*100:.1f}%" if accuracy is not None else "")
                 )
             else:
-                _LOGGER.warning(f"Ã¢Å¡Â  Keine Predictions vom heutigen Tag gefunden (Suchte: {today})")
+                _LOGGER.warning(f"ÃƒÂ¢Ã…Â¡Ã‚Â  Keine Predictions vom heutigen Tag gefunden (Suchte: {today})")
             
         except Exception as e:
-            _LOGGER.error(f"Ã¢ÂÅ’ Failed to update today predictions actual: {e}")
+            _LOGGER.error(f"ÃƒÂ¢Ã‚ÂÃ…â€™ Failed to update today predictions actual: {e}")
             raise DataIntegrityException(
                 f"Failed to update today predictions actual value: {str(e)}",
                 context=create_context(error=str(e))
@@ -706,7 +706,7 @@ class DataManager:
             return True
             
         except Exception as e:
-            _LOGGER.error(f"Ã¢ÂÅ’ Data migration failed: {e}")
+            _LOGGER.error(f"ÃƒÂ¢Ã‚ÂÃ…â€™ Data migration failed: {e}")
             return False
 
     async def _migrate_prediction_history(self) -> None:
@@ -1033,7 +1033,7 @@ class DataManager:
         Verifiziert Datenpersistenz und erstellt fehlende Dateien. // von Zara
         """
         try:
-            # PrÃƒÂ¼fe kritische Dateien auf Existenz // von Zara
+            # PrÃƒÆ’Ã‚Â¼fe kritische Dateien auf Existenz // von Zara
             critical_files = [
                 (self.prediction_history_file, "prediction_history"),
                 (self.learned_weights_file, "learned_weights"),
@@ -1053,7 +1053,7 @@ class DataManager:
                 await self._initialize_missing_files()
                 _LOGGER.info("Auto-Save: Fehlende Dateien wiederhergestellt")
             else:
-                _LOGGER.debug("Ã¢Å“â€œ Auto-Save: Alle Daten persistent")
+                _LOGGER.debug("ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Auto-Save: Alle Daten persistent")
             
         except Exception as e:
             _LOGGER.error(f"Auto-Save fehlgeschlagen: {e}")

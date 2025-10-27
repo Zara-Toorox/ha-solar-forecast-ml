@@ -1,6 +1,6 @@
 """
 ML-basierte Forecast-Strategie.
-Verwendet MLPredictor für Machine Learning Vorhersagen.
+Verwendet MLPredictor fÃ¼r Machine Learning Vorhersagen.
 Version 4.8.1 - Encoding Fix von Zara
 
 Copyright (C) 2025 Zara-Toorox
@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 class MLForecastStrategy(ForecastStrategy):
     """
     ML-basierte Forecast-Strategie.
-    Verwendet trainiertes ML-Model für präzise Vorhersagen.
+    Verwendet trainiertes ML-Model fÃ¼r prÃ¤zise Vorhersagen.
     # von Zara
     """
     
@@ -49,14 +49,14 @@ class MLForecastStrategy(ForecastStrategy):
         self.ml_predictor = ml_predictor
         self.error_handler = error_handler
         
-        # Konstanten für ML-Forecast
+        # Konstanten fÃ¼r ML-Forecast
         self.PREDICTION_MIN_VALUE = 0.0
         self.PREDICTION_MAX_VALUE = 100.0
         self.TOMORROW_DISCOUNT_FACTOR = 0.92  # Tomorrow ist etwas unsicherer
         
     def is_available(self) -> bool:
         """
-        Prüft ob ML Predictor verfügbar und gesund ist.
+        PrÃ¼ft ob ML Predictor verfÃ¼gbar und gesund ist.
         # von Zara
         """
         if not self.ml_predictor:
@@ -70,10 +70,10 @@ class MLForecastStrategy(ForecastStrategy):
     
     def get_priority(self) -> int:
         """
-        ML hat höchste Priorität wenn verfügbar.
+        ML hat hÃ¶chste PrioritÃ¤t wenn verfÃ¼gbar.
         # von Zara
         """
-        return 100  # Höchste Priorität
+        return 100  # HÃ¶chste PrioritÃ¤t
     
     async def calculate_forecast(
         self,
@@ -97,11 +97,11 @@ class MLForecastStrategy(ForecastStrategy):
         # von Zara
         """
         try:
-            _LOGGER.debug("ðŸ§  Starte ML-Forecast-Berechnung...")
+            _LOGGER.debug("Ã°Å¸Â§Â  Starte ML-Forecast-Berechnung...")
             
             # Validiere ML Predictor
             if not self.is_available():
-                raise RuntimeError("ML Predictor nicht verfügbar oder unhealthy")
+                raise RuntimeError("ML Predictor nicht verfÃ¼gbar oder unhealthy")
             
             # Hole ML Prediction
             prediction_result = await self.ml_predictor.predict(
@@ -152,7 +152,7 @@ class MLForecastStrategy(ForecastStrategy):
             return result
             
         except Exception as e:
-            _LOGGER.error(f"âŒ ML Forecast Berechnung fehlgeschlagen: {e}", exc_info=True)
+            _LOGGER.error(f"Ã¢ÂÅ’ ML Forecast Berechnung fehlgeschlagen: {e}", exc_info=True)
             
             # Record Error im Error Handler
             if self.error_handler:

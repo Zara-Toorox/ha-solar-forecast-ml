@@ -56,9 +56,9 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     version = config_entry.version
     
-    _LOGGER.info(f"Migrating Solar Forecast ML from version {version} to version 4")
+    _LOGGER.info(f"Migrating Solar Forecast ML from version {version} to version 6")
     
-    if version < 4:
+    if version < 6:
         new_data = {**config_entry.data}
         
         keys_to_remove = [
@@ -102,7 +102,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             version=4
         )
         
-        _LOGGER.info("✓ Migration to version 4 completed successfully")
+        _LOGGER.info("Migration to version 6 completed successfully")
         return True
     
     return True
@@ -114,14 +114,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    _LOGGER.info("Setting up Solar Forecast ML integration - Version 4.9.2")
+    _LOGGER.info("Setting up Solar Forecast ML integration - Version 6.0.0")
     
     _LOGGER.info("Initializing NotificationService...")
     notification_service = await create_notification_service(hass)
     
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["notification_service"] = notification_service
-    _LOGGER.info("✓ NotificationService initialized")
+    _LOGGER.info("NotificationService initialized")
     
     _LOGGER.info("Checking dependencies...")
     dependency_handler = DependencyHandler()
@@ -139,9 +139,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Initializing DataManager...")
     try:
         await coordinator.data_manager.initialize()
-        _LOGGER.info(f"✓ DataManager initialized - Directory: {DATA_DIR}")
+        _LOGGER.info(f"DataManager initialized - Directory: {DATA_DIR}")
     except Exception as err:
-        _LOGGER.error(f"✗ Failed to initialize DataManager: {err}")
+        _LOGGER.error(f"Failed to initialize DataManager: {err}")
         await notification_service.show_installation_error(
             f"DataManager Initialisierung fehlgeschlagen: {err}"
         )
@@ -177,13 +177,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 missing_deps.append(pkg)
         
         if dependencies_ok:
-            _LOGGER.info("✓ All dependencies satisfied - ML Mode active")
+            _LOGGER.info("All dependencies satisfied - ML Mode active")
             await notification_service.show_startup_success(
                 ml_mode=True,
                 installed_packages=installed_deps
             )
         else:
-            _LOGGER.warning(f"⚠️ Missing dependencies: {', '.join(missing_deps)} - Fallback Mode")
+            _LOGGER.warning(f" Missing dependencies: {', '.join(missing_deps)} - Fallback Mode")
             await notification_service.show_startup_success(
                 ml_mode=False,
                 installed_packages=installed_deps,
@@ -207,7 +207,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         if coordinator and hasattr(coordinator, 'production_time_calculator'):
             coordinator.production_time_calculator.stop_tracking()
-            _LOGGER.info("✓ ProductionTimeCalculator Listener bereinigt")
+            _LOGGER.info("ProductionTimeCalculator Listener bereinigt")
         
         if coordinator and hasattr(coordinator, 'data_manager'):
             await coordinator.data_manager.cleanup()

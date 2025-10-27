@@ -25,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 
 class SensorDataCollector:
     """
-    Zentrale Klasse für Sensor-Daten-Sammlung
+    Zentrale Klasse fÃ¼r Sensor-Daten-Sammlung
     """
     
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
@@ -76,7 +76,7 @@ class SensorDataCollector:
                 value = self.get_sensor_value(entity_id)
                 if value is not None:
                     sensor_data[key] = value
-                    _LOGGER.debug(f"✓ Sensor {key} geladen: {value}")
+                    _LOGGER.debug(f"âœ“ Sensor {key} geladen: {value}")
         
         return sensor_data
     
@@ -117,13 +117,13 @@ class SensorDataCollector:
                     value = self.get_sensor_value(entity_id)
                     if value is not None:
                         available_count += 1
-                        sensor_status.append(f"{key}=✓")
+                        sensor_status.append(f"{key}=âœ“")
                     else:
-                        sensor_status.append(f"{key}=✗")
+                        sensor_status.append(f"{key}=âœ—")
             
             if available_count > 0:
                 _LOGGER.info(
-                    "Externe Sensoren bereit: %d verfügbar nach %ds [%s]",
+                    "Externe Sensoren bereit: %d verfÃ¼gbar nach %ds [%s]",
                     available_count, total_waited, ", ".join(sensor_status)
                 )
                 return available_count
@@ -131,5 +131,5 @@ class SensorDataCollector:
             await asyncio.sleep(wait_interval)
             total_waited += wait_interval
         
-        _LOGGER.warning("Keine externen Sensoren verfügbar nach %ds", max_wait)
+        _LOGGER.warning("Keine externen Sensoren verfÃ¼gbar nach %ds", max_wait)
         return 0

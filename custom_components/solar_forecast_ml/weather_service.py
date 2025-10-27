@@ -43,8 +43,8 @@ DEFAULT_WEATHER_DATA = {
 
 class WeatherService:
     """
-    Weather Service für Home Assistant Weather Entities
-    âœ“ Bereinigt: Nur HA Weather Entities, kein OpenWeatherMap
+    Weather Service fÃ¼r Home Assistant Weather Entities
+    Ã¢Å“â€œ Bereinigt: Nur HA Weather Entities, kein OpenWeatherMap
     # von Zara
     """
     
@@ -61,21 +61,21 @@ class WeatherService:
         """
         Validiere Weather Service Konfiguration
         
-        Prüft nur noch Home Assistant Weather Entity
+        PrÃ¼ft nur noch Home Assistant Weather Entity
         # von Zara
         """
         if not self.weather_entity:
             raise ConfigurationException("Weather Entity nicht konfiguriert")
         
-        # Prüfe ob Entity existiert (kann später starten, daher nur Warning)
+        # PrÃ¼fe ob Entity existiert (kann spÃ¤ter starten, daher nur Warning)
         state = self.hass.states.get(self.weather_entity)
         if state is None:
             _LOGGER.warning(
-                f"Weather Entity {self.weather_entity} aktuell nicht verfügbar. "
+                f"Weather Entity {self.weather_entity} aktuell nicht verfÃ¼gbar. "
                 f"Wird beim Start geladen."
             )
         
-        _LOGGER.info(f"âœ“ Weather Service konfiguriert: {self.weather_entity}")
+        _LOGGER.info(f"Ã¢Å“â€œ Weather Service konfiguriert: {self.weather_entity}")
     
     
     async def initialize(self) -> bool:
@@ -86,17 +86,17 @@ class WeatherService:
         # von Zara
         """
         try:
-            # Prüfe ob Entity verfügbar ist
+            # PrÃ¼fe ob Entity verfÃ¼gbar ist
             state = self.hass.states.get(self.weather_entity)
             if state is None:
-                _LOGGER.warning(f"Weather Entity {self.weather_entity} noch nicht verfügbar")
+                _LOGGER.warning(f"Weather Entity {self.weather_entity} noch nicht verfÃ¼gbar")
                 return False
             
             if state.state in ["unavailable", "unknown"]:
                 _LOGGER.warning(f"Weather Entity {self.weather_entity} ist {state.state}")
                 return False
             
-            _LOGGER.info(f"âœ“ Weather Service initialisiert: {self.weather_entity}")
+            _LOGGER.info(f"Ã¢Å“â€œ Weather Service initialisiert: {self.weather_entity}")
             return True
             
         except Exception as e:
@@ -146,7 +146,7 @@ class WeatherService:
         state = self.hass.states.get(self.weather_entity)
         
         if state is None:
-            raise WeatherAPIException(f"Weather Entity {self.weather_entity} nicht verfügbar")
+            raise WeatherAPIException(f"Weather Entity {self.weather_entity} nicht verfÃ¼gbar")
         
         if state.state in ["unavailable", "unknown"]:
             raise WeatherAPIException(
@@ -169,8 +169,8 @@ class WeatherService:
             }
             
             _LOGGER.debug(
-                f"âœ“ HA Weather data retrieved from {self.weather_entity}: "
-                f"Temp={weather_data['temperature']}Â°C, "
+                f"Ã¢Å“â€œ HA Weather data retrieved from {self.weather_entity}: "
+                f"Temp={weather_data['temperature']}Ã‚Â°C, "
                 f"Clouds={weather_data['cloud_cover']}%, "
                 f"Condition={weather_data['condition']}"
             )
@@ -242,7 +242,7 @@ class WeatherService:
         Hole Forecast-Daten von Home Assistant Weather Entity
         
         Args:
-            hours: Anzahl Stunden für Forecast
+            hours: Anzahl Stunden fÃ¼r Forecast
         
         Returns:
             Liste mit Forecast-Daten pro Stunde
@@ -256,22 +256,22 @@ class WeatherService:
         state = self.hass.states.get(weather_entity)
         
         if state is None:
-            raise WeatherAPIException(f"Weather Entity {weather_entity} nicht verfügbar")
+            raise WeatherAPIException(f"Weather Entity {weather_entity} nicht verfÃ¼gbar")
         
         # Extrahiere Forecast aus Attributes
         attributes = state.attributes
         forecast_data = attributes.get("forecast", [])
         
         if not forecast_data:
-            _LOGGER.warning(f"Keine Forecast-Daten in {weather_entity} verfügbar")
+            _LOGGER.warning(f"Keine Forecast-Daten in {weather_entity} verfÃ¼gbar")
             return []
         
-        # Limitiere auf gewünschte Stunden
+        # Limitiere auf gewÃ¼nschte Stunden
         return forecast_data[:hours]
     
     def get_health_status(self) -> dict[str, Any]:
         """
-        Prüfe Health Status des Weather Service
+        PrÃ¼fe Health Status des Weather Service
         
         Returns:
             Dict mit health_status und details
@@ -306,14 +306,14 @@ class WeatherService:
         return {
             "healthy": True,
             "status": "ok",
-            "message": f"Weather Entity {weather_entity} ist verfügbar",
+            "message": f"Weather Entity {weather_entity} ist verfÃ¼gbar",
             "condition": state.state,
             "last_updated": state.last_updated.isoformat() if state.last_updated else None
         }
     
     def update_weather_entity(self, new_entity: str) -> None:
         """
-        âœ“ Update Weather Entity (z.B. bei Fallback)
+        Ã¢Å“â€œ Update Weather Entity (z.B. bei Fallback)
         
         Args:
             new_entity: Neue Weather Entity ID
@@ -322,7 +322,7 @@ class WeatherService:
         old_entity = self.weather_entity
         self.weather_entity = new_entity
         
-        _LOGGER.info(f"Weather Entity aktualisiert: {old_entity} â†’ {new_entity}")
+        _LOGGER.info(f"Weather Entity aktualisiert: {old_entity} Ã¢â€ â€™ {new_entity}")
         
         # Re-validiere Config
         try:

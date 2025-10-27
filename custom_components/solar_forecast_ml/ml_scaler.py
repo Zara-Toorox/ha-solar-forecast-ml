@@ -1,5 +1,5 @@
 """
-StandardScaler für Feature Normalisierung.
+StandardScaler fÃ¼r Feature Normalisierung.
 
 Copyright (C) 2025 Zara-Toorox
 

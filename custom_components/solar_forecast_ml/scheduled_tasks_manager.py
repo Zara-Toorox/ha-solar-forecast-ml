@@ -1,6 +1,6 @@
 """
 Scheduled Tasks Manager Module
-Verwaltet tägliche Updates und Verifikationen
+Verwaltet tÃ¤gliche Updates und Verifikationen
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -38,40 +38,40 @@ class ScheduledTasksManager:
     
     @callback
     async def scheduled_morning_update(self, now: datetime) -> None:
-        _LOGGER.info("🌅 === TÄGLICHER MORGEN-UPDATE GESTARTET ===")
-        _LOGGER.info(f"� Zeitpunkt: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        _LOGGER.info("ðŸŒ… === TÃ„GLICHER MORGEN-UPDATE GESTARTET ===")
+        _LOGGER.info(f"ï¿½Â Zeitpunkt: {now.strftime('%Y-%m-%d %H:%M:%S')}")
         
         try:
             await self.coordinator.async_request_refresh()
-            _LOGGER.info("âœ“ Tagesprognose erfolgreich erstellt")
+            _LOGGER.info("Ã¢Å“â€œ Tagesprognose erfolgreich erstellt")
             
         except Exception as e:
-            _LOGGER.error(f"âŒ Morgen-Update fehlgeschlagen: {e}", exc_info=True)
+            _LOGGER.error(f"Ã¢ÂÅ’ Morgen-Update fehlgeschlagen: {e}", exc_info=True)
     
     @callback
     async def scheduled_evening_verification(self, now: datetime) -> None:
-        _LOGGER.info("🌆 === TÄGLICHE PROGNOSE-VERIFIKATION GESTARTET ===")
-        _LOGGER.info(f"� Zeitpunkt: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        _LOGGER.info("ðŸŒ† === TÃ„GLICHE PROGNOSE-VERIFIKATION GESTARTET ===")
+        _LOGGER.info(f"ï¿½Â Zeitpunkt: {now.strftime('%Y-%m-%d %H:%M:%S')}")
         
         if not self.solar_yield_today:
-            _LOGGER.warning("âš ï¸ Kein solar_yield_today Sensor konfiguriert - Verifikation übersprungen")
+            _LOGGER.warning("Ã¢Å¡Â Ã¯Â¸Â Kein solar_yield_today Sensor konfiguriert - Verifikation Ã¼bersprungen")
             return
         
         try:
             state = self.hass.states.get(self.solar_yield_today)
             
             if not state or state.state in ['unavailable', 'unknown', 'none', None]:
-                _LOGGER.warning(f"âš ï¸ Sensor {self.solar_yield_today} nicht verfügbar")
+                _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Sensor {self.solar_yield_today} nicht verfÃ¼gbar")
                 return
             
             try:
                 actual_kwh = float(state.state)
             except (ValueError, TypeError):
-                _LOGGER.warning(f"âš ï¸ Ungültiger Wert von {self.solar_yield_today}: {state.state}")
+                _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â UngÃ¼ltiger Wert von {self.solar_yield_today}: {state.state}")
                 return
             
             if not self.coordinator.data:
-                _LOGGER.warning("âš ï¸ Keine Coordinator-Daten verfügbar")
+                _LOGGER.warning("Ã¢Å¡Â Ã¯Â¸Â Keine Coordinator-Daten verfÃ¼gbar")
                 return
                 
             predicted_kwh = self.coordinator.data.get("forecast_today", 0.0)
@@ -85,12 +85,12 @@ class ScheduledTasksManager:
             
             try:
                 await self.data_manager.update_today_predictions_actual(actual_kwh, accuracy)
-                _LOGGER.debug("âœ“ Alle heutigen Prediction Records mit actual_value aktualisiert")
+                _LOGGER.debug("Ã¢Å“â€œ Alle heutigen Prediction Records mit actual_value aktualisiert")
             except Exception as e:
-                _LOGGER.warning(f"âš ï¸ Konnte heutige Prediction Records nicht aktualisieren: {e}")
+                _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Konnte heutige Prediction Records nicht aktualisieren: {e}")
             
             _LOGGER.info(
-                f"ðŸ“Š TAGESPROGNOSE-CHECK:\n"
+                f"Ã°Å¸â€œÅ  TAGESPROGNOSE-CHECK:\n"
                 f"   Predicted: {predicted_kwh:.2f} kWh\n"
                 f"   Actual:    {actual_kwh:.2f} kWh\n"
                 f"   Error:     {abs(predicted_kwh - actual_kwh):.2f} kWh\n"
@@ -100,4 +100,4 @@ class ScheduledTasksManager:
             self.coordinator.last_day_error_kwh = abs(predicted_kwh - actual_kwh)
             
         except Exception as e:
-            _LOGGER.error(f"âŒ Abend-Verifikation fehlgeschlagen: {e}", exc_info=True)
+            _LOGGER.error(f"Ã¢ÂÅ’ Abend-Verifikation fehlgeschlagen: {e}", exc_info=True)

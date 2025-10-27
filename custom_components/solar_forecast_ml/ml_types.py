@@ -1,5 +1,5 @@
 """
-ML Data Types fÃ¼r Solar Forecast ML Integration.
+ML Data Types fÃƒÂ¼r Solar Forecast ML Integration.
 PROGRESSIVE UPGRADE v5.1.0: Feature Normalisierung Support
 
 Copyright (C) 2025 Zara-Toorox
@@ -26,7 +26,7 @@ from enum import Enum
 
 
 class ErrorCategory(Enum):
-    """Error Categories fÃ¼r ML System."""
+    """Error Categories fÃƒÂ¼r ML System."""
     DATA_INTEGRITY = "data_integrity"
     MODEL_TRAINING = "model_training"
     PREDICTION = "prediction"
@@ -190,7 +190,7 @@ class ModelMetrics:
         if self.mape < 0:
             raise ValueError("MAPE cannot be negative")
         if not (-1.0 <= self.r2 <= 1.0):
-            raise ValueError("RÂ² must be between -1 and 1")
+            raise ValueError("RÃ‚Â² must be between -1 and 1")
         if not (0.0 <= self.accuracy_percentage <= 100.0):
             raise ValueError("accuracy_percentage must be between 0 and 100")
         if self.sample_count < 0:

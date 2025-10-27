@@ -202,9 +202,9 @@ class ServiceManager:
             self.sun_guard.log_production_window()
             
             if self.sun_guard.is_production_time():
-                _LOGGER.info("🟢 DATENSAMMLUNG GESTARTET")
+                _LOGGER.info("ðŸŸ¢ DATENSAMMLUNG GESTARTET")
             else:
-                _LOGGER.info("🔴 DATENSAMMLUNG PAUSIERT")
+                _LOGGER.info("ðŸ”´ DATENSAMMLUNG PAUSIERT")
             
             _LOGGER.debug("Sun Guard initialisiert")
             return True

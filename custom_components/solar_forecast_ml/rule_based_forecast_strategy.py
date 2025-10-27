@@ -1,6 +1,6 @@
 """
 Rule-basierte Forecast-Strategie (Fallback).
-Verwendet einfache Regeln für Vorhersagen wenn ML nicht verfügbar.
+Verwendet einfache Regeln fÃ¼r Vorhersagen wenn ML nicht verfÃ¼gbar.
 Version 4.8.1
 
 Copyright (C) 2025 Zara-Toorox
@@ -52,7 +52,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         correction_factor: float
     ) -> ForecastResult:
         try:
-            _LOGGER.debug("📊 Starte Rule-based Forecast-Berechnung...")
+            _LOGGER.debug("ðŸ“Š Starte Rule-based Forecast-Berechnung...")
             
             base_capacity = sensor_data.get("solar_capacity", self.solar_capacity)
             
@@ -107,9 +107,9 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             return result
             
         except Exception as e:
-            _LOGGER.error(f"❌ Rule-based Forecast Berechnung fehlgeschlagen: {e}", exc_info=True)
+            _LOGGER.error(f"âŒ Rule-based Forecast Berechnung fehlgeschlagen: {e}", exc_info=True)
             
-            _LOGGER.warning("⚡️ Verwende Emergency Fallback für Rule-based Forecast")
+            _LOGGER.warning("âš¡ï¸ Verwende Emergency Fallback fÃ¼r Rule-based Forecast")
             
             fallback_capacity = sensor_data.get("solar_capacity", self.solar_capacity)
             if fallback_capacity <= 0:
