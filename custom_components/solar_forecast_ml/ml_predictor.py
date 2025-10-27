@@ -1,5 +1,5 @@
 """
-ML Predictor fÃƒÆ’Ã‚Â¼r die Solar Forecast ML Integration.
+ML Predictor für die Solar Forecast ML Integration.
 Refactored v5.2.0 - Modular Architecture
 
 Copyright (C) 2025 Zara-Toorox
@@ -21,13 +21,13 @@ if TYPE_CHECKING:
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_change
-from homeassistant.util import dt as dt_util
 
 from .const import (
     MIN_TRAINING_DATA_POINTS, MODEL_ACCURACY_THRESHOLD, DATA_VERSION,
     ML_MODEL_VERSION
 )
 from .data_manager import DataManager
+from .helpers import SafeDateTimeUtil as dt_util
 from .ml_types import (
     LearnedWeights, HourlyProfile,
     create_default_learned_weights, create_default_hourly_profile
@@ -672,7 +672,7 @@ class MLPredictor:
                 new_sample_count = len(records)
             
             if new_sample_count >= 50:
-                _LOGGER.info(f"Auto-Training: {new_sample_count} neue Samples verfÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼gbar")
+                _LOGGER.info(f"Auto-Training: {new_sample_count} neue Samples verfügbar")
                 return True
             
             if self.last_training_time:

@@ -1,8 +1,8 @@
 """
-Button-Plattform für die Solar Forecast ML Integration.
+Button-Plattform fÃ¼r die Solar Forecast ML Integration.
 
-Diese Datei erstellt die Entitäten für Buttons, die es dem Benutzer ermöglichen,
-Aktionen wie eine manuelle Prognose oder einen Lernprozess auszulösen.
+Diese Datei erstellt die EntitÃ¤ten fÃ¼r Buttons, die es dem Benutzer ermÃ¶glichen,
+Aktionen wie eine manuelle Prognose oder einen Lernprozess auszulÃ¶sen.
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -27,9 +27,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
+from .helpers import SafeDateTimeUtil as dt_util
 from .coordinator import SolarForecastMLCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ async def async_setup_entry(
         ManualForecastButton(coordinator, entry),
         ManualLearningButton(coordinator, entry),
     ])
-    _LOGGER.info("Buttons für manuelle Prognose und Lernen erfolgreich eingerichtet.")
+    _LOGGER.info("Buttons fÃ¼r manuelle Prognose und Lernen erfolgreich eingerichtet.")
 
 
 class ManualForecastButton(ButtonEntity):
@@ -65,7 +65,7 @@ class ManualForecastButton(ButtonEntity):
         )
 
     async def async_press(self) -> None:
-        _LOGGER.info("🔄 Manuelle Prognose ausgelöst - von Zara")
+        _LOGGER.info("ðŸ”„ Manuelle Prognose ausgelÃ¶st - von Zara")
         await self.coordinator.async_request_refresh()
 
 
@@ -82,12 +82,12 @@ class ManualLearningButton(ButtonEntity):
         )
 
     async def async_press(self) -> None:
-        _LOGGER.info("🧠 Manuelles ML-Training ausgelöst - von Zara")
+        _LOGGER.info("ðŸ§  Manuelles ML-Training ausgelÃ¶st - von Zara")
         
         ml_predictor = self.coordinator.ml_predictor
         
         if not ml_predictor:
-            _LOGGER.error("❌ ML Predictor nicht verfügbar - Training nicht möglich - von Zara")
+            _LOGGER.error("âŒ ML Predictor nicht verfÃ¼gbar - Training nicht mÃ¶glich - von Zara")
             return
         
         try:
@@ -95,7 +95,7 @@ class ManualLearningButton(ButtonEntity):
             
             if result.success:
                 timestamp = dt_util.utcnow()
-                _LOGGER.info(f"✓ ML-Training abgeschlossen - Accuracy: {result.accuracy:.2f} - von Zara")
+                _LOGGER.info(f"âœ“ ML-Training abgeschlossen - Accuracy: {result.accuracy:.2f} - von Zara")
                 
                 if hasattr(self.coordinator, 'on_ml_training_complete'):
                     self.coordinator.on_ml_training_complete(
@@ -103,7 +103,7 @@ class ManualLearningButton(ButtonEntity):
                         accuracy=result.accuracy
                     )
             else:
-                _LOGGER.error(f"❌ ML-Training fehlgeschlagen: {result.error_message} - von Zara")
+                _LOGGER.error(f"âŒ ML-Training fehlgeschlagen: {result.error_message} - von Zara")
                 
         except Exception as e:
-            _LOGGER.error(f"❌ ML-Training fehlgeschlagen: {e} - von Zara")
+            _LOGGER.error(f"âŒ ML-Training fehlgeschlagen: {e} - von Zara")

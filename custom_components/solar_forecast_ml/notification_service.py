@@ -191,7 +191,7 @@ class NotificationService:
             if ml_mode:
                 # ✓ ML-Mode aktiv - alle Dependencies vorhanden
                 message = f"""
-**🎉 Solar Forecast ML erfolgreich gestartet!**
+**🎉 Solar Forecast ML 6 RISA gestartet!**
 
 **Status: Full ML Mode ✅**
 
@@ -202,12 +202,17 @@ Die Integration läuft mit allen Features:
 - 28 Features für Prognosen
 - Automatisches Learning
 - Pattern Recognition
+- Algorithmen + Humor = Fehlschlag!
+
+
 
 ✅ **Features aktiv**
 - ML-basierte Vorhersagen
 - Wetterbasierte Optimierung
 - Kontinuierliche Verbesserung
 - Seasonal Adjustments
+- 87,3% Erfolg – Rest: unlogisch!
+
 
 **Die Integration ist einsatzbereit!**
 

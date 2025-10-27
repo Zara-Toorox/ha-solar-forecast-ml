@@ -2,7 +2,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
+
+from .helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ class SunGuard:
     def log_production_window(self) -> None:
         sunrise, sunset = self.get_production_window()
         _LOGGER.info(
-            f"â˜€ï¸Â Sun Guard Produktionsfenster: "
+            f"Ã¢Ëœâ‚¬Ã¯Â¸ÂÃ‚Â Sun Guard Produktionsfenster: "
             f"{sunrise.strftime('%H:%M')} - {sunset.strftime('%H:%M')} "
             f"(Buffer: {self.buffer_hours}h)"
         )
@@ -110,24 +111,24 @@ class SunGuard:
         if is_production:
             if sunrise and sunset:
                 _LOGGER.info(
-                    f"ðŸŸ¢ DATENSAMMLUNG GESTARTET um {now.strftime('%H:%M:%S')} "
+                    f"Ã°Å¸Å¸Â¢ DATENSAMMLUNG GESTARTET um {now.strftime('%H:%M:%S')} "
                     f"(Quelle: {source}, Fenster: {sunrise.strftime('%H:%M')}-{sunset.strftime('%H:%M')})"
                 )
             else:
                 _LOGGER.info(
-                    f"ðŸŸ¢ DATENSAMMLUNG GESTARTET um {now.strftime('%H:%M:%S')} "
+                    f"Ã°Å¸Å¸Â¢ DATENSAMMLUNG GESTARTET um {now.strftime('%H:%M:%S')} "
                     f"(Quelle: {source})"
                 )
         else:
             if sunset:
                 _LOGGER.info(
-                    f"Ã°Å¸â€Â´ DATENSAMMLUNG PAUSIERT um {now.strftime('%H:%M:%S')} "
-                    f"(Grund: AuÃŸerhalb Produktionszeit, Quelle: {source}, Ende: {sunset.strftime('%H:%M')})"
+                    f"ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â´ DATENSAMMLUNG PAUSIERT um {now.strftime('%H:%M:%S')} "
+                    f"(Grund: AuÃƒÅ¸erhalb Produktionszeit, Quelle: {source}, Ende: {sunset.strftime('%H:%M')})"
                 )
             else:
                 _LOGGER.info(
-                    f"Ã°Å¸â€Â´ DATENSAMMLUNG PAUSIERT um {now.strftime('%H:%M:%S')} "
-                    f"(Grund: AuÃŸerhalb Produktionszeit, Quelle: {source})"
+                    f"ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â´ DATENSAMMLUNG PAUSIERT um {now.strftime('%H:%M:%S')} "
+                    f"(Grund: AuÃƒÅ¸erhalb Produktionszeit, Quelle: {source})"
                 )
         
         self._last_state = is_production

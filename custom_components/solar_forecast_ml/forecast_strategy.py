@@ -1,7 +1,7 @@
 """
-Abstract Base Strategy fÃ¼r Forecast-Berechnungen.
-Definiert das Interface fÃ¼r ML und Rule-based Forecasts.
-Version 4.8.0
+Abstract Base Strategy für Forecast-Berechnungen.
+Definiert das Interface für ML und Rule-based Forecasts.
+Version 6.0.0
 
 Copyright (C) 2025 Zara-Toorox
 # von Zara
@@ -33,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 class ForecastResult:
     """
     Ergebnis einer Forecast-Berechnung.
-    Einheitliches Format fÃ¼r alle Strategien.
+    Einheitliches Format für alle Strategien.
     # von Zara
     """
     forecast_today: float
@@ -51,7 +51,7 @@ class ForecastResult:
     
     def to_dict(self) -> Dict[str, Any]:
         """
-        Konvertiert ForecastResult zu Dictionary fÃ¼r Coordinator.
+        Konvertiert ForecastResult zu Dictionary für Coordinator.
         # von Zara
         """
         result = {
@@ -78,8 +78,8 @@ class ForecastResult:
 
 class ForecastStrategy(ABC):
     """
-    Abstract Base Class fÃ¼r Forecast-Strategien.
-    Definiert das gemeinsame Interface fÃ¼r alle Forecast-Methoden.
+    Abstract Base Class für Forecast-Strategien.
+    Definiert das gemeinsame Interface für alle Forecast-Methoden.
     # von Zara
     """
     
@@ -121,7 +121,7 @@ class ForecastStrategy(ABC):
     @abstractmethod
     def is_available(self) -> bool:
         """
-        PrÃ¼ft ob die Strategie verfÃ¼gbar ist.
+        Prüft ob die Strategie verfügbar ist.
         
         Returns:
             True wenn Strategie verwendet werden kann
@@ -132,11 +132,11 @@ class ForecastStrategy(ABC):
     @abstractmethod
     def get_priority(self) -> int:
         """
-        Gibt PrioritÃ¤t der Strategie zurÃ¼ck.
-        HÃ¶here Werte = hÃ¶here PrioritÃ¤t.
+        Gibt Priorität der Strategie zurück.
+        Höhere Werte = höhere Priorität.
         
         Returns:
-            PrioritÃ¤t (0-100)
+            Priorität (0-100)
         # von Zara
         """
         pass
@@ -162,7 +162,7 @@ class ForecastStrategy(ABC):
         
         Args:
             result: ForecastResult
-            details: ZusÃ¤tzliche Details (optional)
+            details: Zusätzliche Details (optional)
         # von Zara
         """
         self._logger.debug(

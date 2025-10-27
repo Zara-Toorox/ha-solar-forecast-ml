@@ -1,5 +1,5 @@
 """
-Data Update Coordinator fÃ¼r Solar Forecast ML Integration.
+Data Update Coordinator für Solar Forecast ML Integration.
 REFACTORED VERSION: Modulare Struktur mit separaten Manager-Klassen
 Version 5.1.0 - Modulare Architektur
 
@@ -28,7 +28,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.event import async_track_time_change
-from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN, CONF_SOLAR_CAPACITY, CONF_WEATHER_ENTITY,
@@ -41,6 +40,7 @@ from .const import (
 )
 from .data_manager import DataManager
 from .exceptions import SolarForecastMLException, WeatherException, ModelException
+from .helpers import SafeDateTimeUtil as dt_util
 
 from .service_manager import ServiceManager
 from .weather_calculator import WeatherCalculator
@@ -170,10 +170,10 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         _LOGGER.info("=== Starting First Refresh v5.1.0 (Modular) ===")
         
         self.current_weather_entity = self.primary_weather_entity
-        _LOGGER.info(f"âš™ï¸ Weather Entity konfiguriert: {self.current_weather_entity}")
+        _LOGGER.info(f"⚡ Weather Entity konfiguriert: {self.current_weather_entity}")
         
         if self.current_weather_entity:
-            _LOGGER.info("Warte auf Weather Entity VerfÃ¼gbarkeit...")
+            _LOGGER.info("Warte auf Weather Entity Verfügbarkeit...")
             max_wait_time = 30
             wait_interval = 2
             total_waited = 0
@@ -191,7 +191,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             
             if total_waited >= max_wait_time:
                 _LOGGER.warning(
-                    f"Weather Entity '{self.current_weather_entity}' nicht verfÃ¼gbar "
+                    f"Weather Entity '{self.current_weather_entity}' nicht verfügbar "
                     f"nach {max_wait_time}s - starte trotzdem"
                 )
         
@@ -206,7 +206,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         try:
             if self.power_entity:
                 self.production_time_calculator.start_tracking()
-                _LOGGER.info(f"Produktionszeit-Tracking gestartet fÃ¼r {self.power_entity}")
+                _LOGGER.info(f"Produktionszeit-Tracking gestartet für {self.power_entity}")
             else:
                 _LOGGER.info("Kein Power-Sensor konfiguriert - Produktionszeit-Tracking deaktiviert")
         except Exception as e:
@@ -214,13 +214,13 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         
         available_sensors = await self.sensor_collector.wait_for_external_sensors(max_wait=25)
         if available_sensors > 0:
-            _LOGGER.info("âœ… %d externe Sensoren ready", available_sensors)
+            _LOGGER.info("✔ %d externe Sensoren ready", available_sensors)
         else:
-            _LOGGER.warning("âš  Keine externen Sensoren verfÃ¼gbar - Predictions ohne Sensor-Daten")
+            _LOGGER.warning("⚠ Keine externen Sensoren verfügbar - Predictions ohne Sensor-Daten")
 
         await super().async_config_entry_first_refresh()
         
-        _LOGGER.info("=== Registriere tÃ¤gliche Time-Trigger ===")
+        _LOGGER.info("=== Registriere tägliche Time-Trigger ===")
         
         async_track_time_change(
             self.hass,
@@ -266,7 +266,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         
         if state.state in ["unavailable", "unknown"]:
             raise WeatherException(
-                f"Weather Entity '{self.current_weather_entity}' nicht verfÃ¼gbar"
+                f"Weather Entity '{self.current_weather_entity}' nicht verfügbar"
             )
         
         try:
@@ -313,7 +313,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             
             if time_diff < 2.0 and value_diff < 0.01:
                 _LOGGER.debug(
-                    "â­ Skip duplicate prediction (%.1fs ago, Î”=%.4f kWh)",
+                    "⏭ Skip duplicate prediction (%.1fs ago, Δ=%.4f kWh)",
                     time_diff, value_diff
                 )
                 return True
@@ -327,7 +327,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             
             if all_sensors_null:
                 _LOGGER.info(
-                    "â­ Skip prediction (alle Sensoren null, %.1fs seit Start)",
+                    "⏭ Skip prediction (alle Sensoren null, %.1fs seit Start)",
                     seconds_since_startup
                 )
                 return True
@@ -412,12 +412,12 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                         }
                         
                         await self.data_manager.add_prediction_record(prediction_record)
-                        _LOGGER.debug(f"âœ… Forecast gespeichert: {forecast['today']:.2f} kWh (confidence={forecast.get('confidence', 75.0)}%)")
+                        _LOGGER.debug(f"✔ Forecast gespeichert: {forecast['today']:.2f} kWh (confidence={forecast.get('confidence', 75.0)}%)")
                     else:
-                        _LOGGER.debug("â­ Forecast NICHT gespeichert (Skip-Regel)")
+                        _LOGGER.debug("⏭ Forecast NICHT gespeichert (Skip-Regel)")
                     
             except Exception as e:
-                _LOGGER.warning(f"âš ï¸ Forecast-Speicherung fehlgeschlagen: {e}")
+                _LOGGER.warning(f"⚠️ Forecast-Speicherung fehlgeschlagen: {e}")
             
             try:
                 if hasattr(self, 'data_manager') and self.data_manager:
@@ -434,15 +434,15 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 "last_update": dt_util.utcnow().isoformat()
             }
             
-            _LOGGER.debug(f"âœ… Update complete: {result}")
+            _LOGGER.debug(f"✔ Update complete: {result}")
             
             return result
             
         except WeatherException as e:
-            _LOGGER.error(f"ðŸŒ¤ï¸ Weather Error: {e}")
+            _LOGGER.error(f"☀️ Weather Error: {e}")
             raise UpdateFailed(f"Weather Fehler: {e}")
         except Exception as e:
-            _LOGGER.error(f"âŒ Update Failed: {e}", exc_info=True)
+            _LOGGER.error(f"❌ Update Failed: {e}", exc_info=True)
             raise UpdateFailed(f"Update Fehler: {e}")
     
     async def _update_sensor_properties(self, forecast: dict[str, Any]) -> None:
@@ -464,12 +464,12 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         
         if self.sun_guard:
             is_production = self.sun_guard.is_production_time()
-            self.sun_guard_status = "ðŸŸ¢ GESTARTET" if is_production else "ðŸ”´ PAUSIERT"
+            self.sun_guard_status = "🟢 GESTARTET" if is_production else "🔴 PAUSIERT"
             
             sunrise, sunset = self.sun_guard.get_production_window()
             self.sun_guard_window = f"{sunrise.strftime('%H:%M')} - {sunset.strftime('%H:%M')}"
         else:
-            self.sun_guard_status = "Nicht verfÃ¼gbar"
+            self.sun_guard_status = "Nicht verfügbar"
             self.sun_guard_window = "N/A"
     
     @property
@@ -490,7 +490,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
     
     @property
     def weather_source(self) -> str:
-        return self.current_weather_entity or "Nicht verfÃ¼gbar"
+        return self.current_weather_entity or "Nicht verfügbar"
     
     @property
     def retry_attempts(self) -> int:
@@ -533,12 +533,12 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         elif weather_available and update_age_ok:
             return "Normal"
         elif not weather_available or not update_age_ok:
-            return "EingeschrÃ¤nkt"
+            return "Eingeschränkt"
         else:
             return "Normal"
     
     def on_ml_training_complete(self, timestamp: datetime, accuracy: float = None) -> None:
-        _LOGGER.info(f"âœ… ML-Training abgeschlossen - Accuracy: {accuracy}")
+        _LOGGER.info(f"✔ ML-Training abgeschlossen - Accuracy: {accuracy}")
         self.last_successful_learning = timestamp
         if accuracy is not None:
             self.model_accuracy = accuracy

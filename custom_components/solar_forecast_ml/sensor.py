@@ -1,8 +1,8 @@
 """
-Sensor platform fÃ¼r Solar Forecast ML Integration.
-VOLLSTÃ„NDIG mit allen ursprÃ¼nglichen Sensoren + 13 neuen Diagnose-Sensoren
+Sensor platform für Solar Forecast ML Integration.
+VOLLSTÄNDIG mit allen ursprünglichen Sensoren + 13 neuen Diagnose-Sensoren
 LIVE-Updates für externe Sensoren, Zeitstempel und Produktionszeit
-Version 4.10.0 - UTF-8 Fix + Status-Mapper + Erweiterte Anzeigen - von Zara
+Version 6.0.0 - UTF-8 Fix + Status-Mapper + Erweiterte Anzeigen - von Zara
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -37,7 +37,6 @@ from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN, 
@@ -46,23 +45,24 @@ from .const import (
     CONF_RAIN_SENSOR,
     CONF_UV_SENSOR, 
     CONF_LUX_SENSOR,
-    CONF_HOURLY,        # Fix: Import fÃ¼r Hourly Sensor Option - von Zara
+    CONF_HOURLY,        # Fix: Import für Hourly Sensor Option - von Zara
     UPDATE_INTERVAL,
     INTEGRATION_MODEL,  # Fix: Device Info
     SOFTWARE_VERSION,   # Fix: Device Info
-    ML_VERSION, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR  # TÃ¤gliche Update-Zeiten - von Zara
+    ML_VERSION, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR
 )
 from .sensor_external_helpers import BaseExternalSensor, format_time_ago
+from .helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
 
-# Status-Mapper fÃ¼r ML Model States - von Zara
+# Status-Mapper für ML Model States - von Zara
 ML_STATE_TRANSLATIONS = {
     "uninitialized": "Noch nicht trainiert",
-    "training": "Training lÃ¤uft",
+    "training": "Training läuft",
     "ready": "Einsatzbereit",
-    "degraded": "EingeschrÃ¤nkt",
+    "degraded": "Eingeschränkt",
     "error": "Fehler"
 }
 
@@ -75,7 +75,7 @@ async def async_setup_entry(
     """Set up Solar Forecast ML sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # â€¢ COMPLETE sensor suite - alle ursprÃ¼nglichen Sensoren - von Zara
+    # • COMPLETE sensor suite - alle ursprünglichen Sensoren - von Zara
     entities_to_add = [
         # Original Status and diagnostic sensors - von Zara
         DiagnosticStatusSensor(coordinator, entry),
@@ -92,19 +92,19 @@ async def async_setup_entry(
         AverageYieldSensor(coordinator, entry),
         AutarkySensor(coordinator, entry),
         
-        # â€¢ NEU: Zeitstempel & AktualitÃ¤t Diagnose-Sensoren (4 Sensoren) - von Zara
+        # • NEU: Zeitstempel & Aktualität Diagnose-Sensoren (4 Sensoren) - von Zara
         LastCoordinatorUpdateSensor(coordinator, entry),
         UpdateAgeSensor(coordinator, entry),
         LastMLTrainingSensor(coordinator, entry),
         NextScheduledUpdateSensor(coordinator, entry),
         
-        # â€¢ NEU: Service-Status Diagnose-Sensoren (3 Sensoren) - von Zara
+        # • NEU: Service-Status Diagnose-Sensoren (3 Sensoren) - von Zara
         MLServiceStatusSensor(coordinator, entry),
         MLMetricsSensor(coordinator, entry),
         CoordinatorHealthSensor(coordinator, entry),
         DataFilesStatusSensor(coordinator, entry),
         
-        # â€¢ NEU: Externe Sensoren Diagnose-Anzeige (6 Sensoren) - von Zara
+        # • NEU: Externe Sensoren Diagnose-Anzeige (6 Sensoren) - von Zara
         ExternalTempSensor(coordinator, entry),
         ExternalHumiditySensor(coordinator, entry),
         ExternalWindSensor(coordinator, entry),
@@ -118,7 +118,7 @@ async def async_setup_entry(
         YieldSensorStateSensor(coordinator, entry),
     ]
 
-    # â€¢ Conditional hourly sensor - prÃ¼fe entry.data UND entry.options - von Zara
+    # • Conditional hourly sensor - prüfe entry.data UND entry.options - von Zara
     enable_hourly = entry.options.get(CONF_HOURLY, entry.data.get(CONF_HOURLY, False))  # Fix: Nutze CONF_HOURLY Konstante - von Zara
     if enable_hourly:
         entities_to_add.append(NextHourSensor(coordinator, entry))
@@ -127,7 +127,7 @@ async def async_setup_entry(
 
 
 class BaseSolarSensor(CoordinatorEntity, SensorEntity):
-    """â€¢ Safe base class for all sensors."""
+    """• Safe base class for all sensors."""
 
     _attr_has_entity_name = True
 
@@ -151,11 +151,11 @@ class BaseSolarSensor(CoordinatorEntity, SensorEntity):
 
 
 # ============================================================================
-# ORIGINAL SENSOREN (unverÃ¤ndert)
+# ORIGINAL SENSOREN (unverändert)
 # ============================================================================
 
 class SolarForecastSensor(BaseSolarSensor):
-    """â€¢ Main forecast sensors (Heute/Morgen)."""
+    """• Main forecast sensors (Heute/Morgen)."""
 
     def __init__(self, coordinator, entry: ConfigEntry, key: str):
         super().__init__(coordinator, entry)
@@ -179,7 +179,7 @@ class SolarForecastSensor(BaseSolarSensor):
 
 
 class NextHourSensor(BaseSolarSensor):
-    """â€¢ Hourly forecast sensor."""
+    """• Hourly forecast sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
@@ -191,13 +191,13 @@ class NextHourSensor(BaseSolarSensor):
         
     @property
     def native_value(self):
-        # Sichere None-PrÃ¼fung vor round() - von Zara
+        # Sichere None-Prüfung vor round() - von Zara
         value = getattr(self.coordinator, 'next_hour_pred', 0.0)
         return round(value, 2) if value is not None else 0.0
 
 
 class PeakProductionHourSensor(BaseSolarSensor):
-    """â€¢ Best hour for consumption sensor."""
+    """• Best hour for consumption sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
@@ -248,7 +248,7 @@ class ProductionTimeSensor(BaseSolarSensor):
 
 
 class AverageYieldSensor(BaseSolarSensor):
-    """â€¢ Average monthly yield sensor."""
+    """• Average monthly yield sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
@@ -260,13 +260,13 @@ class AverageYieldSensor(BaseSolarSensor):
 
     @property
     def native_value(self):
-        # Sichere None-PrÃ¼fung vor round() - von Zara
+        # Sichere None-Prüfung vor round() - von Zara
         value = getattr(self.coordinator, 'avg_month_yield', 0.0)
         return round(value, 2) if value is not None else 0.0
 
 
 class AutarkySensor(BaseSolarSensor):
-    """â€¢ Self-sufficiency sensor."""
+    """• Self-sufficiency sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
@@ -278,13 +278,13 @@ class AutarkySensor(BaseSolarSensor):
 
     @property
     def native_value(self):
-        # Sichere None-PrÃ¼fung vor round() - von Zara
+        # Sichere None-Prüfung vor round() - von Zara
         value = getattr(self.coordinator, 'autarky_today', 0.0)
         return round(value, 1) if value is not None else 0.0
 
 
 class DiagnosticStatusSensor(BaseSolarSensor):
-    """â€¢ Overall system status sensor."""
+    """• Overall system status sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -300,7 +300,7 @@ class DiagnosticStatusSensor(BaseSolarSensor):
 
 
 class SolarAccuracySensor(BaseSolarSensor):
-    """â€¢ Yesterday's accuracy sensor."""
+    """• Yesterday's accuracy sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -314,13 +314,13 @@ class SolarAccuracySensor(BaseSolarSensor):
 
     @property
     def native_value(self):
-        # Sichere None-PrÃ¼fung vor round() - von Zara
+        # Sichere None-Prüfung vor round() - von Zara
         value = getattr(self.coordinator, 'yesterday_accuracy', 0.0)
         return round(value, 1) if value is not None else 0.0
 
 
 class YesterdayDeviationSensor(BaseSolarSensor):
-    """â€¢ Yesterday's deviation sensor."""
+    """• Yesterday's deviation sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -334,13 +334,13 @@ class YesterdayDeviationSensor(BaseSolarSensor):
 
     @property
     def native_value(self):
-        # Sichere None-PrÃ¼fung vor round() - von Zara
+        # Sichere None-Prüfung vor round() - von Zara
         value = getattr(self.coordinator, 'yesterday_deviation', 0.0)
         return round(value, 2) if value is not None else 0.0
 
 
 # ============================================================================
-# â€¢ NEU: ZEITSTEMPEL & AKUALITÃ„T DIAGNOSE-SENSOREN - von Zara
+# • NEU: ZEITSTEMPEL & AKUALITÄT DIAGNOSE-SENSOREN - von Zara
 # ============================================================================
 
 class LastCoordinatorUpdateSensor(BaseSolarSensor):
@@ -399,14 +399,14 @@ class LastMLTrainingSensor(BaseSolarSensor):
     @property
     def available(self) -> bool:
         """
-        âœ“ VERBESSERT: Sensor nur verfügbar wenn ML trainiert wurde - von Zara
+        ✓ VERBESSERT: Sensor nur verfügbar wenn ML trainiert wurde - von Zara
         Zeigt "unavailable" statt "Unbekannt" wenn noch nie trainiert
         """
         ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor:
             return False
         
-        # PrÃ¼fe ob last_training_time existiert UND nicht None ist - von Zara
+        # Prüfe ob last_training_time existiert UND nicht None ist - von Zara
         if hasattr(ml_predictor, "last_training_time"):
             return ml_predictor.last_training_time is not None
         
@@ -427,7 +427,7 @@ class LastMLTrainingSensor(BaseSolarSensor):
     
     @property
     def extra_state_attributes(self) -> dict:
-        """ZusÃ¤tzliche Trainingsinfos - von Zara"""
+        """Zusätzliche Trainingsinfos - von Zara"""
         ml_predictor = self.coordinator.ml_predictor
         
         if not ml_predictor:
@@ -439,11 +439,11 @@ class LastMLTrainingSensor(BaseSolarSensor):
         attrs = {}
         
         if hasattr(ml_predictor, 'last_training_time') and ml_predictor.last_training_time:
-            attrs["training_durchgefÃ¼hrt"] = True
+            attrs["training_durchgeführt"] = True
             attrs["letztes_training"] = ml_predictor.last_training_time.isoformat()
         else:
             attrs["training_durchgeführt"] = False
-            attrs["hinweis"] = "Noch kein Training durchgefÃ¼hrt"
+            attrs["hinweis"] = "Noch kein Training durchgeführt"
         
         if hasattr(ml_predictor, 'current_accuracy'):
             attrs["accuracy_percent"] = round(ml_predictor.current_accuracy * 100, 1)
@@ -452,30 +452,30 @@ class LastMLTrainingSensor(BaseSolarSensor):
 
 
 class NextScheduledUpdateSensor(BaseSolarSensor):
-    """Zeigt nÃ¤chstes geplantes Update - von Zara"""
+    """Zeigt nächstes geplantes Update - von Zara"""
     
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_next_scheduled_update"
-        self._attr_name = "NÃ¤chstes Update"
+        self._attr_name = "Nächstes Update"
         self._attr_icon = "mdi:clock-check-outline"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
     
     @property
     def native_value(self):
-        """Berechnet nÃ¤chsten Update-Zeitpunkt - von Zara"""
+        """Berechnet nächsten Update-Zeitpunkt - von Zara"""
         if not self.coordinator.last_update_time:
             return None
         
-        # NÃ¤chstes Update = letztes Update + Interval - von Zara
+        # Nächstes Update = letztes Update + Interval - von Zara
         next_update = self.coordinator.last_update_time + UPDATE_INTERVAL
         return next_update
 
 
 # ============================================================================
-# â€¢ NEU: SERVICE-STATUS DIAGNOSE-SENSOREN - von Zara
+# • NEU: SERVICE-STATUS DIAGNOSE-SENSOREN - von Zara
 # ============================================================================
 
 class CoordinatorHealthSensor(BaseSolarSensor):
@@ -498,7 +498,7 @@ class CoordinatorHealthSensor(BaseSolarSensor):
     
     @property
     def extra_state_attributes(self) -> dict:
-        """ZusÃ¤tzliche Coordinator-Infos - von Zara"""
+        """Zusätzliche Coordinator-Infos - von Zara"""
         return {
             "last_success": self.coordinator.last_update_success,
             "last_update": self.coordinator.last_update_time.isoformat() if self.coordinator.last_update_time else None,
@@ -517,7 +517,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
         self._attr_name = "Datendateien Status"
         self._attr_icon = "mdi:file-check"
         
-        # Cache fÃ¼r async Daten - von Zara
+        # Cache für async Daten - von Zara
         self._cached_status: Optional[dict] = None
         self._cached_file_count: int = 0
     
@@ -530,12 +530,12 @@ class DataFilesStatusSensor(BaseSolarSensor):
     
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Update Cache bei Coordinator-Ã„nderungen - von Zara"""
+        """Update Cache bei Coordinator-Änderungen - von Zara"""
         self.hass.async_create_task(self._update_cached_data())
         super()._handle_coordinator_update()
     
     async def _update_cached_data(self) -> None:
-        """LÃ¤dt Daten async und cached sie - von Zara"""
+        """Lädt Daten async und cached sie - von Zara"""
         try:
             data_manager = getattr(self.coordinator, 'data_manager', None)
             
@@ -558,14 +558,14 @@ class DataFilesStatusSensor(BaseSolarSensor):
     
     @property
     def native_value(self) -> str:
-        """Gibt gecachten Status zurÃ¼ck - von Zara"""
+        """Gibt gecachten Status zurück - von Zara"""
         if self._cached_status is None:
             return "Initialisierung..."
         
         if not self._cached_status.get('all_present', False):
             available = self._cached_status.get('available', 0)
             total = self._cached_status.get('total', 4)
-            return f"UnvollstÃ¤ndig ({available}/{total})"
+            return f"Unvollständig ({available}/{total})"
         
         return "Vollständig"
     
@@ -583,12 +583,12 @@ class DataFilesStatusSensor(BaseSolarSensor):
             "status_text": self._cached_status.get('status_text', 'Unbekannt'),
         }
         
-        # FÃ¼ge Details zu einzelnen Dateien hinzu - von Zara
+        # Füge Details zu einzelnen Dateien hinzu - von Zara
         files = self._cached_status.get('files', {})
         for file_name, exists in files.items():
             attrs[f"datei_{file_name}"] = "Vorhanden" if exists else "Fehlend"
         
-        # FÃ¼ge Verzeichnispfad hinzu - von Zara
+        # Füge Verzeichnispfad hinzu - von Zara
         if data_manager and hasattr(data_manager, 'get_data_directory'):
             attrs["verzeichnis"] = str(data_manager.get_data_directory())
         
@@ -596,7 +596,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
 
 
 class MLServiceStatusSensor(BaseSolarSensor):
-    """Zeigt ML Service Status mit Ã¼bersetzten States - von Zara"""
+    """Zeigt ML Service Status mit übersetzten States - von Zara"""
     
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     
@@ -608,7 +608,7 @@ class MLServiceStatusSensor(BaseSolarSensor):
     
     @property
     def native_value(self) -> str:
-        """Ãœbersetzter ML State mit detaillierten Fehlermeldungen - von Zara"""
+        """Übersetzter ML State mit detaillierten Fehlermeldungen - von Zara"""
         ml_predictor = self.coordinator.ml_predictor
         
         if not ml_predictor:
@@ -643,7 +643,7 @@ class MLServiceStatusSensor(BaseSolarSensor):
                 
                 return {
                     "model_state_raw": state_raw,
-                    "model_state_Übersetzt": ML_STATE_TRANSLATIONS.get(state_raw, state_raw),
+                    "model_state_übersetzt": ML_STATE_TRANSLATIONS.get(state_raw, state_raw),
                     "model_loaded": health.model_loaded,
                     "training_samples": health.training_samples,
                     "initialisiert": True
@@ -674,7 +674,7 @@ class MLMetricsSensor(BaseSolarSensor):
     
     @property
     def native_value(self) -> str:
-        """Zeigt aktuellen Model State Ã¼bersetzt - von Zara"""
+        """Zeigt aktuellen Model State übersetzt - von Zara"""
         ml_predictor = self.coordinator.ml_predictor
         
         if not ml_predictor:
@@ -706,7 +706,7 @@ class MLMetricsSensor(BaseSolarSensor):
             if hasattr(ml_predictor, 'get_model_health'):
                 health = ml_predictor.get_model_health()
                 
-                # Ãœbersetze State - von Zara
+                # Übersetze State - von Zara
                 state_raw = health.state.value if health.state else "unknown"
                 state_translated = ML_STATE_TRANSLATIONS.get(state_raw, state_raw.capitalize())
                 
@@ -724,7 +724,7 @@ class MLMetricsSensor(BaseSolarSensor):
                     "memory_usage_mb": round(health.performance_metrics.get("memory_usage_mb", 0), 1),
                 }
             
-            # Fallback wenn get_model_health nicht verfÃ¼gbar - von Zara
+            # Fallback wenn get_model_health nicht verfügbar - von Zara
             return {
                 "model_loaded": getattr(ml_predictor, 'model_loaded', False),
                 "current_accuracy": round(getattr(ml_predictor, 'current_accuracy', 0) * 100, 1),
@@ -749,7 +749,7 @@ class ExternalTempSensor(BaseExternalSensor, BaseSolarSensor):
             'unique_id_suffix': 'external_temp',
             'name': 'Temperatur',
             'icon': 'mdi:thermometer',
-            'default_unit': 'Â°C'
+            'default_unit': '°C'
         }
         BaseSolarSensor.__init__(self, coordinator, entry)
         BaseExternalSensor.__init__(self, coordinator, entry, sensor_config)
@@ -768,11 +768,11 @@ class ExternalHumiditySensor(BaseSolarSensor):
     
     @property
     def available(self) -> bool:
-        """Sensor immer verfÃ¼gbar - von Zara"""
+        """Sensor immer verfügbar - von Zara"""
         return True
     
     async def async_added_to_hass(self) -> None:
-        """Register state change listener fÃ¼r LIVE-Updates - von Zara"""
+        """Register state change listener für LIVE-Updates - von Zara"""
         await super().async_added_to_hass()
         
         weather_entity = self.coordinator.current_weather_entity
@@ -787,7 +787,7 @@ class ExternalHumiditySensor(BaseSolarSensor):
     
     @callback
     def _handle_external_sensor_update(self, event) -> None:
-        """Update bei Ã„nderung - von Zara"""
+        """Update bei Änderung - von Zara"""
         self.async_write_ha_state()
     
     @property
@@ -805,7 +805,7 @@ class ExternalHumiditySensor(BaseSolarSensor):
         try:
             humidity = state.attributes.get('humidity')
             if humidity is None:
-                return "Keine Luftfeuchtigkeit verfÃ¼gbar"
+                return "Keine Luftfeuchtigkeit verfügbar"
             
             time_ago = format_time_ago(state.last_changed)
             return f"{humidity} % ({time_ago})"

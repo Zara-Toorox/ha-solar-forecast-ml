@@ -1,7 +1,7 @@
 """
-Production Calculator fÃ¼r Solar Forecast ML.
+Production Calculator für Solar Forecast ML.
 Berechnet Produktionszeit und weitere Produktions-Metriken.
-STRATEGIE 2: ProductionTimeCalculator fÃ¼r Live-Tracking
+STRATEGIE 2: ProductionTimeCalculator für Live-Tracking
 Version 4.11.0 - Gewichtete Peak-Zeit Berechnung
 
 Copyright (C) 2025 Zara-Toorox
@@ -27,7 +27,8 @@ from datetime import datetime, timedelta
 from typing import Optional, Any
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
-from homeassistant.util import dt as dt_util
+
+from .helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class ProductionCalculator:
         self.RECENT_WEIGHT = 0.7
         self.OLDER_WEIGHT = 0.3
         
-        _LOGGER.debug("âœ“ ProductionCalculator initialisiert")
+        _LOGGER.debug("✓ ProductionCalculator initialisiert")
     
     async def calculate_production_time_today(
         self,
@@ -53,8 +54,8 @@ class ProductionCalculator:
     ) -> str:
         try:
             if not power_entity:
-                _LOGGER.debug("1ï¸âƒ£ Kein Power-Sensor konfiguriert")
-                return "Nicht verfÃ¼gbar"
+                _LOGGER.debug("1️⃣ Kein Power-Sensor konfiguriert")
+                return "Nicht verfügbar"
             
             now = dt_util.utcnow()
             start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -67,8 +68,8 @@ class ProductionCalculator:
             )
             
             if not history:
-                _LOGGER.debug("1ï¸âƒ£ Keine History-Daten verfÃ¼gbar")
-                return "Berechnung lÃ¤uft..."
+                _LOGGER.debug("1️⃣ Keine History-Daten verfügbar")
+                return "Berechnung läuft..."
             
             production_minutes = 0
             
@@ -89,7 +90,7 @@ class ProductionCalculator:
             return f"{hours}h {minutes}m"
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Produktionszeit-Berechnung fehlgeschlagen: {e}")
+            _LOGGER.warning(f"⚠️ Produktionszeit-Berechnung fehlgeschlagen: {e}")
             return "Berechnung fehlgeschlagen"
     
     def _get_state_history(
@@ -103,7 +104,7 @@ class ProductionCalculator:
             from homeassistant.components.recorder import history
             
             if not recorder.is_entity_recorded(self.hass, entity_id):
-                _LOGGER.debug(f"1ï¸âƒ£ Entity {entity_id} wird nicht aufgezeichnet")
+                _LOGGER.debug(f"1️⃣ Entity {entity_id} wird nicht aufgezeichnet")
                 return []
             
             states = history.state_changes_during_period(
@@ -128,10 +129,10 @@ class ProductionCalculator:
         power_entity: Optional[str] = None
     ) -> str:
         try:
-            _LOGGER.info("ðŸ” START Peak-Zeit Berechnung (Gewichtete Methode)")
+            _LOGGER.info("📍 START Peak-Zeit Berechnung (Gewichtete Methode)")
             
             if not power_entity:
-                _LOGGER.debug("1ï¸âƒ£ Kein Power-Sensor fÃ¼r Peak-Berechnung")
+                _LOGGER.debug("1️⃣ Kein Power-Sensor für Peak-Berechnung")
                 return "12:00"
             
             now = dt_util.now()
@@ -139,12 +140,12 @@ class ProductionCalculator:
             cutoff_recent = now - timedelta(days=self.RECENT_DAYS_THRESHOLD)
             
             _LOGGER.debug(
-                f"ðŸ“… Analyse-Zeitraum: {start_time.strftime('%Y-%m-%d %H:%M')} "
+                f"📝 Analyse-Zeitraum: {start_time.strftime('%Y-%m-%d %H:%M')} "
                 f"bis {now.strftime('%Y-%m-%d %H:%M')}"
             )
             _LOGGER.debug(
-                f"ðŸ“Š Gewichtung: Letzte {self.RECENT_DAYS_THRESHOLD} Tage = {self.RECENT_WEIGHT*100:.0f}%, "
-                f"Ã„ltere Tage = {self.OLDER_WEIGHT*100:.0f}%"
+                f"📠 Gewichtung: Letzte {self.RECENT_DAYS_THRESHOLD} Tage = {self.RECENT_WEIGHT*100:.0f}%, "
+                f"Ältere Tage = {self.OLDER_WEIGHT*100:.0f}%"
             )
             
             states = await self.hass.async_add_executor_job(
@@ -156,12 +157,12 @@ class ProductionCalculator:
             
             if not states or len(states) < 10:
                 _LOGGER.warning(
-                    f"âš ï¸ Nicht genug Daten fÃ¼r Peak-Berechnung: "
-                    f"{len(states) if states else 0} States gefunden (min. 10 benÃ¶tigt)"
+                    f"⚠️ Nicht genug Daten für Peak-Berechnung: "
+                    f"{len(states) if states else 0} States gefunden (min. 10 benötigt)"
                 )
                 return "12:00"
             
-            _LOGGER.debug(f"ðŸ“ˆ {len(states)} States aus History geladen")
+            _LOGGER.debug(f"📈 {len(states)} States aus History geladen")
             
             hourly_data = {hour: {'values': [], 'weights': []} for hour in range(24)}
             
@@ -209,11 +210,11 @@ class ProductionCalculator:
                     continue
             
             _LOGGER.debug(
-                f"ðŸ“Š DatenqualitÃ¤t: {invalid_states} invalid, {night_values} night/low, "
-                f"{converted_watt} Wâ†’kW konvertiert"
+                f"📠 Datenqualität: {invalid_states} invalid, {night_values} night/low, "
+                f"{converted_watt} W→kW konvertiert"
             )
             _LOGGER.debug(
-                f"âš–ï¸ Gewichtete Daten: {recent_count} recent ({self.RECENT_WEIGHT*100:.0f}%), "
+                f"⚖️ Gewichtete Daten: {recent_count} recent ({self.RECENT_WEIGHT*100:.0f}%), "
                 f"{older_count} older ({self.OLDER_WEIGHT*100:.0f}%)"
             )
             
@@ -229,12 +230,12 @@ class ProductionCalculator:
                         hourly_weighted_averages[hour] = weighted_avg
                         
                         _LOGGER.debug(
-                            f"â° Stunde {hour:02d}: {len(data['values'])} Werte, "
-                            f"Gewichteter Ã˜ = {weighted_avg:.3f} kW"
+                            f"⏰ Stunde {hour:02d}: {len(data['values'])} Werte, "
+                            f"Gewichteter Ø = {weighted_avg:.3f} kW"
                         )
             
             if not hourly_weighted_averages:
-                _LOGGER.warning("âš ï¸ Keine gÃ¼ltigen Produktionsdaten gefunden")
+                _LOGGER.warning("⚠️ Keine gültigen Produktionsdaten gefunden")
                 return "12:00"
             
             peak_hour = max(hourly_weighted_averages, key=hourly_weighted_averages.get)
@@ -242,21 +243,21 @@ class ProductionCalculator:
             
             if not (self.PRODUCTION_START_HOUR <= peak_hour <= self.PRODUCTION_END_HOUR):
                 _LOGGER.warning(
-                    f"âš ï¸ Peak-Stunde {peak_hour}:00 auÃŸerhalb Produktionszeit "
+                    f"⚠️ Peak-Stunde {peak_hour}:00 außerhalb Produktionszeit "
                     f"({self.PRODUCTION_START_HOUR}-{self.PRODUCTION_END_HOUR}), Fallback 12:00"
                 )
                 return "12:00"
             
             _LOGGER.info(
-                f"âœ“ Peak-Stunde gefunden: {peak_hour:02d}:00 Uhr "
-                f"(â‰ˆ {peak_value:.2f} kW gewichtet, "
+                f"✓ Peak-Stunde gefunden: {peak_hour:02d}:00 Uhr "
+                f"(≈ {peak_value:.2f} kW gewichtet, "
                 f"{len(hourly_data[peak_hour]['values'])} Werte)"
             )
             
             return f"{peak_hour:02d}:00"
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Peak-Zeit Berechnung fehlgeschlagen: {e}", exc_info=True)
+            _LOGGER.warning(f"⚠️ Peak-Zeit Berechnung fehlgeschlagen: {e}", exc_info=True)
             return "12:00"
     
     def is_production_hours(self, hour: int = None) -> bool:
@@ -309,11 +310,11 @@ class ProductionTimeCalculator:
         self._state_listener_remove = None
         self._midnight_listener_remove = None
         
-        _LOGGER.info("âœ“ ProductionTimeCalculator initialisiert")
+        _LOGGER.info("✓ ProductionTimeCalculator initialisiert")
     
     def start_tracking(self) -> None:
         if not self.power_entity:
-            _LOGGER.info("1ï¸âƒ£ Kein Power-Entity - Produktionszeit-Tracking deaktiviert")
+            _LOGGER.info("1️⃣ Kein Power-Entity - Produktionszeit-Tracking deaktiviert")
             return
         
         try:
@@ -331,10 +332,10 @@ class ProductionTimeCalculator:
                 second=0
             )
             
-            _LOGGER.info(f"âœ“ Produktionszeit-Tracking gestartet fÃ¼r {self.power_entity}")
+            _LOGGER.info(f"✓ Produktionszeit-Tracking gestartet für {self.power_entity}")
             
         except Exception as e:
-            _LOGGER.error(f"âŒ Fehler beim Starten des Trackings: {e}")
+            _LOGGER.error(f"❌ Fehler beim Starten des Trackings: {e}")
     
     @callback
     def _handle_power_change(self, event) -> None:
@@ -354,7 +355,7 @@ class ProductionTimeCalculator:
                 if not self._is_active:
                     self._is_active = True
                     self._start_time = now
-                    _LOGGER.debug(f"â˜€ï¸ Produktions-Start: {power}W")
+                    _LOGGER.debug(f"🟢 Produktions-Start: {power}W")
                 
                 self._zero_power_start = None
                 self._last_production_time = now
@@ -363,17 +364,17 @@ class ProductionTimeCalculator:
                 if power < self.ZERO_POWER_THRESHOLD:
                     if self._zero_power_start is None:
                         self._zero_power_start = now
-                        _LOGGER.debug(f"â±ï¸ Zero-Power Timer gestartet: {power}W")
+                        _LOGGER.debug(f"⏱️ Zero-Power Timer gestartet: {power}W")
                     
                     elif now - self._zero_power_start >= self.ZERO_POWER_TIMEOUT:
                         self._stop_production_tracking(now)
-                        _LOGGER.debug(f"ðŸ›‘ Produktions-Ende nach 5 Min Timeout")
+                        _LOGGER.debug(f"🕑 Produktions-Ende nach 5 Min Timeout")
                 
                 else:
                     self._zero_power_start = None
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Fehler in Power Change Handler: {e}")
+            _LOGGER.warning(f"⚠️ Fehler in Power Change Handler: {e}")
     
     def _stop_production_tracking(self, stop_time: datetime) -> None:
         if not self._is_active or not self._start_time:
@@ -386,7 +387,7 @@ class ProductionTimeCalculator:
         self._today_total_hours = self._accumulated_hours
         
         _LOGGER.info(
-            f"âœ“ Produktionsphase beendet: {hours:.2f}h "
+            f"✓ Produktionsphase beendet: {hours:.2f}h "
             f"(Gesamt heute: {self._today_total_hours:.2f}h)"
         )
         
@@ -396,7 +397,7 @@ class ProductionTimeCalculator:
     
     @callback
     def _handle_midnight_reset(self, now: datetime) -> None:
-        _LOGGER.info(f"ðŸ•› Mitternacht-Reset: Heute {self._today_total_hours:.2f}h produziert")
+        _LOGGER.info(f"🕛 Mitternacht-Reset: Heute {self._today_total_hours:.2f}h produziert")
         
         if self._is_active:
             self._stop_production_tracking(now)
@@ -411,7 +412,7 @@ class ProductionTimeCalculator:
     def get_production_time(self) -> str:
         try:
             if not self.power_entity:
-                return "Nicht verfÃ¼gbar"
+                return "Nicht verfügbar"
             
             total_hours = self._accumulated_hours
             
@@ -429,7 +430,7 @@ class ProductionTimeCalculator:
             return f"{hours}h {minutes}m"
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Fehler beim Abrufen der Produktionszeit: {e}")
+            _LOGGER.warning(f"⚠️ Fehler beim Abrufen der Produktionszeit: {e}")
             return "Fehler"
     
     def get_production_hours_float(self) -> float:
@@ -458,4 +459,4 @@ class ProductionTimeCalculator:
             self._midnight_listener_remove()
             self._midnight_listener_remove = None
         
-        _LOGGER.info("âœ“ Produktionszeit-Tracking gestoppt")
+        _LOGGER.info("✓ Produktionszeit-Tracking gestoppt")

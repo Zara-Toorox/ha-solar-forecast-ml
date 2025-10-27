@@ -3,10 +3,10 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 from homeassistant.components import recorder
 from .data_manager import DataManager
 from .const import ML_MODEL_VERSION
+from .helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,8 +36,8 @@ class SampleCollector:
     async def collect_sample(self, current_hour: int) -> None:
         if self.sun_guard and not self.sun_guard.is_production_time():
             _LOGGER.debug(
-                f"Ã¢â€ºâ€ Stunde {current_hour}: AuÃŸerhalb Produktionszeit - "
-                f"Sample Collection Ã¼bersprungen"
+                f"ÃƒÂ¢Ã¢â‚¬ÂºÃ¢â‚¬Â Stunde {current_hour}: AuÃƒÅ¸erhalb Produktionszeit - "
+                f"Sample Collection ÃƒÂ¼bersprungen"
             )
             return
         
@@ -45,7 +45,7 @@ class SampleCollector:
             try:
                 if self._last_sample_hour == current_hour:
                     _LOGGER.debug(
-                        f"Sample fÃ¼r Stunde {current_hour} bereits gesammelt, Ã¼berspringe"
+                        f"Sample fÃƒÂ¼r Stunde {current_hour} bereits gesammelt, ÃƒÂ¼berspringe"
                     )
                     return
                 
@@ -60,12 +60,12 @@ class SampleCollector:
         try:
             actual_kwh = await self._get_actual_production_for_hour(current_hour)
             if actual_kwh is None:
-                _LOGGER.debug(f"Keine Produktion fÃ¼r Stunde {current_hour}")
+                _LOGGER.debug(f"Keine Produktion fÃƒÂ¼r Stunde {current_hour}")
                 return
             
             daily_total = await self._get_daily_production_so_far()
             if daily_total is None or daily_total <= 0:
-                _LOGGER.debug(f"Kein Tagesertrag verfÃ¼gbar fÃ¼r Percentage-Berechnung")
+                _LOGGER.debug(f"Kein Tagesertrag verfÃƒÂ¼gbar fÃƒÂ¼r Percentage-Berechnung")
                 percentage = 0.0
             else:
                 percentage = actual_kwh / daily_total
@@ -89,7 +89,7 @@ class SampleCollector:
             await self.data_manager.add_hourly_sample(sample)
             
             _LOGGER.info(
-                f"âœ… Hourly Sample gespeichert: {current_hour}:00 Uhr | "
+                f"Ã¢Å“â€¦ Hourly Sample gespeichert: {current_hour}:00 Uhr | "
                 f"Actual={actual_kwh:.2f}kWh ({percentage*100:.1f}% des Tages), "
                 f"Daily={daily_total:.2f}kWh"
             )
@@ -122,7 +122,7 @@ class SampleCollector:
             )
             
             if not history_list or self.power_entity not in history_list:
-                _LOGGER.debug(f"Keine History fÃ¼r {self.power_entity} von {start_time} bis {end_time}")
+                _LOGGER.debug(f"Keine History fÃƒÂ¼r {self.power_entity} von {start_time} bis {end_time}")
                 return None
             
             states = history_list[self.power_entity]

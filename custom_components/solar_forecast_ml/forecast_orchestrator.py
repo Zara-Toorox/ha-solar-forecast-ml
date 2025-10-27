@@ -13,8 +13,8 @@ import logging
 from typing import Any, Dict, Optional
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
+from .helpers import SafeDateTimeUtil as dt_util
 from .ml_forecast_strategy import MLForecastStrategy
 from .rule_based_forecast_strategy import RuleBasedForecastStrategy
 from .weather_calculator import WeatherCalculator
@@ -54,7 +54,7 @@ class ForecastOrchestrator:
             )
             _LOGGER.info("ML Strategy initialisiert")
         else:
-            _LOGGER.info("ML Strategy nicht verfÃ¼gbar (Predictor fehlt)")
+            _LOGGER.info("ML Strategy nicht verfügbar (Predictor fehlt)")
     
     async def create_forecast(
         self,
@@ -64,7 +64,7 @@ class ForecastOrchestrator:
     ) -> Dict[str, Any]:
         if self.ml_strategy and self.ml_strategy.is_available():
             try:
-                _LOGGER.debug("âš¡ï¸ Verwende ML Strategy fÃ¼r Forecast")
+                _LOGGER.debug("Verwende ML Strategy für Forecast")
                 result = await self.ml_strategy.calculate_forecast(
                     weather_data=weather_data,
                     sensor_data=sensor_data,
@@ -83,10 +83,10 @@ class ForecastOrchestrator:
                 }
                 
             except Exception as e:
-                _LOGGER.warning(f"âš ï¸ ML Strategy fehlgeschlagen: {e}, Fallback zu Rule-Based")
+                _LOGGER.warning(f"ML Strategy fehlgeschlagen: {e}, Fallback zu Rule-Based")
         
         if self.rule_based_strategy:
-            _LOGGER.debug("ðŸŒ¤ï¸ Verwende Rule-Based Strategy fÃ¼r Forecast")
+            _LOGGER.debug("Verwende Rule-Based Strategy für Forecast")
             result = await self.rule_based_strategy.calculate_forecast(
                 weather_data=weather_data,
                 sensor_data=sensor_data,
@@ -104,7 +104,7 @@ class ForecastOrchestrator:
                 "model_accuracy": None
             }
         
-        _LOGGER.warning("âš ï¸ Keine Strategy verfÃ¼gbar, verwende einfache Berechnung")
+        _LOGGER.warning("Keine Strategy verfügbar, verwende einfache Berechnung")
         return await self._simple_forecast(weather_data)
     
     async def _simple_forecast(self, weather_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -160,7 +160,7 @@ class ForecastOrchestrator:
             ml_hourly_base = self._get_ml_hourly_base(forecast_today, current_hour)
             
             if ml_hourly_base is None:
-                _LOGGER.debug("ML hourly profile nicht verfÃ¼gbar, Fallback zu einfacher Berechnung")
+                _LOGGER.debug("ML hourly profile nicht verfügbar, Fallback zu einfacher Berechnung")
                 ml_hourly_base = forecast_today / 15.0
             
             sun_factor = 1.0
@@ -179,7 +179,7 @@ class ForecastOrchestrator:
             hourly_prediction = ml_hourly_base * sun_factor * cloud_factor * temp_factor * lux_factor * rain_factor
             
             _LOGGER.debug(
-                f"StÃ¼ndliche Prognose: base={ml_hourly_base:.2f}, sun={sun_factor:.2f}, "
+                f"Stündliche Prognose: base={ml_hourly_base:.2f}, sun={sun_factor:.2f}, "
                 f"cloud={cloud_factor:.2f}, temp={temp_factor:.2f}, lux={lux_factor:.2f}, "
                 f"rain={rain_factor:.2f}, result={hourly_prediction:.2f}"
             )
@@ -187,7 +187,7 @@ class ForecastOrchestrator:
             return round(hourly_prediction, 2)
                     
         except Exception as e:
-            _LOGGER.debug(f"âš ï¸ Next Hour Berechnung fehlgeschlagen: {e}")
+            _LOGGER.debug(f"Next Hour Berechnung fehlgeschlagen: {e}")
             return 0.0
     
     def _get_ml_hourly_base(self, forecast_today: float, current_hour: int) -> Optional[float]:

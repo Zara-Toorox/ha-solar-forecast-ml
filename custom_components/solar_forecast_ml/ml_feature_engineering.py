@@ -1,5 +1,5 @@
 """
-Feature Engineering fÃƒÂ¼r ML Predictor.
+Feature Engineering fÃƒÆ’Ã‚Â¼r ML Predictor.
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -11,7 +11,8 @@ License, or (at your option) any later version.
 import math
 from datetime import datetime
 from typing import Dict, Any, List
-from homeassistant.util import dt as dt_util
+
+from .helpers import SafeDateTimeUtil as dt_util
 
 
 class FeatureEngineer:

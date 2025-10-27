@@ -1,5 +1,5 @@
 """
-Weather Calculator fÃ¼r Solar Forecast ML.
+Weather Calculator fÃƒÂ¼r Solar Forecast ML.
 Berechnet Temperatur-, Cloud- und Seasonal-Faktoren.
 Version 4.8.1
 
@@ -23,7 +23,8 @@ Copyright (C) 2025 Zara-Toorox
 import logging
 from datetime import datetime
 from typing import Dict, Any
-from homeassistant.util import dt as dt_util
+
+from .helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class WeatherCalculator:
             "exceptional": 0.40
         }
         
-        _LOGGER.debug("âœ“ WeatherCalculator initialisiert")
+        _LOGGER.debug("Ã¢Å“â€œ WeatherCalculator initialisiert")
     
     def get_temperature_factor(self, temperature: float) -> float:
         try:
@@ -73,7 +74,7 @@ class WeatherCalculator:
                 factor = 1.0 - (temperature - self.OPTIMAL_TEMPERATURE) * self.TEMP_EFFICIENCY_LOSS
                 return max(0.7, factor)
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Temperatur-Faktor Berechnung fehlgeschlagen: {e}")
+            _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Temperatur-Faktor Berechnung fehlgeschlagen: {e}")
             return 0.9
     
     def get_cloud_factor(self, cloud_coverage: float) -> float:
@@ -87,7 +88,7 @@ class WeatherCalculator:
             else:
                 return 0.15
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Cloud-Faktor Berechnung fehlgeschlagen: {e}")
+            _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Cloud-Faktor Berechnung fehlgeschlagen: {e}")
             return 0.6
     
     def get_condition_factor(self, condition: str) -> float:
@@ -100,7 +101,7 @@ class WeatherCalculator:
             return self.CONDITION_FACTORS.get(condition_lower, 1.0)
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Condition-Faktor Berechnung fehlgeschlagen: {e}")
+            _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Condition-Faktor Berechnung fehlgeschlagen: {e}")
             return 1.0
     
     def get_seasonal_adjustment(self, now: datetime = None) -> float:
@@ -120,7 +121,7 @@ class WeatherCalculator:
             return max(0.2, min(1.2, factor))
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Seasonal adjustment Berechnung fehlgeschlagen: {e}")
+            _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Seasonal adjustment Berechnung fehlgeschlagen: {e}")
             return 0.6
     
     def get_current_season(self) -> str:
@@ -156,5 +157,5 @@ class WeatherCalculator:
             return combined
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Combined weather factor Berechnung fehlgeschlagen: {e}")
+            _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Combined weather factor Berechnung fehlgeschlagen: {e}")
             return 0.5
