@@ -1,10 +1,9 @@
 """
 Weather Calculator für Solar Forecast ML.
 Berechnet Temperatur-, Cloud- und Seasonal-Faktoren.
-Version 4.8.0
+Version 4.8.1
 
 Copyright (C) 2025 Zara-Toorox
-# von Zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -30,26 +29,15 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class WeatherCalculator:
-    """
-    Berechnet alle Wetter-bezogenen Faktoren für Forecast.
-    Kapselt Temperatur-, Cloud- und Seasonal-Logik.
-    # von Zara
-    """
     
     def __init__(self):
-        """
-        Initialisiere Weather Calculator.
-        # von Zara
-        """
-        # Seasonal Factors für Deutschland
         self.SEASONAL_FACTORS = {
-            "winter": 0.3,   # Deutlich niedriger im Winter
-            "spring": 0.7,   # Moderat im Frühling
-            "summer": 1.0,   # Peak im Sommer
-            "autumn": 0.6    # Niedriger im Herbst
+            "winter": 0.3,
+            "spring": 0.7,
+            "summer": 1.0,
+            "autumn": 0.6
         }
         
-        # Month to Season Mapping
         self.SEASONAL_MONTH_MAPPING = {
             12: "winter", 1: "winter", 2: "winter",
             3: "spring", 4: "spring", 5: "spring",
@@ -57,152 +45,97 @@ class WeatherCalculator:
             9: "autumn", 10: "autumn", 11: "autumn"
         }
         
-        # Temperatur-Konstanten
-        self.OPTIMAL_TEMPERATURE = 25.0  # Optimale Temperatur für PV
-        self.TEMP_EFFICIENCY_LOSS = 0.005  # Effizienz-Verlust pro Â°C über optimal
+        self.OPTIMAL_TEMPERATURE = 25.0
+        self.TEMP_EFFICIENCY_LOSS = 0.005
+        
+        self.CONDITION_FACTORS = {
+            "rainy": 0.25,
+            "pouring": 0.15,
+            "snowy": 0.20,
+            "snowy-rainy": 0.18,
+            "lightning": 0.22,
+            "lightning-rainy": 0.20,
+            "hail": 0.18,
+            "fog": 0.30,
+            "windy": 0.85,
+            "exceptional": 0.40
+        }
         
         _LOGGER.debug("✓ WeatherCalculator initialisiert")
     
     def get_temperature_factor(self, temperature: float) -> float:
-        """
-        Berechnet Temperaturfaktor für Solar-Produktion.
-        
-        PV-Panels arbeiten optimal bei ~25Â°C.
-        Bei höheren Temperaturen sinkt die Effizienz.
-        
-        Args:
-            temperature: Temperatur in Â°C
-            
-        Returns:
-            Faktor zwischen 0.7 und 1.0
-        # von Zara
-        """
         try:
-            # Sehr kalte Temperaturen (unter 0Â°C)
             if temperature < 0:
                 return 0.7
-            
-            # Optimal bis 25Â°C (linearer Anstieg)
             elif temperature <= self.OPTIMAL_TEMPERATURE:
-                # Von 0.8 bei 0Â°C bis 1.0 bei 25Â°C
                 return 0.8 + (temperature / self.OPTIMAL_TEMPERATURE) * 0.2
-            
-            # Über optimal (Effizienz sinkt)
             else:
-                # Verlust von 0.5% pro Â°C über 25Â°C
                 factor = 1.0 - (temperature - self.OPTIMAL_TEMPERATURE) * self.TEMP_EFFICIENCY_LOSS
-                return max(0.7, factor)  # Minimum 0.7
-                
+                return max(0.7, factor)
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Temperatur-Faktor Berechnung fehlgeschlagen: {e}")
-            return 0.9  # Safe fallback
+            _LOGGER.warning(f"⚠️ Temperatur-Faktor Berechnung fehlgeschlagen: {e}")
+            return 0.9
     
     def get_cloud_factor(self, cloud_coverage: float) -> float:
-        """
-        Berechnet Cloud-Faktor für Solar-Produktion.
-        
-        Wolkenbedeckung reduziert direkte Sonneneinstrahlung erheblich.
-        
-        Args:
-            cloud_coverage: Wolkenbedeckung in % (0-100)
-            
-        Returns:
-            Faktor zwischen 0.2 und 1.0
-        # von Zara
-        """
         try:
-            # Klar (< 20% Wolken)
             if cloud_coverage < 20:
                 return 1.0
-            
-            # Teilweise bewölkt (20-50%)
             elif cloud_coverage < 50:
                 return 0.8
-            
-            # Meist bewölkt (50-80%)
             elif cloud_coverage < 80:
                 return 0.4
-            
-            # Stark bewölkt (>= 80%)
             else:
-                return 0.2
-                
+                return 0.15
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Cloud-Faktor Berechnung fehlgeschlagen: {e}")
-            return 0.6  # Safe fallback
+            _LOGGER.warning(f"⚠️ Cloud-Faktor Berechnung fehlgeschlagen: {e}")
+            return 0.6
+    
+    def get_condition_factor(self, condition: str) -> float:
+        try:
+            if not condition:
+                return 1.0
+            
+            condition_lower = condition.lower()
+            
+            return self.CONDITION_FACTORS.get(condition_lower, 1.0)
+            
+        except Exception as e:
+            _LOGGER.warning(f"⚠️ Condition-Faktor Berechnung fehlgeschlagen: {e}")
+            return 1.0
     
     def get_seasonal_adjustment(self, now: datetime = None) -> float:
-        """
-        Berechnet saisonalen Anpassungsfaktor.
-        
-        Berücksichtigt Jahreszeit und Monat für realistische Anpassung.
-        
-        Args:
-            now: Zeitpunkt (optional, default: jetzt)
-            
-        Returns:
-            Seasonal adjustment factor (0.2 - 1.2)
-        # von Zara
-        """
         try:
-            # Verwende aktuelle Zeit wenn nicht angegeben
             if now is None:
                 now = dt_util.utcnow()
             
             month = now.month
-            
-            # Hole Jahreszeit aus Monat
             season = self.SEASONAL_MONTH_MAPPING.get(month, "autumn")
-            
-            # Base seasonal factor
             factor = self.SEASONAL_FACTORS.get(season, 0.6)
             
-            # Feinabstimmung für spezielle Monate
-            if month in [12, 1]:  # Tiefster Winter
+            if month in [12, 1]:
                 factor *= 0.8
-            elif month in [6, 7]:  # Hochsommer
+            elif month in [6, 7]:
                 factor *= 1.1
             
-            # Safety bounds
             return max(0.2, min(1.2, factor))
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Seasonal adjustment Berechnung fehlgeschlagen: {e}")
-            return 0.6  # Safe fallback
+            _LOGGER.warning(f"⚠️ Seasonal adjustment Berechnung fehlgeschlagen: {e}")
+            return 0.6
     
     def get_current_season(self) -> str:
-        """
-        Gibt aktuelle Jahreszeit zurück.
-        
-        Returns:
-            Season name ("winter", "spring", "summer", "autumn")
-        # von Zara
-        """
         try:
             now = dt_util.utcnow()
             month = now.month
             return self.SEASONAL_MONTH_MAPPING.get(month, "autumn")
         except Exception:
-            return "autumn"  # Safe fallback
+            return "autumn"
     
     def calculate_combined_weather_factor(
         self,
         weather_data: Dict[str, Any],
         include_seasonal: bool = True
     ) -> float:
-        """
-        Berechnet kombinierten Wetter-Faktor.
-        
-        Multipliziert Temperatur-, Cloud- und optional Seasonal-Faktor.
-        
-        Args:
-            weather_data: Dictionary mit temperature und clouds
-            include_seasonal: Ob seasonal adjustment einbezogen werden soll
-            
-        Returns:
-            Kombinierter Faktor
-        # von Zara
-        """
         try:
             temp_factor = self.get_temperature_factor(
                 weather_data.get("temperature", 15.0)
@@ -210,10 +143,12 @@ class WeatherCalculator:
             cloud_factor = self.get_cloud_factor(
                 weather_data.get("clouds", 50.0)
             )
+            condition_factor = self.get_condition_factor(
+                weather_data.get("condition", "")
+            )
             
-            combined = temp_factor * cloud_factor
+            combined = temp_factor * cloud_factor * condition_factor
             
-            # Optional: Seasonal adjustment
             if include_seasonal:
                 seasonal = self.get_seasonal_adjustment()
                 combined *= seasonal
@@ -221,5 +156,5 @@ class WeatherCalculator:
             return combined
             
         except Exception as e:
-            _LOGGER.warning(f"âš ï¸ Combined weather factor Berechnung fehlgeschlagen: {e}")
-            return 0.5  # Safe fallback
+            _LOGGER.warning(f"⚠️ Combined weather factor Berechnung fehlgeschlagen: {e}")
+            return 0.5

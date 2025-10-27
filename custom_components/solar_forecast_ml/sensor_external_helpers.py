@@ -1,6 +1,6 @@
 """
-Helper-Modul für externe Sensor-Anzeigen.
-Gemeinsame Basis-Klasse und Hilfsfunktionen für externe Sensoren.
+Helper-Modul fÃ¼r externe Sensor-Anzeigen.
+Gemeinsame Basis-Klasse und Hilfsfunktionen fÃ¼r externe Sensoren.
 Version 1.0 - von Zara
 
 Copyright (C) 2025 Zara-Toorox
@@ -39,7 +39,7 @@ def format_time_ago(last_changed: datetime) -> str:
     Platzsparender: <1min = '>1min' - von Zara
     
     Args:
-        last_changed: Zeitpunkt der letzten Änderung
+        last_changed: Zeitpunkt der letzten Ã„nderung
         
     Returns:
         Formatierter String wie "vor 5 Min." oder "vor 2 Std."
@@ -48,7 +48,7 @@ def format_time_ago(last_changed: datetime) -> str:
     delta = now - last_changed
     
     if delta.total_seconds() < 60:
-        return ">1min"  # Platzsparender für <1 Minute - von Zara
+        return ">1min"  # Platzsparender fÃ¼r <1 Minute - von Zara
     elif delta.total_seconds() < 3600:
         minutes = int(delta.total_seconds() / 60)
         return f"vor {minutes} Min."
@@ -59,13 +59,13 @@ def format_time_ago(last_changed: datetime) -> str:
 
 class BaseExternalSensor:
     """
-    Gemeinsame Basis für externe Sensor-Anzeigen mit LIVE-Updates - von Zara
+    Gemeinsame Basis fÃ¼r externe Sensor-Anzeigen mit LIVE-Updates - von Zara
     
     Diese Klasse implementiert:
     - LIVE State Change Tracking
     - Einheitliche Fehlerbehandlung
     - Zeitstempel-Formatierung
-    - Verfügbarkeitsprüfung
+    - VerfÃ¼gbarkeitsprÃ¼fung
     """
     
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -78,13 +78,13 @@ class BaseExternalSensor:
             coordinator: DataUpdateCoordinator
             entry: ConfigEntry
             sensor_config: Dict mit Konfiguration:
-                - config_key: Key für Config (z.B. CONF_TEMP_SENSOR)
-                - unique_id_suffix: Suffix für unique_id
+                - config_key: Key fÃ¼r Config (z.B. CONF_TEMP_SENSOR)
+                - unique_id_suffix: Suffix fÃ¼r unique_id
                 - name: Anzeigename
                 - icon: MDI Icon
-                - unit_key: Key für Einheit aus Attributes (optional)
+                - unit_key: Key fÃ¼r Einheit aus Attributes (optional)
                 - default_unit: Standard-Einheit falls nicht gefunden (optional)
-                - format_string: Format-String für Anzeige (optional)
+                - format_string: Format-String fÃ¼r Anzeige (optional)
         """
         # Muss von abgeleiteter Klasse bereits aufgerufen sein
         self._sensor_config = sensor_config
@@ -98,14 +98,16 @@ class BaseExternalSensor:
     
     @property
     def available(self) -> bool:
-        """Externe Sensoren immer verfügbar (zeigen eigene Status-Meldungen) - von Zara"""
+        """Externe Sensoren immer verfÃ¼gbar (zeigen eigene Status-Meldungen) - von Zara"""
         return True
     
     async def async_added_to_hass(self) -> None:
         """Registriert LIVE-Update Listener - von Zara"""
         await super().async_added_to_hass()
         
-        sensor_entity_id = self.entry.data.get(self._sensor_config['config_key'])
+        sensor_entity_id_raw = self.entry.data.get(self._sensor_config['config_key'])
+        # Defensives Strip - von Zara
+        sensor_entity_id = sensor_entity_id_raw.strip() if isinstance(sensor_entity_id_raw, str) and sensor_entity_id_raw else None
         if sensor_entity_id:
             self.async_on_remove(
                 async_track_state_change_event(
@@ -117,7 +119,7 @@ class BaseExternalSensor:
     
     @callback
     def _handle_external_sensor_update(self, event) -> None:
-        """Triggert Update bei Änderung des externen Sensors - von Zara"""
+        """Triggert Update bei Ã„nderung des externen Sensors - von Zara"""
         self.async_write_ha_state()
     
     @property
@@ -129,7 +131,9 @@ class BaseExternalSensor:
             Formatierter String mit Wert, Einheit und Zeitstempel
             oder Fehlermeldung
         """
-        sensor_entity_id = self.entry.data.get(self._sensor_config['config_key'])
+        sensor_entity_id_raw = self.entry.data.get(self._sensor_config['config_key'])
+        # Defensives Strip - von Zara
+        sensor_entity_id = sensor_entity_id_raw.strip() if isinstance(sensor_entity_id_raw, str) and sensor_entity_id_raw else None
         
         if not sensor_entity_id:
             return "Kein externer Sensor vorhanden"
@@ -139,9 +143,9 @@ class BaseExternalSensor:
             return "Sensor nicht gefunden"
         
         try:
-            # Prüfe Verfügbarkeit
+            # PrÃ¼fe VerfÃ¼gbarkeit
             if state.state in ['unavailable', 'unknown', 'none', None]:
-                return "Sensor nicht verfügbar"
+                return "Sensor nicht verfÃ¼gbar"
             
             # Formatiere Zeitstempel
             time_ago = format_time_ago(state.last_changed)
@@ -177,7 +181,7 @@ class BaseExternalSensor:
     
     def _format_value(self, value: str, unit: Optional[str], time_ago: str) -> str:
         """
-        Formatiert Sensor-Wert für Anzeige - von Zara
+        Formatiert Sensor-Wert fÃ¼r Anzeige - von Zara
         
         Args:
             value: Sensor-Wert

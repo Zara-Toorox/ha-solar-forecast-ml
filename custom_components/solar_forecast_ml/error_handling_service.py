@@ -16,41 +16,45 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
-# Version 4.8.0 - von Zara
 from __future__ import annotations
 
 import logging
+import traceback
 from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable
+from typing import Any, Callable, Optional, Dict
 
 from .exceptions import (
     ConfigurationException,
     WeatherAPIException,
     CircuitBreakerOpenException,
+    MLModelException,
+    DataIntegrityException,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class CircuitBreakerState(Enum):
-    """Circuit Breaker States - von Zara"""
-    CLOSED = "closed"  # Normal operation - von Zara
-    OPEN = "open"      # Too many failures, blocking calls - von Zara
-    HALF_OPEN = "half_open"  # Testing if service recovered - von Zara
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
 
 
 class ErrorType(Enum):
-    """Fehlertypen für differenzierte Behandlung - von Zara"""
-    CONFIGURATION = "configuration"  # Config-Fehler - sofort behandeln - von Zara
-    API_ERROR = "api_error"          # API-Fehler - mit Retry - von Zara
-    NETWORK_ERROR = "network_error"  # Netzwerk-Fehler - mit Retry - von Zara
-    UNKNOWN = "unknown"              # Unbekannte Fehler - von Zara
+    CONFIGURATION = "configuration"
+    API_ERROR = "api_error"
+    NETWORK_ERROR = "network_error"
+    ML_TRAINING = "ml_training"
+    ML_PREDICTION = "ml_prediction"
+    DATA_INTEGRITY = "data_integrity"
+    JSON_OPERATION = "json_operation"
+    SENSOR_ERROR = "sensor_error"
+    UNKNOWN = "unknown"
 
 
 class CircuitBreaker:
-    """Circuit Breaker Implementation mit Error Type Differenzierung - von Zara"""
     
     def __init__(
         self,
@@ -60,7 +64,6 @@ class CircuitBreaker:
         timeout: int = 60,
         half_open_timeout: int = 30,
     ):
-        """Initialize circuit breaker - von Zara"""
         self.name = name
         self.failure_threshold = failure_threshold
         self.success_threshold = success_threshold
@@ -73,18 +76,15 @@ class CircuitBreaker:
         self.last_failure_time: datetime | None = None
         self.last_state_change: datetime = datetime.now()
         
-        # Tracke Error Types separat - von Zara
         self.error_type_counts = defaultdict(int)
     
     def should_allow_request(self) -> bool:
-        """Prüfe ob Request erlaubt ist - von Zara"""
         current_time = datetime.now()
         
         if self.state == CircuitBreakerState.CLOSED:
             return True
         
         if self.state == CircuitBreakerState.OPEN:
-            # Prüfe ob Timeout abgelaufen - von Zara
             time_since_failure = (current_time - self.last_failure_time).total_seconds()
             
             if time_since_failure >= self.timeout:
@@ -96,13 +96,11 @@ class CircuitBreaker:
             return False
         
         if self.state == CircuitBreakerState.HALF_OPEN:
-            # Im HALF_OPEN State, erlaube limitierte Requests - von Zara
             return True
         
         return False
     
     def record_success(self):
-        """Zeichne erfolgreiche Operation auf - von Zara"""
         current_time = datetime.now()
         
         if self.state == CircuitBreakerState.HALF_OPEN:
@@ -117,19 +115,15 @@ class CircuitBreaker:
                 self.last_state_change = current_time
         
         elif self.state == CircuitBreakerState.CLOSED:
-            # Reset failure count bei Erfolg - von Zara
             if self.failure_count > 0:
                 self.failure_count = max(0, self.failure_count - 1)
     
     def record_failure(self, error_type: ErrorType = ErrorType.UNKNOWN):
-        """Zeichne fehlgeschlagene Operation auf mit Error Type - von Zara"""
         current_time = datetime.now()
         self.last_failure_time = current_time
         
-        # Tracke Error Type - von Zara
         self.error_type_counts[error_type] += 1
         
-        # Config-Fehler öffnen Circuit Breaker sofort - von Zara
         if error_type == ErrorType.CONFIGURATION:
             _LOGGER.warning(
                 "Circuit Breaker %s: Configuration error detected - opening immediately",
@@ -140,7 +134,6 @@ class CircuitBreaker:
             self.last_state_change = current_time
             return
         
-        # Für andere Fehler normale Logik - von Zara
         if self.state == CircuitBreakerState.HALF_OPEN:
             _LOGGER.warning("Circuit Breaker %s: failure in HALF_OPEN, reopening", self.name)
             self.state = CircuitBreakerState.OPEN
@@ -161,7 +154,6 @@ class CircuitBreaker:
                 self.last_state_change = current_time
     
     def reset(self):
-        """Reset circuit breaker manuell - von Zara"""
         _LOGGER.info("Circuit Breaker %s: manual reset", self.name)
         self.state = CircuitBreakerState.CLOSED
         self.failure_count = 0
@@ -171,7 +163,6 @@ class CircuitBreaker:
         self.last_state_change = datetime.now()
     
     def get_status(self) -> dict[str, Any]:
-        """Hole Circuit Breaker Status - von Zara"""
         return {
             "name": self.name,
             "state": self.state.value,
@@ -185,13 +176,17 @@ class CircuitBreaker:
 
 
 class ErrorHandlingService:
-    """Zentraler Error Handling Service mit Circuit Breakers - von Zara"""
     
     def __init__(self):
-        """Initialize error handling service - von Zara"""
         self.circuit_breakers: dict[str, CircuitBreaker] = {}
         self.error_log: list[dict[str, Any]] = []
+        self.ml_operation_log: list[dict[str, Any]] = []
+        self.json_operation_log: list[dict[str, Any]] = []
+        self.sensor_status_log: list[dict[str, Any]] = []
         self.max_error_log_size = 100
+        self.max_ml_log_size = 200
+        self.max_json_log_size = 100
+        self.max_sensor_log_size = 50
     
     def register_circuit_breaker(
         self,
@@ -201,7 +196,6 @@ class ErrorHandlingService:
         timeout: int = 60,
         half_open_timeout: int = 30,
     ) -> CircuitBreaker:
-        """Registriere einen neuen Circuit Breaker - von Zara"""
         if name in self.circuit_breakers:
             _LOGGER.warning("Circuit Breaker %s already registered", name)
             return self.circuit_breakers[name]
@@ -219,7 +213,6 @@ class ErrorHandlingService:
         return breaker
     
     def get_circuit_breaker(self, name: str) -> CircuitBreaker | None:
-        """Hole Circuit Breaker by name - von Zara"""
         return self.circuit_breakers.get(name)
     
     async def execute_with_circuit_breaker(
@@ -229,46 +222,213 @@ class ErrorHandlingService:
         *args,
         **kwargs
     ) -> Any:
-        """Führe Operation mit Circuit Breaker Protection aus - von Zara"""
         breaker = self.circuit_breakers.get(breaker_name)
         
         if breaker is None:
             _LOGGER.error("Circuit Breaker %s not found", breaker_name)
             raise ValueError(f"Circuit Breaker {breaker_name} not registered")
         
-        # Prüfe ob Request erlaubt - von Zara
         if not breaker.should_allow_request():
             error_msg = f"Circuit Breaker {breaker_name} is {breaker.state.value.upper()} - operation blocked"
             _LOGGER.warning(error_msg)
             self._log_error(breaker_name, "CircuitBreakerOpenException", error_msg)
             raise CircuitBreakerOpenException(error_msg)
         
-        # Führe Operation aus - von Zara
         try:
             result = await operation(*args, **kwargs)
             breaker.record_success()
             return result
             
         except ConfigurationException as err:
-            # Config-Fehler - öffne Circuit Breaker sofort - von Zara
             _LOGGER.error("[%s] ConfigurationException: %s", breaker_name, err)
             breaker.record_failure(ErrorType.CONFIGURATION)
             self._log_error(breaker_name, "ConfigurationException", str(err), ErrorType.CONFIGURATION)
             raise
             
         except WeatherAPIException as err:
-            # API-Fehler - normale Behandlung - von Zara
             _LOGGER.error("[%s] WeatherAPIException: %s", breaker_name, err)
             breaker.record_failure(ErrorType.API_ERROR)
             self._log_error(breaker_name, "WeatherAPIException", str(err), ErrorType.API_ERROR)
             raise
             
         except Exception as err:
-            # Unbekannter Fehler - von Zara
             _LOGGER.error("[%s] Exception: %s", breaker_name, err)
             breaker.record_failure(ErrorType.UNKNOWN)
             self._log_error(breaker_name, type(err).__name__, str(err), ErrorType.UNKNOWN)
             raise
+    
+    async def handle_error(
+        self,
+        error: Exception,
+        source: str,
+        context: Optional[Dict[str, Any]] = None,
+        pipeline_position: Optional[str] = None
+    ) -> None:
+        error_type = self._classify_error(error)
+        
+        error_details = {
+            "timestamp": datetime.now().isoformat(),
+            "source": source,
+            "error_type": type(error).__name__,
+            "error_classification": error_type.value,
+            "message": str(error),
+            "pipeline_position": pipeline_position,
+            "context": context or {},
+            "stack_trace": traceback.format_exc()
+        }
+        
+        self.error_log.append(error_details)
+        
+        if len(self.error_log) > self.max_error_log_size:
+            self.error_log = self.error_log[-self.max_error_log_size:]
+        
+        _LOGGER.error(
+            "[ML ERROR] Source: %s | Type: %s | Position: %s | Context: %s | Message: %s",
+            source,
+            type(error).__name__,
+            pipeline_position or "unknown",
+            context or {},
+            str(error)
+        )
+        
+        if error_type in [ErrorType.ML_TRAINING, ErrorType.ML_PREDICTION]:
+            _LOGGER.error("[ML STACK TRACE]\n%s", traceback.format_exc())
+    
+    def _classify_error(self, error: Exception) -> ErrorType:
+        if isinstance(error, MLModelException):
+            if "training" in str(error).lower():
+                return ErrorType.ML_TRAINING
+            elif "prediction" in str(error).lower():
+                return ErrorType.ML_PREDICTION
+            return ErrorType.UNKNOWN
+        elif isinstance(error, DataIntegrityException):
+            return ErrorType.DATA_INTEGRITY
+        elif isinstance(error, ConfigurationException):
+            return ErrorType.CONFIGURATION
+        elif isinstance(error, WeatherAPIException):
+            return ErrorType.API_ERROR
+        else:
+            error_str = str(error).lower()
+            if "sensor" in error_str or "state" in error_str:
+                return ErrorType.SENSOR_ERROR
+            elif "json" in error_str or "file" in error_str:
+                return ErrorType.JSON_OPERATION
+            return ErrorType.UNKNOWN
+    
+    def log_ml_operation(
+        self,
+        operation: str,
+        success: bool,
+        metrics: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        duration_seconds: Optional[float] = None
+    ) -> None:
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "operation": operation,
+            "success": success,
+            "metrics": metrics or {},
+            "context": context or {},
+            "duration_seconds": duration_seconds
+        }
+        
+        self.ml_operation_log.append(log_entry)
+        
+        if len(self.ml_operation_log) > self.max_ml_log_size:
+            self.ml_operation_log = self.ml_operation_log[-self.max_ml_log_size:]
+        
+        status_icon = "✅" if success else "❌"
+        _LOGGER.info(
+            "[ML OPERATION] %s %s | Metrics: %s | Context: %s | Duration: %.2fs",
+            status_icon,
+            operation,
+            metrics or {},
+            context or {},
+            duration_seconds or 0.0
+        )
+    
+    def log_json_operation(
+        self,
+        file_name: str,
+        operation: str,
+        success: bool,
+        file_size_bytes: Optional[int] = None,
+        records_count: Optional[int] = None,
+        error_message: Optional[str] = None
+    ) -> None:
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "file_name": file_name,
+            "operation": operation,
+            "success": success,
+            "file_size_bytes": file_size_bytes,
+            "records_count": records_count,
+            "error_message": error_message
+        }
+        
+        self.json_operation_log.append(log_entry)
+        
+        if len(self.json_operation_log) > self.max_json_log_size:
+            self.json_operation_log = self.json_operation_log[-self.max_json_log_size:]
+        
+        status_icon = "✅" if success else "❌"
+        if success:
+            _LOGGER.info(
+                "[JSON OPERATION] %s %s | File: %s | Size: %s bytes | Records: %s",
+                status_icon,
+                operation,
+                file_name,
+                file_size_bytes or "unknown",
+                records_count or "unknown"
+            )
+        else:
+            _LOGGER.error(
+                "[JSON OPERATION] %s %s | File: %s | Error: %s",
+                status_icon,
+                operation,
+                file_name,
+                error_message or "unknown"
+            )
+    
+    def log_sensor_status(
+        self,
+        sensor_name: str,
+        sensor_type: str,
+        available: bool,
+        value: Optional[Any] = None,
+        error_message: Optional[str] = None
+    ) -> None:
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "sensor_name": sensor_name,
+            "sensor_type": sensor_type,
+            "available": available,
+            "value": value,
+            "error_message": error_message
+        }
+        
+        self.sensor_status_log.append(log_entry)
+        
+        if len(self.sensor_status_log) > self.max_sensor_log_size:
+            self.sensor_status_log = self.sensor_status_log[-self.max_sensor_log_size:]
+        
+        status_icon = "✅" if available else "❌"
+        if available:
+            _LOGGER.debug(
+                "[SENSOR STATUS] %s %s (%s) | Value: %s",
+                status_icon,
+                sensor_name,
+                sensor_type,
+                value
+            )
+        else:
+            _LOGGER.warning(
+                "[SENSOR STATUS] %s %s (%s) | Unavailable | Error: %s",
+                status_icon,
+                sensor_name,
+                sensor_type,
+                error_message or "unknown"
+            )
     
     def _log_error(
         self,
@@ -277,7 +437,6 @@ class ErrorHandlingService:
         message: str,
         error_classification: ErrorType = ErrorType.UNKNOWN
     ):
-        """Logge Fehler in Error Log - von Zara"""
         error_entry = {
             "timestamp": datetime.now().isoformat(),
             "source": source,
@@ -288,32 +447,54 @@ class ErrorHandlingService:
         
         self.error_log.append(error_entry)
         
-        # Begrenze Log-GröÃŸe - von Zara
         if len(self.error_log) > self.max_error_log_size:
             self.error_log = self.error_log[-self.max_error_log_size:]
     
     def get_error_log(self, limit: int = 20) -> list[dict[str, Any]]:
-        """Hole letzte N Fehler aus Log - von Zara"""
         return self.error_log[-limit:]
     
+    def get_ml_operation_log(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self.ml_operation_log[-limit:]
+    
+    def get_json_operation_log(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self.json_operation_log[-limit:]
+    
+    def get_sensor_status_log(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self.sensor_status_log[-limit:]
+    
     def clear_error_log(self):
-        """Lösche Error Log - von Zara"""
         self.error_log.clear()
         _LOGGER.info("Error log cleared")
     
+    def clear_ml_operation_log(self):
+        self.ml_operation_log.clear()
+        _LOGGER.info("ML operation log cleared")
+    
+    def clear_json_operation_log(self):
+        self.json_operation_log.clear()
+        _LOGGER.info("JSON operation log cleared")
+    
+    def clear_sensor_status_log(self):
+        self.sensor_status_log.clear()
+        _LOGGER.info("Sensor status log cleared")
+    
     def get_all_status(self) -> dict[str, Any]:
-        """Hole Status aller Circuit Breakers - von Zara"""
         return {
             "circuit_breakers": {
                 name: breaker.get_status()
                 for name, breaker in self.circuit_breakers.items()
             },
             "error_log_size": len(self.error_log),
+            "ml_operation_log_size": len(self.ml_operation_log),
+            "json_operation_log_size": len(self.json_operation_log),
+            "sensor_status_log_size": len(self.sensor_status_log),
             "recent_errors": self.get_error_log(5),
+            "recent_ml_operations": self.get_ml_operation_log(5),
+            "recent_json_operations": self.get_json_operation_log(5),
+            "recent_sensor_status": self.get_sensor_status_log(5),
         }
     
     def reset_all_circuit_breakers(self):
-        """Reset alle Circuit Breakers - von Zara"""
         for name, breaker in self.circuit_breakers.items():
             breaker.reset()
         _LOGGER.info("All circuit breakers reset")

@@ -1,6 +1,6 @@
 """
-ML Data Types für Solar Forecast ML Integration.
-✓ ERWEITERT: Fehlende Attribute hinzugefügt // von Zara
+ML Data Types fÃ¼r Solar Forecast ML Integration.
+PROGRESSIVE UPGRADE v5.1.0: Feature Normalisierung Support
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -26,7 +26,7 @@ from enum import Enum
 
 
 class ErrorCategory(Enum):
-    """Error Categories für ML System."""
+    """Error Categories fÃ¼r ML System."""
     DATA_INTEGRITY = "data_integrity"
     MODEL_TRAINING = "model_training"
     PREDICTION = "prediction"
@@ -59,7 +59,7 @@ class PredictionRecord:
 class LearnedWeights:
     """
     Learned model weights and metadata.
-    ✓ ERWEITERT: bias, weights, feature_names hinzugefügt // von Zara
+    PROGRESSIVE UPGRADE: Feature Normalisierung Support
     """
     weather_weights: Dict[str, float]
     seasonal_factors: Dict[str, float]
@@ -69,9 +69,11 @@ class LearnedWeights:
     last_trained: str
     model_version: str = "1.0"
     feature_importance: Dict[str, float] = field(default_factory=dict)
-    bias: float = 0.0  # ✓ NEU: Für lineares Modell // von Zara
-    weights: Dict[str, float] = field(default_factory=dict)  # ✓ NEU: Feature weights // von Zara
-    feature_names: List[str] = field(default_factory=list)  # ✓ NEU: Feature-Namen // von Zara
+    bias: float = 0.0
+    weights: Dict[str, float] = field(default_factory=dict)
+    feature_names: List[str] = field(default_factory=list)
+    feature_means: Dict[str, float] = field(default_factory=dict)
+    feature_stds: Dict[str, float] = field(default_factory=dict)
     
     def __post_init__(self):
         if not (0.1 <= self.correction_factor <= 5.0):
@@ -81,14 +83,12 @@ class LearnedWeights:
         if self.training_samples < 0:
             raise ValueError("training_samples cannot be negative")
         
-        # Default feature_names falls leer // von Zara
         if not self.feature_names:
             self.feature_names = [
                 "temperature", "humidity", "cloudiness", 
                 "wind_speed", "hour_of_day", "seasonal_factor"
             ]
         
-        # Default weights falls leer // von Zara
         if not self.weights:
             self.weights = self.weather_weights.copy()
 
@@ -97,17 +97,15 @@ class LearnedWeights:
 class HourlyProfile:
     """
     Hourly production profile for time-based predictions.
-    ✓ ERWEITERT: hourly_averages hinzugefügt // von Zara
     """
     hourly_factors: Dict[str, float]
     samples_count: int
     last_updated: str
     confidence: float = 0.5
     seasonal_adjustment: Dict[str, float] = field(default_factory=dict)
-    hourly_averages: Dict[int, float] = field(default_factory=dict)  # ✓ NEU: Durchschnittswerte pro Stunde // von Zara
+    hourly_averages: Dict[int, float] = field(default_factory=dict)
     
     def __post_init__(self):
-        # Validate hourly_factors (24 hours) // von Zara
         for hour in range(24):
             if str(hour) not in self.hourly_factors:
                 self.hourly_factors[str(hour)] = 1.0
@@ -117,7 +115,6 @@ class HourlyProfile:
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError("confidence must be between 0 and 1")
         
-        # Default hourly_averages falls leer // von Zara
         if not self.hourly_averages:
             import math
             for hour in range(24):
@@ -225,7 +222,6 @@ class PredictionContext:
 def create_default_learned_weights() -> LearnedWeights:
     """
     Create default learned weights for initialization.
-    ✓ ERWEITERT: Mit neuen Feldern // von Zara
     """
     return LearnedWeights(
         weather_weights={
@@ -244,21 +240,22 @@ def create_default_learned_weights() -> LearnedWeights:
         correction_factor=1.0,
         accuracy=0.5,
         training_samples=0,
-        last_trained=datetime.now().isoformat(),
+        last_trained=dt_util.utcnow().isoformat(),
         model_version="1.0",
         bias=0.0,
         weights={},
         feature_names=[
             "temperature", "humidity", "cloudiness", 
             "wind_speed", "hour_of_day", "seasonal_factor"
-        ]
+        ],
+        feature_means={},
+        feature_stds={}
     )
 
 
 def create_default_hourly_profile() -> HourlyProfile:
     """
     Create default hourly profile for initialization.
-    ✓ ERWEITERT: Mit hourly_averages // von Zara
     """
     import math
     hourly_averages = {}
@@ -272,7 +269,7 @@ def create_default_hourly_profile() -> HourlyProfile:
     return HourlyProfile(
         hourly_factors={str(hour): 1.0 for hour in range(24)},
         samples_count=0,
-        last_updated=datetime.now().isoformat(),
+        last_updated=dt_util.utcnow().isoformat(),
         confidence=0.5,
         hourly_averages=hourly_averages
     )

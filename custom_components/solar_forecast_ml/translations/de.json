@@ -52,7 +52,7 @@
           "power_entity": "AKTUELLER Solar-Leistungssensor in Watt (W). Liefert die MOMENTANE Produktionsleistung für ML-Training. Format: Dezimalzahl mit W als Einheit. Beispiel: 2500 W bei aktueller Produktion.",
           "total_consumption_today": "Tagesverbrauchssensor in kWh. WICHTIG: Muss sich täglich um Mitternacht automatisch auf 0 zurücksetzen! Verwende utility_meter mit cycle: daily. Wird für Autarkie-Berechnung verwendet. Beispiel: 12.5 kWh am Abend.",
           "plant_kwp": "Installierte Anlagenleistung in Kilowatt Peak (kWp). Dies ist die Nennleistung deiner Solaranlage. Beispiel: 5.0 für eine 5 kWp Anlage. Steht im Datenblatt oder auf dem Wechselrichter. Bereich: 0.1-1000 kWp.",
-          "rain_sensor": "Regensensor - entweder binary_sensor (on/off bei Regen) oder Sensor mit Regenmenge in mm/h. Bei Regen reduziert sich die Sonneneinstrahlung und die Vorhersage wird entsprechend angepasst.",
+          "rain_sensor": "Regensensor - Sensor mit Regenmenge in mm/h. Bei Regen reduziert sich die Sonneneinstrahlung und die Vorhersage wird entsprechend angepasst.",
           "current_power": "Alternative Leistungsquelle in Watt (W). Falls du einen zusätzlichen oder anderen Leistungssensor als power_entity verwenden möchtest. Auch als momentane Leistung in W.",
           "lux_sensor": "Helligkeitssensor in Lux (lx). Direktes Maß für verfügbares Sonnenlicht am Panel-Standort. Typische Werte: 50.000-100.000 lx bei direkter Sonneneinstrahlung. Format: Ganzzahl mit lx als Einheit.",
           "temp_sensor": "Außentemperatursensor in °C. Wird verwendet wenn genauer als die Wetter-Entity. Höhere Temperaturen können Panel-Effizienz reduzieren (ca. -0.5%/°C über 25°C). Format: Dezimalzahl mit °C.",

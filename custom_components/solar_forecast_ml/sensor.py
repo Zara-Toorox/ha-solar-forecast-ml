@@ -1,8 +1,8 @@
 """
 Sensor platform für Solar Forecast ML Integration.
 VOLLSTÄNDIG mit allen ursprünglichen Sensoren + 13 neuen Diagnose-Sensoren
-LIVE-Updates für externe Sensoren und Zeitstempel
-Version 4.9.0 - UTF-8 Fix + Status-Mapper + Erweiterte Anzeigen - von Zara
+LIVE-Updates für externe Sensoren, Zeitstempel und Produktionszeit
+Version 4.10.0 - UTF-8 Fix + Status-Mapper + Erweiterte Anzeigen - von Zara
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -50,7 +50,7 @@ from .const import (
     UPDATE_INTERVAL,
     INTEGRATION_MODEL,  # Fix: Device Info
     SOFTWARE_VERSION,   # Fix: Device Info
-    ML_VERSION          # Fix: Device Info
+    ML_VERSION, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR  # Tägliche Update-Zeiten - von Zara
 )
 from .sensor_external_helpers import BaseExternalSensor, format_time_ago
 
@@ -75,7 +75,7 @@ async def async_setup_entry(
     """Set up Solar Forecast ML sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # â€¢ COMPLETE sensor suite - alle ursprünglichen Sensoren - von Zara
+    # • COMPLETE sensor suite - alle ursprünglichen Sensoren - von Zara
     entities_to_add = [
         # Original Status and diagnostic sensors - von Zara
         DiagnosticStatusSensor(coordinator, entry),
@@ -92,28 +92,33 @@ async def async_setup_entry(
         AverageYieldSensor(coordinator, entry),
         AutarkySensor(coordinator, entry),
         
-        # â€¢ NEU: Zeitstempel & Aktualität Diagnose-Sensoren (4 Sensoren) - von Zara
+        # • NEU: Zeitstempel & Aktualität Diagnose-Sensoren (4 Sensoren) - von Zara
         LastCoordinatorUpdateSensor(coordinator, entry),
         UpdateAgeSensor(coordinator, entry),
         LastMLTrainingSensor(coordinator, entry),
         NextScheduledUpdateSensor(coordinator, entry),
         
-        # â€¢ NEU: Service-Status Diagnose-Sensoren (3 Sensoren) - von Zara
+        # • NEU: Service-Status Diagnose-Sensoren (3 Sensoren) - von Zara
         MLServiceStatusSensor(coordinator, entry),
         MLMetricsSensor(coordinator, entry),
         CoordinatorHealthSensor(coordinator, entry),
         DataFilesStatusSensor(coordinator, entry),
         
-        # â€¢ NEU: Externe Sensoren Diagnose-Anzeige (6 Sensoren) - von Zara
+        # • NEU: Externe Sensoren Diagnose-Anzeige (6 Sensoren) - von Zara
         ExternalTempSensor(coordinator, entry),
         ExternalHumiditySensor(coordinator, entry),
         ExternalWindSensor(coordinator, entry),
         ExternalRainSensor(coordinator, entry),
         ExternalUVSensor(coordinator, entry),
         ExternalLuxSensor(coordinator, entry),
+        
+        ConfiguredPowerEntitySensor(coordinator, entry),
+        PowerSensorStateSensor(coordinator, entry),
+        ConfiguredYieldEntitySensor(coordinator, entry),
+        YieldSensorStateSensor(coordinator, entry),
     ]
 
-    # â€¢ Conditional hourly sensor - prüfe entry.data UND entry.options - von Zara
+    # • Conditional hourly sensor - prüfe entry.data UND entry.options - von Zara
     enable_hourly = entry.options.get(CONF_HOURLY, entry.data.get(CONF_HOURLY, False))  # Fix: Nutze CONF_HOURLY Konstante - von Zara
     if enable_hourly:
         entities_to_add.append(NextHourSensor(coordinator, entry))
@@ -122,7 +127,7 @@ async def async_setup_entry(
 
 
 class BaseSolarSensor(CoordinatorEntity, SensorEntity):
-    """â€¢ Safe base class for all sensors."""
+    """• Safe base class for all sensors."""
 
     _attr_has_entity_name = True
 
@@ -150,7 +155,7 @@ class BaseSolarSensor(CoordinatorEntity, SensorEntity):
 # ============================================================================
 
 class SolarForecastSensor(BaseSolarSensor):
-    """â€¢ Main forecast sensors (Heute/Morgen)."""
+    """• Main forecast sensors (Heute/Morgen)."""
 
     def __init__(self, coordinator, entry: ConfigEntry, key: str):
         super().__init__(coordinator, entry)
@@ -174,7 +179,7 @@ class SolarForecastSensor(BaseSolarSensor):
 
 
 class NextHourSensor(BaseSolarSensor):
-    """â€¢ Hourly forecast sensor."""
+    """• Hourly forecast sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
@@ -192,7 +197,7 @@ class NextHourSensor(BaseSolarSensor):
 
 
 class PeakProductionHourSensor(BaseSolarSensor):
-    """â€¢ Best hour for consumption sensor."""
+    """• Best hour for consumption sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
@@ -206,21 +211,44 @@ class PeakProductionHourSensor(BaseSolarSensor):
 
 
 class ProductionTimeSensor(BaseSolarSensor):
-    """â€¢ Daily production time sensor."""
+    """• Daily production time sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_production_time"
         self._attr_name = "Produktionszeit Heute"
         self._attr_icon = "mdi:timer-outline"
+        self._timer_remove = None
+        self._attr_native_value = "Initialisierung..."
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._timer_remove = async_track_time_interval(
+            self.hass,
+            self._async_update_value,
+            timedelta(seconds=60)
+        )
+        self._async_update_value(None)
+
+    async def async_will_remove_from_hass(self) -> None:
+        await super().async_will_remove_from_hass()
+        if self._timer_remove:
+            self._timer_remove()
+            self._timer_remove = None
+
+    @callback
+    def _async_update_value(self, now) -> None:
+        if hasattr(self.coordinator, 'production_time_calculator'):
+            self._attr_native_value = self.coordinator.production_time_calculator.get_production_time()
+            self.async_write_ha_state()
 
     @property
     def native_value(self):
-        return getattr(self.coordinator, 'production_time_today', 'Unbekannt')
+        return self._attr_native_value
 
 
 class AverageYieldSensor(BaseSolarSensor):
-    """â€¢ Average monthly yield sensor."""
+    """• Average monthly yield sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
@@ -238,7 +266,7 @@ class AverageYieldSensor(BaseSolarSensor):
 
 
 class AutarkySensor(BaseSolarSensor):
-    """â€¢ Self-sufficiency sensor."""
+    """• Self-sufficiency sensor."""
 
     def __init__(self, coordinator, entry: ConfigEntry):
         super().__init__(coordinator, entry)
@@ -256,7 +284,7 @@ class AutarkySensor(BaseSolarSensor):
 
 
 class DiagnosticStatusSensor(BaseSolarSensor):
-    """â€¢ Overall system status sensor."""
+    """• Overall system status sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -272,7 +300,7 @@ class DiagnosticStatusSensor(BaseSolarSensor):
 
 
 class SolarAccuracySensor(BaseSolarSensor):
-    """â€¢ Yesterday's accuracy sensor."""
+    """• Yesterday's accuracy sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -292,7 +320,7 @@ class SolarAccuracySensor(BaseSolarSensor):
 
 
 class YesterdayDeviationSensor(BaseSolarSensor):
-    """â€¢ Yesterday's deviation sensor."""
+    """• Yesterday's deviation sensor."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -312,7 +340,7 @@ class YesterdayDeviationSensor(BaseSolarSensor):
 
 
 # ============================================================================
-# â€¢ NEU: ZEITSTEMPEL & AKTUALITÄ DIAGNOSE-SENSOREN - von Zara
+# • NEU: ZEITSTEMPEL & AKUALITÄT DIAGNOSE-SENSOREN - von Zara
 # ============================================================================
 
 class LastCoordinatorUpdateSensor(BaseSolarSensor):
@@ -447,7 +475,7 @@ class NextScheduledUpdateSensor(BaseSolarSensor):
 
 
 # ============================================================================
-# â€¢ NEU: SERVICE-STATUS DIAGNOSE-SENSOREN - von Zara
+# • NEU: SERVICE-STATUS DIAGNOSE-SENSOREN - von Zara
 # ============================================================================
 
 class CoordinatorHealthSensor(BaseSolarSensor):
@@ -721,7 +749,7 @@ class ExternalTempSensor(BaseExternalSensor, BaseSolarSensor):
             'unique_id_suffix': 'external_temp',
             'name': 'Temperatur',
             'icon': 'mdi:thermometer',
-            'default_unit': 'Â°C'
+            'default_unit': '°C'
         }
         BaseSolarSensor.__init__(self, coordinator, entry)
         BaseExternalSensor.__init__(self, coordinator, entry, sensor_config)
@@ -850,3 +878,227 @@ class ExternalLuxSensor(BaseExternalSensor, BaseSolarSensor):
         }
         BaseSolarSensor.__init__(self, coordinator, entry)
         BaseExternalSensor.__init__(self, coordinator, entry, sensor_config)
+
+
+class ConfiguredPowerEntitySensor(BaseSolarSensor):
+    
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    
+    def __init__(self, coordinator, entry: ConfigEntry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_configured_power_entity"
+        self._attr_name = "Konfigurierte Power Entity"
+        self._attr_icon = "mdi:lightning-bolt"
+    
+    @property
+    def available(self) -> bool:
+        return True
+    
+    @property
+    def native_value(self) -> str:
+        power_entity = getattr(self.coordinator, 'power_entity', None)
+        if not power_entity:
+            return "Nicht konfiguriert"
+        return str(power_entity)
+    
+    @property
+    def extra_state_attributes(self) -> dict:
+        power_entity = getattr(self.coordinator, 'power_entity', None)
+        if not power_entity:
+            return {"status": "not_configured"}
+        
+        state = self.hass.states.get(power_entity)
+        if state is None:
+            return {
+                "status": "entity_not_found",
+                "entity_exists": False
+            }
+        
+        return {
+            "status": "configured",
+            "entity_exists": True,
+            "entity_id": power_entity
+        }
+
+
+class PowerSensorStateSensor(BaseSolarSensor):
+    
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    
+    def __init__(self, coordinator, entry: ConfigEntry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_power_sensor_state"
+        self._attr_name = "Power Sensor State"
+        self._attr_icon = "mdi:information"
+    
+    @property
+    def available(self) -> bool:
+        return True
+    
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        
+        power_entity = getattr(self.coordinator, 'power_entity', None)
+        if power_entity:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass,
+                    [power_entity],
+                    self._handle_sensor_update
+                )
+            )
+    
+    @callback
+    def _handle_sensor_update(self, event) -> None:
+        self.async_write_ha_state()
+    
+    @property
+    def native_value(self) -> str:
+        power_entity = getattr(self.coordinator, 'power_entity', None)
+        
+        if not power_entity:
+            return "Nicht konfiguriert"
+        
+        state = self.hass.states.get(power_entity)
+        if state is None:
+            return "Entity nicht gefunden"
+        
+        return state.state
+    
+    @property
+    def extra_state_attributes(self) -> dict:
+        power_entity = getattr(self.coordinator, 'power_entity', None)
+        
+        if not power_entity:
+            return {
+                "status": "not_configured",
+                "entity_id": None
+            }
+        
+        state = self.hass.states.get(power_entity)
+        if state is None:
+            return {
+                "status": "entity_not_found",
+                "entity_id": power_entity,
+                "state": None
+            }
+        
+        return {
+            "status": "ok" if state.state not in ['unavailable', 'unknown'] else state.state,
+            "entity_id": power_entity,
+            "state": state.state,
+            "unit_of_measurement": state.attributes.get('unit_of_measurement'),
+            "last_updated": state.last_updated.isoformat() if state.last_updated else None
+        }
+
+
+class ConfiguredYieldEntitySensor(BaseSolarSensor):
+    
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    
+    def __init__(self, coordinator, entry: ConfigEntry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_configured_yield_entity"
+        self._attr_name = "Konfigurierte Yield Entity"
+        self._attr_icon = "mdi:solar-power"
+    
+    @property
+    def available(self) -> bool:
+        return True
+    
+    @property
+    def native_value(self) -> str:
+        yield_entity = getattr(self.coordinator, 'solar_yield_today', None)
+        if not yield_entity:
+            return "Nicht konfiguriert"
+        return str(yield_entity)
+    
+    @property
+    def extra_state_attributes(self) -> dict:
+        yield_entity = getattr(self.coordinator, 'solar_yield_today', None)
+        if not yield_entity:
+            return {"status": "not_configured"}
+        
+        state = self.hass.states.get(yield_entity)
+        if state is None:
+            return {
+                "status": "entity_not_found",
+                "entity_exists": False
+            }
+        
+        return {
+            "status": "configured",
+            "entity_exists": True,
+            "entity_id": yield_entity
+        }
+
+
+class YieldSensorStateSensor(BaseSolarSensor):
+    
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    
+    def __init__(self, coordinator, entry: ConfigEntry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_yield_sensor_state"
+        self._attr_name = "Yield Sensor State"
+        self._attr_icon = "mdi:information"
+    
+    @property
+    def available(self) -> bool:
+        return True
+    
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        
+        yield_entity = getattr(self.coordinator, 'solar_yield_today', None)
+        if yield_entity:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass,
+                    [yield_entity],
+                    self._handle_sensor_update
+                )
+            )
+    
+    @callback
+    def _handle_sensor_update(self, event) -> None:
+        self.async_write_ha_state()
+    
+    @property
+    def native_value(self) -> str:
+        yield_entity = getattr(self.coordinator, 'solar_yield_today', None)
+        
+        if not yield_entity:
+            return "Nicht konfiguriert"
+        
+        state = self.hass.states.get(yield_entity)
+        if state is None:
+            return "Entity nicht gefunden"
+        
+        return state.state
+    
+    @property
+    def extra_state_attributes(self) -> dict:
+        yield_entity = getattr(self.coordinator, 'solar_yield_today', None)
+        
+        if not yield_entity:
+            return {
+                "status": "not_configured",
+                "entity_id": None
+            }
+        
+        state = self.hass.states.get(yield_entity)
+        if state is None:
+            return {
+                "status": "entity_not_found",
+                "entity_id": yield_entity,
+                "state": None
+            }
+        
+        return {
+            "status": "ok" if state.state not in ['unavailable', 'unknown'] else state.state,
+            "entity_id": yield_entity,
+            "state": state.state,
+            "unit_of_measurement": state.attributes.get('unit_of_measurement'),
+            "last_updated": state.last_updated.isoformat() if state.last_updated else None
+        }

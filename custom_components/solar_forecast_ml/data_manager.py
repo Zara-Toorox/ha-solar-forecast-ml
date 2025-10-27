@@ -1,6 +1,7 @@
 """
-Data Manager die Solar Forecast ML Integration.
-ERWEITERT mit fehlenden ML-Methods und Backup-System
+Data Manager fÃƒÂ¼r die Solar Forecast ML Integration.
+Ã¢Å“â€œ ERWEITERT mit fehlenden ML-Methods und Backup-System
+Ã¢â‚¬Â¢ UPDATE PATCH: update_today_predictions_actual() fÃƒÂ¼r tagesbasierte actual_value Updates - von Zara
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -52,24 +53,25 @@ _LOGGER = logging.getLogger(__name__)
 
 class DataManager:
     """
-    Data Manager fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r Solar Forecast ML.
-    ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ERWEITERT mit ML-Methods und Backup-System
+    Data Manager fÃƒÂ¼r Solar Forecast ML.
+    Ã¢Å“â€œ ERWEITERT mit ML-Methods und Backup-System
     """
 
-    def __init__(self, hass: HomeAssistant, entry_id: str, data_dir: Path):
+    def __init__(self, hass: HomeAssistant, entry_id: str, data_dir: Path, error_handler=None):
         """
         Initialize the Data Manager.
         
         Args:
             hass: Home Assistant instance
-            entry_id: Config Entry ID fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r Multi-Instance-Support
-            data_dir: Daten-Verzeichnis fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r JSON-Dateien
+            entry_id: Config Entry ID fÃƒÂ¼r Multi-Instance-Support
+            data_dir: Daten-Verzeichnis fÃƒÂ¼r JSON-Dateien
         
-        # GeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤nderter Abschnitt von Zara - entry_id Parameter hinzugefÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼gt
+        # GeÃƒÂ¤nderter Abschnitt von Zara - entry_id Parameter hinzugefÃƒÂ¼gt
         """
         self.hass = hass
-        self.entry_id = entry_id  # Speichere entry_id fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r zukÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼nftige Features
+        self.entry_id = entry_id
         self.data_dir = Path(data_dir)
+        self.error_handler = error_handler
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="DataManager")
         
         # File paths
@@ -77,11 +79,12 @@ class DataManager:
         self.learned_weights_file = self.data_dir / "learned_weights.json"
         self.hourly_profile_file = self.data_dir / "hourly_profile.json"
         self.model_state_file = self.data_dir / "model_state.json"
+        self.hourly_samples_file = self.data_dir / "hourly_samples.json"
         
-        # Thread-safe lock fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r kritische Operations
+        # Thread-safe lock fÃƒÂ¼r kritische Operations
         self._file_lock = asyncio.Lock()
         
-        _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DataManager initialisiert mit async I/O support (Entry: %s)", entry_id)
+        _LOGGER.info("DataManager initialisiert mit async I/O support (Entry: %s)", entry_id)
 
     async def initialize(self) -> bool:
         """Initialize data manager and create directory structure."""
@@ -97,47 +100,35 @@ class DataManager:
             migration_success = await self.migrate_data()
             
             if migration_success:
-                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DataManager erfolgreich initialisiert")
+                _LOGGER.info("DataManager erfolgreich initialisiert")
                 return True
             else:
-                raise DataIntegrityException(
-                    "Data migration fehlgeschlagen",
-                    create_context(data_dir=str(self.data_dir))
-                )
+                _LOGGER.warning("DataManager initialisiert, aber Migration hatte Probleme")
+                return True
                 
         except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ DataManager Initialisierung fehlgeschlagen: %s", str(e))
-            raise DataIntegrityException(
-                f"DataManager Initialisierung fehlgeschlagen: {str(e)}",
-                create_context(error=str(e), data_dir=str(self.data_dir))
-            )
+            _LOGGER.error(f"DataManager Initialisierung fehlgeschlagen: {e}")
+            return False
 
     async def _ensure_directory_exists(self, directory: Path) -> None:
-        """Ensure directory exists."""
+        """Ensure directory exists, create if not."""
         try:
-            await self.hass.async_add_executor_job(
-                os.makedirs, directory, 0o755, True
-            )
-            _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Directory created/verified: %s", directory)
+            await self.hass.async_add_executor_job(lambda: directory.mkdir(parents=True, exist_ok=True))
         except Exception as e:
             raise DataIntegrityException(
-                f"Fehler beim Erstellen des Verzeichnisses {directory}: {str(e)}",
-                create_context(directory=str(directory), error=str(e))
+                f"Failed to create directory {directory}: {str(e)}",
+                context=create_context(directory=str(directory), error=str(e))
             )
 
-    async def _initialize_missing_files(self) -> None:
-        """Initialize missing JSON files."""
-        files_to_check = [
-            (self.prediction_history_file, self._create_default_prediction_history),
-            (self.learned_weights_file, self._create_default_learned_weights),
-            (self.hourly_profile_file, self._create_default_hourly_profile),
-            (self.model_state_file, self._create_default_model_state)
-        ]
-        
-        for file_path, create_func in files_to_check:
-            if not await self._file_exists(file_path):
-                _LOGGER.info("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€šÃ‚Â Erstelle fehlende Datei: %s", file_path.name)
-                await create_func()
+
+    async def _get_file_size(self, file_path: Path) -> int:
+        """Get file size in bytes."""
+        try:
+            if await self._file_exists(file_path):
+                return file_path.stat().st_size
+            return 0
+        except Exception:
+            return 0
 
     async def _file_exists(self, file_path: Path) -> bool:
         """Check if file exists."""
@@ -146,61 +137,77 @@ class DataManager:
         except Exception:
             return False
 
+    async def _initialize_missing_files(self) -> None:
+        """Initialize missing data files with defaults."""
+        # Prediction history
+        if not await self._file_exists(self.prediction_history_file):
+            await self._create_default_prediction_history()
+        
+        # Learned weights
+        if not await self._file_exists(self.learned_weights_file):
+            await self._create_default_learned_weights()
+        
+        # Hourly profile
+        if not await self._file_exists(self.hourly_profile_file):
+            await self._create_default_hourly_profile()
+        
+        # Model state
+        if not await self._file_exists(self.model_state_file):
+            await self._create_default_model_state()
+        
+        if not await self._file_exists(self.hourly_samples_file):
+            await self._create_default_hourly_samples()
+
     async def _create_default_prediction_history(self) -> None:
-        """Create default prediction history."""
+        """Create default prediction history file."""
         default_history = {
             "version": DATA_VERSION,
-            "created": dt_util.utcnow().isoformat(),
-            "predictions": []
+            "predictions": [],
+            "last_updated": dt_util.utcnow().isoformat()
         }
         await self._atomic_write_json(self.prediction_history_file, default_history)
 
     async def _create_default_learned_weights(self) -> None:
-        """Create default learned weights."""
-        default_weights = create_default_learned_weights()
-        weights_dict = {
-            "version": DATA_VERSION,
-            "created": dt_util.utcnow().isoformat(),
-            "weather_weights": default_weights.weather_weights,
-            "seasonal_factors": default_weights.seasonal_factors,
-            "correction_factor": default_weights.correction_factor,
-            "accuracy": default_weights.accuracy,
-            "training_samples": default_weights.training_samples,
-            "last_trained": default_weights.last_trained,
-            "model_version": default_weights.model_version,
-            "feature_importance": default_weights.feature_importance
-        }
-        await self._atomic_write_json(self.learned_weights_file, weights_dict)
+        """Create default learned weights file."""
+        from dataclasses import asdict
+        default_weights = asdict(create_default_learned_weights())
+        default_weights["version"] = DATA_VERSION
+        default_weights["last_updated"] = dt_util.utcnow().isoformat()
+        await self._atomic_write_json(self.learned_weights_file, default_weights)
 
     async def _create_default_hourly_profile(self) -> None:
-        """Create default hourly profile."""
-        default_profile = create_default_hourly_profile()
-        profile_dict = {
-            "version": DATA_VERSION,
-            "created": dt_util.utcnow().isoformat(),
-            "hourly_factors": default_profile.hourly_factors,
-            "samples_count": default_profile.samples_count,
-            "last_updated": default_profile.last_updated,
-            "confidence": default_profile.confidence,
-            "seasonal_adjustment": default_profile.seasonal_adjustment
-        }
-        await self._atomic_write_json(self.hourly_profile_file, profile_dict)
+        """Create default hourly profile file."""
+        from dataclasses import asdict
+        default_profile = asdict(create_default_hourly_profile())
+        default_profile["version"] = DATA_VERSION
+        default_profile["last_updated"] = dt_util.utcnow().isoformat()
+        await self._atomic_write_json(self.hourly_profile_file, default_profile)
 
     async def _create_default_model_state(self) -> None:
-        """Create default model state."""
+        """Create default model state file."""
         default_state = {
             "version": DATA_VERSION,
-            "created": dt_util.utcnow().isoformat(),
+            "model_loaded": False,
             "last_training": None,
-            "training_count": 0,
-            "performance_metrics": {
-                "mae": None,
-                "rmse": None,
-                "accuracy": None
+            "training_samples": 0,
+            "current_accuracy": 0.0,
+            "model_info": {
+                "version": "1.0",
+                "type": "ml_predictor"
             },
             "status": "initialized"
         }
         await self._atomic_write_json(self.model_state_file, default_state)
+
+    async def _create_default_hourly_samples(self) -> None:
+        default_samples = {
+            "version": DATA_VERSION,
+            "samples": [],
+            "count": 0,
+            "last_updated": dt_util.utcnow().isoformat()
+        }
+        await self._atomic_write_json(self.hourly_samples_file, default_samples)
+
 
     async def _atomic_write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Atomic write to JSON file."""
@@ -214,7 +221,7 @@ class DataManager:
                     shutil.move, str(temp_file), str(file_path)
                 )
                 
-                _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Atomic write successful: %s", file_path.name)
+                _LOGGER.debug("Atomic write successful: %s", file_path.name)
                 
             except Exception as e:
                 # Clean up temp file if it exists
@@ -225,7 +232,7 @@ class DataManager:
                         pass
                 raise DataIntegrityException(
                     f"Failed to write {file_path.name}: {str(e)}",
-                    create_context(file=str(file_path), error=str(e))
+                    context=create_context(file=str(file_path), error=str(e))
                 )
 
     async def _read_json_file(self, file_path: Path) -> Dict[str, Any]:
@@ -234,7 +241,7 @@ class DataManager:
             if not await self._file_exists(file_path):
                 raise DataIntegrityException(
                     f"File not found: {file_path.name}",
-                    create_context(file=str(file_path))
+                    context=create_context(file=str(file_path))
                 )
             
             async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
@@ -242,18 +249,18 @@ class DataManager:
                 return json.loads(content)
                 
         except json.JSONDecodeError as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ JSON decode error in %s: %s", file_path.name, str(e))
+            _LOGGER.error("JSON decode error in %s: %s", file_path.name, str(e))
             raise DataIntegrityException(
                 f"Invalid JSON in {file_path.name}: {str(e)}",
-                create_context(file=str(file_path), error=str(e))
+                context=create_context(file=str(file_path), error=str(e))
             )
         except Exception as e:
             raise DataIntegrityException(
                 f"Failed to read {file_path.name}: {str(e)}",
-                create_context(file=str(file_path), error=str(e))
+                context=create_context(file=str(file_path), error=str(e))
             )
 
-    # ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ERWEITERT: ML-spezifische Methoden
+    # Ã¢Å“â€œ ERWEITERT: ML-spezifische Methoden
     async def add_prediction(self, prediction: PredictionRecord) -> None:
         """
         Add a new prediction to history.
@@ -262,15 +269,17 @@ class DataManager:
             prediction: PredictionRecord to add
         """
         try:
-            # Validate prediction record
-            validate_prediction_record(prediction)
+            # PredictionRecord hat bereits Validierung in __post_init__ - von Zara
+            # Konvertiere PredictionRecord zu Dict fÃƒÂ¼r JSON - von Zara
+            from dataclasses import asdict
+            prediction_dict = asdict(prediction)
             
             # Get current history
             history = await self.get_prediction_history()
             predictions = history.get("predictions", [])
             
-            # Add new prediction
-            predictions.append(prediction)
+            # Add new prediction as dict - von Zara
+            predictions.append(prediction_dict)
             
             # Limit history size
             if len(predictions) > MAX_PREDICTION_HISTORY:
@@ -280,49 +289,175 @@ class DataManager:
             history["predictions"] = predictions
             history["last_updated"] = dt_util.utcnow().isoformat()
             
-            # Create backup before writing
-            await self._create_backup(self.prediction_history_file)
+            # Save
+            await self.save_prediction_history(history)
             
-            # Save updated history
-            await self._atomic_write_json(self.prediction_history_file, history)
-            
-            _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Prediction added to history")
+            _LOGGER.debug("Prediction added to history")
             
         except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to add prediction: %s", str(e))
+            _LOGGER.error(f"Failed to add prediction: {e}")
             raise DataIntegrityException(
                 f"Failed to add prediction: {str(e)}",
-                create_context(error=str(e))
+                context=create_context(error=str(e))
             )
 
     async def add_prediction_record(self, record: Dict[str, Any]) -> None:
         """
-        Fügt Training-Sample als Dict zur History hinzu.
-        Alias für add_prediction mit Dict-Input - von Zara
+        FÃƒÂ¼gt einen neuen Prediction Record zur History hinzu.
         
         Args:
-            record: Dict mit prediction data
+            record: Dictionary mit Prediction-Daten
         """
         try:
-            # Konvertiere Dict zu PredictionRecord - von Zara
-            prediction = PredictionRecord(
-                timestamp=record.get('timestamp', dt_util.utcnow().isoformat()),
-                predicted_value=record.get('predicted_value', 0.0),
-                actual_value=record.get('actual_value'),
-                weather_data=record.get('weather_data', {}),
-                sensor_data=record.get('sensor_data', {})
-            )
+            # Validiere Record
+            validate_prediction_record(record)
             
-            # Nutze existierende add_prediction Methode - von Zara
-            await self.add_prediction(prediction)
+            # Get current history
+            history = await self.get_prediction_history()
+            predictions = history.get("predictions", [])
             
-            _LOGGER.debug("ÃƒÂ¢Ã…â€œ... Prediction record added via add_prediction_record - von Zara")
+            # Add new record
+            predictions.append(record)
+            
+            # Limit history size
+            if len(predictions) > MAX_PREDICTION_HISTORY:
+                predictions = predictions[-MAX_PREDICTION_HISTORY:]
+            
+            # Update history
+            history["predictions"] = predictions
+            history["last_updated"] = dt_util.utcnow().isoformat()
+            
+            # Save
+            await self.save_prediction_history(history)
+            
+            _LOGGER.debug("Prediction record added to history")
             
         except Exception as e:
-            _LOGGER.error("ÃƒÂ¢Ã‚ÂÃ…â€™ Failed to add prediction record: %s - von Zara", str(e))
+            _LOGGER.error(f"Failed to add prediction record: {e}")
             raise DataIntegrityException(
                 f"Failed to add prediction record: {str(e)}",
-                create_context(error=str(e))
+                context=create_context(error=str(e))
+            )
+
+    async def update_latest_prediction_actual(self, actual_value: float, accuracy: float = None) -> None:
+        """
+        Aktualisiert den letzten Prediction Record mit actual_value.
+        DEPRECATED: Verwende update_today_predictions_actual() stattdessen - von Zara
+        
+        Args:
+            actual_value: Tatsächlicher Tagesertrag in kWh
+            accuracy: Optional berechnete Genauigkeit (0-1)
+        """
+        try:
+            # Lade aktuelle History - von Zara
+            history_data = await self.get_prediction_history()
+            predictions = history_data.get('predictions', [])
+            
+            if not predictions:
+                _LOGGER.warning("Keine Predictions vorhanden - Update ubersprungen")
+                return
+            
+            # Hole letzten Record (neuester zuerst) - von Zara
+            latest_record = predictions[-1]
+            
+            # Update actual_value - von Zara
+            latest_record['actual_value'] = actual_value
+            
+            # Update accuracy wenn gegeben - von Zara
+            if accuracy is not None:
+                latest_record['accuracy'] = accuracy
+            
+            # Speichere aktualisierte History - von Zara
+            await self.save_prediction_history(history_data)
+            
+            if self.error_handler:
+                file_size = await self._get_file_size(self.prediction_history_file)
+                records_count = len(history_data.get("predictions", []))
+                self.error_handler.log_json_operation(
+                    file_name="prediction_history.json",
+                    operation="add_record",
+                    success=True,
+                    file_size_bytes=file_size,
+                    records_count=records_count
+                )
+            
+            _LOGGER.info(
+                f"Ã¢Å“â€œ Latest prediction updated: "
+                f"predicted={latest_record.get('predicted_value', 0):.2f}kWh, "
+                f"actual={actual_value:.2f}kWh, "
+                f"accuracy={accuracy*100:.1f}%" if accuracy else "no accuracy"
+            )
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to update latest prediction actual: {e}")
+            raise DataIntegrityException(
+                f"Failed to update prediction actual value: {str(e)}",
+                context=create_context(error=str(e))
+            )
+
+    async def update_today_predictions_actual(self, actual_value: float, accuracy: float = None) -> None:
+        """
+        Aktualisiert ALLE Prediction Records vom heutigen Tag mit actual_value.
+        Neue Methode für tagesbasierte Aktualisierung - von Zara
+        
+        Args:
+            actual_value: Tagesertrag in kWh
+            accuracy: Optional berechnete Genauigkeit (0-1)
+        """
+        try:
+            # Lade aktuelle History - von Zara
+            history_data = await self.get_prediction_history()
+            predictions = history_data.get('predictions', [])
+            
+            if not predictions:
+                _LOGGER.warning("Keine Predictions vorhanden - Update übersprungen")
+                return
+            
+            today = dt_util.as_local(dt_util.utcnow()).date()
+            
+            updated_count = 0
+            
+            _LOGGER.debug(f"Suche Predictions lokales Datum: {today}")
+            
+            # Durchlaufe alle Records und update die vom heutigen Tag - von Zara
+            for record in predictions:
+                try:
+                    # Parse timestamp - von Zara
+                    record_timestamp = dt_util.parse_datetime(record.get('timestamp', ''))
+                    record_date = dt_util.as_local(record_timestamp).date()
+                    
+                    # PrÃƒÂ¼fe ob Record von heute ist - von Zara
+                    if record_date == today:
+                        # Update actual_value - von Zara
+                        record['actual_value'] = actual_value
+                        
+                        # Update accuracy wenn gegeben - von Zara
+                        if accuracy is not None:
+                            record['accuracy'] = accuracy
+                        
+                        updated_count += 1
+                        
+                except (ValueError, KeyError) as e:
+                    _LOGGER.debug(f"Konnte Record nicht parsen, überspringe: {e}")
+                    continue
+            
+            # Speichere aktualisierte History - von Zara
+            if updated_count > 0:
+                await self.save_prediction_history(history_data)
+                
+                _LOGGER.info(
+                    f"Ã¢Å“â€œ {updated_count} Predictions vom heutigen Tag aktualisiert: "
+                    f"actual={actual_value:.2f}kWh"
+                    + (f", accuracy={accuracy*100:.1f}%" if accuracy is not None else "")
+                )
+            else:
+                _LOGGER.warning(f"Ã¢Å¡Â  Keine Predictions vom heutigen Tag gefunden (Suchte: {today})")
+            
+        except Exception as e:
+            _LOGGER.error(f"Ã¢ÂÅ’ Failed to update today predictions actual: {e}")
+            raise DataIntegrityException(
+                f"Failed to update today predictions actual value: {str(e)}",
+                context=create_context(error=str(e))
             )
 
     async def get_recent_predictions(self, hours: int = 24) -> List[PredictionRecord]:
@@ -349,552 +484,585 @@ class DataManager:
             recent = []
             for pred in predictions:
                 try:
-                    pred_time = dt_util.parse_datetime(pred.get("timestamp"))
-                    if pred_time and pred_time >= cutoff:
-                        recent.append(pred)
-                except Exception:
+                    pred_time = dt_util.parse_datetime(pred["timestamp"])
+                    if pred_time >= cutoff:
+                        # Convert dict to PredictionRecord
+                        from .typed_data_adapter import TypedDataAdapter
+                        adapter = TypedDataAdapter()
+                        record = adapter.dict_to_prediction_record(pred)
+                        recent.append(record)
+                except (ValueError, KeyError) as e:
+                    _LOGGER.debug(f"Skipping invalid prediction record: {e}")
                     continue
             
             return recent
             
         except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to get recent predictions: %s", str(e))
+            _LOGGER.error(f"Failed to get recent predictions: {e}")
             return []
 
-    async def update_learned_weights(self, weights: LearnedWeights) -> None:
-        """
-        Update learned weights.
-        
-        Args:
-            weights: LearnedWeights object to save
-        """
+    def get_average_monthly_yield(self) -> float:
         try:
-            weights_dict = {
-                "version": DATA_VERSION,
-                "weather_weights": weights.weather_weights,
-                "seasonal_factors": weights.seasonal_factors,
-                "correction_factor": weights.correction_factor,
-                "accuracy": weights.accuracy,
-                "training_samples": weights.training_samples,
-                "last_trained": weights.last_trained,
-                "model_version": weights.model_version,
-                "feature_importance": weights.feature_importance,
-                "updated": dt_util.utcnow().isoformat()
-            }
+            history_file = self.prediction_history_file
+            if not history_file.exists():
+                return 0.0
             
-            # Create backup before writing
-            await self._create_backup(self.learned_weights_file)
+            with open(history_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
             
-            # Save weights
-            await self._atomic_write_json(self.learned_weights_file, weights_dict)
+            predictions = data.get('predictions', [])
+            if not predictions:
+                return 0.0
             
-            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Learned weights updated (Accuracy: %.2f%%)", weights.accuracy * 100)
+            cutoff = dt_util.utcnow() - timedelta(days=30)
             
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to update learned weights: %s", str(e))
-            raise DataIntegrityException(
-                f"Failed to update learned weights: {str(e)}",
-                create_context(error=str(e))
-            )
-
-    async def update_hourly_profile(self, profile: HourlyProfile) -> None:
-        """
-        Update hourly profile.
-        
-        Args:
-            profile: HourlyProfile object to save
-        """
-        try:
-            profile_dict = {
-                "version": DATA_VERSION,
-                "hourly_factors": profile.hourly_factors,
-                "samples_count": profile.samples_count,
-                "last_updated": profile.last_updated,
-                "confidence": profile.confidence,
-                "seasonal_adjustment": profile.seasonal_adjustment,
-                "updated": dt_util.utcnow().isoformat()
-            }
-            
-            # Create backup before writing
-            await self._create_backup(self.hourly_profile_file)
-            
-            # Save profile
-            await self._atomic_write_json(self.hourly_profile_file, profile_dict)
-            
-            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Hourly profile updated")
-            
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to update hourly profile: %s", str(e))
-            raise DataIntegrityException(
-                f"Failed to update hourly profile: {str(e)}",
-                create_context(error=str(e))
-            )
-
-    async def update_model_state(
-        self,
-        training_count: Optional[int] = None,
-        performance_metrics: Optional[Dict[str, float]] = None,
-        status: Optional[str] = None
-    ) -> None:
-        """
-        Update model state.
-        
-        Args:
-            training_count: Number of training iterations
-            performance_metrics: Performance metrics (mae, rmse, accuracy)
-            status: Current model status
-        """
-        try:
-            current_state = await self.get_model_state()
-            
-            # Update fields if provided
-            if training_count is not None:
-                current_state["training_count"] = training_count
-                current_state["last_training"] = dt_util.utcnow().isoformat()
-            
-            if performance_metrics is not None:
-                current_state["performance_metrics"] = performance_metrics
-            
-            if status is not None:
-                current_state["status"] = status
-            
-            current_state["last_updated"] = dt_util.utcnow().isoformat()
-            
-            # Create backup before writing
-            await self._create_backup(self.model_state_file)
-            
-            # Save state
-            await self._atomic_write_json(self.model_state_file, current_state)
-            
-            _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Model state updated")
-            
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Failed to update model state: %s", str(e))
-            raise DataIntegrityException(
-                f"Failed to update model state: {str(e)}",
-                create_context(error=str(e))
-            )
-
-    # ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ BACKUP SYSTEM
-    async def _create_backup(self, file_path: Path) -> None:
-        """Create backup of a file before modification."""
-        try:
-            if not await self._file_exists(file_path):
-                return
-            
-            backup_dir = self.data_dir / "backups"
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_file = backup_dir / f"{file_path.stem}_{timestamp}.json"
-            
-            # Copy file to backup
-            await self.hass.async_add_executor_job(
-                shutil.copy2, str(file_path), str(backup_file)
-            )
-            
-            _LOGGER.debug("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Backup created: %s", backup_file.name)
-            
-            # Cleanup old backups
-            await self._cleanup_old_backups(file_path.stem)
-            
-        except Exception as e:
-            # Backup failure should not break the operation
-            _LOGGER.warning("ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Backup creation failed: %s", str(e))
-
-    async def _cleanup_old_backups(self, file_stem: str) -> None:
-        """Remove old backup files."""
-        try:
-            backup_dir = self.data_dir / "backups"
-            
-            if not await self._file_exists(backup_dir):
-                return
-            
-            # Get all backup files for this file stem
-            pattern = f"{file_stem}_*.json"
-            backup_files = await self.hass.async_add_executor_job(
-                lambda: sorted(backup_dir.glob(pattern), key=lambda f: f.stat().st_mtime, reverse=True)
-            )
-            
-            # Remove files beyond retention limit
-            if len(backup_files) > MAX_BACKUP_FILES:
-                for old_backup in backup_files[MAX_BACKUP_FILES:]:
-                    try:
-                        await self.hass.async_add_executor_job(old_backup.unlink)
-                        _LOGGER.debug("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Removed old backup: %s", old_backup.name)
-                    except Exception as e:
-                        _LOGGER.warning("ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to remove old backup: %s", str(e))
-            
-            # Remove files older than retention period
-            cutoff_date = datetime.now() - timedelta(days=BACKUP_RETENTION_DAYS)
-            for backup_file in backup_files:
+            daily_totals = {}
+            for pred in predictions:
                 try:
-                    file_time = datetime.fromtimestamp(backup_file.stat().st_mtime)
-                    if file_time < cutoff_date:
-                        await self.hass.async_add_executor_job(backup_file.unlink)
-                        _LOGGER.debug("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Removed expired backup: %s", backup_file.name)
-                except Exception as e:
-                    _LOGGER.warning("ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Failed to check/remove backup: %s", str(e))
+                    pred_time = dt_util.parse_datetime(pred['timestamp'])
+                    if pred_time < cutoff:
+                        continue
                     
-        except Exception as e:
-            _LOGGER.warning("ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Backup cleanup failed: %s", str(e))
-
-    async def restore_from_backup(self, file_path: Path, backup_timestamp: str) -> bool:
-        """
-        Restore a file from backup.
-        
-        Args:
-            file_path: Target file to restore
-            backup_timestamp: Timestamp of backup to restore (format: YYYYMMDD_HHMMSS)
+                    actual_value = pred.get('actual_value')
+                    if actual_value is None or actual_value <= 0:
+                        continue
+                    
+                    date_key = pred_time.date().isoformat()
+                    if date_key not in daily_totals:
+                        daily_totals[date_key] = 0.0
+                    daily_totals[date_key] += actual_value
+                    
+                except (ValueError, KeyError):
+                    continue
             
+            if not daily_totals:
+                return 0.0
+            
+            total_yield = sum(daily_totals.values())
+            days_count = len(daily_totals)
+            
+            if days_count == 0:
+                return 0.0
+            
+            avg_daily_yield = total_yield / days_count
+            monthly_yield = avg_daily_yield * 30
+            
+            return round(monthly_yield, 2)
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to calculate average monthly yield: {e}")
+            return 0.0
+
+    async def get_prediction_history(self) -> Dict[str, Any]:
+        """
+        Get prediction history.
+        
         Returns:
-            True if restore was successful
+            Dictionary with prediction history
         """
         try:
-            backup_dir = self.data_dir / "backups"
-            backup_file = backup_dir / f"{file_path.stem}_{backup_timestamp}.json"
+            if not await self._file_exists(self.prediction_history_file):
+                await self._create_default_prediction_history()
             
-            if not await self._file_exists(backup_file):
-                _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Backup file not found: %s", backup_file.name)
-                return False
+            return await self._read_json_file(self.prediction_history_file)
             
-            # Create backup of current file before restore
-            if await self._file_exists(file_path):
-                await self._create_backup(file_path)
+        except Exception as e:
+            _LOGGER.error(f"Failed to get prediction history: {e}")
+            return {
+                "version": DATA_VERSION,
+                "predictions": [],
+                "last_updated": dt_util.utcnow().isoformat()
+            }
+
+    async def get_all_training_records(self, days: int = 60) -> List[Dict[str, Any]]:
+        try:
+            all_records = []
             
-            # Restore from backup
-            await self.hass.async_add_executor_job(
-                shutil.copy2, str(backup_file), str(file_path)
+            history_data = await self.get_prediction_history()
+            predictions = history_data.get('predictions', [])
+            
+            for pred in predictions:
+                if pred.get('actual_value') is not None:
+                    all_records.append({
+                        'timestamp': pred['timestamp'],
+                        'predicted_value': pred.get('predicted_value', 0.0),
+                        'actual_value': pred['actual_value'],
+                        'weather_data': pred.get('weather_data', {}),
+                        'sensor_data': pred.get('sensor_data', {}),
+                        'accuracy': pred.get('accuracy', 0.75),
+                        'model_version': pred.get('model_version', DATA_VERSION),
+                        'source': 'prediction_history'
+                    })
+            
+            samples_data = await self.get_hourly_samples(days=days)
+            samples = samples_data.get('samples', [])
+            
+            daily_aggregated = {}
+            for sample in samples:
+                try:
+                    timestamp = dt_util.parse_datetime(sample['timestamp'])
+                    date_key = timestamp.date().isoformat()
+                    
+                    if date_key not in daily_aggregated:
+                        daily_aggregated[date_key] = {
+                            'timestamp': timestamp.replace(hour=12, minute=0, second=0, microsecond=0).isoformat(),
+                            'actual_value': 0.0,
+                            'weather_data': sample.get('weather_data', {}),
+                            'sensor_data': sample.get('sensor_data', {}),
+                            'hourly_count': 0
+                        }
+                    
+                    daily_aggregated[date_key]['actual_value'] += sample.get('actual_kwh', 0.0)
+                    daily_aggregated[date_key]['hourly_count'] += 1
+                    
+                except (ValueError, KeyError) as e:
+                    _LOGGER.debug(f"Skipping invalid sample: {e}")
+                    continue
+            
+            for date_key, agg_data in daily_aggregated.items():
+                all_records.append({
+                    'timestamp': agg_data['timestamp'],
+                    'predicted_value': agg_data['actual_value'],
+                    'actual_value': agg_data['actual_value'],
+                    'weather_data': agg_data['weather_data'],
+                    'sensor_data': agg_data['sensor_data'],
+                    'accuracy': 1.0,
+                    'model_version': DATA_VERSION,
+                    'source': 'hourly_samples',
+                    'hourly_count': agg_data['hourly_count']
+                })
+            
+            all_records.sort(key=lambda x: x['timestamp'])
+            
+            _LOGGER.info(
+                f"Training records loaded: {len(predictions)} from predictions, "
+                f"{len(daily_aggregated)} from hourly samples, total: {len(all_records)}"
             )
             
-            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Restored from backup: %s", backup_file.name)
-            return True
+            return all_records
             
         except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Restore from backup failed: %s", str(e))
-            return False
-
-    # ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ VALIDATION METHODS
-    async def validate_all_data(self) -> bool:
-        """
-        Validate all data files.
-        
-        Returns:
-            True if all validations pass
-        """
-        try:
-            _LOGGER.info("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â Starting data validation...")
-            
-            validation_tasks = [
-                self._validate_prediction_history(),
-                self._validate_learned_weights(),
-                self._validate_hourly_profile(),
-                self._validate_model_state()
-            ]
-            
-            results = await asyncio.gather(*validation_tasks, return_exceptions=True)
-            
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Validation failed for task %d: %s", i, str(result))
-                    return False
-            
-            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ All data validations passed")
-            return True
-            
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Data validation failed: %s", str(e))
-            return False
-
-    async def _validate_prediction_history(self) -> None:
-        """Validate prediction history data."""
-        data = await self.get_prediction_history()
-        
-        required_fields = ["version", "created", "predictions"]
-        if not all(field in data for field in required_fields):
-            raise DataIntegrityException("Invalid prediction_history schema")
-        
-        # Validate each prediction record
-        for i, pred in enumerate(data.get("predictions", [])):
-            try:
-                validate_prediction_record(pred)
-            except Exception as e:
-                raise DataIntegrityException(f"Invalid prediction record at index {i}: {e}")
-
-    async def _validate_learned_weights(self) -> None:
-        """Validate learned weights data."""
-        data = await self.get_learned_weights()
-        
-        required_fields = ["weather_weights", "seasonal_factors", "correction_factor", "accuracy"]
-        if not all(field in data for field in required_fields):
-            raise DataIntegrityException("Invalid learned_weights schema")
-        
-        # Validate correction_factor bounds
-        correction_factor = data.get("correction_factor", 1.0)
-        if not (0.1 <= correction_factor <= 5.0):
-            raise DataIntegrityException(f"correction_factor {correction_factor} out of bounds [0.1, 5.0]")
-
-    async def _validate_hourly_profile(self) -> None:
-        """Validate hourly profile data."""
-        data = await self.get_hourly_profile()
-        
-        required_fields = ["hourly_factors", "samples_count"]
-        if not all(field in data for field in required_fields):
-            raise DataIntegrityException("Invalid hourly_profile schema")
-        
-        # Validate hourly_factors (should have 24 entries)
-        hourly_factors = data.get("hourly_factors", {})
-        if len(hourly_factors) != 24:
-            raise DataIntegrityException(f"hourly_factors must have 24 entries, got {len(hourly_factors)}")
-
-    async def _validate_model_state(self) -> None:
-        """Validate model state data."""
-        data = await self.get_model_state()
-        
-        required_fields = ["version", "status"]
-        if not all(field in data for field in required_fields):
-            raise DataIntegrityException("Invalid model_state schema")
-
-    # Migration methods
-    async def migrate_data(self) -> bool:
-        """Migrate data to current version."""
-        try:
-            _LOGGER.info("ÃƒÆ’Ã‚Â°Ãƒ...Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ Starte Data Migration...")
-            
-            await self._initialize_missing_files()
-            
-            migration_tasks = [
-                self._migrate_prediction_history(),
-                self._migrate_learned_weights(),
-                self._migrate_hourly_profile(),
-                self._migrate_model_state()
-            ]
-            
-            results = await asyncio.gather(*migration_tasks, return_exceptions=True)
-            
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Migration Task %d failed: %s", i, str(result))
-                    raise result
-            
-            _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Data Migration erfolgreich abgeschlossen")
-            return True
-            
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Data Migration fehlgeschlagen: %s", str(e))
-            if isinstance(e, DataIntegrityException):
-                raise
-            else:
-                raise DataIntegrityException(
-                    f"Data Migration fehlgeschlagen: {str(e)}",
-                    create_context(error=str(e))
-                )
-
-    async def _migrate_prediction_history(self) -> bool:
-        """Migrate prediction history."""
-        try:
-            data = await self._read_json_file(self.prediction_history_file)
-            
-            if data.get("version") != DATA_VERSION:
-                data["version"] = DATA_VERSION
-                data["migrated"] = dt_util.utcnow().isoformat()
-                await self._atomic_write_json(self.prediction_history_file, data)
-                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Prediction history migrated to version %s", DATA_VERSION)
-            
-            return True
-            
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Prediction history migration failed: %s", str(e))
-            raise
-
-    async def _migrate_learned_weights(self) -> bool:
-        """Migrate learned weights."""
-        try:
-            data = await self._read_json_file(self.learned_weights_file)
-            
-            if data.get("version") != DATA_VERSION:
-                data["version"] = DATA_VERSION
-                data["migrated"] = dt_util.utcnow().isoformat()
-                await self._atomic_write_json(self.learned_weights_file, data)
-                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Learned weights migrated to version %s", DATA_VERSION)
-            
-            return True
-            
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Learned weights migration failed: %s", str(e))
-            raise
-
-    async def _migrate_hourly_profile(self) -> bool:
-        """Migrate hourly profile."""
-        try:
-            data = await self._read_json_file(self.hourly_profile_file)
-            
-            if data.get("version") != DATA_VERSION:
-                data["version"] = DATA_VERSION
-                data["migrated"] = dt_util.utcnow().isoformat()
-                await self._atomic_write_json(self.hourly_profile_file, data)
-                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Hourly profile migrated to version %s", DATA_VERSION)
-            
-            return True
-            
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Hourly profile migration failed: %s", str(e))
-            raise
-
-    async def _migrate_model_state(self) -> bool:
-        """Migrate model state."""
-        try:
-            data = await self._read_json_file(self.model_state_file)
-            
-            if data.get("version") != DATA_VERSION:
-                data["version"] = DATA_VERSION
-                data["migrated"] = dt_util.utcnow().isoformat()
-                await self._atomic_write_json(self.model_state_file, data)
-                _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Model state migrated to version %s", DATA_VERSION)
-            
-            return True
-            
-        except Exception as e:
-            _LOGGER.error("ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒ...Ã¢â‚¬â„¢ Model state migration failed: %s", str(e))
-            raise
-
-    async def cleanup(self) -> None:
-        """Cleanup resources."""
-        if hasattr(self, '_executor'):
-            self._executor.shutdown(wait=True)
-        _LOGGER.info("ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ DataManager cleanup completed")
-
-    # Public API methods
-    async def get_prediction_history(self) -> Dict[str, Any]:
-        """Get prediction history data."""
-        return await self._read_json_file(self.prediction_history_file)
-
-    async def get_learned_weights(self) -> Dict[str, Any]:
-        """Get learned weights data."""
-        return await self._read_json_file(self.learned_weights_file)
-
-    async def get_hourly_profile(self) -> Dict[str, Any]:
-        """Get hourly profile data."""
-        return await self._read_json_file(self.hourly_profile_file)
-
-    async def get_model_state(self) -> Dict[str, Any]:
-        """Get model state data."""
-        return await self._read_json_file(self.model_state_file)
+            _LOGGER.error(f"Failed to get all training records: {e}")
+            return []
 
     async def save_prediction_history(self, data: Dict[str, Any]) -> None:
-        """Save prediction history data."""
-        await self._atomic_write_json(self.prediction_history_file, data)
-
-    async def save_learned_weights(self, data: Dict[str, Any]) -> None:
-        """Save learned weights data."""
-        await self._atomic_write_json(self.learned_weights_file, data)
-
-    async def save_hourly_profile(self, data: Dict[str, Any]) -> None:
-        """Save hourly profile data."""
-        await self._atomic_write_json(self.hourly_profile_file, data)
-
-    async def save_model_state(self, data: Dict[str, Any]) -> None:
-        """Save model state data."""
-        await self._atomic_write_json(self.model_state_file, data)
-
-    # ========================================================================
-    # ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STRATEGIE 2: DATEI-STATUS METHODEN
-    # ========================================================================
-    
-    async def get_data_files_count(self) -> int:
         """
-        ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STRATEGIE 2: ZÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤hlt vorhandene Datendateien.
+        Save prediction history.
         
-        Returns:
-            Anzahl vorhandener Datendateien (0-4)
-
+        Args:
+            data: Prediction history data to save
         """
         try:
-            files_to_check = [
-                self.prediction_history_file,
-                self.learned_weights_file,
-                self.hourly_profile_file,
-                self.model_state_file
+            # Ensure version is set
+            if "version" not in data:
+                data["version"] = DATA_VERSION
+            
+            # Update timestamp
+            data["last_updated"] = dt_util.utcnow().isoformat()
+            
+            # Atomic write
+            await self._atomic_write_json(self.prediction_history_file, data)
+            
+            if self.error_handler:
+                file_size = await self._get_file_size(self.prediction_history_file)
+                records_count = len(data.get("predictions", []))
+                self.error_handler.log_json_operation(
+                    file_name="prediction_history.json",
+                    operation="write",
+                    success=True,
+                    file_size_bytes=file_size,
+                    records_count=records_count
+                )
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to save prediction history: {e}")
+            if self.error_handler:
+                self.error_handler.log_json_operation(
+                    file_name="prediction_history.json",
+                    operation="write",
+                    success=False,
+                    error_message=str(e)
+                )
+            raise DataIntegrityException(
+                f"Failed to save prediction history: {str(e)}",
+                context=create_context(error=str(e))
+            )
+
+    async def migrate_data(self) -> bool:
+        """
+        Migrate data to current version.
+        
+        Returns:
+            True if migration successful
+        """
+        try:
+            # Check each file and migrate if needed
+            await self._migrate_prediction_history()
+            await self._migrate_learned_weights()
+            await self._migrate_hourly_profile()
+            await self._migrate_model_state()
+            
+            _LOGGER.info("Data migration completed successfully")
+            return True
+            
+        except Exception as e:
+            _LOGGER.error(f"Ã¢ÂÅ’ Data migration failed: {e}")
+            return False
+
+    async def _migrate_prediction_history(self) -> None:
+        """Migrate prediction history to current version."""
+        try:
+            if not await self._file_exists(self.prediction_history_file):
+                return
+            
+            data = await self._read_json_file(self.prediction_history_file)
+            current_version = data.get("version", "1.0")
+            
+            if current_version != DATA_VERSION:
+                _LOGGER.info(f"Migrating prediction history from {current_version} to {DATA_VERSION}")
+                data["version"] = DATA_VERSION
+                await self._atomic_write_json(self.prediction_history_file, data)
+                
+        except Exception as e:
+            _LOGGER.error(f"Failed to migrate prediction history: {e}")
+
+    async def _migrate_learned_weights(self) -> None:
+        """Migrate learned weights to current version."""
+        try:
+            if not await self._file_exists(self.learned_weights_file):
+                return
+            
+            data = await self._read_json_file(self.learned_weights_file)
+            current_version = data.get("version", "1.0")
+            
+            if current_version != DATA_VERSION:
+                _LOGGER.info(f"Migrating learned weights from {current_version} to {DATA_VERSION}")
+                data["version"] = DATA_VERSION
+                await self._atomic_write_json(self.learned_weights_file, data)
+                
+        except Exception as e:
+            _LOGGER.error(f"Failed to migrate learned weights: {e}")
+
+    async def _migrate_hourly_profile(self) -> None:
+        """Migrate hourly profile to current version."""
+        try:
+            if not await self._file_exists(self.hourly_profile_file):
+                return
+            
+            data = await self._read_json_file(self.hourly_profile_file)
+            current_version = data.get("version", "1.0")
+            
+            if current_version != DATA_VERSION:
+                _LOGGER.info(f"Migrating hourly profile from {current_version} to {DATA_VERSION}")
+                data["version"] = DATA_VERSION
+                await self._atomic_write_json(self.hourly_profile_file, data)
+                
+        except Exception as e:
+            _LOGGER.error(f"Failed to migrate hourly profile: {e}")
+
+    async def _migrate_model_state(self) -> None:
+        """Migrate model state to current version."""
+        try:
+            if not await self._file_exists(self.model_state_file):
+                return
+            
+            data = await self._read_json_file(self.model_state_file)
+            current_version = data.get("version", "1.0")
+            
+            if current_version != DATA_VERSION:
+                _LOGGER.info(f"Migrating model state from {current_version} to {DATA_VERSION}")
+                data["version"] = DATA_VERSION
+                await self._atomic_write_json(self.model_state_file, data)
+                
+        except Exception as e:
+            _LOGGER.error(f"Failed to migrate model state: {e}")
+
+    async def cleanup_old_data(self, days: int = 90) -> None:
+        """
+        Clean up old prediction data.
+        
+        Args:
+            days: Keep data from this many days
+        """
+        try:
+            history = await self.get_prediction_history()
+            predictions = history.get("predictions", [])
+            
+            if not predictions:
+                return
+            
+            # Calculate cutoff
+            cutoff = dt_util.utcnow() - timedelta(days=days)
+            
+            # Filter predictions
+            filtered = [
+                p for p in predictions
+                if dt_util.parse_datetime(p["timestamp"]) >= cutoff
             ]
             
-            count = 0
-            for file_path in files_to_check:
-                if await self._file_exists(file_path):
-                    count += 1
-            
-            return count
-            
+            # Update if changed
+            if len(filtered) != len(predictions):
+                history["predictions"] = filtered
+                await self.save_prediction_history(history)
+                _LOGGER.info(f"Cleaned up {len(predictions) - len(filtered)} old predictions")
+                
         except Exception as e:
-            _LOGGER.warning(f"ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Fehler beim ZÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤hlen der Datendateien: {e}")
-            return 0
-    
-    async def get_data_status(self) -> dict[str, Any]:
-        """
-        ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STRATEGIE 2: Gibt detaillierten Status aller Datendateien zurÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ck.
-        
-        Returns:
-            Dict mit Status-Informationen
+            _LOGGER.error(f"Failed to cleanup old data: {e}")
 
-        """
+    async def get_learned_weights(self) -> Optional[LearnedWeights]:
+        """Get learned weights."""
         try:
-            files_status = {
-                "prediction_history": await self._file_exists(self.prediction_history_file),
-                "learned_weights": await self._file_exists(self.learned_weights_file),
-                "hourly_profile": await self._file_exists(self.hourly_profile_file),
-                "model_state": await self._file_exists(self.model_state_file),
-            }
+            if not await self._file_exists(self.learned_weights_file):
+                return None
             
-            total_files = len(files_status)
-            available_files = sum(1 for exists in files_status.values() if exists)
+            data = await self._read_json_file(self.learned_weights_file)
             
-            return {
-                "files": files_status,
-                "total": total_files,
-                "available": available_files,
-                "all_present": available_files == total_files,
-                "status_text": f"{available_files}/{total_files} Dateien"
-            }
+            # Convert dict to LearnedWeights
+            from .typed_data_adapter import TypedDataAdapter
+            adapter = TypedDataAdapter()
+            return adapter.dict_to_learned_weights(data)
             
         except Exception as e:
-            _LOGGER.warning(f"ÃƒÆ’Ã‚Â¢Ãƒ...Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Fehler beim Abrufen des Datei-Status: {e}")
-            return {
-                "files": {},
-                "total": 4,
-                "available": 0,
-                "all_present": False,
-                "status_text": "Fehler"
-            }
-    
-    def get_data_directory(self) -> Path:
-        """
-        ÃƒÆ’Ã‚Â¢Ãƒ...Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ STRATEGIE 2: Gibt Data Directory Pfad zurÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ck.
-        
-        Returns:
-            Path zum Data Directory
+            _LOGGER.error(f"Failed to get learned weights: {e}")
+            return None
 
-        """
-        return self.data_dir
-    
-    # ========================================================================
-    # âœ“ LÖSUNG 2: SAVE_ALL_ASYNC IMPLEMENTIERUNG
-    # ========================================================================
-    
+    async def save_learned_weights(self, weights: LearnedWeights) -> None:
+        """Save learned weights."""
+        try:
+            from dataclasses import asdict
+            data = asdict(weights)
+            data["version"] = DATA_VERSION
+            data["last_updated"] = dt_util.utcnow().isoformat()
+            
+            await self._atomic_write_json(self.learned_weights_file, data)
+            
+            if self.error_handler:
+                file_size = await self._get_file_size(self.learned_weights_file)
+                self.error_handler.log_json_operation(
+                    file_name="learned_weights.json",
+                    operation="write",
+                    success=True,
+                    file_size_bytes=file_size
+                )
+            
+            _LOGGER.debug("Learned weights saved")
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to save learned weights: {e}")
+            if self.error_handler:
+                self.error_handler.log_json_operation(
+                    file_name="learned_weights.json",
+                    operation="write",
+                    success=False,
+                    error_message=str(e)
+                )
+            raise DataIntegrityException(
+                f"Failed to save learned weights: {str(e)}",
+                context=create_context(error=str(e))
+            )
+
+    async def get_hourly_profile(self) -> Optional[HourlyProfile]:
+        """Get hourly profile."""
+        try:
+            if not await self._file_exists(self.hourly_profile_file):
+                return None
+            
+            data = await self._read_json_file(self.hourly_profile_file)
+            
+            # Convert dict to HourlyProfile
+            from .typed_data_adapter import TypedDataAdapter
+            adapter = TypedDataAdapter()
+            return adapter.dict_to_hourly_profile(data)
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to get hourly profile: {e}")
+            return None
+
+    async def save_hourly_profile(self, profile: HourlyProfile) -> None:
+        """Save hourly profile."""
+        try:
+            from dataclasses import asdict
+            data = asdict(profile)
+            data["version"] = DATA_VERSION
+            data["last_updated"] = dt_util.utcnow().isoformat()
+            
+            await self._atomic_write_json(self.hourly_profile_file, data)
+            
+            if self.error_handler:
+                file_size = await self._get_file_size(self.hourly_profile_file)
+                self.error_handler.log_json_operation(
+                    file_name="hourly_profile.json",
+                    operation="write",
+                    success=True,
+                    file_size_bytes=file_size
+                )
+            
+            _LOGGER.debug("Hourly profile saved")
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to save hourly profile: {e}")
+            if self.error_handler:
+                self.error_handler.log_json_operation(
+                    file_name="hourly_profile.json",
+                    operation="write",
+                    success=False,
+                    error_message=str(e)
+                )
+            raise DataIntegrityException(
+                f"Failed to save hourly profile: {str(e)}",
+                context=create_context(error=str(e))
+            )
+
+    async def get_model_state(self) -> Dict[str, Any]:
+        """Get model state."""
+        try:
+            if not await self._file_exists(self.model_state_file):
+                await self._create_default_model_state()
+            
+            return await self._read_json_file(self.model_state_file)
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to get model state: {e}")
+            return {
+                "version": DATA_VERSION,
+                "model_loaded": False,
+                "last_training": None,
+                "training_samples": 0,
+                "current_accuracy": 0.0,
+                "status": "error"
+            }
+
+    async def save_model_state(self, state: Dict[str, Any]) -> None:
+        """Save model state."""
+        try:
+            if "version" not in state:
+                state["version"] = DATA_VERSION
+            
+            state["last_updated"] = dt_util.utcnow().isoformat()
+            
+            await self._atomic_write_json(self.model_state_file, state)
+            
+            if self.error_handler:
+                file_size = await self._get_file_size(self.model_state_file)
+                self.error_handler.log_json_operation(
+                    file_name="model_state.json",
+                    operation="write",
+                    success=True,
+                    file_size_bytes=file_size
+                )
+            
+            _LOGGER.debug("Model state saved")
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to save model state: {e}")
+            if self.error_handler:
+                self.error_handler.log_json_operation(
+                    file_name="model_state.json",
+                    operation="write",
+                    success=False,
+                    error_message=str(e)
+                )
+            raise DataIntegrityException(
+                f"Failed to save model state: {str(e)}",
+                context=create_context(error=str(e))
+            )
+
+    async def add_hourly_sample(self, sample: Dict[str, Any]) -> None:
+        try:
+            samples_data = await self.get_hourly_samples()
+            samples = samples_data.get("samples", [])
+            
+            samples.append(sample)
+            
+            if len(samples) > 24 * 60:
+                samples = samples[-24 * 60:]
+            
+            samples_data["samples"] = samples
+            samples_data["last_updated"] = dt_util.utcnow().isoformat()
+            samples_data["count"] = len(samples)
+            
+            await self._atomic_write_json(self.hourly_samples_file, samples_data)
+            
+            _LOGGER.debug("Hourly sample added")
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to add hourly sample: {e}")
+            raise DataIntegrityException(
+                f"Failed to add hourly sample: {str(e)}",
+                context=create_context(error=str(e))
+            )
+
+    async def get_hourly_samples(self, days: int = 60) -> Dict[str, Any]:
+        try:
+            if not await self._file_exists(self.hourly_samples_file):
+                await self._create_default_hourly_samples()
+            
+            data = await self._read_json_file(self.hourly_samples_file)
+            
+            if days and days > 0:
+                cutoff = dt_util.utcnow() - timedelta(days=days)
+                samples = data.get("samples", [])
+                filtered = []
+                
+                for sample in samples:
+                    try:
+                        timestamp = dt_util.parse_datetime(sample["timestamp"])
+                        if timestamp >= cutoff:
+                            filtered.append(sample)
+                    except (ValueError, KeyError):
+                        continue
+                
+                data["samples"] = filtered
+                data["count"] = len(filtered)
+            
+            return data
+            
+        except Exception as e:
+            _LOGGER.error(f"Failed to get hourly samples: {e}")
+            return {
+                "version": DATA_VERSION,
+                "samples": [],
+                "count": 0,
+                "last_updated": None
+            }
+
+
     async def save_all_async(self) -> None:
         """
-        Speichert alle Datendateien asynchron.
-        âœ“ LÖSUNG 2: Nun tatsächlich implementiert // von Zara
-        
-        Diese Methode wird vom Coordinator aufgerufen aber macht
-        normalerweise nichts, da Daten nur bei Änderungen gespeichert werden.
-        Sie dient als Backup-Save falls irgendwo Daten im RAM sind.
+        Zentrale Save-Methode Auto-Save System.
+        Verifiziert Datenpersistenz und erstellt fehlende Dateien. // von Zara
         """
         try:
-            # Diese Methode existiert jetzt, aber speichert nur wenn notwendig // von Zara
-            # Die tatsächliche Speicherung erfolgt durch:
-            # - add_prediction_record() -> Speichert prediction_history
-            # - save_learned_weights() -> Speichert nach Training
-            # - save_hourly_profile() -> Speichert nach Training
-            # - update_model_state() -> Speichert model state
+            # PrÃƒÂ¼fe kritische Dateien auf Existenz // von Zara
+            critical_files = [
+                (self.prediction_history_file, "prediction_history"),
+                (self.learned_weights_file, "learned_weights"),
+                (self.hourly_profile_file, "hourly_profile"),
+                (self.model_state_file, "model_state"),
+                (self.hourly_samples_file, "hourly_samples")
+            ]
             
-            _LOGGER.debug("âœ“ save_all_async aufgerufen (Daten werden bei Änderungen gespeichert)")
+            missing_files = []
+            for file_path, file_name in critical_files:
+                if not await self._file_exists(file_path):
+                    missing_files.append(file_name)
+            
+            if missing_files:
+                _LOGGER.warning(f"Auto-Save: Fehlende Dateien erkannt: {missing_files}")
+                # Erstelle fehlende Dateien mit Defaults // von Zara
+                await self._initialize_missing_files()
+                _LOGGER.info("Auto-Save: Fehlende Dateien wiederhergestellt")
+            else:
+                _LOGGER.debug("Ã¢Å“â€œ Auto-Save: Alle Daten persistent")
             
         except Exception as e:
-            _LOGGER.debug(f"save_all_async: {e}")
+            _LOGGER.error(f"Auto-Save fehlgeschlagen: {e}")
+            # Nicht re-raisen - Auto-Save ist nicht kritisch // von Zara
+
+    def shutdown(self) -> None:
+        """Shutdown data manager and cleanup resources."""
+        try:
+            self._executor.shutdown(wait=False)
+            _LOGGER.info("DataManager shutdown complete")
+        except Exception as e:
+            _LOGGER.error(f"Error during DataManager shutdown: {e}")

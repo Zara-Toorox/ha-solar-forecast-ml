@@ -1,6 +1,6 @@
 """
-Konstanten für die Solar Forecast ML Integration.
-ÃVersion 4.0 - Bereinigt ohne OpenWeatherMap
+Konstanten fÃƒÂ¼r die Solar Forecast ML Integration.
+ÃƒÆ’Version 4.0 - Bereinigt ohne OpenWeatherMap
 Intelligente DWD-Retry Logic implementiert
 
 Copyright (C) 2025 Zara-Toorox
@@ -26,13 +26,13 @@ from homeassistant.const import Platform
 # Integration info
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "4.0"
+VERSION = "5.8"
 
 # Versionierung - Zentral verwaltet - von Zara
-RELEASE_VERSION = "5.0"  # Hauptversion der Integration - von Zara
-SOFTWARE_VERSION = "4.0"  # Software-Version - von Zara
-ML_VERSION = "4.0"  # ML-Modell Version - von Zara
-INTEGRATION_MODEL = "v5.0"  # Display-Version für Device Info - von Zara
+RELEASE_VERSION = "6.0"  # Hauptversion der Integration - von Zara
+SOFTWARE_VERSION = "5.8"  # Software-Version - von Zara
+ML_VERSION = "5.2"  # ML-Modell Version - von Zara
+INTEGRATION_MODEL = "v6.0"  # Display-Version fÃƒÂ¼r Device Info - von Zara
 
 # Platforms
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
@@ -44,14 +44,14 @@ CONF_LUX_SENSOR = "lux_sensor"
 CONF_PLANT_KWP = "plant_kwp"
 CONF_POWER_ENTITY = "power_entity"
 CONF_RAIN_SENSOR = "rain_sensor"
-CONF_SOLAR_YIELD_TODAY = "solar_yield_today"  # Täglicher Solar-Ertrag in kWh - von Zara
+CONF_SOLAR_YIELD_TODAY = "solar_yield_today"  # TÃƒÂ¤glicher Solar-Ertrag in kWh - von Zara
 CONF_TEMP_SENSOR = "temp_sensor"
 CONF_TOTAL_CONSUMPTION_TODAY = "total_consumption_today"
 CONF_UV_SENSOR = "uv_sensor"
 CONF_WEATHER_ENTITY = "weather_entity"
 CONF_WIND_SENSOR = "wind_sensor"
 
-# Ã¢Å“â€œ NEU: Weather Preference & Retry Configuration
+# ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ NEU: Weather Preference & Retry Configuration
 CONF_WEATHER_PREFERENCE = "weather_preference"
 CONF_FALLBACK_ENTITY = "fallback_weather_entity"
 
@@ -77,7 +77,7 @@ CONF_SOLAR_CAPACITY = "solar_capacity"
 CONF_LEARNING_ENABLED = "learning_enabled"
 CONF_HOURLY_LEARNING_ENABLED = "hourly_learning_enabled"
 
-# Ã¢Å“â€œ NEU: Panel Configuration
+# ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ NEU: Panel Configuration
 CONF_PANEL_EFFICIENCY = "panel_efficiency"
 CONF_AZIMUTH = "azimuth"
 CONF_TILT = "tilt"
@@ -85,11 +85,15 @@ CONF_TILT = "tilt"
 # Default values
 DEFAULT_SOLAR_CAPACITY = 5.0
 DEFAULT_PANEL_EFFICIENCY = 0.18  # 18%
-DEFAULT_AZIMUTH = 180.0  # Süd
-DEFAULT_TILT = 30.0  # 30Ã‚Â°
+DEFAULT_AZIMUTH = 180.0  # SÃƒÂ¼d
+DEFAULT_TILT = 30.0  # 30ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°
 DEFAULT_LEARNING_ENABLED = True
 DEFAULT_HOURLY_LEARNING_ENABLED = False
-UPDATE_INTERVAL = timedelta(minutes=30)
+UPDATE_INTERVAL = timedelta(minutes=30)  # Legacy - wird nicht mehr fÃ¼r Coordinator verwendet - von Zara
+
+# TÃ¤glicher Update-Zeitplan - von Zara
+DAILY_UPDATE_HOUR = 6  # Morgens 6 Uhr: Tagesprognose erstellen - von Zara
+DAILY_VERIFICATION_HOUR = 21  # Abends 21 Uhr: Prognose-Genauigkeit prÃ¼fen - von Zara
 
 # File names
 PREDICTION_HISTORY_FILE = "prediction_history.json"
@@ -97,13 +101,23 @@ LEARNED_WEIGHTS_FILE = "learned_weights.json"
 HOURLY_PROFILE_FILE = "hourly_profile.json"
 MODEL_STATE_FILE = "model_state.json"
 ERROR_LOG_FILE = "error_log.json"
+HOURLY_SAMPLES_FILE = "hourly_samples.json"
+HOURLY_STATE_FILE = "hourly_state.json"
 
 # Data management
 DATA_VERSION = "1.0"
 MAX_PREDICTION_HISTORY = 365
+MAX_HOURLY_SAMPLES = 1260
+MAX_HOURLY_STATE_DAYS = 7
 MIN_TRAINING_DATA_POINTS = 7
 BACKUP_RETENTION_DAYS = 30
 MAX_BACKUP_FILES = 10
+
+# Sun Guard Constants
+SUN_BUFFER_HOURS = 1.0
+SUN_CACHE_DURATION_MINUTES = 5
+FALLBACK_PRODUCTION_START_HOUR = 5
+FALLBACK_PRODUCTION_END_HOUR = 21
 
 # ML Constants
 MODEL_ACCURACY_THRESHOLD = 0.75
@@ -131,8 +145,8 @@ WEATHER_FEATURE_WEIGHTS = {
 }
 
 # Weather Data Validation Ranges
-WEATHER_TEMP_MIN = -50.0  # Ã‚Â°C
-WEATHER_TEMP_MAX = 60.0   # Ã‚Â°C
+WEATHER_TEMP_MIN = -50.0  # ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C
+WEATHER_TEMP_MAX = 60.0   # ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C
 WEATHER_HUMIDITY_MIN = 0.0
 WEATHER_HUMIDITY_MAX = 100.0
 WEATHER_CLOUDS_MIN = 0.0
@@ -176,9 +190,9 @@ ATTR_WEATHER_CONDITION = "weather_condition"
 ATTR_LEARNING_STATUS = "learning_status"
 ATTR_LAST_LEARNING = "last_learning"
 ATTR_MODEL_ACCURACY = "model_accuracy"
-ATTR_WEATHER_SOURCE = "weather_source"  # Ã¢Å“â€œ NEU für State-Machine
-ATTR_RETRY_COUNT = "retry_count"  # Ã¢Å“â€œ NEU für State-Machine
-ATTR_FALLBACK_ACTIVE = "fallback_active"  # Ã¢Å“â€œ NEU für State-Machine
+ATTR_WEATHER_SOURCE = "weather_source"  # ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ NEU fÃƒÂ¼r State-Machine
+ATTR_RETRY_COUNT = "retry_count"  # ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ NEU fÃƒÂ¼r State-Machine
+ATTR_FALLBACK_ACTIVE = "fallback_active"  # ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ NEU fÃƒÂ¼r State-Machine
 
 # Button identifiers
 BUTTON_MANUAL_FORECAST = "manual_forecast"
@@ -196,11 +210,11 @@ WEATHER_TYPE_GENERIC = "generic"
 
 # Supported weather entities (priorisiert)
 PREFERRED_WEATHER_ENTITIES = [
-    "weather.dwd_weather",       # Priorität 1: DWD (Deutschland)
-    "weather.met",               # Priorität 2: Met.no (Europa)
-    "weather.forecast_home",     # Priorität 3: Forecast.Solar
-    "weather.home",              # Priorität 4: Generic HA
-    "weather.hourly",            # Priorität 5: Hourly Fallback
+    "weather.dwd_weather",       # PrioritÃƒÂ¤t 1: DWD (Deutschland)
+    "weather.met",               # PrioritÃƒÂ¤t 2: Met.no (Europa)
+    "weather.forecast_home",     # PrioritÃƒÂ¤t 3: Forecast.Solar
+    "weather.home",              # PrioritÃƒÂ¤t 4: Generic HA
+    "weather.hourly",            # PrioritÃƒÂ¤t 5: Hourly Fallback
 ]
 
 # Icons
