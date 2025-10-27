@@ -1,8 +1,0 @@
-# Solar Forecast ML Integration - Python Requirements
-# Version 4.8.0
-# Diese Datei definiert alle externen AbhÃ¤ngigkeiten
-# Wird automatisch beim Start installiert falls Pakete fehlen
-# von Zara
-
-aiofiles>=23.0.0
-numpy>=1.21.0
