@@ -1,12 +1,23 @@
 """
-Feature Engineering fÃƒÆ’Ã‚Â¼r ML Predictor.
+Feature Engineering for ML Predictor.
 
-Copyright (C) 2025 Zara-Toorox
+REFACTORED VERSION: Modular structure with separate manager classes
+Version 6.0.0 - Modular Architecture
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
 """
 import math
 from datetime import datetime
@@ -18,10 +29,13 @@ from .helpers import SafeDateTimeUtil as dt_util
 class FeatureEngineer:
     
     def __init__(self):
+        # === START PATCH 4: ML-Kern-Upgrade (Lag Features) ===
         self.base_features = [
             "temperature", "humidity", "cloudiness", "wind_speed", 
-            "hour_of_day", "seasonal_factor", "weather_trend"
+            "hour_of_day", "seasonal_factor", "weather_trend",
+            "production_yesterday", "production_last_hour"
         ]
+        # === ENDE PATCH 4 ===
         
         self.polynomial_features = [
             "temperature_sq", "cloudiness_sq", "hour_of_day_sq",
@@ -34,6 +48,7 @@ class FeatureEngineer:
             "weather_trend_x_seasonal"
         ]
         
+        # self.feature_names wird automatisch mit den neuen base_features erstellt
         self.feature_names = (
             self.base_features + 
             self.polynomial_features + 
@@ -52,6 +67,12 @@ class FeatureEngineer:
             cloudiness = self._safe_extract(weather_data, 'cloudiness', 50.0)
             wind_speed = self._safe_extract(weather_data, 'wind_speed', 5.0)
             
+            # === START PATCH 4: ML-Kern-Upgrade (Lag Features) ===
+            # Extrahiere die neuen Lag-Features aus sensor_data
+            prod_yesterday = self._safe_extract(sensor_data, 'production_yesterday', 0.0)
+            prod_last_hour = self._safe_extract(sensor_data, 'production_last_hour', 0.0)
+            # === ENDE PATCH 4 ===
+            
             now = dt_util.utcnow()
             day_of_year = now.timetuple().tm_yday
             seasonal_factor = 0.5 + 0.5 * math.cos((day_of_year - 172) * 2 * math.pi / 365)
@@ -66,6 +87,12 @@ class FeatureEngineer:
                 "hour_of_day": float(hour),
                 "seasonal_factor": seasonal_factor,
                 "weather_trend": weather_trend,
+                
+                # === START PATCH 4: ML-Kern-Upgrade (Lag Features) ===
+                "production_yesterday": prod_yesterday,
+                "production_last_hour": prod_last_hour,
+                # === ENDE PATCH 4 ===
+                
                 "temperature_sq": temp ** 2,
                 "cloudiness_sq": cloudiness ** 2,
                 "hour_of_day_sq": hour ** 2,
@@ -100,6 +127,14 @@ class FeatureEngineer:
         cloudiness = self._safe_extract(weather_data, 'cloudiness', 50.0)
         wind_speed = self._safe_extract(weather_data, 'wind_speed', 5.0)
         
+        # === START PATCH 4: ML-Kern-Upgrade (Lag Features) ===
+        # Extrahiere die neuen Lag-Features aus sensor_data
+        # 'production_last_hour' kommt aus dem 'sensor_data' im record
+        prod_last_hour = self._safe_extract(sensor_data, 'production_last_hour', 0.0)
+        # 'production_yesterday' wird im ml_predictor (train_model) direkt in sensor_data eingefügt
+        prod_yesterday = self._safe_extract(sensor_data, 'production_yesterday', 0.0)
+        # === ENDE PATCH 4 ===
+        
         try:
             day_of_year = timestamp.timetuple().tm_yday
             seasonal_factor = 0.5 + 0.5 * math.cos((day_of_year - 172) * 2 * math.pi / 365)
@@ -116,6 +151,12 @@ class FeatureEngineer:
             "hour_of_day": float(hour),
             "seasonal_factor": seasonal_factor,
             "weather_trend": weather_trend,
+
+            # === START PATCH 4: ML-Kern-Upgrade (Lag Features) ===
+            "production_yesterday": prod_yesterday,
+            "production_last_hour": prod_last_hour,
+            # === ENDE PATCH 4 ===
+            
             "temperature_sq": temp ** 2,
             "cloudiness_sq": cloudiness ** 2,
             "hour_of_day_sq": hour ** 2,
@@ -139,6 +180,12 @@ class FeatureEngineer:
             "hour_of_day": float(hour),
             "seasonal_factor": seasonal_factor,
             "weather_trend": 0.5,
+            
+            # === START PATCH 4: ML-Kern-Upgrade (Lag Features) ===
+            "production_yesterday": 0.0,
+            "production_last_hour": 0.0,
+            # === ENDE PATCH 4 ===
+            
             "temperature_sq": 225.0,
             "cloudiness_sq": 2500.0,
             "hour_of_day_sq": hour ** 2,

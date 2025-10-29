@@ -1,5 +1,5 @@
 """
-StandardScaler fÃ¼r Feature Normalisierung.
+StandardScaler for Feature Normalization.
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -18,7 +18,7 @@ def _ensure_numpy():
             import numpy as np
             _np = np
         except ImportError as e:
-            raise ImportError(f"NumPy konnte nicht importiert werden: {e}")
+            raise ImportError(f"NumPy could not be imported: {e}") # Übersetzt
     return _np
 
 

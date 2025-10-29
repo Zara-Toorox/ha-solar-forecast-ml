@@ -2,108 +2,109 @@
   "config": {
     "step": {
       "user": {
-        "title": "Solar Forecast ML - Konfiguration",
-        "description": "Konfiguriere deine Solar Forecast ML Integration.\n\nPflichtfelder: Wettersensor, Leistungssensor und Tagesertrag\nAlle anderen Felder sind optional und kÃ¶nnen leer gelassen werden.",
+        "title": "Solar Forecast ML - Configuration",
+        "description": "Configure your Solar Forecast ML integration.\n\nRequired fields: Weather Sensor, Power Sensor, and Daily Yield\nAll other fields are optional and can be left empty.",
         "data": {
-          "weather_entity": "Wettersensor",
-          "power_entity": "Leistungssensor (W)",
-          "solar_yield_today": "Solar-Tagesertrag (kWh)",
-          "total_consumption_today": "Tagesverbrauch (kWh)",
-          "plant_kwp": "Anlagenleistung (kWp)",
-          "rain_sensor": "Regensensor",
-          "current_power": "Aktuelle Leistung (W)",
-          "lux_sensor": "Helligkeitssensor (Lux)",
-          "temp_sensor": "Temperatursensor",
-          "wind_sensor": "Windsensor",
-          "uv_sensor": "UV-Sensor",
+          "weather_entity": "Weather Sensor",
+          "power_entity": "Power Sensor (W)",
+          "solar_yield_today": "Solar Daily Yield (kWh)",
+          "total_consumption_today": "Daily Consumption (kWh)",
+          "plant_kwp": "System Capacity (kWp)",
+          "rain_sensor": "Rain Sensor",
+          "current_power": "Current Power (W)",
+          "lux_sensor": "Luminance Sensor (Lux)",
+          "temp_sensor": "Temperature Sensor",
+          "wind_sensor": "Wind Sensor",
+          "uv_sensor": "UV Sensor",
           "forecast_solar": "Forecast.Solar Sensor"
         },
         "data_description": {
-          "weather_entity": "Wetter-Entity fÃ¼r Vorhersageberechnungen (Pflichtfeld)",
-          "power_entity": "Aktueller Solar-Leistungssensor in Watt - fÃ¼r Produktionszeit-Berechnung (Pflichtfeld)",
-          "solar_yield_today": "TÃ¤glicher Solar-Ertrag in kWh - MUSS sich tÃ¤glich um Mitternacht zurÃ¼cksetzen (z.B. utility_meter daily) - FÃ¼r ML-Training (Pflichtfeld)",
-          "total_consumption_today": "Tagesverbrauchssensor in kWh - fÃ¼r Autarkie-Berechnung (optional)",
-          "plant_kwp": "Installierte Spitzenleistung in Kilowatt Peak (optional)",
-          "rain_sensor": "Externer Regensensor (optional)",
-          "current_power": "Sensor fÃ¼r aktuelle Solarleistung (optional)",
-          "lux_sensor": "Externer Helligkeitssensor in Lux (optional)",
-          "temp_sensor": "Externer Temperatursensor (optional)",
-          "wind_sensor": "Externer Windsensor (optional)",
-          "uv_sensor": "Externer UV-Strahlungssensor (optional)",
-          "forecast_solar": "Forecast.Solar Integration Sensor (optional)"
+          "weather_entity": "Weather entity for forecast calculations (Required)",
+          "power_entity": "Current solar power sensor in Watts - for production time calculation (Required)",
+          "solar_yield_today": "Daily solar yield in kWh - MUST reset daily at midnight (e.g., utility_meter daily) - For ML training (Required)",
+          "total_consumption_today": "Daily consumption sensor in kWh - for self-sufficiency calculation (optional)",
+          "plant_kwp": "Installed peak power in Kilowatt Peak (optional)",
+          "rain_sensor": "External rain sensor (optional)",
+          "current_power": "Sensor for current solar power (optional)",
+          "lux_sensor": "External luminance sensor in Lux (optional)",
+          "temp_sensor": "External temperature sensor (optional)",
+          "wind_sensor": "External wind sensor (optional)",
+          "uv_sensor": "External UV radiation sensor (optional)",
+          "forecast_solar": "Forecast.Solar integration sensor (optional)"
         }
       },
       "reconfigure": {
-        "title": "Solar Forecast ML - Neukonfiguration",
-        "description": "Ã„ndere die Konfiguration deiner Solar Forecast ML Integration.\n\nPflichtfelder: Wettersensor, Leistungssensor und Tagesertrag\nAlle anderen Felder sind optional. Leere Felder werden gelÃ¶scht.",
+        "title": "Solar Forecast ML - Reconfiguration",
+        "description": "Change the configuration of your Solar Forecast ML integration.\n\nRequired fields: Weather Sensor, Power Sensor, and Daily Yield\nAll other fields are optional. Empty fields will be cleared.",
         "data": {
-          "weather_entity": "Wettersensor",
-          "power_entity": "Leistungssensor (W)",
-          "solar_yield_today": "Solar-Tagesertrag (kWh)",
-          "total_consumption_today": "Tagesverbrauch (kWh)",
-          "plant_kwp": "Anlagenleistung (kWp)",
-          "rain_sensor": "Regensensor",
-          "current_power": "Aktuelle Leistung (W)",
-          "lux_sensor": "Helligkeitssensor (Lux)",
-          "temp_sensor": "Temperatursensor",
-          "wind_sensor": "Windsensor",
-          "uv_sensor": "UV-Sensor",
+          "weather_entity": "Weather Sensor",
+          "power_entity": "Power Sensor (W)",
+          "solar_yield_today": "Solar Daily Yield (kWh)",
+          "total_consumption_today": "Daily Consumption (kWh)",
+          "plant_kwp": "System Capacity (kWp)",
+          "rain_sensor": "Rain Sensor",
+          "current_power": "Current Power (W)",
+          "lux_sensor": "Luminance Sensor (Lux)",
+          "temp_sensor": "Temperature Sensor",
+          "wind_sensor": "Wind Sensor",
+          "uv_sensor": "UV Sensor",
           "forecast_solar": "Forecast.Solar Sensor"
         },
         "data_description": {
-          "weather_entity": "Wetter-Entity fÃ¼r Vorhersageberechnungen (Pflichtfeld)",
-          "power_entity": "Aktueller Solar-Leistungssensor in Watt - fÃ¼r Produktionszeit-Berechnung (Pflichtfeld)",
-          "solar_yield_today": "TÃ¤glicher Solar-Ertrag in kWh - MUSS sich tÃ¤glich um Mitternacht zurÃ¼cksetzen (z.B. utility_meter daily) - FÃ¼r ML-Training (Pflichtfeld)",
-          "total_consumption_today": "Tagesverbrauchssensor in kWh - fÃ¼r Autarkie-Berechnung (optional)",
-          "plant_kwp": "Installierte Spitzenleistung in Kilowatt Peak (optional)",
-          "rain_sensor": "Externer Regensensor (optional)",
-          "current_power": "Sensor fÃ¼r aktuelle Solarleistung (optional)",
-          "lux_sensor": "Externer Helligkeitssensor in Lux (optional)",
-          "temp_sensor": "Externer Temperatursensor (optional)",
-          "wind_sensor": "Externer Windsensor (optional)",
-          "uv_sensor": "Externer UV-Strahlungssensor (optional)",
-          "forecast_solar": "Forecast.Solar Integration Sensor (optional)"
+          "weather_entity": "Weather entity for forecast calculations (Required)",
+          "power_entity": "Current solar power sensor in Watts - for production time calculation (Required)",
+          "solar_yield_today": "Daily solar yield in kWh - MUST reset daily at midnight (e.g., utility_meter daily) - For ML training (Required)",
+          "total_consumption_today": "Daily consumption sensor in kWh - for self-sufficiency calculation (optional)",
+          "plant_kwp": "Installed peak power in Kilowatt Peak (optional)",
+          "rain_sensor": "External rain sensor (optional)",
+          "current_power": "Sensor for current solar power (optional)",
+          "lux_sensor": "External luminance sensor in Lux (optional)",
+          "temp_sensor": "External temperature sensor (optional)",
+          "wind_sensor": "External wind sensor (optional)",
+          "uv_sensor": "External UV radiation sensor (optional)",
+          "forecast_solar": "Forecast.Solar integration sensor (optional)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zum Sensor fehlgeschlagen",
-      "invalid_auth": "UngÃ¼ltige Authentifizierung",
-      "unknown": "Unbekannter Fehler aufgetreten",
-      "invalid_capacity": "UngÃ¼ltige KapazitÃ¤t (muss zwischen 0.1 und 1000 kWp liegen)",
-      "invalid_efficiency": "UngÃ¼ltige Effizienz (muss zwischen 0.01 und 1.0 liegen)",
-      "invalid_input": "UngÃ¼ltige Eingabe",
-      "required": "Dieses Feld ist erforderlich"
+      "cannot_connect": "Failed to connect to sensor",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unknown error occurred",
+      "invalid_capacity": "Invalid capacity (must be between 0.1 and 1000 kWp)",
+      "invalid_efficiency": "Invalid efficiency (must be between 0.01 and 1.0)",
+      "invalid_input": "Invalid input",
+      "required": "This field is required",
+      "sensor_no_daily_reset": "This sensor does not have a daily reset (missing 'last_reset' attribute). Please use a 'utility_meter' with a 'daily' cycle."
     },
     "abort": {
-      "already_configured": "Diese Integration ist bereits konfiguriert",
-      "reconfigure_successful": "Neukonfiguration erfolgreich abgeschlossen",
-      "not_reconfigure": "Dieser Flow ist nur fÃ¼r Neukonfiguration verfÃ¼gbar",
-      "entry_not_found": "Konfigurationseintrag nicht gefunden"
+      "already_configured": "This integration is already configured",
+      "reconfigure_successful": "Reconfiguration successfully completed",
+      "not_reconfigure": "This flow is only available for reconfiguration",
+      "entry_not_found": "Configuration entry not found"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Solar Forecast ML - Optionen",
-        "description": "Konfiguriere die erweiterten Optionen fÃ¼r Solar Forecast ML.",
+        "title": "Solar Forecast ML - Options",
+        "description": "Configure advanced options for Solar Forecast ML.",
         "data": {
-          "update_interval": "Update-Intervall (Sekunden)",
-          "diagnostic": "Diagnose-Modus aktivieren",
-          "enable_hourly": "StÃ¼ndliche Vorhersagen aktivieren",
-          "notify_startup": "Start-Benachrichtigung",
-          "notify_forecast": "Vorhersage-Benachrichtigungen",
-          "notify_learning": "Lernprozess-Benachrichtigungen",
-          "notify_successful_learning": "Erfolgreiches Learning-Benachrichtigungen"
+          "update_interval": "Update Interval (Seconds)",
+          "diagnostic": "Enable Diagnostic Mode",
+          "enable_hourly": "Enable Hourly Forecasts",
+          "notify_startup": "Startup Notification",
+          "notify_forecast": "Forecast Notifications",
+          "notify_learning": "Learning Process Notifications",
+          "notify_successful_learning": "Successful Learning Notifications"
         },
         "data_description": {
-          "update_interval": "Wie oft sollen Vorhersagen aktualisiert werden? (300-86400 Sekunden)",
-          "diagnostic": "Aktiviere erweiterte Diagnose-Sensoren fÃ¼r Fehlersuche",
-          "enable_hourly": "Aktiviere zusÃ¤tzliche stÃ¼ndliche Vorhersagen (optional)",
-          "notify_startup": "Zeige Benachrichtigung beim Start der Integration",
-          "notify_forecast": "Zeige Benachrichtigung bei neuen Vorhersage-Updates",
-          "notify_learning": "Zeige Benachrichtigung wÃ¤hrend des ML-Trainings",
-          "notify_successful_learning": "Zeige Benachrichtigung nach erfolgreichem ML-Training"
+          "update_interval": "How often should forecasts be updated? (300-86400 seconds)",
+          "diagnostic": "Enable advanced diagnostic sensors for troubleshooting",
+          "enable_hourly": "Enable additional hourly forecasts (optional)",
+          "notify_startup": "Show notification when the integration starts",
+          "notify_forecast": "Show notification on new forecast updates",
+          "notify_learning": "Show notification during ML training",
+          "notify_successful_learning": "Show notification after successful ML training"
         }
       }
     }
@@ -111,16 +112,16 @@
   "entity": {
     "button": {
       "update_forecast": {
-        "name": "Prognose aktualisieren"
+        "name": "Update Forecast"
       },
       "retrain_model": {
-        "name": "Modell neu trainieren"
+        "name": "Retrain Model"
       },
       "calibrate_model": {
-        "name": "Modell kalibrieren"
+        "name": "Calibrate Model"
       },
       "clear_errors": {
-        "name": "Fehler lÃ¶schen"
+        "name": "Clear Errors"
       }
     }
   }

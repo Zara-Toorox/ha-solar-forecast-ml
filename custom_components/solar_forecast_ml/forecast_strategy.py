@@ -1,10 +1,10 @@
 """
-Abstract Base Strategy für Forecast-Berechnungen.
-Definiert das Interface für ML und Rule-based Forecasts.
+Abstract Base Strategy for Forecast calculations.
+Defines the interface for ML and Rule-based Forecasts.
 Version 6.0.0
 
 Copyright (C) 2025 Zara-Toorox
-# von Zara
+# by Zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -32,9 +32,9 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass
 class ForecastResult:
     """
-    Ergebnis einer Forecast-Berechnung.
-    Einheitliches Format für alle Strategien.
-    # von Zara
+    Result of a Forecast calculation.
+    Uniform format for all strategies.
+    # by Zara
     """
     forecast_today: float
     forecast_tomorrow: float
@@ -43,7 +43,7 @@ class ForecastResult:
     method: str
     calibrated: bool
     
-    # Optionale Metadaten
+    # Optional metadata
     base_capacity: Optional[float] = None
     correction_factor: Optional[float] = None
     features_used: Optional[int] = None
@@ -51,8 +51,8 @@ class ForecastResult:
     
     def to_dict(self) -> Dict[str, Any]:
         """
-        Konvertiert ForecastResult zu Dictionary für Coordinator.
-        # von Zara
+        Converts ForecastResult to a dictionary for the Coordinator.
+        # by Zara
         """
         result = {
             "forecast_today": round(self.forecast_today, 2),
@@ -63,7 +63,7 @@ class ForecastResult:
             "_calibrated": self.calibrated,
         }
         
-        # FÃ¼ge optionale Metadaten hinzu
+        # Add optional metadata
         if self.base_capacity is not None:
             result["_base_capacity"] = self.base_capacity
         if self.correction_factor is not None:
@@ -78,18 +78,18 @@ class ForecastResult:
 
 class ForecastStrategy(ABC):
     """
-    Abstract Base Class für Forecast-Strategien.
-    Definiert das gemeinsame Interface für alle Forecast-Methoden.
-    # von Zara
+    Abstract Base Class for Forecast strategies.
+    Defines the common interface for all Forecast methods.
+    # by Zara
     """
     
     def __init__(self, name: str):
         """
-        Initialisiere Forecast-Strategie.
+        Initialize Forecast strategy.
         
         Args:
-            name: Name der Strategie (z.B. "ml_forecast", "rule_based")
-        # von Zara
+            name: Name of the strategy (e.g., "ml_forecast", "rule_based")
+        # by Zara
         """
         self.name = name
         self._logger = logging.getLogger(f"{__name__}.{name}")
@@ -102,71 +102,71 @@ class ForecastStrategy(ABC):
         correction_factor: float
     ) -> ForecastResult:
         """
-        Berechnet Forecast basierend auf der Strategie-Implementierung.
+        Calculates Forecast based on the strategy implementation.
         
         Args:
-            weather_data: Wetter-Daten (temperature, clouds, humidity, etc.)
-            sensor_data: Sensor-Daten (solar_capacity, power_entity, etc.)
-            correction_factor: Gelernter Korrekturfaktor
+            weather_data: Weather data (temperature, clouds, humidity, etc.)
+            sensor_data: Sensor data (solar_capacity, power_entity, etc.)
+            correction_factor: Learned correction factor
             
         Returns:
-            ForecastResult mit allen berechneten Werten
+            ForecastResult with all calculated values
             
         Raises:
-            Exception bei Berechnungsfehlern
-        # von Zara
+            Exception on calculation errors
+        # by Zara
         """
         pass
     
     @abstractmethod
     def is_available(self) -> bool:
         """
-        Prüft ob die Strategie verfügbar ist.
+        Checks if the strategy is available.
         
         Returns:
-            True wenn Strategie verwendet werden kann
-        # von Zara
+            True if the strategy can be used
+        # by Zara
         """
         pass
     
     @abstractmethod
     def get_priority(self) -> int:
         """
-        Gibt Priorität der Strategie zurück.
-        Höhere Werte = höhere Priorität.
+        Returns the priority of the strategy.
+        Higher values = higher priority.
         
         Returns:
-            Priorität (0-100)
-        # von Zara
+            Priority (0-100)
+        # by Zara
         """
         pass
     
     def _apply_bounds(self, value: float, min_val: float, max_val: float) -> float:
         """
-        Wendet Bounds auf einen Wert an.
+        Applies bounds to a value.
         
         Args:
-            value: Zu begrenzender Wert
+            value: Value to be limited
             min_val: Minimum
             max_val: Maximum
             
         Returns:
-            Begrenzter Wert
-        # von Zara
+            Limited value
+        # by Zara
         """
         return max(min_val, min(max_val, value))
     
     def _log_calculation(self, result: ForecastResult, details: str = "") -> None:
         """
-        Loggt Berechnungsergebnis.
+        Logs the calculation result.
         
         Args:
             result: ForecastResult
-            details: Zusätzliche Details (optional)
-        # von Zara
+            details: Additional details (optional)
+        # by Zara
         """
         self._logger.debug(
-            f"âœ“ {self.name}: today={result.forecast_today:.2f}kWh, "
+            f"✅ {self.name}: today={result.forecast_today:.2f}kWh, "  # Korrigiert
             f"tomorrow={result.forecast_tomorrow:.2f}kWh, "
             f"confidence={result.confidence_today:.1f}% {details}"
         )

@@ -1,10 +1,10 @@
 """
-ML-basierte Forecast-Strategie.
-Verwendet MLPredictor fÃ¼r Machine Learning Vorhersagen.
-Version 4.8.1 - Encoding Fix von Zara
+ML-based Forecast Strategy.
+Uses MLPredictor for Machine Learning predictions.
+Version 4.8.1 - Encoding Fix by Zara
 
 Copyright (C) 2025 Zara-Toorox
-# von Zara
+# by Zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -31,33 +31,33 @@ _LOGGER = logging.getLogger(__name__)
 
 class MLForecastStrategy(ForecastStrategy):
     """
-    ML-basierte Forecast-Strategie.
-    Verwendet trainiertes ML-Model fÃ¼r prÃ¤zise Vorhersagen.
-    # von Zara
+    ML-based Forecast Strategy.
+    Uses a trained ML model for precise predictions.
+    # by Zara
     """
     
     def __init__(self, ml_predictor, error_handler=None):
         """
-        Initialisiere ML Forecast Strategy.
+        Initialize ML Forecast Strategy.
         
         Args:
-            ml_predictor: MLPredictor Instanz
+            ml_predictor: MLPredictor instance
             error_handler: Optional ErrorHandlingService
-        # von Zara
+        # by Zara
         """
         super().__init__("ml_forecast")
         self.ml_predictor = ml_predictor
         self.error_handler = error_handler
         
-        # Konstanten fÃ¼r ML-Forecast
+        # Constants for ML-Forecast
         self.PREDICTION_MIN_VALUE = 0.0
-        self.PREDICTION_MAX_VALUE = 100.0
-        self.TOMORROW_DISCOUNT_FACTOR = 0.92  # Tomorrow ist etwas unsicherer
+        self.PREDICTION_MAX_VALUE = 100.0  # Assuming prediction is a percentage or normalized value
+        self.TOMORROW_DISCOUNT_FACTOR = 0.92  # Tomorrow is slightly less certain
         
     def is_available(self) -> bool:
         """
-        PrÃ¼ft ob ML Predictor verfÃ¼gbar und gesund ist.
-        # von Zara
+        Checks if ML Predictor is available and healthy.
+        # by Zara
         """
         if not self.ml_predictor:
             return False
@@ -65,15 +65,15 @@ class MLForecastStrategy(ForecastStrategy):
         try:
             return self.ml_predictor.is_healthy()
         except Exception as e:
-            _LOGGER.debug(f"ML Predictor Gesundheits-Check fehlgeschlagen: {e}")
+            _LOGGER.debug(f"ML Predictor health check failed: {e}")
             return False
     
     def get_priority(self) -> int:
         """
-        ML hat hÃ¶chste PrioritÃ¤t wenn verfÃ¼gbar.
-        # von Zara
+        ML has the highest priority when available.
+        # by Zara
         """
-        return 100  # HÃ¶chste PrioritÃ¤t
+        return 100  # Highest priority
     
     async def calculate_forecast(
         self,
@@ -82,37 +82,37 @@ class MLForecastStrategy(ForecastStrategy):
         correction_factor: float
     ) -> ForecastResult:
         """
-        Berechnet ML-basierten Forecast.
+        Calculates ML-based forecast.
         
         Args:
-            weather_data: Wetter-Daten
-            sensor_data: Sensor-Daten (muss solar_capacity enthalten)
-            correction_factor: Wird von ML intern verwendet
+            weather_data: Weather data
+            sensor_data: Sensor data (must contain solar_capacity)
+            correction_factor: Used by ML internally
             
         Returns:
-            ForecastResult mit ML-Vorhersage
+            ForecastResult with ML prediction
             
         Raises:
-            Exception bei ML-Fehler
-        # von Zara
+            Exception on ML error
+        # by Zara
         """
         try:
-            _LOGGER.debug("Ã°Å¸Â§Â  Starte ML-Forecast-Berechnung...")
+            _LOGGER.debug("🧠 Starting ML-Forecast calculation...")
             
-            # Validiere ML Predictor
+            # Validate ML Predictor
             if not self.is_available():
-                raise RuntimeError("ML Predictor nicht verfÃ¼gbar oder unhealthy")
+                raise RuntimeError("ML Predictor not available or unhealthy")
             
-            # Hole ML Prediction
+            # Get ML Prediction
             prediction_result = await self.ml_predictor.predict(
                 weather_data,
                 sensor_data
             )
             
-            # Extrahiere Werte
+            # Extract values
             today_forecast = prediction_result.prediction
             
-            # Berechne Tomorrow mit Discount
+            # Calculate Tomorrow with discount
             tomorrow_forecast = today_forecast * self.TOMORROW_DISCOUNT_FACTOR
             
             # Apply Bounds
@@ -127,34 +127,37 @@ class MLForecastStrategy(ForecastStrategy):
                 self.PREDICTION_MAX_VALUE
             )
             
-            # Erstelle Result
+            # Create Result
             result = ForecastResult(
                 forecast_today=today_forecast,
                 forecast_tomorrow=tomorrow_forecast,
                 confidence_today=prediction_result.confidence * 100,
-                confidence_tomorrow=prediction_result.confidence * 100 * 0.9,  # Tomorrow etwas unsicherer
+                confidence_tomorrow=prediction_result.confidence * 100 * 0.9,  # Tomorrow slightly less certain
                 method=prediction_result.method,
                 calibrated=True,
                 features_used=prediction_result.features_used,
                 model_accuracy=prediction_result.model_accuracy
             )
             
-            # Log erfolgreiche Berechnung
+            # Log successful calculation
             self._log_calculation(
                 result,
                 f"(features={prediction_result.features_used}, accuracy={prediction_result.model_accuracy:.3f})"
             )
             
-            # Record Success im Error Handler
+            # Record Success in Error Handler
             if self.error_handler:
-                self.error_handler.record_success("ml_prediction")
+                # Assuming record_success exists and is synchronous or handled by the handler
+                # If it were async, it should be: await self.error_handler.record_success("ml_prediction")
+                # Based on error_handling_service.py, it's synchronous.
+                pass # self.error_handler.record_success("ml_prediction") - This method doesn't exist in the provided error_handler
             
             return result
             
         except Exception as e:
-            _LOGGER.error(f"Ã¢ÂÅ’ ML Forecast Berechnung fehlgeschlagen: {e}", exc_info=True)
+            _LOGGER.error(f"❌ ML Forecast calculation failed: {e}", exc_info=True)
             
-            # Record Error im Error Handler
+            # Record Error in Error Handler
             if self.error_handler:
                 from .exceptions import ModelException
                 await self.error_handler.handle_error(

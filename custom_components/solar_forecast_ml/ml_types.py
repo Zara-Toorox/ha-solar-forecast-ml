@@ -1,6 +1,6 @@
 """
-ML Data Types fÃƒÂ¼r Solar Forecast ML Integration.
-PROGRESSIVE UPGRADE v5.1.0: Feature Normalisierung Support
+ML Data Types for Solar Forecast ML Integration.
+PROGRESSIVE UPGRADE v5.1.0: Feature Normalization Support
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -19,14 +19,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+import math
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
 class ErrorCategory(Enum):
-    """Error Categories fÃƒÂ¼r ML System."""
+    """Error Categories for ML System."""
     DATA_INTEGRITY = "data_integrity"
     MODEL_TRAINING = "model_training"
     PREDICTION = "prediction"
@@ -59,7 +60,7 @@ class PredictionRecord:
 class LearnedWeights:
     """
     Learned model weights and metadata.
-    PROGRESSIVE UPGRADE: Feature Normalisierung Support
+    PROGRESSIVE UPGRADE: Feature Normalization Support
     """
     weather_weights: Dict[str, float]
     seasonal_factors: Dict[str, float]
@@ -89,6 +90,7 @@ class LearnedWeights:
                 "wind_speed", "hour_of_day", "seasonal_factor"
             ]
         
+        # Fallback to weather_weights if new 'weights' field isn't populated
         if not self.weights:
             self.weights = self.weather_weights.copy()
 
@@ -106,6 +108,7 @@ class HourlyProfile:
     hourly_averages: Dict[int, float] = field(default_factory=dict)
     
     def __post_init__(self):
+        # Ensure all hours are present in the factors
         for hour in range(24):
             if str(hour) not in self.hourly_factors:
                 self.hourly_factors[str(hour)] = 1.0
@@ -115,10 +118,11 @@ class HourlyProfile:
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError("confidence must be between 0 and 1")
         
+        # Populate default hourly averages (simple sine curve) if empty
         if not self.hourly_averages:
-            import math
             for hour in range(24):
                 if 6 <= hour <= 18:
+                    # Simple sine curve for daylight hours
                     angle = ((hour - 6) / 12) * math.pi
                     self.hourly_averages[hour] = max(0.0, math.sin(angle) * 5.0)
                 else:
@@ -149,7 +153,7 @@ class WeatherFeatures:
             raise ValueError("hour_of_day must be between 0 and 23")
         if self.wind_speed < 0:
             raise ValueError("wind_speed cannot be negative")
-        if self.pressure < 800 or self.pressure > 1200:
+        if not (800 <= self.pressure <= 1200):
             raise ValueError("pressure out of realistic range [800, 1200]")
 
 
@@ -178,7 +182,7 @@ class ModelMetrics:
     mae: float
     rmse: float
     mape: float
-    r2: float
+    r2: float  # R-squared
     accuracy_percentage: float
     sample_count: int
     
@@ -189,8 +193,9 @@ class ModelMetrics:
             raise ValueError("RMSE cannot be negative")
         if self.mape < 0:
             raise ValueError("MAPE cannot be negative")
-        if not (-1.0 <= self.r2 <= 1.0):
-            raise ValueError("RÃ‚Â² must be between -1 and 1")
+        # R-squared can be negative, but not typically > 1
+        if self.r2 > 1.0: 
+            raise ValueError("R-squared (R2) cannot be greater than 1")
         if not (0.0 <= self.accuracy_percentage <= 100.0):
             raise ValueError("accuracy_percentage must be between 0 and 100")
         if self.sample_count < 0:
@@ -240,10 +245,10 @@ def create_default_learned_weights() -> LearnedWeights:
         correction_factor=1.0,
         accuracy=0.5,
         training_samples=0,
-        last_trained=dt_util.utcnow().isoformat(),
+        last_trained=datetime.now(timezone.utc).isoformat(),
         model_version="1.0",
         bias=0.0,
-        weights={},
+        weights={},  # Will be populated by __post_init__
         feature_names=[
             "temperature", "humidity", "cloudiness", 
             "wind_speed", "hour_of_day", "seasonal_factor"
@@ -257,7 +262,6 @@ def create_default_hourly_profile() -> HourlyProfile:
     """
     Create default hourly profile for initialization.
     """
-    import math
     hourly_averages = {}
     for hour in range(24):
         if 6 <= hour <= 18:
@@ -269,27 +273,28 @@ def create_default_hourly_profile() -> HourlyProfile:
     return HourlyProfile(
         hourly_factors={str(hour): 1.0 for hour in range(24)},
         samples_count=0,
-        last_updated=dt_util.utcnow().isoformat(),
+        last_updated=datetime.now(timezone.utc).isoformat(),
         confidence=0.5,
         hourly_averages=hourly_averages
     )
 
 
 def validate_prediction_record(record: Dict[str, Any]) -> bool:
-    """Validate a prediction record dictionary."""
+    """Validate a prediction record dictionary before dataclass creation."""
     required_fields = [
         "timestamp", "predicted_value", "weather_data", 
         "sensor_data", "accuracy", "model_version"
     ]
     
-    for field in required_fields:
-        if field not in record:
-            raise ValueError(f"Missing required field: {field}")
+    for field_name in required_fields:
+        if field_name not in record:
+            raise ValueError(f"Missing required field: {field_name}")
     
     if not isinstance(record["predicted_value"], (int, float)):
         raise ValueError("predicted_value must be numeric")
     
-    if record["actual_value"] is not None and not isinstance(record["actual_value"], (int, float)):
+    actual_val = record.get("actual_value")
+    if actual_val is not None and not isinstance(actual_val, (int, float)):
         raise ValueError("actual_value must be numeric or None")
     
     if not isinstance(record["accuracy"], (int, float)):
@@ -298,7 +303,7 @@ def validate_prediction_record(record: Dict[str, Any]) -> bool:
     if record["predicted_value"] < 0:
         raise ValueError("predicted_value cannot be negative")
     
-    if record["actual_value"] is not None and record["actual_value"] < 0:
+    if actual_val is not None and actual_val < 0:
         raise ValueError("actual_value cannot be negative")
     
     if not (0.0 <= record["accuracy"] <= 1.0):
@@ -308,22 +313,23 @@ def validate_prediction_record(record: Dict[str, Any]) -> bool:
 
 
 def sanitize_weather_data(weather_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Sanitize and validate weather data."""
+    """Sanitize and validate raw weather data from an external source."""
     sanitized = {}
     
+    # Use .get() for safety, provide reasonable defaults, cast to float, and clamp
     temp = weather_data.get("temperature", 15.0)
-    sanitized["temperature"] = max(-50, min(60, float(temp)))
+    sanitized["temperature"] = max(-50.0, min(60.0, float(temp)))
     
     humidity = weather_data.get("humidity", 60.0)
-    sanitized["humidity"] = max(0, min(100, float(humidity)))
+    sanitized["humidity"] = max(0.0, min(100.0, float(humidity)))
     
     clouds = weather_data.get("cloudiness", 50.0)
-    sanitized["cloudiness"] = max(0, min(100, float(clouds)))
+    sanitized["cloudiness"] = max(0.0, min(100.0, float(clouds)))
     
     wind = weather_data.get("wind_speed", 5.0)
-    sanitized["wind_speed"] = max(0, float(wind))
+    sanitized["wind_speed"] = max(0.0, float(wind))
     
     pressure = weather_data.get("pressure", 1013.0)
-    sanitized["pressure"] = max(800, min(1200, float(pressure)))
+    sanitized["pressure"] = max(800.0, min(1200.0, float(pressure)))
     
     return sanitized

@@ -1,5 +1,5 @@
 """
-Prediction Strategies mit Strategy Pattern.
+Prediction Strategies using the Strategy Pattern.
 
 Copyright (C) 2025 Zara-Toorox
 

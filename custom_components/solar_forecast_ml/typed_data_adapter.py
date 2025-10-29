@@ -1,6 +1,6 @@
 """
-Typed Data Adapter fÃ¼r Solar Forecast ML Integration.
-PROGRESSIVE UPGRADE v5.1.0: Feature Normalisierung Support
+Typed Data Adapter for Solar Forecast ML Integration.
+PROGRESSIVE UPGRADE v5.1.0: Feature Normalization Support
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -33,13 +33,13 @@ _LOGGER = logging.getLogger(__name__)
 
 class TypedDataAdapter:
     """
-    Adapter fÃƒÂ¼r Konvertierung zwischen Dict und Typed Dataclasses.
-    PROGRESSIVE UPGRADE: Feature Normalisierung Support
+    Adapter for converting between Dicts and Typed Dataclasses.
+    PROGRESSIVE UPGRADE: Feature Normalization Support
     """
     
     @staticmethod
     def dict_to_prediction_record(data: Dict[str, Any]) -> PredictionRecord:
-        """Konvertiert Dict zu PredictionRecord Dataclass."""
+        """Converts Dict to PredictionRecord Dataclass."""
         try:
             if isinstance(data, PredictionRecord):
                 return data
@@ -61,13 +61,15 @@ class TypedDataAdapter:
     @staticmethod
     def dict_to_learned_weights(data: Dict[str, Any]) -> LearnedWeights:
         """
-        Konvertiert Dict zu LearnedWeights Dataclass.
-        PROGRESSIVE UPGRADE: feature_means und feature_stds Support
+        Converts Dict to LearnedWeights Dataclass.
+        Handles missing keys and provides defaults for backward compatibility.
+        PROGRESSIVE UPGRADE: feature_means and feature_stds Support
         """
         try:
             if isinstance(data, LearnedWeights):
                 return data
             
+            # --- Provide defaults for older versions ---
             weather_weights = data.get("weather_weights", {})
             if not weather_weights:
                 weather_weights = {
@@ -87,21 +89,26 @@ class TypedDataAdapter:
                     "winter": 1.0
                 }
             
+            # Clamp correction_factor to a safe range
             correction_factor = float(data.get("correction_factor", 1.0))
             correction_factor = max(0.1, min(5.0, correction_factor))
             
             bias = float(data.get("bias", 0.0))
             
+            # Fallback for old models before 'weights' existed
+            weights = data.get("weights", weather_weights.copy())
+            
+            # Fallback for feature names
             feature_names = data.get("feature_names", [
                 "temperature", "humidity", "cloudiness", 
                 "wind_speed", "hour_of_day", "seasonal_factor"
             ])
             
-            weights = data.get("weights", weather_weights.copy())
-            
+            # Add new normalization fields
             feature_means = data.get("feature_means", {})
             feature_stds = data.get("feature_stds", {})
             
+            # --- Create Dataclass ---
             return LearnedWeights(
                 weather_weights=weather_weights,
                 seasonal_factors=seasonal_factors,
@@ -119,16 +126,18 @@ class TypedDataAdapter:
             )
             
         except Exception as e:
-            _LOGGER.error("Failed to convert dict to LearnedWeights: %s", str(e))
+            _LOGGER.error("Failed to convert dict to LearnedWeights: %s. Creating default.", str(e))
             return create_default_learned_weights()
     
     @staticmethod
     def learned_weights_to_dict(weights: LearnedWeights) -> Dict[str, Any]:
         """
-        Konvertiert LearnedWeights zu Dict fÃƒÂ¼r JSON-Speicherung.
-        PROGRESSIVE UPGRADE: feature_means und feature_stds inkludiert
+        Converts LearnedWeights to Dict for JSON storage.
+        PROGRESSIVE UPGRADE: feature_means and feature_stds included
         """
-        result = {
+        # The dataclass always has feature_means/stds (even if empty dicts),
+        # so we can add them directly without hasattr checks.
+        return {
             "version": "1.0",
             "weather_weights": weights.weather_weights,
             "seasonal_factors": weights.seasonal_factors,
@@ -141,38 +150,28 @@ class TypedDataAdapter:
             "bias": weights.bias,
             "weights": weights.weights,
             "feature_names": weights.feature_names,
+            "feature_means": weights.feature_means,
+            "feature_stds": weights.feature_stds,
             "updated": datetime.now().isoformat()
         }
-        
-        if hasattr(weights, 'feature_means'):
-            result["feature_means"] = weights.feature_means
-        
-        if hasattr(weights, 'feature_stds'):
-            result["feature_stds"] = weights.feature_stds
-        
-        return result
     
     @staticmethod
     def dict_to_hourly_profile(data: Dict[str, Any]) -> HourlyProfile:
-        """Konvertiert Dict zu HourlyProfile Dataclass."""
+        """Converts Dict to HourlyProfile Dataclass."""
         try:
             if isinstance(data, HourlyProfile):
                 return data
             
             hourly_factors = data.get("hourly_factors", {})
             if len(hourly_factors) != 24:
+                # Ensure a 24-hour structure if data is partial or invalid
                 hourly_factors = {str(h): 1.0 for h in range(24)}
             
+            # *** BUGFIX ***
+            # Removed redundant logic for populating hourly_averages.
+            # The HourlyProfile dataclass __post_init__ handles this.
+            # We just pass the dictionary (even if empty).
             hourly_averages = data.get("hourly_averages", {})
-            if not hourly_averages:
-                import math
-                hourly_averages = {}
-                for hour in range(24):
-                    if 6 <= hour <= 18:
-                        angle = ((hour - 6) / 12) * math.pi
-                        hourly_averages[hour] = max(0.0, math.sin(angle) * 5.0)
-                    else:
-                        hourly_averages[hour] = 0.0
             
             return HourlyProfile(
                 hourly_factors=hourly_factors,
@@ -184,12 +183,12 @@ class TypedDataAdapter:
             )
             
         except Exception as e:
-            _LOGGER.error("Failed to convert dict to HourlyProfile: %s", str(e))
+            _LOGGER.error("Failed to convert dict to HourlyProfile: %s. Creating default.", str(e))
             return create_default_hourly_profile()
     
     @staticmethod
     def hourly_profile_to_dict(profile: HourlyProfile) -> Dict[str, Any]:
-        """Konvertiert HourlyProfile zu Dict fÃƒÂ¼r JSON-Speicherung."""
+        """Converts HourlyProfile to Dict for JSON storage."""
         return {
             "version": "1.0",
             "hourly_factors": profile.hourly_factors,
@@ -202,7 +201,7 @@ class TypedDataAdapter:
     
     @staticmethod
     def prediction_record_to_dict(record: PredictionRecord) -> Dict[str, Any]:
-        """Konvertiert PredictionRecord zu Dict fÃƒÂ¼r JSON-Speicherung."""
+        """Converts PredictionRecord to Dict for JSON storage."""
         return {
             "timestamp": record.timestamp,
             "predicted_value": record.predicted_value,

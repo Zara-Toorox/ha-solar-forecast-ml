@@ -6,7 +6,7 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
+This program is distributed in the hope that it is useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
@@ -229,7 +229,7 @@ class ErrorHandlingService:
             raise ValueError(f"Circuit Breaker {breaker_name} not registered")
         
         if not breaker.should_allow_request():
-            error_msg = f"Circuit Breaker {breaker_name} is {breaker.state.value.upper()} - operation blocked"
+            error_msg = f"Circuit Breaker {breaker_name} is {breaker.state.value.UPPER()} - operation blocked"
             _LOGGER.warning(error_msg)
             self._log_error(breaker_name, "CircuitBreakerOpenException", error_msg)
             raise CircuitBreakerOpenException(error_msg)
@@ -337,7 +337,7 @@ class ErrorHandlingService:
         if len(self.ml_operation_log) > self.max_ml_log_size:
             self.ml_operation_log = self.ml_operation_log[-self.max_ml_log_size:]
         
-        status_icon = "âœ…" if success else "âŒ"
+        status_icon = "✅" if success else "❌"  # Korrigiert
         _LOGGER.info(
             "[ML OPERATION] %s %s | Metrics: %s | Context: %s | Duration: %.2fs",
             status_icon,
@@ -371,7 +371,7 @@ class ErrorHandlingService:
         if len(self.json_operation_log) > self.max_json_log_size:
             self.json_operation_log = self.json_operation_log[-self.max_json_log_size:]
         
-        status_icon = "âœ…" if success else "âŒ"
+        status_icon = "✅" if success else "❌"  # Korrigiert
         if success:
             _LOGGER.info(
                 "[JSON OPERATION] %s %s | File: %s | Size: %s bytes | Records: %s",
@@ -412,7 +412,7 @@ class ErrorHandlingService:
         if len(self.sensor_status_log) > self.max_sensor_log_size:
             self.sensor_status_log = self.sensor_status_log[-self.max_sensor_log_size:]
         
-        status_icon = "âœ…" if available else "âŒ"
+        status_icon = "✅" if available else "❌"  # Korrigiert
         if available:
             _LOGGER.debug(
                 "[SENSOR STATUS] %s %s (%s) | Value: %s",

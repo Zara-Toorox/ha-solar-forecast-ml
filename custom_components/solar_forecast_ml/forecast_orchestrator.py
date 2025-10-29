@@ -1,6 +1,6 @@
 """
 Forecast Orchestrator Module
-Verwaltet Strategy-Auswahl und Forecast-Erstellung
+Manages strategy selection and forecast creation
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -44,7 +44,7 @@ class ForecastOrchestrator:
             solar_capacity=self.solar_capacity,
             weather_calculator=self.weather_calculator
         )
-        _LOGGER.info("Rule-Based Strategy initialisiert")
+        _LOGGER.info("Rule-Based Strategy initialized") # Übersetzt
         
         if ml_predictor:
             self.ml_predictor = ml_predictor
@@ -52,9 +52,9 @@ class ForecastOrchestrator:
                 ml_predictor=ml_predictor,
                 error_handler=error_handler
             )
-            _LOGGER.info("ML Strategy initialisiert")
+            _LOGGER.info("ML Strategy initialized") # Übersetzt
         else:
-            _LOGGER.info("ML Strategy nicht verfügbar (Predictor fehlt)")
+            _LOGGER.info("ML Strategy not available (Predictor missing)") # Übersetzt
     
     async def create_forecast(
         self,
@@ -64,7 +64,7 @@ class ForecastOrchestrator:
     ) -> Dict[str, Any]:
         if self.ml_strategy and self.ml_strategy.is_available():
             try:
-                _LOGGER.debug("Verwende ML Strategy für Forecast")
+                _LOGGER.debug("Using ML Strategy for forecast") # Übersetzt
                 result = await self.ml_strategy.calculate_forecast(
                     weather_data=weather_data,
                     sensor_data=sensor_data,
@@ -83,10 +83,10 @@ class ForecastOrchestrator:
                 }
                 
             except Exception as e:
-                _LOGGER.warning(f"ML Strategy fehlgeschlagen: {e}, Fallback zu Rule-Based")
+                _LOGGER.warning(f"ML Strategy failed: {e}, falling back to Rule-Based") # Übersetzt
         
         if self.rule_based_strategy:
-            _LOGGER.debug("Verwende Rule-Based Strategy für Forecast")
+            _LOGGER.debug("Using Rule-Based Strategy for forecast") # Übersetzt
             result = await self.rule_based_strategy.calculate_forecast(
                 weather_data=weather_data,
                 sensor_data=sensor_data,
@@ -104,7 +104,7 @@ class ForecastOrchestrator:
                 "model_accuracy": None
             }
         
-        _LOGGER.warning("Keine Strategy verfügbar, verwende einfache Berechnung")
+        _LOGGER.warning("No strategy available, using simple calculation") # Übersetzt
         return await self._simple_forecast(weather_data)
     
     async def _simple_forecast(self, weather_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -160,7 +160,7 @@ class ForecastOrchestrator:
             ml_hourly_base = self._get_ml_hourly_base(forecast_today, current_hour)
             
             if ml_hourly_base is None:
-                _LOGGER.debug("ML hourly profile nicht verfügbar, Fallback zu einfacher Berechnung")
+                _LOGGER.debug("ML hourly profile not available, falling back to simple calculation") # Übersetzt
                 ml_hourly_base = forecast_today / 15.0
             
             sun_factor = 1.0
@@ -179,7 +179,7 @@ class ForecastOrchestrator:
             hourly_prediction = ml_hourly_base * sun_factor * cloud_factor * temp_factor * lux_factor * rain_factor
             
             _LOGGER.debug(
-                f"Stündliche Prognose: base={ml_hourly_base:.2f}, sun={sun_factor:.2f}, "
+                f"Hourly forecast: base={ml_hourly_base:.2f}, sun={sun_factor:.2f}, " # Übersetzt
                 f"cloud={cloud_factor:.2f}, temp={temp_factor:.2f}, lux={lux_factor:.2f}, "
                 f"rain={rain_factor:.2f}, result={hourly_prediction:.2f}"
             )
@@ -187,7 +187,7 @@ class ForecastOrchestrator:
             return round(hourly_prediction, 2)
                     
         except Exception as e:
-            _LOGGER.debug(f"Next Hour Berechnung fehlgeschlagen: {e}")
+            _LOGGER.debug(f"Next Hour calculation failed: {e}") # Übersetzt
             return 0.0
     
     def _get_ml_hourly_base(self, forecast_today: float, current_hour: int) -> Optional[float]:
@@ -229,7 +229,7 @@ class ForecastOrchestrator:
             return ml_hourly_base
             
         except Exception as e:
-            _LOGGER.debug(f"Fehler beim Abrufen des ML hourly base: {e}")
+            _LOGGER.debug(f"Error retrieving ML hourly base: {e}") # Übersetzt
             return None
     
     def _get_realtime_factors(
@@ -298,11 +298,11 @@ class ForecastOrchestrator:
                     factors['rain_factor'] = 0.8
             
             _LOGGER.debug(
-                f"Realtime-Faktoren berechnet: cloudiness={cloudiness}, "
+                f"Realtime factors calculated: cloudiness={cloudiness}, " # Übersetzt
                 f"temp={temperature}, lux={lux}, rain={rain}"
             )
             
         except Exception as e:
-            _LOGGER.debug(f"Fehler bei Realtime-Faktoren: {e}")
+            _LOGGER.debug(f"Error during realtime factors: {e}") # Übersetzt
         
         return factors

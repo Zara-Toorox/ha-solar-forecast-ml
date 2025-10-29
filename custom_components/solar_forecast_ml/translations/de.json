@@ -3,10 +3,11 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML - Konfiguration",
-        "description": "Konfiguriere deine Solar Forecast ML Integration.\n\nPflichtfelder: Wettersensor und Leistungssensor\nAlle anderen Felder sind optional und können leer gelassen werden.",
+        "description": "Konfiguriere deine Solar Forecast ML Integration.\n\nPflichtfelder: Wettersensor, Leistungssensor und Tagesertrag\nAlle anderen Felder sind optional und können leer gelassen werden.",
         "data": {
           "weather_entity": "Wettersensor (PFLICHT - z.B. weather.home mit Forecast-Daten)",
           "power_entity": "Aktueller Leistungssensor in Watt (PFLICHT - z.B. sensor.solar_power)",
+          "solar_yield_today": "Solar-Tagesertrag in kWh (PFLICHT - MUSS sich täglich zurücksetzen!)",
           "total_consumption_today": "Tagesverbrauch in kWh (optional - MUSS sich täglich zurücksetzen!)",
           "plant_kwp": "Anlagenleistung in kWp (optional - z.B. 5.0 für installierte Spitzenleistung)",
           "rain_sensor": "Regensensor (optional - binary_sensor oder mm/h)",
@@ -20,6 +21,7 @@
         "data_description": {
           "weather_entity": "Wetter-Entity für Vorhersageberechnungen. Muss Vorhersagedaten mit temperature, humidity, cloud_coverage liefern. Kompatibel: Met.no, OpenWeatherMap, DWD.",
           "power_entity": "AKTUELLER Solar-Leistungssensor in Watt (W). Liefert die MOMENTANE Produktionsleistung für ML-Training. Format: Dezimalzahl mit W als Einheit. Beispiel: 2500 W bei aktueller Produktion.",
+          "solar_yield_today": "Täglicher Solar-Ertrag in kWh. WICHTIG: Muss sich täglich um Mitternacht automatisch auf 0 zurücksetzen! (z.B. utility_meter daily). Wird für ML-Training benötigt. (Pflichtfeld)",
           "total_consumption_today": "Tagesverbrauchssensor in kWh. WICHTIG: Muss sich täglich um Mitternacht automatisch auf 0 zurücksetzen! Verwende utility_meter mit cycle: daily. Wird für Autarkie-Berechnung verwendet. Beispiel: 12.5 kWh am Abend.",
           "plant_kwp": "Installierte Anlagenleistung in Kilowatt Peak (kWp). Dies ist die Nennleistung deiner Solaranlage. Beispiel: 5.0 für eine 5 kWp Anlage. Steht im Datenblatt oder auf dem Wechselrichter. Bereich: 0.1-1000 kWp.",
           "rain_sensor": "Regensensor - entweder binary_sensor (on/off bei Regen) oder Sensor mit Regenmenge in mm/h. Bei Regen reduziert sich die Sonneneinstrahlung und die Vorhersage wird entsprechend angepasst.",
@@ -33,10 +35,11 @@
       },
       "reconfigure": {
         "title": "Solar Forecast ML - Neukonfiguration",
-        "description": "Ändere die Konfiguration deiner Solar Forecast ML Integration.\n\nPflichtfelder: Wettersensor und Leistungssensor\nAlle anderen Felder sind optional. Leere Felder werden gelöscht.",
+        "description": "Ändere die Konfiguration deiner Solar Forecast ML Integration.\n\nPflichtfelder: Wettersensor, Leistungssensor und Tagesertrag\nAlle anderen Felder sind optional. Leere Felder werden gelöscht.",
         "data": {
           "weather_entity": "Wettersensor (PFLICHT - z.B. weather.home mit Forecast-Daten)",
           "power_entity": "Aktueller Leistungssensor in Watt (PFLICHT - z.B. sensor.solar_power)",
+          "solar_yield_today": "Solar-Tagesertrag in kWh (PFLICHT - MUSS sich täglich zurücksetzen!)",
           "total_consumption_today": "Tagesverbrauch in kWh (optional - MUSS sich täglich zurücksetzen!)",
           "plant_kwp": "Anlagenleistung in kWp (optional - z.B. 5.0 für installierte Spitzenleistung)",
           "rain_sensor": "Regensensor (optional - binary_sensor oder mm/h)",
@@ -50,6 +53,7 @@
         "data_description": {
           "weather_entity": "Wetter-Entity für Vorhersageberechnungen. Muss Vorhersagedaten mit temperature, humidity, cloud_coverage liefern. Kompatibel: Met.no, OpenWeatherMap, DWD.",
           "power_entity": "AKTUELLER Solar-Leistungssensor in Watt (W). Liefert die MOMENTANE Produktionsleistung für ML-Training. Format: Dezimalzahl mit W als Einheit. Beispiel: 2500 W bei aktueller Produktion.",
+          "solar_yield_today": "Täglicher Solar-Ertrag in kWh. WICHTIG: Muss sich täglich um Mitternacht automatisch auf 0 zurücksetzen! (z.B. utility_meter daily). Wird für ML-Training benötigt. (Pflichtfeld)",
           "total_consumption_today": "Tagesverbrauchssensor in kWh. WICHTIG: Muss sich täglich um Mitternacht automatisch auf 0 zurücksetzen! Verwende utility_meter mit cycle: daily. Wird für Autarkie-Berechnung verwendet. Beispiel: 12.5 kWh am Abend.",
           "plant_kwp": "Installierte Anlagenleistung in Kilowatt Peak (kWp). Dies ist die Nennleistung deiner Solaranlage. Beispiel: 5.0 für eine 5 kWp Anlage. Steht im Datenblatt oder auf dem Wechselrichter. Bereich: 0.1-1000 kWp.",
           "rain_sensor": "Regensensor - entweder binary_sensor (on/off bei Regen) oder Sensor mit Regenmenge in mm/h. Bei Regen reduziert sich die Sonneneinstrahlung und die Vorhersage wird entsprechend angepasst.",

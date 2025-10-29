@@ -16,23 +16,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
-# Version 4.9.3 - Async Fix fÃ¼r Blocking I/O
+# Version 4.9.4 - Async Fix for Blocking I/O
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-# Fix: importlib.metadata statt getattr()
+# Fix: importlib.metadata instead of getattr()
 try:
     from importlib.metadata import version as get_version
 except ImportError:
-    # Fallback fÃ¼r Python < 3.8
+    # Fallback for Python < 3.8
     from importlib_metadata import version as get_version
 
 _LOGGER = logging.getLogger(__name__)
 
 
-# Dependencies die benÃ¶tigt werden
+# Dependencies that are required
 REQUIRED_DEPENDENCIES = {
     "numpy": "1.21.0",
     "aiofiles": "23.0.0",
@@ -41,92 +41,99 @@ REQUIRED_DEPENDENCIES = {
 
 class DependencyHandler:
     """
-    Handler fÃ¼r AbhÃ¤ngigkeitsprÃ¼fung.
+    Handler for dependency checks.
     
-    Vereinfacht: Nur Check, keine Installation.
-    Home Assistant installiert automatisch aus manifest.json # von Zara
+    Simplified: Only check, no installation.
+    Home Assistant installs automatically from manifest.json # by Zara
     """
     
     def __init__(self) -> None:
-        """Initialize dependency handler # von Zara"""
+        """Initialize dependency handler # by Zara"""
         self._checked = False
         self._all_satisfied = False
         self._package_status = {}
     
-    def check_package(self, package: str) -> bool:
+    def _check_package_sync(self, package: str) -> bool:
         """
-        PrÃ¼fe ob Package installiert und funktionsfÃ¤hig ist.
+        Synchronous check if a package is installed and functional.
+        This is a BLOCKING function intended to be run in an executor.
         
         Args:
-            package: Package-Name (z.B. "numpy")
+            package: Package name (e.g., "numpy")
             
         Returns:
-            True wenn Package funktioniert # von Zara
+            True if package works # by Zara
         """
         try:
             if package == "numpy":
                 import numpy as np
-                # Test grundlegende FunktionalitÃ¤t
+                # Test basic functionality
                 test_array = np.array([1, 2, 3])
                 _ = test_array.mean()
-                _LOGGER.debug(f"âœ“ {package} funktioniert (Version: {np.__version__})")
+                _LOGGER.debug(f"✓ {package} is functional (Version: {np.__version__})")
                 return True
             elif package == "aiofiles":
                 import aiofiles
-                _LOGGER.debug(f"âœ“ {package} funktioniert")
+                _LOGGER.debug(f"✓ {package} is functional")
                 return True
             else:
-                # FÃ¼r andere Packages: Standard-Import
+                # For other packages: standard import
                 __import__(package)
-                _LOGGER.debug(f"âœ“ {package} installiert")
+                _LOGGER.debug(f"✓ {package} is installed")
                 return True
                 
         except Exception as e:
-            _LOGGER.warning(f"Ã¢ÂÅ’ {package} nicht verfÃ¼gbar: {e}")
+            _LOGGER.warning(f"✗ {package} is not available: {e}")
             return False
     
-    def check_dependencies(self) -> bool:
+    async def check_dependencies(self, hass) -> bool:
         """
-        PrÃ¼fe alle Dependencies.
+        Check all dependencies asynchronously.
         
+        Args:
+            hass: HomeAssistant instance for async_add_executor_job
+            
         Returns:
-            True wenn alle vorhanden # von Zara
+            True if all are present # by Zara
         """
         if self._checked:
-            _LOGGER.debug(f"Ã¢â€žÂ¹Ã¯Â¸Â Dependencies bereits geprÃ¼ft: {self._all_satisfied}")
+            _LOGGER.debug(f"ℹ️ Dependencies already checked: {self._all_satisfied}")
             return self._all_satisfied
         
-        _LOGGER.info("Ã°Å¸â€Â PrÃ¼fe Dependencies...")
+        _LOGGER.info("🔍 Checking dependencies...")
         
         missing_deps = []
         
         for package in REQUIRED_DEPENDENCIES.keys():
-            is_ok = self.check_package(package)
+            # Run the blocking import check in an executor
+            is_ok = await hass.async_add_executor_job(
+                self._check_package_sync, package
+            )
             self._package_status[package] = is_ok
             if not is_ok:
                 missing_deps.append(package)
         
         if not missing_deps:
-            _LOGGER.info("âœ“ Alle Dependencies vorhanden")
+            _LOGGER.info("✓ All dependencies are present")
             self._checked = True
             self._all_satisfied = True
             return True
         
-        _LOGGER.warning(f"Ã¢Å¡Â Ã¯Â¸Â Fehlende Dependencies: {', '.join(missing_deps)}")
-        _LOGGER.info("Ã¢â€žÂ¹Ã¯Â¸Â Home Assistant installiert diese automatisch beim nÃ¤chsten Neustart")
+        _LOGGER.warning(f"⚠️ Missing dependencies: {', '.join(missing_deps)}")
+        _LOGGER.info("ℹ️ Home Assistant should install these automatically on the next restart")
         self._checked = True
         self._all_satisfied = False
         return False
     
     def _get_package_version_sync(self, package: str) -> str:
         """
-        Blocking-Funktion zum Holen der Package-Version.
-        Wird im Executor ausgefÃ¼hrt # von Zara
+        Blocking function to get the package version.
+        Will be run in the executor # by Zara
         """
         try:
             return get_version(package)
         except Exception:
-            # Fallback fÃ¼r Packages ohne Metadaten
+            # Fallback for packages without metadata
             if package == "numpy":
                 try:
                     import numpy as np
@@ -137,27 +144,38 @@ class DependencyHandler:
     
     async def get_dependency_status(self, hass=None) -> dict[str, Any]:
         """
-        Hole Status aller AbhÃ¤ngigkeiten.
-        Async-Version mit Executor fÃ¼r Blocking I/O # von Zara
+        Get the status of all dependencies.
+        Async version with executor for blocking I/O # by Zara
         
         Args:
-            hass: HomeAssistant instance fÃ¼r async_add_executor_job
+            hass: HomeAssistant instance for async_add_executor_job
             
         Returns:
-            Dict mit Package-Status # von Zara
+            Dict with package status # by Zara
         """
         status = {}
         
         for package, min_version in REQUIRED_DEPENDENCIES.items():
-            is_satisfied = self.check_package(package)
+            # Use the already checked status if available
+            is_satisfied = self._package_status.get(package)
             
-            # Fix: Blocking I/O in Executor ausfÃ¼hren
+            # If not checked yet (e.g., direct call), run the check
+            if is_satisfied is None:
+                if hass:
+                    is_satisfied = await hass.async_add_executor_job(
+                        self._check_package_sync, package
+                    )
+                else:
+                    is_satisfied = self._check_package_sync(package)
+                self._package_status[package] = is_satisfied
+
+            # Get version
             if hass:
                 version = await hass.async_add_executor_job(
                     self._get_package_version_sync, package
                 )
             else:
-                # Fallback ohne hass (z.B. Tests)
+                # Fallback without hass (e.g., tests)
                 version = self._get_package_version_sync(package)
             
             status[package] = {

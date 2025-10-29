@@ -1,8 +1,8 @@
 """
-Production Calculator für Solar Forecast ML.
-Berechnet Produktionszeit und weitere Produktions-Metriken.
-STRATEGIE 2: ProductionTimeCalculator für Live-Tracking
-Version 4.11.0 - Gewichtete Peak-Zeit Berechnung
+Production Calculator for Solar Forecast ML.
+Calculates production time and other production metrics.
+STRATEGY 2: ProductionTimeCalculator for Live-Tracking
+Version 4.11.0 - Weighted Peak-Time Calculation
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -34,32 +34,41 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ProductionCalculator:
+    """
+    Calculates historical production metrics, such as total production time
+    today or the weighted average peak production hour.
+    """
     
     def __init__(self, hass: HomeAssistant):
         self.hass = hass
         
-        self.MIN_PRODUCTION_POWER = 0.01
-        self.PRODUCTION_START_HOUR = 5
-        self.PRODUCTION_END_HOUR = 21
+        self.MIN_PRODUCTION_POWER = 0.01  # min power (kW) to count as "producing"
+        self.PRODUCTION_START_HOUR = 5    # 5 AM
+        self.PRODUCTION_END_HOUR = 21     # 9 PM
         
+        # Weighting for peak time calculation
         self.RECENT_DAYS_THRESHOLD = 3
         self.RECENT_WEIGHT = 0.7
         self.OLDER_WEIGHT = 0.3
         
-        _LOGGER.debug("✓ ProductionCalculator initialisiert")
+        _LOGGER.debug("✓ ProductionCalculator initialized")
     
     async def calculate_production_time_today(
         self,
         power_entity: Optional[str]
     ) -> str:
+        """
+        Calculates the total time production was active today based on history.
+        """
         try:
             if not power_entity:
-                _LOGGER.debug("1️⃣ Kein Power-Sensor konfiguriert")
-                return "Nicht verfügbar"
+                _LOGGER.debug("1️⃣ No power sensor configured")
+                return "Not available"
             
             now = dt_util.utcnow()
             start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
             
+            # Call the blocking history function in an executor thread
             history = await self.hass.async_add_executor_job(
                 self._get_state_history,
                 power_entity,
@@ -68,8 +77,8 @@ class ProductionCalculator:
             )
             
             if not history:
-                _LOGGER.debug("1️⃣ Keine History-Daten verfügbar")
-                return "Berechnung läuft..."
+                _LOGGER.debug("1️⃣ No history data available")
+                return "Calculating..."
             
             production_minutes = 0
             
@@ -90,8 +99,8 @@ class ProductionCalculator:
             return f"{hours}h {minutes}m"
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Produktionszeit-Berechnung fehlgeschlagen: {e}")
-            return "Berechnung fehlgeschlagen"
+            _LOGGER.warning(f"⚠️ Production time calculation failed: {e}")
+            return "Calculation failed"
     
     def _get_state_history(
         self,
@@ -99,12 +108,17 @@ class ProductionCalculator:
         start_time: datetime,
         end_time: datetime
     ) -> list:
+        """
+        Synchronous helper to fetch state history.
+        Must be run in an executor job.
+        """
         try:
+            # Import recorder component locally as required by HA best practices
             from homeassistant.components import recorder
             from homeassistant.components.recorder import history
             
             if not recorder.is_entity_recorded(self.hass, entity_id):
-                _LOGGER.debug(f"1️⃣ Entity {entity_id} wird nicht aufgezeichnet")
+                _LOGGER.debug(f"1️⃣ Entity {entity_id} is not being recorded")
                 return []
             
             states = history.state_changes_during_period(
@@ -121,31 +135,35 @@ class ProductionCalculator:
             return []
             
         except Exception as e:
-            _LOGGER.debug(f"History-Abruf fehlgeschlagen: {e}")
+            _LOGGER.debug(f"History retrieval failed: {e}")
             return []
     
     async def calculate_peak_production_time(
         self,
         power_entity: Optional[str] = None
     ) -> str:
+        """
+        Calculates the historical peak production hour using a weighted average.
+        Recent days are weighted more heavily.
+        """
         try:
-            _LOGGER.info("📍 START Peak-Zeit Berechnung (Gewichtete Methode)")
+            _LOGGER.info("📍 START Peak-Time Calculation (Weighted Method)")
             
             if not power_entity:
-                _LOGGER.debug("1️⃣ Kein Power-Sensor für Peak-Berechnung")
-                return "12:00"
+                _LOGGER.debug("1️⃣ No power sensor for peak calculation")
+                return "12:00"  # Fallback
             
             now = dt_util.now()
             start_time = now - timedelta(days=14)
             cutoff_recent = now - timedelta(days=self.RECENT_DAYS_THRESHOLD)
             
             _LOGGER.debug(
-                f"📝 Analyse-Zeitraum: {start_time.strftime('%Y-%m-%d %H:%M')} "
-                f"bis {now.strftime('%Y-%m-%d %H:%M')}"
+                f"📝 Analysis period: {start_time.strftime('%Y-%m-%d %H:%M')} "
+                f"to {now.strftime('%Y-%m-%d %H:%M')}"
             )
             _LOGGER.debug(
-                f"📠 Gewichtung: Letzte {self.RECENT_DAYS_THRESHOLD} Tage = {self.RECENT_WEIGHT*100:.0f}%, "
-                f"Ältere Tage = {self.OLDER_WEIGHT*100:.0f}%"
+                f"📠 Weighting: Last {self.RECENT_DAYS_THRESHOLD} days = {self.RECENT_WEIGHT*100:.0f}%, "
+                f"Older days = {self.OLDER_WEIGHT*100:.0f}%"
             )
             
             states = await self.hass.async_add_executor_job(
@@ -157,12 +175,12 @@ class ProductionCalculator:
             
             if not states or len(states) < 10:
                 _LOGGER.warning(
-                    f"⚠️ Nicht genug Daten für Peak-Berechnung: "
-                    f"{len(states) if states else 0} States gefunden (min. 10 benötigt)"
+                    f"⚠️ Not enough data for peak calculation: "
+                    f"{len(states) if states else 0} states found (min. 10 required)"
                 )
-                return "12:00"
+                return "12:00"  # Fallback
             
-            _LOGGER.debug(f"📈 {len(states)} States aus History geladen")
+            _LOGGER.debug(f"📈 {len(states)} states loaded from history")
             
             hourly_data = {hour: {'values': [], 'weights': []} for hour in range(24)}
             
@@ -184,6 +202,8 @@ class ProductionCalculator:
                         night_values += 1
                         continue
                     
+                    # Heuristic: If power > 100, assume it's in Watts, convert to kW
+                    # This handles sensors that might report W instead of kW
                     if power > 100:
                         power = power / 1000.0
                         converted_watt += 1
@@ -205,16 +225,16 @@ class ProductionCalculator:
                     hourly_data[hour]['values'].append(power)
                     hourly_data[hour]['weights'].append(weight)
                 
-                except (ValueError, TypeError, AttributeError) as e:
+                except (ValueError, TypeError, AttributeError):
                     invalid_states += 1
                     continue
             
             _LOGGER.debug(
-                f"📠 Datenqualität: {invalid_states} invalid, {night_values} night/low, "
-                f"{converted_watt} W→kW konvertiert"
+                f"📠 Data quality: {invalid_states} invalid, {night_values} night/low, "
+                f"{converted_watt} W->kW converted"
             )
             _LOGGER.debug(
-                f"⚖️ Gewichtete Daten: {recent_count} recent ({self.RECENT_WEIGHT*100:.0f}%), "
+                f"⚖️ Weighted data: {recent_count} recent ({self.RECENT_WEIGHT*100:.0f}%), "
                 f"{older_count} older ({self.OLDER_WEIGHT*100:.0f}%)"
             )
             
@@ -230,37 +250,38 @@ class ProductionCalculator:
                         hourly_weighted_averages[hour] = weighted_avg
                         
                         _LOGGER.debug(
-                            f"⏰ Stunde {hour:02d}: {len(data['values'])} Werte, "
-                            f"Gewichteter Ø = {weighted_avg:.3f} kW"
+                            f"⏰ Hour {hour:02d}: {len(data['values'])} values, "
+                            f"Weighted Avg = {weighted_avg:.3f} kW"
                         )
             
             if not hourly_weighted_averages:
-                _LOGGER.warning("⚠️ Keine gültigen Produktionsdaten gefunden")
-                return "12:00"
+                _LOGGER.warning("⚠️ No valid production data found")
+                return "12:00"  # Fallback
             
             peak_hour = max(hourly_weighted_averages, key=hourly_weighted_averages.get)
             peak_value = hourly_weighted_averages[peak_hour]
             
             if not (self.PRODUCTION_START_HOUR <= peak_hour <= self.PRODUCTION_END_HOUR):
                 _LOGGER.warning(
-                    f"⚠️ Peak-Stunde {peak_hour}:00 außerhalb Produktionszeit "
-                    f"({self.PRODUCTION_START_HOUR}-{self.PRODUCTION_END_HOUR}), Fallback 12:00"
+                    f"⚠️ Peak hour {peak_hour}:00 outside production time "
+                    f"({self.PRODUCTION_START_HOUR}-{self.PRODUCTION_END_HOUR}), falling back to 12:00"
                 )
                 return "12:00"
             
             _LOGGER.info(
-                f"✓ Peak-Stunde gefunden: {peak_hour:02d}:00 Uhr "
-                f"(≈ {peak_value:.2f} kW gewichtet, "
-                f"{len(hourly_data[peak_hour]['values'])} Werte)"
+                f"✓ Peak hour found: {peak_hour:02d}:00 "
+                f"(≈ {peak_value:.2f} kW weighted, "
+                f"{len(hourly_data[peak_hour]['values'])} values)"
             )
             
             return f"{peak_hour:02d}:00"
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Peak-Zeit Berechnung fehlgeschlagen: {e}", exc_info=True)
+            _LOGGER.warning(f"⚠️ Peak-Time calculation failed: {e}", exc_info=True)
             return "12:00"
     
     def is_production_hours(self, hour: int = None) -> bool:
+        """Checks if a given hour is within the defined production window."""
         try:
             if hour is None:
                 hour = dt_util.utcnow().hour
@@ -268,19 +289,22 @@ class ProductionCalculator:
             return self.PRODUCTION_START_HOUR <= hour <= self.PRODUCTION_END_HOUR
             
         except Exception:
-            return True
+            return True  # Fail open
     
     def estimate_remaining_production_hours(self) -> float:
+        """Estimates remaining production hours for today."""
         try:
             now = dt_util.utcnow()
             current_hour = now.hour
             
             if current_hour >= self.PRODUCTION_END_HOUR:
-                return 0.0
+                return 0.0  # Past production time
             
             if current_hour < self.PRODUCTION_START_HOUR:
+                # Before production time, return full duration
                 return float(self.PRODUCTION_END_HOUR - self.PRODUCTION_START_HOUR)
             
+            # During production time
             remaining_full_hours = self.PRODUCTION_END_HOUR - current_hour - 1
             current_hour_fraction = 1.0 - (now.minute / 60.0)
             
@@ -291,39 +315,49 @@ class ProductionCalculator:
 
 
 class ProductionTimeCalculator:
+    """
+    Live tracks production time based on power entity state changes.
+    Uses a state machine to handle start, stop, and low-power timeouts.
+    """
     
     def __init__(self, hass: HomeAssistant, power_entity: Optional[str] = None):
         self.hass = hass
         self.power_entity = power_entity
         
-        self._is_active = False
+        self._is_active = False  # Is production currently active?
         self._start_time: Optional[datetime] = None
         self._accumulated_hours = 0.0
         self._last_production_time: Optional[datetime] = None
         self._zero_power_start: Optional[datetime] = None
         self._today_total_hours = 0.0
         
+        # Power (in W) to start counting production
         self.MIN_POWER_THRESHOLD = 10.0
+        # Power (in W) below which the stop-timer starts
         self.ZERO_POWER_THRESHOLD = 1.0
+        # Time to wait at zero power before stopping
         self.ZERO_POWER_TIMEOUT = timedelta(minutes=5)
         
         self._state_listener_remove = None
         self._midnight_listener_remove = None
         
-        _LOGGER.info("✓ ProductionTimeCalculator initialisiert")
+        _LOGGER.info("✓ ProductionTimeCalculator initialized")
     
     def start_tracking(self) -> None:
+        """Starts the live tracking listeners."""
         if not self.power_entity:
-            _LOGGER.info("1️⃣ Kein Power-Entity - Produktionszeit-Tracking deaktiviert")
+            _LOGGER.info("1️⃣ No power entity - production time tracking disabled")
             return
         
         try:
+            # Listen for state changes on the power entity
             self._state_listener_remove = async_track_state_change_event(
                 self.hass,
                 [self.power_entity],
                 self._handle_power_change
             )
             
+            # Listen for midnight to reset counters
             self._midnight_listener_remove = async_track_time_change(
                 self.hass,
                 self._handle_midnight_reset,
@@ -332,13 +366,14 @@ class ProductionTimeCalculator:
                 second=0
             )
             
-            _LOGGER.info(f"✓ Produktionszeit-Tracking gestartet für {self.power_entity}")
+            _LOGGER.info(f"✓ Production time tracking started for {self.power_entity}")
             
         except Exception as e:
-            _LOGGER.error(f"❌ Fehler beim Starten des Trackings: {e}")
+            _LOGGER.error(f"❌ Error starting tracking: {e}")
     
     @callback
     def _handle_power_change(self, event) -> None:
+        """Callback to handle power entity state changes."""
         try:
             new_state = event.data.get("new_state")
             if not new_state or new_state.state in ["unavailable", "unknown"]:
@@ -352,31 +387,40 @@ class ProductionTimeCalculator:
             now = dt_util.utcnow()
             
             if power >= self.MIN_POWER_THRESHOLD:
+                # --- State: Started/Producing ---
                 if not self._is_active:
                     self._is_active = True
                     self._start_time = now
-                    _LOGGER.debug(f"🟢 Produktions-Start: {power}W")
+                    _LOGGER.debug(f"🟢 Production start: {power}W")
                 
+                # Reset zero-power timer
                 self._zero_power_start = None
                 self._last_production_time = now
             
             elif self._is_active:
+                # --- State: Stopping? ---
+                # Power is < MIN_POWER_THRESHOLD but we were active
+                
                 if power < self.ZERO_POWER_THRESHOLD:
+                    # Power is near zero, start/check the timeout
                     if self._zero_power_start is None:
                         self._zero_power_start = now
-                        _LOGGER.debug(f"⏱️ Zero-Power Timer gestartet: {power}W")
+                        _LOGGER.debug(f"⏱️ Zero-Power timer started: {power}W")
                     
                     elif now - self._zero_power_start >= self.ZERO_POWER_TIMEOUT:
+                        # Timeout reached, stop production tracking
                         self._stop_production_tracking(now)
-                        _LOGGER.debug(f"🕑 Produktions-Ende nach 5 Min Timeout")
+                        _LOGGER.debug(f"🕑 Production end after 5 min timeout")
                 
                 else:
+                    # Power is low (e.g., 5W) but not zero, reset timer
                     self._zero_power_start = None
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Fehler in Power Change Handler: {e}")
+            _LOGGER.warning(f"⚠️ Error in power change handler: {e}")
     
     def _stop_production_tracking(self, stop_time: datetime) -> None:
+        """Internal: Stops a production phase and banks the time."""
         if not self._is_active or not self._start_time:
             return
         
@@ -387,19 +431,22 @@ class ProductionTimeCalculator:
         self._today_total_hours = self._accumulated_hours
         
         _LOGGER.info(
-            f"✓ Produktionsphase beendet: {hours:.2f}h "
-            f"(Gesamt heute: {self._today_total_hours:.2f}h)"
+            f"✓ Production phase ended: {hours:.2f}h "
+            f"(Total today: {self._today_total_hours:.2f}h)"
         )
         
+        # Reset state machine
         self._is_active = False
         self._start_time = None
         self._zero_power_start = None
     
     @callback
     def _handle_midnight_reset(self, now: datetime) -> None:
-        _LOGGER.info(f"🕛 Mitternacht-Reset: Heute {self._today_total_hours:.2f}h produziert")
+        """Callback to reset counters at midnight."""
+        _LOGGER.info(f"🕛 Midnight-Reset: Today {self._today_total_hours:.2f}h produced")
         
         if self._is_active:
+            # If production was active across midnight, stop it
             self._stop_production_tracking(now)
         
         self._accumulated_hours = 0.0
@@ -410,16 +457,12 @@ class ProductionTimeCalculator:
         self._zero_power_start = None
     
     def get_production_time(self) -> str:
+        """Returns the current production time as a formatted string."""
         try:
             if not self.power_entity:
-                return "Nicht verfügbar"
+                return "Not available"
             
-            total_hours = self._accumulated_hours
-            
-            if self._is_active and self._start_time:
-                now = dt_util.utcnow()
-                current_duration = now - self._start_time
-                total_hours += current_duration.total_seconds() / 3600.0
+            total_hours = self.get_production_hours_float()
             
             if total_hours < 0.01:
                 return "0h 0m"
@@ -430,13 +473,15 @@ class ProductionTimeCalculator:
             return f"{hours}h {minutes}m"
             
         except Exception as e:
-            _LOGGER.warning(f"⚠️ Fehler beim Abrufen der Produktionszeit: {e}")
-            return "Fehler"
+            _LOGGER.warning(f"⚠️ Error retrieving production time: {e}")
+            return "Error"
     
     def get_production_hours_float(self) -> float:
+        """Returns the current production time as a float."""
         try:
             total_hours = self._accumulated_hours
             
+            # If currently active, add the ongoing duration
             if self._is_active and self._start_time:
                 now = dt_util.utcnow()
                 current_duration = now - self._start_time
@@ -448,9 +493,11 @@ class ProductionTimeCalculator:
             return 0.0
     
     def is_currently_producing(self) -> bool:
+        """Returns true if the system is currently in a production state."""
         return self._is_active
     
     def stop_tracking(self) -> None:
+        """Stops the live tracking and removes listeners."""
         if self._state_listener_remove:
             self._state_listener_remove()
             self._state_listener_remove = None
@@ -459,4 +506,4 @@ class ProductionTimeCalculator:
             self._midnight_listener_remove()
             self._midnight_listener_remove = None
         
-        _LOGGER.info("✓ Produktionszeit-Tracking gestoppt")
+        _LOGGER.info("✓ Production time tracking stopped")

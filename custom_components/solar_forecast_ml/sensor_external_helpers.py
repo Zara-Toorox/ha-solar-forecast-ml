@@ -1,7 +1,7 @@
 """
-Helper-Modul fÃƒÆ’Ã‚Â¼r externe Sensor-Anzeigen.
-Gemeinsame Basis-Klasse und Hilfsfunktionen fÃƒÆ’Ã‚Â¼r externe Sensoren.
-Version 1.0 - von Zara
+Helper module for external sensor displays.
+Common base class and helper functions for external sensors.
+Version 1.1 - by Zara (Bugfix by Gemini)
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -22,10 +22,10 @@ Copyright (C) 2025 Zara-Toorox
 """
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any, Dict
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import callback
+from homeassistant.core import callback, HomeAssistant, State
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -36,80 +36,105 @@ _LOGGER = logging.getLogger(__name__)
 
 def format_time_ago(last_changed: datetime) -> str:
     """
-    Formatiert Zeitstempel als 'vor X Min/Std' - von Zara
-    Platzsparender: <1min = '>1min' - von Zara
+    Formats timestamp as 'X min/h ago' - by Zara
+    Space-saving: <1min = '< 1 min ago' - by Zara
     
     Args:
-        last_changed: Zeitpunkt der letzten ÃƒÆ’Ã¢â‚¬Å¾nderung
+        last_changed: Timestamp of the last change
         
     Returns:
-        Formatierter String wie "vor 5 Min." oder "vor 2 Std."
+        Formatted string like "5 min ago" or "2 h ago"
     """
     now = dt_util.utcnow()
     delta = now - last_changed
     
-    if delta.total_seconds() < 60:
-        return ">1min"  # Platzsparender fÃƒÆ’Ã‚Â¼r <1 Minute - von Zara
-    elif delta.total_seconds() < 3600:
-        minutes = int(delta.total_seconds() / 60)
-        return f"vor {minutes} Min."
+    seconds = delta.total_seconds()
+    
+    if seconds < 60:
+        return "< 1 min ago"  # Space-saving for < 1 minute - by Zara
+    elif seconds < 3600:
+        minutes = int(seconds / 60)
+        return f"{minutes} min ago"
     else:
-        hours = int(delta.total_seconds() / 3600)
-        return f"vor {hours} Std."
+        hours = int(seconds / 3600)
+        return f"{hours} h ago"
 
 
 class BaseExternalSensor:
     """
-    Gemeinsame Basis fÃƒÆ’Ã‚Â¼r externe Sensor-Anzeigen mit LIVE-Updates - von Zara
+    Common base for external sensor displays with LIVE updates - by Zara
     
-    Diese Klasse implementiert:
+    This class implements:
     - LIVE State Change Tracking
-    - Einheitliche Fehlerbehandlung
-    - Zeitstempel-Formatierung
-    - VerfÃƒÆ’Ã‚Â¼gbarkeitsprÃƒÆ’Ã‚Â¼fung
+    - Uniform error handling
+    - Timestamp formatting
+    - Availability check
     """
     
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    
-    def __init__(self, coordinator, entry: ConfigEntry, sensor_config: dict):
+    hass: HomeAssistant  # Make hass available to the class
+
+    def __init__(self, coordinator, entry: ConfigEntry, sensor_config: Dict[str, Any]):
         """
-        Initialisiert externen Sensor - von Zara
+        Initializes the external sensor - by Zara
         
         Args:
             coordinator: DataUpdateCoordinator
             entry: ConfigEntry
-            sensor_config: Dict mit Konfiguration:
-                - config_key: Key fÃƒÆ’Ã‚Â¼r Config (z.B. CONF_TEMP_SENSOR)
-                - unique_id_suffix: Suffix fÃƒÆ’Ã‚Â¼r unique_id
-                - name: Anzeigename
+            sensor_config: Dict with configuration:
+                - key: Suffix for unique_id (e.g., 'temp_sensor')
+                - config_key: Key for Config (e.g., CONF_TEMP_SENSOR)
+                - name: Display name
                 - icon: MDI Icon
-                - unit_key: Key fÃƒÆ’Ã‚Â¼r Einheit aus Attributes (optional)
-                - default_unit: Standard-Einheit falls nicht gefunden (optional)
-                - format_string: Format-String fÃƒÆ’Ã‚Â¼r Anzeige (optional)
+                - unit: Default unit (optional)
+                - device_class: Device class (optional)
+                - format_string: Format string for display (optional)
         """
-        # Muss von abgeleiteter Klasse bereits aufgerufen sein
         self._sensor_config = sensor_config
         self.entry = entry
         self.coordinator = coordinator
         
-        # Attribute setzen
-        self._attr_unique_id = f"{entry.entry_id}_{sensor_config['unique_id_suffix']}"
+        # Set attributes
+        self._attr_unique_id = f"{entry.entry_id}_{sensor_config['key']}"
         self._attr_name = sensor_config['name']
         self._attr_icon = sensor_config['icon']
-    
+        self._attr_device_class = sensor_config.get('device_class')
+        self._attr_native_unit_of_measurement = sensor_config.get('unit')
+
+    @staticmethod
+    def strip_entity_id(entity_id_raw: Any) -> Optional[str]:
+        """Safely strips an entity ID string, returns None if invalid."""
+        if isinstance(entity_id_raw, str) and entity_id_raw:
+            return entity_id_raw.strip()
+        return None
+
+    @property
+    def _sensor_entity_id(self) -> Optional[str]:
+        """
+        Gets the entity ID of the sensor to track from the ConfigEntry.
+        This is the correct, centralized logic.
+        """
+        config_key = self._sensor_config.get('config_key')
+        if not config_key:
+            _LOGGER.error(f"Missing 'config_key' for sensor {self._attr_name}")
+            return None
+        
+        entity_id_raw = self.entry.data.get(config_key)
+        return self.strip_entity_id(entity_id_raw)
+
     @property
     def available(self) -> bool:
-        """Externe Sensoren immer verfÃƒÆ’Ã‚Â¼gbar (zeigen eigene Status-Meldungen) - von Zara"""
+        """External sensors are always available (they show their own status messages) - by Zara"""
         return True
     
     async def async_added_to_hass(self) -> None:
-        """Registriert LIVE-Update Listener - von Zara"""
+        """Registers LIVE update listener - by Zara"""
         await super().async_added_to_hass()
         
-        sensor_entity_id_raw = self.entry.data.get(self._sensor_config['config_key'])
-        # Defensives Strip - von Zara
-        sensor_entity_id = sensor_entity_id_raw.strip() if isinstance(sensor_entity_id_raw, str) and sensor_entity_id_raw else None
+        sensor_entity_id = self._sensor_entity_id
+        
         if sensor_entity_id:
+            _LOGGER.debug(f"Tracking external sensor {sensor_entity_id} for {self._attr_name}")
             self.async_on_remove(
                 async_track_state_change_event(
                     self.hass,
@@ -117,94 +142,92 @@ class BaseExternalSensor:
                     self._handle_external_sensor_update
                 )
             )
+        else:
+            _LOGGER.debug(f"No external sensor configured for {self._attr_name}")
     
     @callback
     def _handle_external_sensor_update(self, event) -> None:
-        """Triggert Update bei ÃƒÆ’Ã¢â‚¬Å¾nderung des externen Sensors - von Zara"""
+        """Triggers update on external sensor change - by Zara"""
+        _LOGGER.debug(f"External sensor {event.data.get('entity_id')} updated, refreshing {self._attr_name}")
         self.async_write_ha_state()
     
     @property
     def native_value(self) -> str:
         """
-        Holt Wert vom konfigurierten Sensor mit Zeitstempel - von Zara
+        Gets value from the configured sensor with timestamp - by Zara
         
         Returns:
-            Formatierter String mit Wert, Einheit und Zeitstempel
-            oder Fehlermeldung
+            Formatted string with value, unit, and timestamp
+            or an error message
         """
-        sensor_entity_id_raw = self.entry.data.get(self._sensor_config['config_key'])
-        # Defensives Strip - von Zara
-        sensor_entity_id = sensor_entity_id_raw.strip() if isinstance(sensor_entity_id_raw, str) and sensor_entity_id_raw else None
+        sensor_entity_id = self._sensor_entity_id
         
         if not sensor_entity_id:
-            return "Kein externer Sensor vorhanden"
+            return "Not configured"
         
-        state = self.coordinator.hass.states.get(sensor_entity_id)
+        state = self.hass.states.get(sensor_entity_id)
         if not state:
-            return "Sensor nicht gefunden"
+            return "Entity not found"
         
         try:
-            # PrÃƒÆ’Ã‚Â¼fe VerfÃƒÆ’Ã‚Â¼gbarkeit
+            # Check availability
             if state.state in ['unavailable', 'unknown', 'none', None]:
-                return "Sensor nicht verfÃƒÆ’Ã‚Â¼gbar"
+                return "Unavailable"
             
-            # Formatiere Zeitstempel
+            # Format timestamp
             time_ago = format_time_ago(state.last_changed)
             
-            # Hole Einheit
-            unit = self._get_unit(state)
+            # Get unit (override default if state provides one)
+            unit = state.attributes.get('unit_of_measurement', self._attr_native_unit_of_measurement or "")
             
-            # Formatiere Ausgabe
+            # Format output
             return self._format_value(state.state, unit, time_ago)
             
         except Exception as e:
-            _LOGGER.warning(f"Fehler beim Lesen des {self._sensor_config['name']}: {e}")
-            return "Fehler beim Auslesen"
+            _LOGGER.warning(f"Error reading {self._sensor_config['name']}: {e}")
+            return "Error"
     
-    def _get_unit(self, state) -> Optional[str]:
+    def _get_unit(self, state: State) -> Optional[str]:
         """
-        Ermittelt Einheit des Sensors - von Zara
+        Determines the unit of the sensor - by Zara
+        (This is redundant as of v1.1, native_value handles it)
         
         Args:
-            state: State-Objekt des Sensors
+            state: State object of the sensor
             
         Returns:
-            Einheit oder None
+            Unit or None
         """
         unit_key = self._sensor_config.get('unit_key', 'unit_of_measurement')
-        default_unit = self._sensor_config.get('default_unit')
-        
-        if default_unit is None:
-            # Kein default_unit = keine Einheit verwenden
-            return None
+        default_unit = self._sensor_config.get('unit')
         
         return state.attributes.get(unit_key, default_unit)
     
     def _format_value(self, value: str, unit: Optional[str], time_ago: str) -> str:
         """
-        Formatiert Sensor-Wert fÃƒÆ’Ã‚Â¼r Anzeige - von Zara
+        Formats sensor value for display - by Zara
         
         Args:
-            value: Sensor-Wert
-            unit: Einheit (optional)
-            time_ago: Zeitstempel-String
+            value: Sensor value
+            unit: Unit (optional)
+            time_ago: Timestamp string
             
         Returns:
-            Formatierter String
+            Formatted string
         """
         format_string = self._sensor_config.get('format_string', '{value} {unit} ({time})')
         
-        # Wenn spezifisches Format definiert
+        # If a specific format is defined
         if '{value}' in format_string:
             result = format_string.replace('{value}', str(value))
             if unit:
-                result = result.replace('{unit}', unit)
+                result = result.replace('{unit}', str(unit))
             else:
-                result = result.replace(' {unit}', '')  # Entferne unit-Platzhalter
+                result = result.replace(' {unit}', '')  # Remove unit placeholder
             result = result.replace('{time}', time_ago)
             return result
         
-        # Standard-Format
+        # Standard format
         if unit:
             return f"{value} {unit} ({time_ago})"
         else:

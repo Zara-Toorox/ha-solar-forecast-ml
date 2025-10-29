@@ -22,6 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 from typing import Any
 import voluptuous as vol
+import logging
 
 from homeassistant import config_entries
 # KORREKTUR: OptionsFlow statt OptionsFlowWithReload verwenden, wenn __init__ wegfÃƒÂ¤llt
@@ -57,6 +58,8 @@ from .const import (
     CONF_NOTIFY_LEARNING,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 @config_entries.HANDLERS.register(DOMAIN)
 class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
@@ -141,6 +144,32 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
         })
 
+    # === START PATCH 2: GIGO-Schutz (Validierungsfunktion) ===
+    def _validate_solar_yield_sensor(self, solar_yield_entity_id: str) -> bool:
+        """Prüft, ob der Sensor das 'last_reset' Attribut besitzt."""
+        if not solar_yield_entity_id:
+            return True # Wird von 'required' abgefangen
+        
+        state = self.hass.states.get(solar_yield_entity_id)
+        
+        if state is None:
+            # Sensor existiert, wurde aber vlt. noch nie aktualisiert.
+            # Wir können es nicht validieren, aber auch nicht blockieren.
+            _LOGGER.debug(f"Sensor {solar_yield_entity_id} state is None, validation skipped.")
+            return True 
+
+        # State existiert, prüfe Attribute
+        if state.attributes.get("last_reset") is None:
+            _LOGGER.warning(
+                f"Validation FAILED for {solar_yield_entity_id}: "
+                f"Missing 'last_reset' attribute. Attributes: {state.attributes}"
+            )
+            return False # Das Attribut fehlt
+        
+        _LOGGER.debug(f"Validation OK for {solar_yield_entity_id}: 'last_reset' found.")
+        return True # Attribut ist vorhanden
+    # === ENDE PATCH 2 ===
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Behandelt die Ersteinrichtung."""
         errors = {}
@@ -153,6 +182,14 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
                 errors[CONF_POWER_ENTITY] = "required"
             if not user_input.get(CONF_SOLAR_YIELD_TODAY):
                 errors[CONF_SOLAR_YIELD_TODAY] = "required"
+            
+            # === START PATCH 2: GIGO-Schutz (Aufruf) ===
+            if not errors:
+                solar_yield_entity_id = user_input.get(CONF_SOLAR_YIELD_TODAY, "")
+                if not self._validate_solar_yield_sensor(solar_yield_entity_id):
+                    errors[CONF_SOLAR_YIELD_TODAY] = "sensor_no_daily_reset"
+            # === ENDE PATCH 2 ===
+            
             if errors:
                 return self.async_show_form(
                     step_id="user",
@@ -202,6 +239,13 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
             if not user_input.get(CONF_SOLAR_YIELD_TODAY, "").strip():
                 errors[CONF_SOLAR_YIELD_TODAY] = "required"
 
+            # === START PATCH 2: GIGO-Schutz (Aufruf) ===
+            if not errors:
+                solar_yield_entity_id = user_input.get(CONF_SOLAR_YIELD_TODAY, "")
+                if not self._validate_solar_yield_sensor(solar_yield_entity_id):
+                    errors[CONF_SOLAR_YIELD_TODAY] = "sensor_no_daily_reset"
+            # === ENDE PATCH 2 ===
+            
             if errors:
                 return self.async_show_form(
                     step_id="reconfigure",
@@ -221,7 +265,7 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
 
             # --- KORREKTUR (START) ---
             # Wir dÃƒÂ¼rfen NICHT {**entry.data, **user_input} verwenden.
-            # Das fÃƒÂ¼hrt dazu, dass gelÃƒÂ¶schte (leere) Felder mit den alten
+            # Das fÃƒÂ¼hrt dazu, dass gelÃƒÂBte (leere) Felder mit den alten
             # Werten aus entry.data wieder aufgefÃƒÂ¼llt werden.
             # Wir verwenden user_input.copy() als alleinige Basis.
             cleaned_data = user_input.copy()

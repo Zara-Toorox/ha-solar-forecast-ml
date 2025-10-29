@@ -1,7 +1,7 @@
 """
-Konstanten für die Solar Forecast ML Integration.
-Version 6.0 - Bereinigt ohne OpenWeatherMap
-Intelligente DWD-Retry Logic implementiert
+Constants for the Solar Forecast ML Integration.
+Version 6.0 - Cleaned up without OpenWeatherMap
+Smart DWD-Retry Logic implemented
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -12,7 +12,7 @@ License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+MERCHANTCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
@@ -27,10 +27,10 @@ DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
 VERSION = "6.0.0"
 
-RELEASE_VERSION = "6.0.0"
-SOFTWARE_VERSION = "6.0.0"
-ML_VERSION = "5.2"
-INTEGRATION_MODEL = "v6.0.0"
+RELEASE_VERSION = "6.2.0"
+SOFTWARE_VERSION = "6.2.0"
+ML_VERSION = "6.0"
+INTEGRATION_MODEL = "v6.2.0"
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 

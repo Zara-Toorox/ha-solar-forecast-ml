@@ -1,8 +1,8 @@
 """
-Helper-Funktionen fÃƒÂ¼r Solar Forecast ML Integration.
-ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ PRODUCTION READY: Non-blocking async operations
-ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ OPTIMIERT: Comprehensive Error Handling & Logging
-Version 4.9.2 - importlib.metadata Fix + UTF-8 Encoding # von Zara
+Helper functions for Solar Forecast ML Integration.
+✅ PRODUCTION READY: Non-blocking async operations
+✅ OPTIMIZED: Comprehensive Error Handling & Logging
+Version 4.9.2 - importlib.metadata Fix + UTF-8 Encoding # by Zara
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -28,11 +28,11 @@ import sys
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
-# Fix: importlib.metadata statt getattr()
+# Fix: importlib.metadata instead of getattr()
 try:
     from importlib.metadata import version as get_version
 except ImportError:
-    # Fallback fÃƒÂ¼r Python < 3.8
+    # Fallback for Python < 3.8
     from importlib_metadata import version as get_version
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ try:
 except (ImportError, AttributeError):
     _HAS_HA_DT = False
     from datetime import datetime, timezone
-    _LOGGER.warning("Home Assistant dt_util nicht verfugbar - Fallback auf Standard-datetime")
+    _LOGGER.warning("Home Assistant dt_util not available - Fallback to standard datetime") # Übersetzt
 
 
 class SafeDateTimeUtil:
@@ -80,7 +80,7 @@ class SafeDateTimeUtil:
 
 @dataclass
 class DependencyStatus:
-    """Status einer Python-AbhÃƒÂ¤ngigkeit. # von Zara"""
+    """Status of a Python dependency. # by Zara""" # Übersetzt
     name: str
     required_version: str
     installed: bool
@@ -90,67 +90,67 @@ class DependencyStatus:
 
 class DependencyChecker:
     """
-    PrÃƒÂ¼ft Python-AbhÃƒÂ¤ngigkeiten ohne automatische Installation.
-    ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ASYNC: Alle blocking operations in executor
-    ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ CACHED: Wiederverwendung von Check-Ergebnissen
-    # von Zara
-    """
+    Checks Python dependencies without automatic installation.
+    ✅ ASYNC: All blocking operations in executor
+    ✅ CACHED: Reuse of check results
+    # by Zara
+    """ # Übersetzt
     
-    # Erforderliche Pakete fÃƒÂ¼r ML-Features
+    # Required packages for ML features
     REQUIRED_PACKAGES = [
         ("numpy", "1.21.0"),
         ("aiofiles", "23.0.0")
     ]
     
     def __init__(self):
-        """Initialisiert Dependency Checker. # von Zara"""
+        """Initializes Dependency Checker. # by Zara""" # Übersetzt
         self._last_check: Optional[Dict[str, DependencyStatus]] = None
-        self._check_lock = asyncio.Lock()  # Verhindert gleichzeitige Checks
+        self._check_lock = asyncio.Lock()  # Prevents simultaneous checks
         
     async def check_package_installed_async(
         self, 
         package_name: str
     ) -> Tuple[bool, Optional[str]]:
         """
-        PrÃƒÂ¼ft ob ein Python-Paket installiert ist (NON-BLOCKING).
+        Checks if a Python package is installed (NON-BLOCKING).
         
-        ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ASYNC: Verwendet asyncio.to_thread fÃƒÂ¼r blocking operations
+        ✅ ASYNC: Uses asyncio.to_thread for blocking operations
         
         Returns:
-            Tuple[bool, Optional[str]]: (installiert, version)
-        # von Zara
-        """
+            Tuple[bool, Optional[str]]: (installed, version)
+        # by Zara
+        """ # Übersetzt
         def _sync_check() -> Tuple[bool, Optional[str]]:
-            """Synchroner Check im Thread Pool. # von Zara"""
+            """Synchronous check in Thread Pool. # by Zara""" # Übersetzt
             try:
-                # Nicht-blockierender Spec-Check
+                # Non-blocking Spec-Check
                 spec = importlib.util.find_spec(package_name)
                 if spec is None:
                     return False, None
                 
-                # Version ermitteln mit importlib.metadata
+                # Determine version with importlib.metadata
                 try:
                     version = get_version(package_name)
                     return True, version
                 except Exception:
-                    # Fallback fÃƒÂ¼r Packages ohne Metadaten
+                    # Fallback for packages without metadata
                     return True, "unknown"
                     
             except (ImportError, ValueError, AttributeError, ModuleNotFoundError) as e:
-                _LOGGER.debug(f"Paket {package_name} nicht gefunden: {e}")
+                _LOGGER.debug(f"Package {package_name} not found: {e}") # Übersetzt
                 return False, None
             except Exception as e:
                 _LOGGER.warning(
-                    f"Unerwarteter Fehler bei Check von {package_name}: {e}"
+                    f"Unexpected error during check of {package_name}: {e}" # Übersetzt
                 )
                 return False, None
         
         try:
-            # FÃƒÂ¼hre sync Check in Thread Pool aus (non-blocking)
+            # Execute sync check in Thread Pool (non-blocking)
             return await asyncio.to_thread(_sync_check)
         except Exception as e:
             _LOGGER.error(
-                f"ÃƒÂ¢Ã‚ÂÃ…â€™ Async Check fÃƒÂ¼r {package_name} fehlgeschlagen: {e}",
+                f"❌ Async Check for {package_name} failed: {e}", # Übersetzt & Korrigiert
                 exc_info=True
             )
             return False, None
@@ -160,20 +160,20 @@ class DependencyChecker:
         package_name: str
     ) -> Tuple[bool, Optional[str]]:
         """
-        Synchrone Variante fÃƒÂ¼r nicht-async Kontexte.
+        Synchronous version for non-async contexts.
         
-        ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â LEGACY: Nur fÃƒÂ¼r KompatibilitÃƒÂ¤t, verwende async Version wenn mÃƒÂ¶glich
+        ⚠️ LEGACY: Only for compatibility, use async version if possible
         
         Returns:
-            Tuple[bool, Optional[str]]: (installiert, version)
-        # von Zara
-        """
+            Tuple[bool, Optional[str]]: (installed, version)
+        # by Zara
+        """ # Übersetzt & Korrigiert
         try:
             spec = importlib.util.find_spec(package_name)
             if spec is None:
                 return False, None
             
-            # Version mit importlib.metadata
+            # Version with importlib.metadata
             try:
                 version = get_version(package_name)
                 return True, version
@@ -185,27 +185,27 @@ class DependencyChecker:
     
     async def check_all_dependencies_async(self) -> Dict[str, DependencyStatus]:
         """
-        PrÃƒÂ¼ft alle erforderlichen AbhÃƒÂ¤ngigkeiten (NON-BLOCKING).
+        Checks all required dependencies (NON-BLOCKING).
         
-        ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ASYNC: Parallele Checks fÃƒÂ¼r bessere Performance
-        ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ CACHED: Verwendet Lock fÃƒÂ¼r Thread-Safety
+        ✅ ASYNC: Parallel checks for better performance
+        ✅ CACHED: Uses Lock for Thread-Safety
         
         Returns:
-            Dict mit DependencyStatus fÃƒÂ¼r jedes Paket
-        # von Zara
-        """
+            Dict with DependencyStatus for each package
+        # by Zara
+        """ # Übersetzt & Korrigiert
         async with self._check_lock:
-            _LOGGER.debug("ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Starte Dependency Check (async)...")
+            _LOGGER.debug("🔬 Starting Dependency Check (async)...") # Übersetzt & Korrigiert
             
             results = {}
             
-            # Erstelle Tasks fÃƒÂ¼r parallele Checks
+            # Create tasks for parallel checks
             check_tasks = []
             for package_name, min_version in self.REQUIRED_PACKAGES:
                 task = self.check_package_installed_async(package_name)
                 check_tasks.append((package_name, min_version, task))
             
-            # FÃƒÂ¼hre alle Checks parallel aus
+            # Execute all checks in parallel
             for package_name, min_version, task in check_tasks:
                 try:
                     installed, version = await task
@@ -221,16 +221,16 @@ class DependencyChecker:
                     
                     if installed:
                         _LOGGER.debug(
-                            f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ {package_name} installiert (Version: {version})"
+                            f"✅ {package_name} installed (Version: {version})" # Übersetzt & Korrigiert
                         )
                     else:
                         _LOGGER.debug(
-                            f"ÃƒÂ¢Ã‚ÂÃ…â€™ {package_name} fehlt (benÃƒÂ¶tigt: >={min_version})"
+                            f"❌ {package_name} missing (required: >={min_version})" # Übersetzt & Korrigiert
                         )
                         
                 except Exception as e:
                     _LOGGER.error(
-                        f"ÃƒÂ¢Ã‚ÂÃ…â€™ Fehler bei Check von {package_name}: {e}",
+                        f"❌ Error during check of {package_name}: {e}", # Übersetzt & Korrigiert
                         exc_info=True
                     )
                     results[package_name] = DependencyStatus(
@@ -242,21 +242,21 @@ class DependencyChecker:
             
             self._last_check = results
             _LOGGER.info(
-                f"ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚ÂÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Dependency Check abgeschlossen: "
-                f"{sum(1 for s in results.values() if s.installed)}/{len(results)} installiert"
+                f"🔬✅ Dependency Check completed: " # Übersetzt & Korrigiert
+                f"{sum(1 for s in results.values() if s.installed)}/{len(results)} installed"
             )
             return results
     
     def check_all_dependencies_sync(self) -> Dict[str, DependencyStatus]:
         """
-        Synchrone Variante des Dependency Checks.
+        Synchronous version of the Dependency Check.
         
-        ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â LEGACY: Nur fÃƒÂ¼r nicht-async Kontexte
+        ⚠️ LEGACY: Only for non-async contexts
         
         Returns:
-            Dict mit DependencyStatus fÃƒÂ¼r jedes Paket
-        # von Zara
-        """
+            Dict with DependencyStatus for each package
+        # by Zara
+        """ # Übersetzt & Korrigiert
         results = {}
         
         for package_name, min_version in self.REQUIRED_PACKAGES:
@@ -272,23 +272,23 @@ class DependencyChecker:
             results[package_name] = status
             
             if installed:
-                _LOGGER.debug(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ {package_name} installiert (Version: {version})")
+                _LOGGER.debug(f"✅ {package_name} installed (Version: {version})") # Übersetzt & Korrigiert
             else:
-                _LOGGER.debug(f"ÃƒÂ¢Ã‚ÂÃ…â€™ {package_name} fehlt (benÃƒÂ¶tigt: >={min_version})")
+                _LOGGER.debug(f"❌ {package_name} missing (required: >={min_version})") # Übersetzt & Korrigiert
         
         self._last_check = results
         return results
     
     def get_missing_packages(self) -> List[str]:
         """
-        Gibt Liste der fehlenden Pakete zurÃƒÂ¼ck.
+        Returns a list of missing packages.
         
         Returns:
-            Liste mit Namen der fehlenden Pakete
-        # von Zara
-        """
+            List with names of missing packages
+        # by Zara
+        """ # Übersetzt
         if self._last_check is None:
-            # Fallback auf sync check wenn noch kein Check lief
+            # Fallback to sync check if no check has run yet
             self.check_all_dependencies_sync()
         
         return [
@@ -299,14 +299,14 @@ class DependencyChecker:
     
     def are_all_dependencies_installed(self) -> bool:
         """
-        PrÃƒÂ¼ft ob alle AbhÃƒÂ¤ngigkeiten installiert sind.
+        Checks if all dependencies are installed.
         
-        ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â SYNC: Verwendet cached results oder fÃƒÂ¼hrt sync check aus
+        ⚠️ SYNC: Uses cached results or runs sync check
         
         Returns:
-            True wenn alle installiert, sonst False
-        # von Zara
-        """
+            True if all are installed, else False
+        # by Zara
+        """ # Übersetzt & Korrigiert
         if self._last_check is None:
             status = self.check_all_dependencies_sync()
         else:
@@ -316,12 +316,12 @@ class DependencyChecker:
     
     def get_installation_command(self) -> str:
         """
-        Gibt pip install Command fÃƒÂ¼r fehlende Pakete zurÃƒÂ¼ck.
+        Returns pip install command for missing packages.
         
         Returns:
-            String mit pip install command
-        # von Zara
-        """
+            String with pip install command
+        # by Zara
+        """ # Übersetzt
         missing = self.get_missing_packages()
         if not missing:
             return ""
@@ -337,57 +337,57 @@ class DependencyChecker:
 
 class DependencyInstaller:
     """
-    Installiert fehlende Python-AbhÃƒÂ¤ngigkeiten via pip.
-    ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ASYNC: Non-blocking subprocess execution
-    ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ PROGRESS: Callback-Support fÃƒÂ¼r UI-Updates
-    ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â ACHTUNG: Funktioniert nicht in allen HA-Umgebungen (Read-Only, etc.)
-    # von Zara
-    """
+    Installs missing Python dependencies via pip.
+    ✅ ASYNC: Non-blocking subprocess execution
+    ✅ PROGRESS: Callback support for UI updates
+    ⚠️ ATTENTION: Does not work in all HA environments (Read-Only, etc.)
+    # by Zara
+    """ # Übersetzt & Korrigiert
     
     def __init__(self, checker: DependencyChecker):
-        """Initialisiert Installer mit Checker. # von Zara"""
+        """Initializes Installer with Checker. # by Zara""" # Übersetzt
         self.checker = checker
         self._installing = False
-        self._install_lock = asyncio.Lock()  # Verhindert parallele Installationen
+        self._install_lock = asyncio.Lock()  # Prevents parallel installations
         
     async def install_missing_dependencies(
         self, 
         progress_callback=None
     ) -> Tuple[bool, str]:
         """
-        Installiert alle fehlenden AbhÃƒÂ¤ngigkeiten.
+        Installs all missing dependencies.
         
-        ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ASYNC: Non-blocking mit subprocess
-        ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ SAFE: Lock verhindert parallele Installationen
+        ✅ ASYNC: Non-blocking with subprocess
+        ✅ SAFE: Lock prevents parallel installations
         
         Args:
-            progress_callback: Optional callback fÃƒÂ¼r Progress-Updates
+            progress_callback: Optional callback for Progress-Updates
             
         Returns:
             Tuple[bool, str]: (success, message)
-        # von Zara
-        """
+        # by Zara
+        """ # Übersetzt & Korrigiert
         async with self._install_lock:
             if self._installing:
-                return False, "Installation lÃƒÂ¤uft bereits"
+                return False, "Installation already in progress" # Übersetzt
             
             self._installing = True
             
             try:
-                # PrÃƒÂ¼fe welche Pakete fehlen
+                # Check which packages are missing
                 missing = self.checker.get_missing_packages()
                 
                 if not missing:
-                    return True, "Alle AbhÃƒÂ¤ngigkeiten bereits installiert"
+                    return True, "All dependencies already installed" # Übersetzt
                 
-                _LOGGER.info(f"ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â½ Installiere {len(missing)} Pakete: {', '.join(missing)}")
+                _LOGGER.info(f"📦 Installing {len(missing)} packages: {', '.join(missing)}") # Übersetzt & Korrigiert
                 
-                # Installiere jedes Paket einzeln fÃƒÂ¼r besseres Feedback
+                # Install each package individually for better feedback
                 results = []
                 total = len(missing)
                 
                 for idx, package_name in enumerate(missing, 1):
-                    # Finde Required Version
+                    # Find Required Version
                     required_version = next(
                         (v for n, v in self.checker.REQUIRED_PACKAGES if n == package_name),
                         "latest"
@@ -397,38 +397,38 @@ class DependencyInstaller:
                     if progress_callback:
                         progress = int((idx - 1) / total * 100)
                         try:
-                            await progress_callback(f"Installiere {package_name}...", progress)
+                            await progress_callback(f"Installing {package_name}...", progress) # Übersetzt
                         except Exception as e:
-                            _LOGGER.warning(f"ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Progress callback failed: {e}")
+                            _LOGGER.warning(f"⚠️ Progress callback failed: {e}") # Übersetzt & Korrigiert
                     
-                    # Installiere Paket
+                    # Install package
                     success, message = await self._install_package(package_name, required_version)
                     results.append((package_name, success, message))
                     
                     if not success:
-                        _LOGGER.error(f"ÃƒÂ¢Ã‚ÂÃ…â€™ Installation von {package_name} fehlgeschlagen: {message}")
+                        _LOGGER.error(f"❌ Installation of {package_name} failed: {message}") # Übersetzt & Korrigiert
                     else:
-                        _LOGGER.info(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ {package_name} erfolgreich installiert")
+                        _LOGGER.info(f"✅ {package_name} successfully installed") # Übersetzt & Korrigrigiert
                 
-                # Finaler Progress
+                # Final Progress
                 if progress_callback:
                     try:
-                        await progress_callback("Installation abgeschlossen", 100)
+                        await progress_callback("Installation complete", 100) # Übersetzt
                     except Exception as e:
-                        _LOGGER.warning(f"ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Final progress callback failed: {e}")
+                        _LOGGER.warning(f"⚠️ Final progress callback failed: {e}") # Übersetzt & Korrigiert
                 
-                # PrÃƒÂ¼fe Gesamt-Ergebnis
+                # Check overall result
                 all_successful = all(success for _, success, _ in results)
                 
                 if all_successful:
-                    return True, "Alle AbhÃƒÂ¤ngigkeiten erfolgreich installiert"
+                    return True, "All dependencies successfully installed" # Übersetzt
                 else:
                     failed = [name for name, success, _ in results if not success]
-                    return False, f"Installation fehlgeschlagen fÃƒÂ¼r: {', '.join(failed)}"
+                    return False, f"Installation failed for: {', '.join(failed)}" # Übersetzt
                     
             except Exception as e:
-                _LOGGER.error(f"ÃƒÂ¢Ã‚ÂÃ…â€™ Unerwarteter Fehler bei Installation: {e}", exc_info=True)
-                return False, f"Installationsfehler: {str(e)}"
+                _LOGGER.error(f"❌ Unexpected error during installation: {e}", exc_info=True) # Übersetzt & Korrigiert
+                return False, f"Installation error: {str(e)}" # Übersetzt
                 
             finally:
                 self._installing = False
@@ -439,38 +439,38 @@ class DependencyInstaller:
         min_version: str
     ) -> Tuple[bool, str]:
         """
-        Installiert ein einzelnes Python-Paket via pip.
+        Installs a single Python package via pip.
         
-        ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ASYNC: subprocess mit asyncio
-        ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ TIMEOUT: 3 Minuten pro Paket
+        ✅ ASYNC: subprocess with asyncio
+        ✅ TIMEOUT: 3 minutes per package
         
         Args:
-            package_name: Name des Pakets
-            min_version: Minimale Version
+            package_name: Name of the package
+            min_version: Minimum version
             
         Returns:
             Tuple[bool, str]: (success, message)
-        # von Zara
-        """
+        # by Zara
+        """ # Übersetzt & Korrigiert
         package_spec = f"{package_name}>={min_version}"
         
         try:
-            _LOGGER.info(f"ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â½ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¦ Installiere {package_spec}...")
+            _LOGGER.info(f"📦⏳ Installing {package_spec}...") # Übersetzt & Korrigiert
             
-            # Bestimme pip executable
+            # Determine pip executable
             pip_cmd = [
                 sys.executable, 
                 "-m", 
                 "pip", 
                 "install", 
-                "--user",              # User-Installation fÃƒÂ¼r bessere KompatibilitÃƒÂ¤t
-                "--no-cache-dir",      # Kein Cache um Platz zu sparen
-                "--quiet",             # Weniger Output
-                "--disable-pip-version-check",  # Keine pip Update-Checks
+                "--user",              # User installation for better compatibility
+                "--no-cache-dir",      # No cache to save space
+                "--quiet",             # Less Output
+                "--disable-pip-version-check",  # No pip Update-Checks
                 package_spec
             ]
             
-            # FÃƒÂ¼hre Installation asynchron aus mit Timeout
+            # Execute installation asynchronously with timeout
             try:
                 process = await asyncio.wait_for(
                     asyncio.create_subprocess_exec(
@@ -478,7 +478,7 @@ class DependencyInstaller:
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE
                     ),
-                    timeout=180  # 3 Minuten Timeout
+                    timeout=180  # 3 minutes Timeout
                 )
                 
                 stdout, stderr = await asyncio.wait_for(
@@ -487,25 +487,25 @@ class DependencyInstaller:
                 )
                 
                 if process.returncode == 0:
-                    # Erfolgreich installiert
+                    # Successfully installed
                     _LOGGER.debug(f"pip stdout: {stdout.decode()}")
-                    return True, "Installation erfolgreich"
+                    return True, "Installation successful" # Übersetzt
                 else:
-                    # Installation fehlgeschlagen
-                    error_msg = stderr.decode() if stderr else "Unbekannter Fehler"
+                    # Installation failed
+                    error_msg = stderr.decode() if stderr else "Unknown error" # Übersetzt
                     
-                    # Parse hÃƒÂ¤ufige Fehler
+                    # Parse common errors
                     if "permission denied" in error_msg.lower():
-                        return False, "Keine Schreibrechte (Permission Denied)"
+                        return False, "No write permissions (Permission Denied)" # Übersetzt
                     elif "read-only" in error_msg.lower():
-                        return False, "Read-Only Dateisystem"
+                        return False, "Read-Only file system" # Übersetzt
                     elif "no space" in error_msg.lower():
-                        return False, "Nicht genug Speicherplatz"
+                        return False, "Not enough storage space" # Übersetzt
                     else:
                         return False, f"pip error: {error_msg[:200]}"
                         
             except asyncio.TimeoutError:
-                return False, "Timeout (>3 Minuten)"
+                return False, "Timeout (>3 minutes)" # Übersetzt
                 
         except Exception as e:
             return False, f"Exception: {str(e)}"
@@ -513,66 +513,66 @@ class DependencyInstaller:
 
 def get_manual_install_instructions() -> str:
     """
-    Gibt manuelle Installationsanweisungen zurÃƒÂ¼ck.
+    Returns manual installation instructions.
     
     Returns:
-        Formatierter String mit Anweisungen
-    # von Zara
-    """
+        Formatted string with instructions
+    # by Zara
+    """ # Übersetzt
     return """
-MANUELLE INSTALLATION:
+MANUAL INSTALLATION:
 
-FÃƒÂ¼r Home Assistant OS / Supervised (Docker):
+For Home Assistant OS / Supervised (Docker):
 --------------------------------------------
-1. Terminal & SSH Add-on installieren und ÃƒÂ¶ffnen
-2. Folgende Befehle ausfÃƒÂ¼hren:
+1. Install and open the Terminal & SSH Add-on
+2. Execute the following commands:
 
    docker exec -it homeassistant bash
    pip install --user numpy>=1.21.0 aiofiles>=23.0.0
    exit
 
-3. Home Assistant neu starten
+3. Restart Home Assistant
 
 
-FÃƒÂ¼r Home Assistant Container (Docker):
+For Home Assistant Container (Docker):
 ---------------------------------------
-1. In Container einloggen:
+1. Log into the container:
 
    docker exec -it homeassistant bash
 
-2. Pakete installieren:
+2. Install packages:
 
    pip install --user numpy>=1.21.0 aiofiles>=23.0.0
 
-3. Container neu starten:
+3. Restart the container:
 
    docker restart homeassistant
 
 
-FÃƒÂ¼r Home Assistant Core (venv):
+For Home Assistant Core (venv):
 --------------------------------
-1. In venv aktivieren:
+1. Activate venv:
 
    cd /srv/homeassistant
    source bin/activate
 
-2. Pakete installieren:
+2. Install packages:
 
    pip install numpy>=1.21.0 aiofiles>=23.0.0
 
-3. Home Assistant neu starten:
+3. Restart Home Assistant:
 
    systemctl restart home-assistant@homeassistant
 
 
-PRÃƒÅ“FUNG:
+VERIFICATION:
 --------
-Nach Installation prÃƒÂ¼fen:
+After installation, check:
 
-python3 -c "import numpy, aiofiles; print('ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ OK')"
+python3 -c "import numpy, aiofiles; print('✅ OK')"
 
-Dann Home Assistant neu starten.
-"""
+Then restart Home Assistant.
+""" # Komplett übersetzt und korrigiert
 
 
 # Global Checker Instance (Singleton)
@@ -582,14 +582,14 @@ _checker_lock = asyncio.Lock()
 
 def get_dependency_checker() -> DependencyChecker:
     """
-    Gibt globale Dependency Checker Instanz zurÃƒÂ¼ck (Singleton).
+    Returns global Dependency Checker instance (Singleton).
     
-    ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ SYNC: FÃƒÂ¼r KompatibilitÃƒÂ¤t mit bestehendem Code
+    ✅ SYNC: For compatibility with existing code
     
     Returns:
-        DependencyChecker Instanz
-    # von Zara
-    """
+        DependencyChecker instance
+    # by Zara
+    """ # Übersetzt & Korrigiert
     global _global_checker
     if _global_checker is None:
         _global_checker = DependencyChecker()
@@ -598,14 +598,14 @@ def get_dependency_checker() -> DependencyChecker:
 
 async def get_dependency_checker_async() -> DependencyChecker:
     """
-    Gibt globale Dependency Checker Instanz zurÃƒÂ¼ck (Singleton, async-safe).
+    Returns global Dependency Checker instance (Singleton, async-safe).
     
-    ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ ASYNC: Thread-safe mit Lock
+    ✅ ASYNC: Thread-safe with Lock
     
     Returns:
-        DependencyChecker Instanz
-    # von Zara
-    """
+        DependencyChecker instance
+    # by Zara
+    """ # Übersetzt & Korrigiert
     global _global_checker
     async with _checker_lock:
         if _global_checker is None:
