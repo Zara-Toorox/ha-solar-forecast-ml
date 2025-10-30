@@ -1,35 +1,22 @@
 # Solar Forecast ML Integration - Services
-# ✅ Services als Alternative zu UI-Buttons
-# Version 4.8.0
-# von Zara
-
-install_dependencies:
-  name: Abhängigkeiten installieren
-  description: >
-    Installiert fehlende Python-Abhängigkeiten (numpy, aiofiles) automatisch.
-    Nach erfolgreicher Installation ist ein Home Assistant Neustart erforderlich.
-  fields: {}
-
-check_dependencies:
-  name: Abhängigkeiten prüfen
-  description: >
-    Prüft den Status aller Python-Abhängigkeiten und zeigt das Ergebnis in einer Notification an.
-  fields: {}
 
 force_retrain:
-  name: ML-Model neu trainieren
+  name: Retrain ML Model
   description: >
-    Erzwingt sofortiges Neutraining des Machine Learning Models mit allen verfügbaren Daten.
-  fields: {}
+    Forces immediate retraining of the Machine Learning model using all available historical data.
+    Useful after significant data changes or to manually trigger an update.
+  fields: {} # No fields required
 
 reset_model:
-  name: ML-Model zurücksetzen
+  name: Reset ML Model
   description: >
-    Setzt das ML-Model auf den Werkszustand zurück. ACHTUNG: Löscht alle trainierten Daten!
-  fields: {}
+    Resets the Machine Learning model to its initial state.
+    WARNING: This deletes all learned weights and requires the model to retrain from scratch.
+    Use with caution.
+  fields: {} # No fields required
 
-clear_history:
-  name: Verlauf löschen
-  description: >
-    Löscht die gesamte Prediction History. ACHTUNG: Nicht rückgängig zu machen!
-  fields: {}
+# Removed services (not implemented or handled differently):
+# install_dependencies: (Handled via UI button/HA core)
+# check_dependencies: (Handled via diagnostic sensors/logs)
+# clear_history: (Can be done by deleting the prediction_history.json file manually if needed)
+# manual_forecast: (Handled via UI button)

@@ -6,6 +6,8 @@
 [![GitHub release](https://img.shields.io/github/release/Zara-Toorox/ha-solar-forecast-ml.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
+<a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee ' /></a>
+
 Imagine your smart home not just reacting, but **predicting** - using machine learning that adapts daily to your unique solar installation. That's exactly what **Solar Forecast ML** does, and with Version 6 "Risa" we reach a new dimension of precision.
 
 ## What Makes This Integration Special?

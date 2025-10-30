@@ -3,84 +3,79 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML - Configuration",
-        "description": "Configure your Solar Forecast ML integration.\n\nRequired fields: Weather Sensor, Power Sensor, and Daily Yield\nAll other fields are optional and can be left empty.",
+        "description": "Configure your Solar Forecast ML integration.\n\nRequired fields: Weather Sensor, Power Sensor, and Daily Yield.\nAll other fields are optional and can be left empty.",
         "data": {
           "weather_entity": "Weather Sensor",
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Solar Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
-          "plant_kwp": "System Capacity (kWp)",
+          "solar_capacity": "System Capacity (kWp)",
           "rain_sensor": "Rain Sensor",
-          "current_power": "Current Power (W)",
           "lux_sensor": "Luminance Sensor (Lux)",
           "temp_sensor": "Temperature Sensor",
           "wind_sensor": "Wind Sensor",
           "uv_sensor": "UV Sensor",
-          "forecast_solar": "Forecast.Solar Sensor"
+          "humidity_sensor": "Humidity Sensor"
         },
         "data_description": {
-          "weather_entity": "Weather entity for forecast calculations (Required)",
-          "power_entity": "Current solar power sensor in Watts - for production time calculation (Required)",
-          "solar_yield_today": "Daily solar yield in kWh - MUST reset daily at midnight (e.g., utility_meter daily) - For ML training (Required)",
-          "total_consumption_today": "Daily consumption sensor in kWh - for self-sufficiency calculation (optional)",
-          "plant_kwp": "Installed peak power in Kilowatt Peak (optional)",
-          "rain_sensor": "External rain sensor (optional)",
-          "current_power": "Sensor for current solar power (optional)",
-          "lux_sensor": "External luminance sensor in Lux (optional)",
-          "temp_sensor": "External temperature sensor (optional)",
-          "wind_sensor": "External wind sensor (optional)",
-          "uv_sensor": "External UV radiation sensor (optional)",
-          "forecast_solar": "Forecast.Solar integration sensor (optional)"
+          "weather_entity": "Weather entity for forecast calculations (Required).",
+          "power_entity": "Current solar power sensor in Watts - for production time calculation (Required).",
+          "solar_yield_today": "Daily solar yield in kWh - MUST reset daily at midnight (e.g., using a utility_meter with a 'daily' cycle) - For ML training (Required).",
+          "total_consumption_today": "Daily total consumption sensor in kWh - for self-sufficiency calculation (optional).",
+          "solar_capacity": "Installed peak power in Kilowatt Peak (kWp) - e.g., 5.5 (optional, default: 5.0).",
+          "rain_sensor": "External rain sensor (optional).",
+          "lux_sensor": "External luminance sensor in Lux (optional).",
+          "temp_sensor": "External temperature sensor (optional).",
+          "wind_sensor": "External wind sensor (optional).",
+          "uv_sensor": "External UV radiation sensor (optional).",
+          "humidity_sensor": "External humidity sensor (optional)."
         }
       },
       "reconfigure": {
         "title": "Solar Forecast ML - Reconfiguration",
-        "description": "Change the configuration of your Solar Forecast ML integration.\n\nRequired fields: Weather Sensor, Power Sensor, and Daily Yield\nAll other fields are optional. Empty fields will be cleared.",
+        "description": "Change the configuration of your Solar Forecast ML integration.\n\nRequired fields: Weather Sensor, Power Sensor, and Daily Yield.\nAll other fields are optional. Leaving optional fields empty will clear their current value.",
         "data": {
           "weather_entity": "Weather Sensor",
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Solar Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
-          "plant_kwp": "System Capacity (kWp)",
+          "solar_capacity": "System Capacity (kWp)",
           "rain_sensor": "Rain Sensor",
-          "current_power": "Current Power (W)",
           "lux_sensor": "Luminance Sensor (Lux)",
           "temp_sensor": "Temperature Sensor",
           "wind_sensor": "Wind Sensor",
           "uv_sensor": "UV Sensor",
-          "forecast_solar": "Forecast.Solar Sensor"
+          "humidity_sensor": "Humidity Sensor"
         },
         "data_description": {
-          "weather_entity": "Weather entity for forecast calculations (Required)",
-          "power_entity": "Current solar power sensor in Watts - for production time calculation (Required)",
-          "solar_yield_today": "Daily solar yield in kWh - MUST reset daily at midnight (e.g., utility_meter daily) - For ML training (Required)",
-          "total_consumption_today": "Daily consumption sensor in kWh - for self-sufficiency calculation (optional)",
-          "plant_kwp": "Installed peak power in Kilowatt Peak (optional)",
-          "rain_sensor": "External rain sensor (optional)",
-          "current_power": "Sensor for current solar power (optional)",
-          "lux_sensor": "External luminance sensor in Lux (optional)",
-          "temp_sensor": "External temperature sensor (optional)",
-          "wind_sensor": "External wind sensor (optional)",
-          "uv_sensor": "External UV radiation sensor (optional)",
-          "forecast_solar": "Forecast.Solar integration sensor (optional)"
+          "weather_entity": "Weather entity for forecast calculations (Required).",
+          "power_entity": "Current solar power sensor in Watts - for production time calculation (Required).",
+          "solar_yield_today": "Daily solar yield in kWh - MUST reset daily at midnight (e.g., using a utility_meter with a 'daily' cycle) - For ML training (Required).",
+          "total_consumption_today": "Daily total consumption sensor in kWh - for self-sufficiency calculation (optional).",
+          "solar_capacity": "Installed peak power in Kilowatt Peak (kWp) - e.g., 5.5 (optional, leave empty to use default: 5.0).",
+          "rain_sensor": "External rain sensor (optional).",
+          "lux_sensor": "External luminance sensor in Lux (optional).",
+          "temp_sensor": "External temperature sensor (optional).",
+          "wind_sensor": "External wind sensor (optional).",
+          "uv_sensor": "External UV radiation sensor (optional).",
+          "humidity_sensor": "External humidity sensor (optional)."
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to sensor",
-      "invalid_auth": "Invalid authentication",
-      "unknown": "Unknown error occurred",
-      "invalid_capacity": "Invalid capacity (must be between 0.1 and 1000 kWp)",
-      "invalid_efficiency": "Invalid efficiency (must be between 0.01 and 1.0)",
-      "invalid_input": "Invalid input",
-      "required": "This field is required",
-      "sensor_no_daily_reset": "This sensor does not have a daily reset (missing 'last_reset' attribute). Please use a 'utility_meter' with a 'daily' cycle."
+      "cannot_connect": "Failed to connect to sensor.",
+      "invalid_auth": "Invalid authentication.",
+      "unknown": "An unknown error occurred.",
+      "invalid_capacity": "Capacity must be a number between 0.1 and 1000.0 kWp.",
+      "invalid_input": "Invalid input format.",
+      "required": "This field is required.",
+      "already_configured": "This weather entity is already used by another Solar Forecast ML configuration."
     },
     "abort": {
-      "already_configured": "This integration is already configured",
-      "reconfigure_successful": "Reconfiguration successfully completed",
-      "not_reconfigure": "This flow is only available for reconfiguration",
-      "entry_not_found": "Configuration entry not found"
+      "already_configured": "This integration is already configured with this unique ID.",
+      "reconfigure_successful": "Reconfiguration completed successfully. The integration will now reload.",
+      "not_reconfigure": "This configuration flow is only available for reconfiguration.",
+      "entry_not_found": "Configuration entry not found for reconfiguration."
     }
   },
   "options": {
@@ -91,37 +86,35 @@
         "data": {
           "update_interval": "Update Interval (Seconds)",
           "diagnostic": "Enable Diagnostic Mode",
-          "enable_hourly": "Enable Hourly Forecasts",
+          "hourly": "Enable Next Hour Forecast Sensor",
           "notify_startup": "Startup Notification",
-          "notify_forecast": "Forecast Notifications",
+          "notify_forecast": "Forecast Update Notifications",
           "notify_learning": "Learning Process Notifications",
           "notify_successful_learning": "Successful Learning Notifications"
         },
         "data_description": {
-          "update_interval": "How often should forecasts be updated? (300-86400 seconds)",
-          "diagnostic": "Enable advanced diagnostic sensors for troubleshooting",
-          "enable_hourly": "Enable additional hourly forecasts (optional)",
-          "notify_startup": "Show notification when the integration starts",
-          "notify_forecast": "Show notification on new forecast updates",
-          "notify_learning": "Show notification during ML training",
-          "notify_successful_learning": "Show notification after successful ML training"
+          "update_interval": "How often the main forecast should be updated? (Range: 300-86400 seconds, default: 1800)",
+          "diagnostic": "Enable additional diagnostic sensors for troubleshooting and monitoring internal states.",
+          "hourly": "Enable the 'Next Hour Forecast' sensor (requires more frequent updates if desired).",
+          "notify_startup": "Show a persistent notification when the integration starts.",
+          "notify_forecast": "Show a persistent notification when a new forecast is generated (can be noisy).",
+          "notify_learning": "Show a persistent notification when ML model training starts.",
+          "notify_successful_learning": "Show a persistent notification after ML model training completes successfully."
+        },
+         "error": {
+           "invalid_interval": "Update interval must be between 300 and 86400 seconds.",
+           "invalid_input": "Invalid input format."
         }
       }
     }
   },
   "entity": {
     "button": {
-      "update_forecast": {
-        "name": "Update Forecast"
+      "manual_forecast": {
+        "name": "Manual Forecast"
       },
-      "retrain_model": {
-        "name": "Retrain Model"
-      },
-      "calibrate_model": {
-        "name": "Calibrate Model"
-      },
-      "clear_errors": {
-        "name": "Clear Errors"
+      "manual_learning": {
+        "name": "Manual Learning Process"
       }
     }
   }

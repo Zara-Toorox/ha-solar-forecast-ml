@@ -1,10 +1,6 @@
 """
-Config flow fÃƒÂ¼r die Solar Forecast ML Integration.
-
-Diese Datei definiert die BenutzeroberflÃƒÂ¤che, die beim HinzufÃƒÂ¼gen und
-Konfigurieren der Integration in Home Assistant angezeigt wird.
-
-Copyright (C) 2025 Zara-Toorox
+Config flow for the Solar Forecast ML integration.
+Defines the user interface for adding and configuring the integration.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -18,6 +14,8 @@ GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
 """
 from __future__ import annotations
 from typing import Any
@@ -25,31 +23,28 @@ import voluptuous as vol
 import logging
 
 from homeassistant import config_entries
-# KORREKTUR: OptionsFlow statt OptionsFlowWithReload verwenden, wenn __init__ wegfÃƒÂ¤llt
-# ODER OptionsFlowWithReload behalten, __init__ weglassen funktioniert auch.
-# Wir behalten OptionsFlowWithReload fÃƒÂ¼r die automatische Reload-Funktion.
-from homeassistant.config_entries import OptionsFlowWithReload, SOURCE_RECONFIGURE
+# --- HIER DIE KORREKTUR ---
+from homeassistant.config_entries import OptionsFlowWithReload, SOURCE_RECONFIGURE # Added OptionsFlowWithReload
+# --- ENDE KORREKTUR ---
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
-    # Basis-Konstanten
     DOMAIN,
-    # Config-SchlÃƒÂ¼ssel
-    CONF_CURRENT_POWER,
-    CONF_FORECAST_SOLAR,
-    CONF_LUX_SENSOR,
-    CONF_PLANT_KWP,
-    CONF_POWER_ENTITY,
-    CONF_RAIN_SENSOR,
-    CONF_SOLAR_YIELD_TODAY,
-    CONF_TEMP_SENSOR,
-    CONF_TOTAL_CONSUMPTION_TODAY,
-    CONF_UV_SENSOR,
+    # Config keys
     CONF_WEATHER_ENTITY,
+    CONF_POWER_ENTITY,
+    CONF_SOLAR_YIELD_TODAY,
+    CONF_TOTAL_CONSUMPTION_TODAY,
+    CONF_SOLAR_CAPACITY,
+    CONF_RAIN_SENSOR,
+    CONF_LUX_SENSOR,
+    CONF_TEMP_SENSOR,
     CONF_WIND_SENSOR,
-    # Options-SchlÃƒÂ¼ssel
+    CONF_UV_SENSOR,
+    CONF_HUMIDITY_SENSOR, # <-- NEU (Block 3)
+    # Options keys
     CONF_UPDATE_INTERVAL,
     CONF_DIAGNOSTIC,
     CONF_HOURLY,
@@ -57,289 +52,273 @@ from .const import (
     CONF_NOTIFY_FORECAST,
     CONF_NOTIFY_LEARNING,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
+    # Defaults / Constants needed
+    DEFAULT_SOLAR_CAPACITY
 )
 
 _LOGGER = logging.getLogger(__name__)
 
+# --- Helper function to safely get defaults ---
+def _get_default(data: dict | None, key: str, default: Any = vol.UNDEFINED):
+    """Safely get default value for schema."""
+    if data is None:
+        return default
+    value = data.get(key)
+    return value if value is not None and value != "" else default
+
+# --- Schema Definition ---
+def _get_base_schema(defaults: dict | None) -> vol.Schema:
+    """Returns the base schema for user and reconfigure steps."""
+    if defaults is None:
+        defaults = {}
+
+    return vol.Schema({
+        vol.Required(
+            CONF_WEATHER_ENTITY,
+            default=_get_default(defaults, CONF_WEATHER_ENTITY, "")
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["weather"])),
+        vol.Required(
+            CONF_POWER_ENTITY,
+            default=_get_default(defaults, CONF_POWER_ENTITY, "")
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Required(
+            CONF_SOLAR_YIELD_TODAY,
+            default=_get_default(defaults, CONF_SOLAR_YIELD_TODAY, "")
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+
+        vol.Optional(
+            CONF_TOTAL_CONSUMPTION_TODAY,
+            default=_get_default(defaults, CONF_TOTAL_CONSUMPTION_TODAY)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+
+        vol.Optional(
+            CONF_SOLAR_CAPACITY,
+            default=_get_default(defaults, CONF_SOLAR_CAPACITY, DEFAULT_SOLAR_CAPACITY)
+        ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=1000.0)),
+
+        vol.Optional(
+            CONF_RAIN_SENSOR,
+            default=_get_default(defaults, CONF_RAIN_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_LUX_SENSOR,
+            default=_get_default(defaults, CONF_LUX_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_TEMP_SENSOR,
+            default=_get_default(defaults, CONF_TEMP_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_WIND_SENSOR,
+            default=_get_default(defaults, CONF_WIND_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_UV_SENSOR,
+            default=_get_default(defaults, CONF_UV_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        # --- NEU (Block 3) ---
+        vol.Optional(
+            CONF_HUMIDITY_SENSOR,
+            default=_get_default(defaults, CONF_HUMIDITY_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        # --- ENDE NEU ---
+    })
+
+
 @config_entries.HANDLERS.register(DOMAIN)
-class SolarForecastMLConfigFlow(config_entries.ConfigFlow):
-    """Behandelt den Konfigurations-Flow."""
+class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handles the configuration flow for Solar Forecast ML."""
     VERSION = 1
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        """Leitet den Benutzer zum Options-Flow."""
-        # KORREKTUR (nach Vorschlag Freund): Kein Argument mehr ÃƒÂ¼bergeben!
-        return SolarForecastMLOptionsFlow()
-
-    def _get_schema(self, defaults: dict[str, Any] | None) -> vol.Schema:
-        """
-        Gibt das Schema fÃƒÂ¼r die Konfiguration zurÃƒÂ¼ck, mit Defaults fÃƒÂ¼r Prefill.
-        """
-        if defaults is None:
-            defaults = {}
-
-        def _get_entity_default(key: str) -> Any:
-            val = defaults.get(key)
-            return val if val and val != "" else vol.UNDEFINED
-
-        def _get_string_default(key: str) -> Any:
-            val = defaults.get(key)
-            if val is None or val == "":
-                return vol.UNDEFINED
-            return str(val)
-
-        return vol.Schema({
-            vol.Required(
-                CONF_WEATHER_ENTITY,
-                default=defaults.get(CONF_WEATHER_ENTITY, "")
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["weather"])),
-            vol.Required(
-                CONF_POWER_ENTITY,
-                default=defaults.get(CONF_POWER_ENTITY, "")
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            vol.Required(
-                CONF_SOLAR_YIELD_TODAY,
-                default=defaults.get(CONF_SOLAR_YIELD_TODAY, "")
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-
-            vol.Optional(
-                CONF_TOTAL_CONSUMPTION_TODAY,
-                default=_get_entity_default(CONF_TOTAL_CONSUMPTION_TODAY)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-
-            vol.Optional(
-                CONF_PLANT_KWP,
-                default=_get_string_default(CONF_PLANT_KWP)
-            ): str,
-
-            vol.Optional(
-                CONF_RAIN_SENSOR,
-                default=_get_entity_default(CONF_RAIN_SENSOR)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            vol.Optional(
-                CONF_CURRENT_POWER,
-                default=_get_entity_default(CONF_CURRENT_POWER)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            vol.Optional(
-                CONF_LUX_SENSOR,
-                default=_get_entity_default(CONF_LUX_SENSOR)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            vol.Optional(
-                CONF_TEMP_SENSOR,
-                default=_get_entity_default(CONF_TEMP_SENSOR)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            vol.Optional(
-                CONF_WIND_SENSOR,
-                default=_get_entity_default(CONF_WIND_SENSOR)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            vol.Optional(
-                CONF_UV_SENSOR,
-                default=_get_entity_default(CONF_UV_SENSOR)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            vol.Optional(
-                CONF_FORECAST_SOLAR,
-                default=_get_entity_default(CONF_FORECAST_SOLAR)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-        })
-
-    # === START PATCH 2: GIGO-Schutz (Validierungsfunktion) ===
-    def _validate_solar_yield_sensor(self, solar_yield_entity_id: str) -> bool:
-        """Prüft, ob der Sensor das 'last_reset' Attribut besitzt."""
-        if not solar_yield_entity_id:
-            return True # Wird von 'required' abgefangen
-        
-        state = self.hass.states.get(solar_yield_entity_id)
-        
-        if state is None:
-            # Sensor existiert, wurde aber vlt. noch nie aktualisiert.
-            # Wir können es nicht validieren, aber auch nicht blockieren.
-            _LOGGER.debug(f"Sensor {solar_yield_entity_id} state is None, validation skipped.")
-            return True 
-
-        # State existiert, prüfe Attribute
-        if state.attributes.get("last_reset") is None:
-            _LOGGER.warning(
-                f"Validation FAILED for {solar_yield_entity_id}: "
-                f"Missing 'last_reset' attribute. Attributes: {state.attributes}"
-            )
-            return False # Das Attribut fehlt
-        
-        _LOGGER.debug(f"Validation OK for {solar_yield_entity_id}: 'last_reset' found.")
-        return True # Attribut ist vorhanden
-    # === ENDE PATCH 2 ===
+        """Redirect users to the options flow handler."""
+        return SolarForecastMLOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Behandelt die Ersteinrichtung."""
+        """Handle the initial setup step."""
         errors = {}
         prefill_data = user_input if user_input is not None else {}
 
         if user_input is not None:
-            if not user_input.get(CONF_WEATHER_ENTITY):
-                errors[CONF_WEATHER_ENTITY] = "required"
-            if not user_input.get(CONF_POWER_ENTITY):
-                errors[CONF_POWER_ENTITY] = "required"
-            if not user_input.get(CONF_SOLAR_YIELD_TODAY):
-                errors[CONF_SOLAR_YIELD_TODAY] = "required"
-            
-            # === START PATCH 2: GIGO-Schutz (Aufruf) ===
-            if not errors:
-                solar_yield_entity_id = user_input.get(CONF_SOLAR_YIELD_TODAY, "")
-                if not self._validate_solar_yield_sensor(solar_yield_entity_id):
-                    errors[CONF_SOLAR_YIELD_TODAY] = "sensor_no_daily_reset"
-            # === ENDE PATCH 2 ===
-            
+            # Basic validation
+            if not user_input.get(CONF_WEATHER_ENTITY): errors[CONF_WEATHER_ENTITY] = "required"
+            if not user_input.get(CONF_POWER_ENTITY): errors[CONF_POWER_ENTITY] = "required"
+            if not user_input.get(CONF_SOLAR_YIELD_TODAY): errors[CONF_SOLAR_YIELD_TODAY] = "required"
+            try:
+                capacity = user_input.get(CONF_SOLAR_CAPACITY)
+                if capacity is not None:
+                     float_cap = float(capacity)
+                     if not (0.1 <= float_cap <= 1000.0): errors[CONF_SOLAR_CAPACITY] = "invalid_capacity"
+            except (ValueError, TypeError): errors[CONF_SOLAR_CAPACITY] = "invalid_input"
+
             if errors:
                 return self.async_show_form(
-                    step_id="user",
-                    data_schema=self._get_schema(prefill_data),
-                    errors=errors,
+                    step_id="user", data_schema=_get_base_schema(prefill_data), errors=errors
                 )
 
+            # --- Data Cleaning and Entry Creation ---
             unique_id = user_input[CONF_WEATHER_ENTITY].strip()
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
 
-            cleaned_data = user_input.copy()
-            for key, value in cleaned_data.items():
+            cleaned_data = {}
+            for key, value in user_input.items():
                 if isinstance(value, str):
-                    # Strip alle String-Werte (Entity-IDs) - von Zara
-                    cleaned_data[key] = value.strip() if value else ""
+                    cleaned_value = value.strip()
+                    cleaned_data[key] = cleaned_value if cleaned_value else ""
+                elif key == CONF_SOLAR_CAPACITY:
+                     cleaned_data[key] = value if value is not None else DEFAULT_SOLAR_CAPACITY
                 elif value is None:
                     cleaned_data[key] = ""
+                else:
+                    cleaned_data[key] = value
+
+            if CONF_SOLAR_CAPACITY not in cleaned_data or cleaned_data[CONF_SOLAR_CAPACITY] == "":
+                 cleaned_data[CONF_SOLAR_CAPACITY] = DEFAULT_SOLAR_CAPACITY
 
             return self.async_create_entry(title="Solar Forecast ML", data=cleaned_data)
 
+        # Show initial form
         return self.async_show_form(
             step_id="user",
-            data_schema=self._get_schema({}),
+            data_schema=_get_base_schema({CONF_SOLAR_CAPACITY: DEFAULT_SOLAR_CAPACITY}),
             errors={},
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Behandelt die Rekonfiguration."""
-        if self.source != SOURCE_RECONFIGURE:
-            return self.async_abort(reason="not_reconfigure")
-
-        entry = self._get_reconfigure_entry()
-        if entry is None:
-            return self.async_abort(reason="entry_not_found")
+        """Handle the reconfiguration step."""
+        if self.source != SOURCE_RECONFIGURE: return self.async_abort(reason="not_reconfigure")
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        if entry is None: return self.async_abort(reason="entry_not_found")
 
         errors = {}
         prefill_data = dict(entry.data)
 
         if user_input is not None:
             prefill_data.update(user_input)
+            # Basic validation
+            if not user_input.get(CONF_WEATHER_ENTITY, "").strip(): errors[CONF_WEATHER_ENTITY] = "required"
+            if not user_input.get(CONF_POWER_ENTITY, "").strip(): errors[CONF_POWER_ENTITY] = "required"
+            if not user_input.get(CONF_SOLAR_YIELD_TODAY, "").strip(): errors[CONF_SOLAR_YIELD_TODAY] = "required"
+            try:
+                capacity = user_input.get(CONF_SOLAR_CAPACITY)
+                if capacity is not None and capacity != "":
+                     float_cap = float(capacity)
+                     if not (0.1 <= float_cap <= 1000.0): errors[CONF_SOLAR_CAPACITY] = "invalid_capacity"
+            except (ValueError, TypeError): errors[CONF_SOLAR_CAPACITY] = "invalid_input"
 
-            if not user_input.get(CONF_WEATHER_ENTITY, "").strip():
-                errors[CONF_WEATHER_ENTITY] = "required"
-            if not user_input.get(CONF_POWER_ENTITY, "").strip():
-                errors[CONF_POWER_ENTITY] = "required"
-            if not user_input.get(CONF_SOLAR_YIELD_TODAY, "").strip():
-                errors[CONF_SOLAR_YIELD_TODAY] = "required"
-
-            # === START PATCH 2: GIGO-Schutz (Aufruf) ===
-            if not errors:
-                solar_yield_entity_id = user_input.get(CONF_SOLAR_YIELD_TODAY, "")
-                if not self._validate_solar_yield_sensor(solar_yield_entity_id):
-                    errors[CONF_SOLAR_YIELD_TODAY] = "sensor_no_daily_reset"
-            # === ENDE PATCH 2 ===
-            
             if errors:
                 return self.async_show_form(
-                    step_id="reconfigure",
-                    data_schema=self._get_schema(prefill_data),
-                    errors=errors,
+                    step_id="reconfigure", data_schema=_get_base_schema(prefill_data), errors=errors
                 )
 
+            # --- Data Cleaning and Entry Update ---
             new_unique_id = user_input.get(CONF_WEATHER_ENTITY, "").strip()
             old_unique_id = entry.unique_id or ""
-
             if new_unique_id != old_unique_id:
-                await self.async_set_unique_id(new_unique_id)
-                self.hass.config_entries.async_update_entry(entry, unique_id=new_unique_id)
-            else:
-                await self.async_set_unique_id(new_unique_id)
-                pass
+                # Check for conflicts before updating HA entry (HA might handle this too)
+                if self._async_current_entries(include_ignore=False):
+                    for existing_entry in self._async_current_entries(include_ignore=False):
+                        if existing_entry.unique_id == new_unique_id and existing_entry.entry_id != entry.entry_id:
+                             errors["base"] = "already_configured"
+                             return self.async_show_form(
+                                 step_id="reconfigure", data_schema=_get_base_schema(prefill_data), errors=errors
+                             )
+                # Update unique_id if needed (HA does this via async_update_reload_and_abort)
 
-            # --- KORREKTUR (START) ---
-            # Wir dÃƒÂ¼rfen NICHT {**entry.data, **user_input} verwenden.
-            # Das fÃƒÂ¼hrt dazu, dass gelÃƒÂBte (leere) Felder mit den alten
-            # Werten aus entry.data wieder aufgefÃƒÂ¼llt werden.
-            # Wir verwenden user_input.copy() als alleinige Basis.
-            cleaned_data = user_input.copy()
-            
-            # Bereinige alle String-Werte und None-Werte - von Zara
-            for key, value in cleaned_data.items():
+            cleaned_data = {}
+            for key, value in user_input.items():
                 if isinstance(value, str):
-                    # Strip alle String-Werte (Entity-IDs) - von Zara
-                    cleaned_data[key] = value.strip() if value else ""
-                elif value is None:
-                    cleaned_data[key] = ""
-            # --- KORREKTUR (ENDE) ---
+                    cleaned_value = value.strip()
+                    cleaned_data[key] = cleaned_value
+                elif key == CONF_SOLAR_CAPACITY:
+                     if value is None or value == "": cleaned_data[key] = DEFAULT_SOLAR_CAPACITY
+                     else: cleaned_data[key] = float(value)
+                elif value is None: cleaned_data[key] = ""
+                else: cleaned_data[key] = value
+
+            if cleaned_data.get(CONF_SOLAR_CAPACITY) == "":
+                 cleaned_data[CONF_SOLAR_CAPACITY] = DEFAULT_SOLAR_CAPACITY
 
             return self.async_update_reload_and_abort(
-                entry,
-                data=cleaned_data,
-                reload_even_if_entry_is_unchanged=False,
+                entry, data=cleaned_data, reason="reconfigure_successful"
             )
 
+        # Show reconfigure form prefilled
         return self.async_show_form(
-            step_id="reconfigure",
-            data_schema=self._get_schema(prefill_data),
-            errors=errors,
+            step_id="reconfigure", data_schema=_get_base_schema(prefill_data), errors=errors
         )
 
 
 class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
-    """Behandelt den Options-Flow mit automatischer Reload nach ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾nderungen."""
+    """Handles the options flow with automatic reload after changes."""
 
-    # KORREKTUR (nach Vorschlag Freund): KEINE __init__-Methode mehr!
-    # self.config_entry wird automatisch von der Basisklasse gesetzt.
+    # No __init__ needed, self.config_entry is provided by base class
 
-    OPTIONS_SCHEMA = vol.Schema({
-        vol.Optional(
-            CONF_UPDATE_INTERVAL,
-            default=3600
-        ): vol.All(vol.Coerce(int), vol.Range(min=300, max=86400)),
-        vol.Optional(
-            CONF_DIAGNOSTIC,
-            default=True
-        ): bool,
-        vol.Optional(
-            CONF_HOURLY,
-            default=False
-        ): bool,
-        vol.Optional(
-            CONF_NOTIFY_STARTUP,
-            default=True
-        ): bool,
-        vol.Optional(
-            CONF_NOTIFY_FORECAST,
-            default=False
-        ): bool,
-        vol.Optional(
-            CONF_NOTIFY_LEARNING,
-            default=False
-        ): bool,
-        vol.Optional(
-            CONF_NOTIFY_SUCCESSFUL_LEARNING,
-            default=True
-        ): bool,
-    })
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        # This init is deprecated, remove it.
+        # self.config_entry = config_entry
+        # Instead, access via self.config_entry directly in methods.
+        pass # Keep init empty or remove completely. Let's remove it.
+
+    # def __init__(self, config_entry: config_entries.ConfigEntry) -> None: <-- REMOVE THIS METHOD
+    #    """Initialize options flow."""
+    #    self.config_entry = config_entry
+
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Verwaltet die Optionen."""
+        """Manage the options."""
         errors = {}
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            # Validation
+            interval = user_input.get(CONF_UPDATE_INTERVAL, 3600)
+            try:
+                interval_sec = int(interval)
+                if not (300 <= interval_sec <= 86400): errors[CONF_UPDATE_INTERVAL] = "invalid_interval"
+            except (ValueError, TypeError): errors[CONF_UPDATE_INTERVAL] = "invalid_input"
 
+            if errors:
+                 options_schema = self._get_options_schema()
+                 return self.async_show_form(
+                     step_id="init",
+                     data_schema=self.add_suggested_values_to_schema(
+                         options_schema, user_input or self.config_entry.options
+                     ),
+                     errors=errors,
+                 )
+
+            # Update options
+            updated_options = {
+                 **self.config_entry.options,
+                 **user_input,
+                 CONF_DIAGNOSTIC: user_input.get(CONF_DIAGNOSTIC, True)
+            }
+            return self.async_create_entry(title="", data=updated_options)
+
+        # Show form
+        options_schema = self._get_options_schema()
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
-                self.OPTIONS_SCHEMA,
-                self.config_entry.options # KORREKTUR (nach Vorschlag Freund): Zugriff ÃƒÂ¼ber self.config_entry.options
+                options_schema, self.config_entry.options
             ),
             errors=errors,
         )
+
+    def _get_options_schema(self) -> vol.Schema:
+         """Define the schema for the options form."""
+         current_options = self.config_entry.options
+
+         return vol.Schema({
+             vol.Optional(CONF_UPDATE_INTERVAL, default=current_options.get(CONF_UPDATE_INTERVAL, 1800)): # Default 30 min
+                 vol.All(vol.Coerce(int), vol.Range(min=300, max=86400)),
+             vol.Optional(CONF_DIAGNOSTIC, default=current_options.get(CONF_DIAGNOSTIC, True)): bool,
+             vol.Optional(CONF_HOURLY, default=current_options.get(CONF_HOURLY, False)): bool,
+             vol.Optional(CONF_NOTIFY_STARTUP, default=current_options.get(CONF_NOTIFY_STARTUP, True)): bool,
+             vol.Optional(CONF_NOTIFY_FORECAST, default=current_options.get(CONF_NOTIFY_FORECAST, False)): bool,
+             vol.Optional(CONF_NOTIFY_LEARNING, default=current_options.get(CONF_NOTIFY_LEARNING, False)): bool,
+             vol.Optional(CONF_NOTIFY_SUCCESSFUL_LEARNING, default=current_options.get(CONF_NOTIFY_SUCCESSFUL_LEARNING, True)): bool,
+         })

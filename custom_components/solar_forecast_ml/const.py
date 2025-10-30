@@ -1,7 +1,5 @@
 """
 Constants for the Solar Forecast ML Integration.
-Version 6.0 - Cleaned up without OpenWeatherMap
-Smart DWD-Retry Logic implemented
 
 Copyright (C) 2025 Zara-Toorox
 
@@ -12,7 +10,7 @@ License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
@@ -25,143 +23,108 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "6.0.0"
-
-RELEASE_VERSION = "6.2.0"
-SOFTWARE_VERSION = "6.2.0"
-ML_VERSION = "6.0"
-INTEGRATION_MODEL = "v6.2.0"
+# [Version Update] Set version numbers to 6.2.1
+VERSION = "6.2.1"
+RELEASE_VERSION = "6.2.1"
+SOFTWARE_VERSION = "6.2.1"
+INTEGRATION_MODEL = "v6.2.1" # Model string might differ based on ML changes
+ML_VERSION = "6.0" # Keep ML Model version unless model structure changed significantly
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 
-CONF_CURRENT_POWER = "current_power"
-CONF_FORECAST_SOLAR = "forecast_solar"
-CONF_LUX_SENSOR = "lux_sensor"
-CONF_PLANT_KWP = "plant_kwp"
-CONF_POWER_ENTITY = "power_entity"
-CONF_RAIN_SENSOR = "rain_sensor"
-CONF_SOLAR_YIELD_TODAY = "solar_yield_today"
-CONF_TEMP_SENSOR = "temp_sensor"
-CONF_TOTAL_CONSUMPTION_TODAY = "total_consumption_today"
-CONF_UV_SENSOR = "uv_sensor"
+# --- Core Configuration Keys ---
 CONF_WEATHER_ENTITY = "weather_entity"
+CONF_POWER_ENTITY = "power_entity"
+CONF_SOLAR_YIELD_TODAY = "solar_yield_today"
+CONF_SOLAR_CAPACITY = "solar_capacity" # Changed from plant_kwp
+
+# --- Optional Configuration Keys ---
+CONF_TOTAL_CONSUMPTION_TODAY = "total_consumption_today"
+CONF_RAIN_SENSOR = "rain_sensor"
+CONF_LUX_SENSOR = "lux_sensor"
+CONF_TEMP_SENSOR = "temp_sensor"
 CONF_WIND_SENSOR = "wind_sensor"
+CONF_UV_SENSOR = "uv_sensor"
+CONF_HUMIDITY_SENSOR = "humidity_sensor" # <-- NEU (Block 3)
 
+# --- Removed Configuration Keys (Dead Ends) ---
+# CONF_CURRENT_POWER = "current_power" # Removed - Duplicated logic with CONF_POWER_ENTITY
+# CONF_FORECAST_SOLAR = "forecast_solar" # Removed - Not used anywhere
+# CONF_PLANT_KWP = "plant_kwp" # Removed - Replaced by CONF_SOLAR_CAPACITY
+
+# --- Weather Preference (Keep for potential future use or remove if definitely unused) ---
 CONF_WEATHER_PREFERENCE = "weather_preference"
-CONF_FALLBACK_ENTITY = "fallback_weather_entity"
-
+CONF_FALLBACK_ENTITY = "fallback_weather_entity" # Check if still used
 WEATHER_PREFERENCE_DWD = "dwd"
 WEATHER_PREFERENCE_GENERIC = "generic"
+WEATHER_FALLBACK_DEFAULT = "weather.home" # Default fallback weather entity
 
-WEATHER_RETRY_DELAYS = [0, 60, 120, 180, 240]
-WEATHER_MAX_RETRY_TIME = 300
-WEATHER_FALLBACK_DEFAULT = "weather.home"
-
+# --- Options Flow Keys ---
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_DIAGNOSTIC = "diagnostic"
-CONF_HOURLY = "hourly"
+CONF_HOURLY = "hourly" # Renamed from enable_hourly
 CONF_NOTIFY_STARTUP = "notify_startup"
 CONF_NOTIFY_FORECAST = "notify_forecast"
 CONF_NOTIFY_LEARNING = "notify_learning"
 CONF_NOTIFY_SUCCESSFUL_LEARNING = "notify_successful_learning"
+CONF_LEARNING_ENABLED = "learning_enabled" # <-- WIEDER HINZUGEFÜGT
 
-CONF_SOLAR_CAPACITY = "solar_capacity"
-CONF_LEARNING_ENABLED = "learning_enabled"
-CONF_HOURLY_LEARNING_ENABLED = "hourly_learning_enabled"
+# --- Deprecated/Legacy Configuration Keys (Keep for potential migration logic if needed) ---
+# CONF_PANEL_EFFICIENCY = "panel_efficiency" # Might be needed for migration from older versions
+# CONF_AZIMUTH = "azimuth"
+# CONF_TILT = "tilt"
 
-CONF_PANEL_EFFICIENCY = "panel_efficiency"
-CONF_AZIMUTH = "azimuth"
-CONF_TILT = "tilt"
+# --- Default Values ---
+DEFAULT_SOLAR_CAPACITY = 5.0 # kWp
+# DEFAULT_PANEL_EFFICIENCY = 0.18 # Removed defaults for deprecated keys unless needed for migration
+# DEFAULT_AZIMUTH = 180.0
+# DEFAULT_TILT = 30.0
+UPDATE_INTERVAL = timedelta(minutes=30) # Default Coordinator update interval
 
-DEFAULT_SOLAR_CAPACITY = 5.0
-DEFAULT_PANEL_EFFICIENCY = 0.18
-DEFAULT_AZIMUTH = 180.0
-DEFAULT_TILT = 30.0
-DEFAULT_LEARNING_ENABLED = True
-DEFAULT_HOURLY_LEARNING_ENABLED = False
-UPDATE_INTERVAL = timedelta(minutes=30)
+# --- Scheduling Constants ---
+DAILY_UPDATE_HOUR = 6      # Hour for morning forecast update
+DAILY_VERIFICATION_HOUR = 21 # Hour for evening verification
 
-DAILY_UPDATE_HOUR = 6
-DAILY_VERIFICATION_HOUR = 21
-
+# --- File Names (Relative to DATA_DIR) ---
 PREDICTION_HISTORY_FILE = "prediction_history.json"
 LEARNED_WEIGHTS_FILE = "learned_weights.json"
 HOURLY_PROFILE_FILE = "hourly_profile.json"
 MODEL_STATE_FILE = "model_state.json"
-ERROR_LOG_FILE = "error_log.json"
+# ERROR_LOG_FILE = "error_log.json" # Not used by data_manager, maybe error_handler?
 HOURLY_SAMPLES_FILE = "hourly_samples.json"
-HOURLY_STATE_FILE = "hourly_state.json"
+# HOURLY_STATE_FILE = "hourly_state.json" # Not used
 
-DATA_VERSION = "1.0"
-MAX_PREDICTION_HISTORY = 365
-MAX_HOURLY_SAMPLES = 1260
-MAX_HOURLY_STATE_DAYS = 7
-MIN_TRAINING_DATA_POINTS = 7
-BACKUP_RETENTION_DAYS = 30
-MAX_BACKUP_FILES = 10
+# --- Data Management Constants ---
+DATA_DIR = f"/config/{DOMAIN}" # Use domain in path for uniqueness
+DATA_VERSION = "1.0" # Version for the data format within JSON files
+MAX_PREDICTION_HISTORY = 365 # Max days of prediction records to keep
+MAX_HOURLY_SAMPLES = 1440 # Max hourly samples (e.g., 60 days * 24 hours)
+MIN_TRAINING_DATA_POINTS = 50 # <-- GEÄNDERT (Stabilität)
+BACKUP_RETENTION_DAYS = 30 # How long to keep backups (if implemented)
+MAX_BACKUP_FILES = 10      # Max number of backup files (if implemented)
 
-SUN_BUFFER_HOURS = 1.0
-SUN_CACHE_DURATION_MINUTES = 5
-FALLBACK_PRODUCTION_START_HOUR = 5
-FALLBACK_PRODUCTION_END_HOUR = 21
+# --- ML Model Constants ---
+ML_MODEL_VERSION = "1.0" # Internal version of the ML model logic/features
+MODEL_ACCURACY_THRESHOLD = 0.75 # Target accuracy threshold for retraining checks
+PREDICTION_CONFIDENCE_THRESHOLD = 0.6 # Minimum confidence for certain actions (if used)
+CORRECTION_FACTOR_MIN = 0.5 # Min value for learned fallback correction factor
+CORRECTION_FACTOR_MAX = 1.5 # Max value for learned fallback correction factor
 
-MODEL_ACCURACY_THRESHOLD = 0.75
-ML_MODEL_VERSION = "1.0"
-MIN_SAMPLES_FOR_TRAINING = 10
-MAX_TRAINING_SAMPLES = 1000
-FEATURE_VECTOR_SIZE = 7
-PREDICTION_CONFIDENCE_THRESHOLD = 0.6
-
-LEARNING_RATE = 0.01
-REGULARIZATION_FACTOR = 0.1
-CONVERGENCE_TOLERANCE = 1e-6
-MAX_TRAINING_ITERATIONS = 1000
-CROSS_VALIDATION_FOLDS = 5
-
-WEATHER_FEATURE_WEIGHTS = {
-    "temperature": 0.25,
-    "humidity": 0.15,
-    "cloudiness": 0.35,
-    "wind_speed": 0.10,
-    "pressure": 0.10,
-    "hour_of_day": 0.05
-}
-
+# --- Weather Calculation Constants (Example, might be in weather_calculator) ---
 WEATHER_TEMP_MIN = -50.0
 WEATHER_TEMP_MAX = 60.0
 WEATHER_HUMIDITY_MIN = 0.0
 WEATHER_HUMIDITY_MAX = 100.0
 WEATHER_CLOUDS_MIN = 0.0
 WEATHER_CLOUDS_MAX = 100.0
-WEATHER_WIND_MAX = 150.0
-WEATHER_PRESSURE_MIN = 800.0
-WEATHER_PRESSURE_MAX = 1200.0
+# ... other weather related constants if needed centrally
 
+# --- Circuit Breaker Constants (Used by error_handling_service) ---
 CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
-CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60
+CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60 # seconds
 CIRCUIT_BREAKER_SUCCESS_THRESHOLD = 3
-MAX_FAILURES_PER_HOUR = 20
 
-DEFAULT_RETRY_ATTEMPTS = 3
-DEFAULT_RETRY_BASE_DELAY = 1.0
-DEFAULT_RETRY_MAX_DELAY = 60.0
-DEFAULT_RETRY_EXPONENTIAL_BASE = 2.0
-
-DEFAULT_WEATHER_WEIGHTS = {
-    "temperature": 0.3,
-    "clouds": 0.4,
-    "humidity": 0.1,
-    "wind_speed": 0.1,
-    "pressure": 0.1
-}
-
-DEFAULT_SEASONAL_FACTORS = {
-    "spring": 1.0,
-    "summer": 1.0,
-    "autumn": 1.0,
-    "winter": 1.0
-}
-
+# --- Attribute Names (Used in sensor states) ---
 ATTR_FORECAST_TODAY = "forecast_today"
 ATTR_FORECAST_TOMORROW = "forecast_tomorrow"
 ATTR_WEATHER_CONDITION = "weather_condition"
@@ -169,135 +132,67 @@ ATTR_LEARNING_STATUS = "learning_status"
 ATTR_LAST_LEARNING = "last_learning"
 ATTR_MODEL_ACCURACY = "model_accuracy"
 ATTR_WEATHER_SOURCE = "weather_source"
-ATTR_RETRY_COUNT = "retry_count"
-ATTR_FALLBACK_ACTIVE = "fallback_active"
+ATTR_RETRY_COUNT = "retry_count" # Check if used
+ATTR_FALLBACK_ACTIVE = "fallback_active" # Check if used
 
+# --- Button Keys (Used in button platform) ---
 BUTTON_MANUAL_FORECAST = "manual_forecast"
-BUTTON_RETRAIN_MODEL = "retrain_model"
-BUTTON_RESET_DATA = "reset_data"
+BUTTON_MANUAL_LEARNING = "manual_learning" # Changed from retrain_model for consistency
+# BUTTON_RESET_DATA = "reset_data" # Removed? Check services.yaml
 
-SERVICE_MANUAL_FORECAST = "manual_forecast"
-SERVICE_RETRAIN_MODEL = "retrain_model"
-SERVICE_RESET_LEARNING_DATA = "reset_learning_data"
+# --- Service Names (Used for service registration) ---
+SERVICE_MANUAL_FORECAST = "manual_forecast" # Check services.yaml
+SERVICE_RETRAIN_MODEL = "force_retrain" # Match services.yaml
+SERVICE_RESET_LEARNING_DATA = "reset_model" # Match services.yaml
 
-WEATHER_TYPE_DWD = "dwd"
-WEATHER_TYPE_GENERIC = "generic"
-
-PREFERRED_WEATHER_ENTITIES = [
-    "weather.dwd_weather",
-    "weather.met",
-    "weather.forecast_home",
-    "weather.home",
-    "weather.hourly",
-]
-
+# --- Other Constants ---
 ICON_SOLAR = "mdi:solar-power"
 ICON_FORECAST = "mdi:weather-sunny"
 ICON_LEARNING = "mdi:brain"
-ICON_BUTTON = "mdi:play-circle"
+ICON_BUTTON = "mdi:play-circle-outline"
 
 UNIT_KWH = "kWh"
 UNIT_PERCENTAGE = "%"
 
-ERROR_WEATHER_UNAVAILABLE = "weather_unavailable"
-ERROR_DATA_CORRUPTION = "data_corruption"
-ERROR_ML_MODEL_FAILED = "ml_model_failed"
-ERROR_INSUFFICIENT_DATA = "insufficient_data"
-
-DATA_DIR = "/config/solar_forecast_ml"
-DEFAULT_BASE_CAPACITY = 2.13
-HISTORY_FILE = f"{DATA_DIR}/prediction_history.json"
-HOURLY_PROFILE_FILE = f"{DATA_DIR}/hourly_profile.json"
-OLD_HISTORY_FILE = "/config/custom_components/solar_forecast_ml/prediction_history.json"
-OLD_HOURLY_PROFILE_FILE = "/config/custom_components/solar_forecast_ml/hourly_profile.json"
-OLD_WEIGHTS_FILE = "/config/custom_components/solar_forecast_ml/learned_weights.json"
-WEIGHTS_FILE = f"{DATA_DIR}/learned_weights.json"
-
-LOGGER_NAME = f"custom_components.{DOMAIN}"
-
-COORDINATOR_UPDATE_INTERVAL = timedelta(minutes=30)
-LEARNING_UPDATE_INTERVAL = timedelta(hours=1)
-CLEANUP_INTERVAL = timedelta(days=1)
-
-MAX_RETRIES = 3
-RETRY_DELAY = 5
-EXPONENTIAL_BACKOFF = True
+LOGGER_NAME = f"custom_components.{DOMAIN}" # For consistency in logging
 
 FILE_ENCODING = "utf-8"
 JSON_INDENT = 2
-ATOMIC_WRITE_ENABLED = True
+ATOMIC_WRITE_ENABLED = True # Flag if atomic writes are used (they are)
 
-MAX_CONCURRENT_OPERATIONS = 3
-THREAD_POOL_SIZE = 2
-MEMORY_CACHE_SIZE = 100
+# --- Timing / Intervals ---
+COORDINATOR_UPDATE_INTERVAL = timedelta(minutes=30) # Default update interval
+LEARNING_UPDATE_INTERVAL = timedelta(hours=1) # How often samples are collected
+CLEANUP_INTERVAL = timedelta(days=1) # How often cleanup tasks might run
 
+# --- Performance / Limits ---
+MAX_CONCURRENT_OPERATIONS = 3 # Example limit for concurrent tasks
+THREAD_POOL_SIZE = 2 # For blocking operations in executor
+
+# --- Validation Ranges ---
 MIN_SOLAR_CAPACITY = 0.1
-MAX_SOLAR_CAPACITY = 100.0
-MIN_FORECAST_HOURS = 1
-MAX_FORECAST_HOURS = 72
+MAX_SOLAR_CAPACITY = 1000.0 # Increased upper limit from 100.0
+# MIN_TEMPERATURE = -50 # Defined above
+# MAX_TEMPERATURE = 60
+# MIN_HUMIDITY = 0
+# MAX_HUMIDITY = 100
+# MIN_CLOUDS = 0
+# MAX_CLOUDS = 100
 
-MIN_TEMPERATURE = -50
-MAX_TEMPERATURE = 60
-MIN_HUMIDITY = 0
-MAX_HUMIDITY = 100
-MIN_CLOUDS = 0
-MAX_CLOUDS = 100
-
-MIN_LEARNING_SAMPLES = 7
-MAX_LEARNING_SAMPLES = 365
-LEARNING_DECAY_FACTOR = 0.95
-
-ACCURACY_EXCELLENT = 95
-ACCURACY_GOOD = 85
-ACCURACY_FAIR = 70
-ACCURACY_POOR = 50
-
+# --- Status Strings ---
 STATUS_INITIALIZING = "initializing"
 STATUS_READY = "ready"
 STATUS_LEARNING = "learning"
 STATUS_FORECASTING = "forecasting"
 STATUS_ERROR = "error"
-STATUS_OFFLINE = "offline"
+STATUS_OFFLINE = "offline" # Or unavailable?
 
+# --- Device Info ---
 DEVICE_MANUFACTURER = "Zara-Toorox"
-DEVICE_MODEL = "Solar Forecast ML"
-DEVICE_SW_VERSION = VERSION
+# DEVICE_MODEL = INTEGRATION_MODEL # Use constant defined above
+# DEVICE_SW_VERSION = VERSION # Use constant defined above
 
-PREDICTION_MIN_VALUE = 0.0
-PREDICTION_MAX_VALUE = 50.0
-CORRECTION_FACTOR_MIN = 0.1
-CORRECTION_FACTOR_MAX = 5.0
-
-DATA_QUALITY_MIN_SAMPLES = 5
-DATA_QUALITY_MAX_AGE_DAYS = 90
-DATA_QUALITY_MIN_ACCURACY = 0.3
-
-HEALTH_CHECK_INTERVAL = timedelta(minutes=15)
-SERVICE_HEALTH_TIMEOUT = 10
-PERFORMANCE_DEGRADED_THRESHOLD = 0.7
-
-BACKUP_SCHEDULE_HOUR = 3
-BACKUP_BEFORE_TRAINING = True
-BACKUP_MAX_AGE_DAYS = 30
-
-NOTIFICATION_CRITICAL_ERRORS = True
-NOTIFICATION_MODEL_RETRAINED = True
-NOTIFICATION_DATA_CORRUPTION = True
-NOTIFICATION_BACKUP_FAILED = True
-
-HOUR_NORMALIZATION_FACTOR = 24
-SEASONAL_MONTH_MAPPING = {
-    12: "winter", 1: "winter", 2: "winter",
-    3: "spring", 4: "spring", 5: "spring", 
-    6: "summer", 7: "summer", 8: "summer",
-    9: "autumn", 10: "autumn", 11: "autumn"
-}
-
-SUNRISE_HOUR = 6
-SUNSET_HOUR = 19
-PEAK_PRODUCTION_START = 10
-PEAK_PRODUCTION_END = 14
-
-MAX_CONCURRENT_PREDICTIONS = 5
-MAX_TRAINING_TIME_MINUTES = 30
-MAX_MEMORY_USAGE_MB = 500
+# --- Sun Calculation Constants (Used by sun_guard, production_calculator) ---
+SUN_BUFFER_HOURS = 1.5 # <-- GEÄNDERT (Block 4)
+FALLBACK_PRODUCTION_START_HOUR = 5
+FALLBACK_PRODUCTION_END_HOUR = 21

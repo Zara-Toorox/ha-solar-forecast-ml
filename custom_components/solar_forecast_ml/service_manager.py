@@ -1,10 +1,7 @@
 """
-Service Manager for Solar Forecast ML.
-Manages the lifecycle of all services (ML, Weather, Notification, Error Handler).
-FIX: set_entities is called after ML-Init
-Version 4.9.3 - solar_yield_today Fix
-
-Copyright (C) 2025 Zara-Toorox
+Service Manager for Solar Forecast ML Integration.
+Manages the lifecycle and initialization of core services like
+ML Predictor, Weather Service, Notification Service, and Error Handler.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -23,364 +20,416 @@ Copyright (C) 2025 Zara-Toorox
 """
 import asyncio
 import logging
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING, Dict
+
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
-from .const import DOMAIN
+# Import constants used for configuration lookup
+from .const import (
+    DOMAIN, CONF_SOLAR_CAPACITY, DEFAULT_SOLAR_CAPACITY,
+    SERVICE_RETRAIN_MODEL, SERVICE_RESET_LEARNING_DATA
+)
+
+# Use TYPE_CHECKING for components only needed for type hints
+if TYPE_CHECKING:
+    from .data_manager import DataManager
+    from .error_handling_service import ErrorHandlingService
+    from .weather_service import WeatherService
+    from .ml_predictor import MLPredictor
+    from .notification_service import NotificationService
+    from .sun_guard import SunGuard
+    from .coordinator import SolarForecastMLCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class ServiceManager:
     """
-    Manages the lifecycle and initialization of all services.
-    Encapsulates service management logic from the Coordinator.
-    
-    PATCH: Improved service initialization and validation
+    Manages the lifecycle (initialization, access) of various services
+    used by the Solar Forecast ML integration. Encapsulates service
+    management logic, separating it from the Coordinator.
     """
-    
+
     def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        data_manager,
-        weather_entity: str,
+        data_manager: 'DataManager',
+        weather_entity: Optional[str],
         dependencies_ok: bool = False,
         power_entity: Optional[str] = None,
         solar_yield_today: Optional[str] = None,
-        solar_capacity: float = 5.0,
+        solar_capacity: Optional[float] = None,
         temp_sensor: Optional[str] = None,
         wind_sensor: Optional[str] = None,
         rain_sensor: Optional[str] = None,
         uv_sensor: Optional[str] = None,
         lux_sensor: Optional[str] = None,
+        humidity_sensor: Optional[str] = None,
     ):
-        """
-        Initialize Service Manager.
-        
-        Args:
-            hass: HomeAssistant instance
-            entry: ConfigEntry
-            data_manager: DataManager instance
-            weather_entity: Weather Entity ID
-            dependencies_ok: True if dependencies are present
-            power_entity: Power Entity ID
-            solar_yield_today: Solar Yield Today Entity ID
-            solar_capacity: Solar Capacity in kWp
-        """
         self.hass = hass
         self.entry = entry
         self.data_manager = data_manager
-        self.weather_entity = weather_entity
-        
-        self.power_entity = power_entity
-        self.solar_yield_today = solar_yield_today
-        self.solar_capacity = solar_capacity
-        
-        self.temp_sensor = temp_sensor
-        self.wind_sensor = wind_sensor
-        self.rain_sensor = rain_sensor
-        self.uv_sensor = uv_sensor
-        self.lux_sensor = lux_sensor
-        
-        # Service References
-        self.error_handler: Optional[Any] = None
-        self.weather_service: Optional[Any] = None
-        self.ml_predictor: Optional[Any] = None
-        self.notification_service: Optional[Any] = None
-        self.sun_guard: Optional[Any] = None
-        
+        self._initial_weather_entity = weather_entity
+        self._power_entity = power_entity
+        self._solar_yield_today = solar_yield_today
+        self._solar_capacity = solar_capacity if solar_capacity is not None \
+            else float(entry.data.get(CONF_SOLAR_CAPACITY, DEFAULT_SOLAR_CAPACITY))
+        self._temp_sensor = temp_sensor
+        self._wind_sensor = wind_sensor
+        self._rain_sensor = rain_sensor
+        self._uv_sensor = uv_sensor
+        self._lux_sensor = lux_sensor
+        self._humidity_sensor = humidity_sensor
+
+        # Service instance references
+        self.error_handler: Optional['ErrorHandlingService'] = None
+        self.weather_service: Optional['WeatherService'] = None
+        self.ml_predictor: Optional['MLPredictor'] = None
+        self.notification_service: Optional['NotificationService'] = None
+        self.sun_guard: Optional['SunGuard'] = None
+        self.coordinator: Optional['SolarForecastMLCoordinator'] = None
+
         # Status Flags
-        self._services_initialized = False
-        self._ml_ready = False
+        self._services_initialized: bool = False
+        self._ml_ready: bool = False
         self._initialization_lock = asyncio.Lock()
-        
-        self.dependencies_installed = dependencies_ok
-    
+        self.dependencies_installed: bool = dependencies_ok
+
+        _LOGGER.debug("ServiceManager initialized.")
+
     async def initialize_all_services(self) -> bool:
-        """
-        Initializes all services in the correct order.
-        
-        Thread-safe with a lock for parallel calls.
-        
-        PATCH: Improved error handling and validation
-        
-        Returns:
-            True if successfully initialized
-        """
         async with self._initialization_lock:
             if self._services_initialized:
-                _LOGGER.debug("Services already initialized")
+                _LOGGER.debug("Services already initialized, skipping.")
                 return True
-            
-            _LOGGER.info("Initializing services...")
-            
+
+            _LOGGER.info("Initializing managed services...")
+            overall_success = True
+
             try:
+                # 1. Error Handler
                 error_handler_ok = await self._initialize_error_handler()
                 if not error_handler_ok:
-                    _LOGGER.warning("Error Handler initialization failed - proceeding")
-                
+                    _LOGGER.critical("Failed to initialize Error Handling Service. Aborting.")
+                    return False
+
+                # 2. Sun Guard
                 sun_guard_ok = await self._initialize_sun_guard()
                 if not sun_guard_ok:
-                    _LOGGER.warning("Sun Guard initialization failed - proceeding")
-                
-                if not self.notification_service:
-                    self.notification_service = self.hass.data.get(DOMAIN, {}).get("notification_service")
-                    if self.notification_service:
-                        _LOGGER.info("NotificationService taken from hass.data")
-                    else:
-                        notif_ok = await self._initialize_notification_service()
-                        if not notif_ok:
-                            _LOGGER.warning("Notification Service not available")
+                    _LOGGER.warning("Sun Guard initialization failed, continuing without it.")
+
+                # 3. Notification Service
+                self.notification_service = self.hass.data.get(DOMAIN, {}).get("notification_service")
+                if self.notification_service:
+                    _LOGGER.info("NotificationService instance retrieved from hass.data.")
                 else:
-                    _LOGGER.debug("Notification Service already set")
-                
+                    _LOGGER.warning("NotificationService not found in hass.data, attempting initialization.")
+                    notif_ok = await self._initialize_notification_service()
+                    if not notif_ok:
+                        _LOGGER.warning("Notification Service initialization failed or unavailable.")
+
+                # 4. Weather Service
                 weather_ok = await self._initialize_weather_service()
                 if not weather_ok:
-                    _LOGGER.warning("Weather Service initialization failed - proceeding")
-                
+                    _LOGGER.error("Weather Service initialization failed. Forecasts may be unavailable.")
+                    overall_success = False
+
+                # 5. ML Predictor
                 ml_ok = await self._initialize_ml_predictor()
                 if not ml_ok:
-                    _LOGGER.warning("ML Predictor not available - fallback active")
-                    self._ml_ready = False
+                    _LOGGER.warning("ML Predictor initialization failed or skipped (dependencies?).")
+                else:
+                    _LOGGER.info("ML Predictor initialized successfully.")
 
-                
                 self._services_initialized = True
-                _LOGGER.info(f"Services initialized - ML Ready: {self._ml_ready}")
-                
+                _LOGGER.info(f"Service initialization sequence completed. Overall Success: {overall_success}, ML Ready: {self._ml_ready}")
                 self._log_service_status()
-                return True
-                
+                return overall_success
+
             except Exception as e:
-                _LOGGER.error(f"Service initialization failed: {e}", exc_info=True)
+                _LOGGER.critical(f"Unexpected critical error during service initialization: {e}", exc_info=True)
+                self._services_initialized = False
                 return False
-    
+
     def _log_service_status(self):
-        """
-        NEW: Log status of all services for debugging.
-        """
-        _LOGGER.info("Service Status:")
-        _LOGGER.info(f"  - Error Handler: {'OK' if self.error_handler else 'MISSING'}")
-        _LOGGER.info(f"  - Sun Guard: {'OK' if self.sun_guard else 'MISSING'}")
-        _LOGGER.info(f"  - Notification Service: {'OK' if self.notification_service else 'MISSING'}")
-        _LOGGER.info(f"  - Weather Service: {'OK' if self.weather_service else 'MISSING'}")
-        _LOGGER.info(f"  - ML Predictor: {'OK' if self.ml_predictor else 'MISSING'}")
-        _LOGGER.info(f"  - ML Ready: {'YES' if self._ml_ready else 'NO'}")
-    
+        _LOGGER.debug("--- Service Status Report ---")
+        _LOGGER.debug(f"  - Error Handler: {'Initialized' if self.error_handler else 'FAILED'}")
+        _LOGGER.debug(f"  - Sun Guard: {'Initialized' if self.sun_guard else 'Failed/Skipped'}")
+        _LOGGER.debug(f"  - Notification Service: {'Available' if self.notification_service else 'Unavailable'}")
+        _LOGGER.debug(f"  - Weather Service: {'Initialized' if self.weather_service else 'FAILED/Skipped'}")
+        _LOGGER.debug(f"  - ML Predictor: {'Initialized' if self.ml_predictor else 'FAILED/Skipped'}")
+        _LOGGER.debug(f"  - Dependencies Installed: {self.dependencies_installed}")
+        _LOGGER.debug(f"  - ML Ready (Healthy): {self._ml_ready}")
+        _LOGGER.debug("-----------------------------")
+
     async def _initialize_error_handler(self) -> bool:
-        """
-        Initializes Error Handler Service.
-        
-        PATCH: Returns success status
-        """
+        if self.error_handler:
+            return True
+        _LOGGER.debug("Initializing ErrorHandlingService...")
         try:
             from .error_handling_service import ErrorHandlingService
-            
             self.error_handler = ErrorHandlingService()
-            _LOGGER.debug("Error Handler initialized")
+            _LOGGER.info("ErrorHandlingService initialized.")
             return True
-            
         except Exception as e:
-            _LOGGER.error(f"Error Handler initialization failed: {e}", exc_info=True)
+            _LOGGER.exception(f"Failed to initialize ErrorHandlingService: {e}")
             return False
-    
+
     async def _initialize_sun_guard(self) -> bool:
-        """Initializes the Sun Guard service."""
+        """Initializes the Sun Guard service for production time window calculations."""
+        if self.sun_guard:
+            return True
+        _LOGGER.debug("Initializing SunGuard...")
         try:
             from .sun_guard import SunGuard
-            
+            from .const import SUN_BUFFER_HOURS
+
             self.sun_guard = SunGuard(
                 hass=self.hass,
-                buffer_hours=1.0
+                buffer_hours=SUN_BUFFER_HOURS
             )
-            
-            self.sun_guard.log_production_window()
-            
-            if self.sun_guard.is_production_time():
-                _LOGGER.info("DATA COLLECTION STARTED")
-            else:
-                _LOGGER.info("DATA COLLECTION PAUSED")
-            
-            _LOGGER.debug("Sun Guard initialized")
+
+            # --- KORREKTUR: await hinzufügen! ---
+            # Option 1: Warte auf Logging (sicher)
+            await self.sun_guard.log_production_window()
+
+            # Option 2: Hole is_production_time() mit await
+            is_prod = await self.sun_guard.is_production_time()
+            _LOGGER.info(f"SunGuard initialized (Production Time: {is_prod}).")
+
+            # BONUS: Alternativ – Hintergrund-Logging (nicht blockierend)
+            # self.hass.async_create_task(self.sun_guard.log_production_window())
+
             return True
-            
         except Exception as e:
-            _LOGGER.error(f"Sun Guard initialization failed: {e}", exc_info=True)
+            _LOGGER.exception(f"Failed to initialize SunGuard: {e}")
             return False
-    
+
     async def _initialize_notification_service(self) -> bool:
-        """
-        Initializes Notification Service.
-        
-        PATCH: Returns success status
-        """
-        try:
-            from .notification_service import NotificationService
-            
-            self.notification_service = NotificationService(
-                self.hass,
-                self.entry.entry_id
-            )
-            
-            _LOGGER.debug("Notification Service initialized")
+        if self.notification_service:
             return True
-            
+        _LOGGER.debug("Initializing NotificationService...")
+        try:
+            from .notification_service import create_notification_service
+            self.notification_service = await create_notification_service(self.hass)
+            _LOGGER.info("NotificationService initialized.")
+            return True
         except Exception as e:
-            _LOGGER.error(f"Notification Service initialization failed: {e}", exc_info=True)
+            _LOGGER.exception(f"Failed to initialize NotificationService: {e}")
             return False
-    
+
     async def _initialize_weather_service(self) -> bool:
-        """
-        Initializes Weather Service.
-        
-        PATCH: Returns success status
-        """
+        if self.weather_service:
+            return True
+        if not self._initial_weather_entity:
+            _LOGGER.error("Cannot initialize WeatherService: No weather entity configured.")
+            return False
+        _LOGGER.debug(f"Initializing WeatherService for entity: {self._initial_weather_entity}...")
         try:
             from .weather_service import WeatherService
-            
-            weather_state = self.hass.states.get(self.weather_entity)
-            if not weather_state:
-                _LOGGER.error(f"Weather Entity not found: {self.weather_entity}")
-                return False
-            
             self.weather_service = WeatherService(
                 self.hass,
-                self.weather_entity,
+                self._initial_weather_entity,
                 self.error_handler
             )
-            
-            weather_init_success = await self.weather_service.initialize()
-            
-            if weather_init_success:
-                _LOGGER.debug("Weather Service initialized")
-                return True
+            init_ok = await self.weather_service.initialize()
+            if init_ok:
+                _LOGGER.info("WeatherService initialized.")
             else:
-                _LOGGER.error("Weather Service initialization failed")
-                return False
-                
+                _LOGGER.warning("WeatherService.initialize() returned False.")
+            return init_ok
         except Exception as e:
-            _LOGGER.warning(f"Weather Service initialization failed: {e}")
+            _LOGGER.exception(f"Failed to initialize WeatherService: {e}")
             return False
-    
+
     async def _initialize_ml_predictor(self) -> bool:
-        """
-        Initializes ML Predictor with dependencies.
-        
-        PATCH: Returns success status and better validation
-        FIX: set_entities is called after initialize
-        """
+        if self.ml_predictor:
+            return True
+
+        if not self.dependencies_installed:
+            _LOGGER.warning("ML Predictor initialization skipped: Required Python dependencies missing.")
+            self._ml_ready = False
+            return False
+
+        _LOGGER.debug("Initializing MLPredictor...")
         try:
-            if not self.dependencies_installed:
-                _LOGGER.warning(
-                    "ML Dependencies missing (numpy, aiofiles) - "
-                    "ML Predictor will not be initialized"
-                )
-                self._ml_ready = False
-                return False
-            
-            from .ml_predictor import MLPredictor
-            
-            _LOGGER.info("Initializing ML Predictor with dependencies...")
-            
             if not self.data_manager:
-                _LOGGER.error("DataManager not available - ML cannot be initialized")
+                _LOGGER.error("Cannot initialize ML Predictor: DataManager is not available.")
                 return False
-            
+            if not self.error_handler:
+                _LOGGER.error("Cannot initialize ML Predictor: ErrorHandler is not available.")
+                return False
+
+            from .ml_predictor import MLPredictor
+
             self.ml_predictor = MLPredictor(
                 self.hass,
                 self.data_manager,
                 self.error_handler
             )
-            
-            ml_init_success = await self.ml_predictor.initialize()
-            
-            if ml_init_success:
-                _LOGGER.info("ML Predictor successfully initialized")
 
+            ml_init_success = await self.ml_predictor.initialize()
+
+            if ml_init_success:
+                _LOGGER.info("MLPredictor.initialize() successful.")
                 self.ml_predictor.set_entities(
-                    power_entity=self.power_entity,
-                    solar_yield_today=self.solar_yield_today,
-                    weather_entity=self.weather_entity,
-                    solar_capacity=self.solar_capacity,
-                    forecast_cache={},
-                    temp_sensor=self.temp_sensor,
-                    wind_sensor=self.wind_sensor,
-                    rain_sensor=self.rain_sensor,
-                    uv_sensor=self.uv_sensor,
-                    lux_sensor=self.lux_sensor,
+                    power_entity=self._power_entity,
+                    weather_entity=self._initial_weather_entity,
+                    solar_capacity=self._solar_capacity,
+                    temp_sensor=self._temp_sensor,
+                    wind_sensor=self._wind_sensor,
+                    rain_sensor=self._rain_sensor,
+                    uv_sensor=self._uv_sensor,
+                    lux_sensor=self._lux_sensor,
+                    humidity_sensor=self._humidity_sensor,
                     sun_guard=self.sun_guard
                 )
-                _LOGGER.info(
-                    f"ML Entities set: power={self.power_entity}, "
-                    f"yield={self.solar_yield_today}, external_sensors: "
-                    f"temp={self.temp_sensor}, wind={self.wind_sensor}, "
-                    f"rain={self.rain_sensor}, uv={self.uv_sensor}, "
-                    f"lux={self.lux_sensor}"
-                )
+                _LOGGER.debug("Entities configured in MLPredictor and SampleCollector.")
 
-                # *** BACKFILL-TRIGGER WURDE ENTFERNT ***
-                # Ursprünglicher Code:
-                # _LOGGER.debug("Scheduling initial backfill trigger...")
-                # asyncio.create_task(self.ml_predictor.async_run_initial_backfill())
-                
-                self._ml_ready = True
+                self._ml_ready = self.is_ml_ready()
+                _LOGGER.info(f"ML Predictor initialization complete. ML Ready state: {self._ml_ready}")
                 return True
             else:
-                _LOGGER.warning("ML Predictor initialization failed - Fallback active")
+                _LOGGER.warning("MLPredictor.initialize() returned False. ML features disabled.")
                 self._ml_ready = False
+                self.ml_predictor = None
                 return False
-                
-        except ImportError as e:
-            _LOGGER.error(f"ML Predictor import failed (Dependencies missing?): {e}")
+
+        except ImportError as import_err:
+            _LOGGER.critical(f"ML Predictor import failed: {import_err}.")
             self._ml_ready = False
+            self.ml_predictor = None
+            self.dependencies_installed = False
             return False
         except Exception as e:
-            _LOGGER.error(f"ML Predictor initialization failed: {e}", exc_info=True)
+            _LOGGER.exception(f"Unexpected error during ML Predictor initialization: {e}")
             self._ml_ready = False
+            self.ml_predictor = None
             return False
-    
+
     def is_ml_ready(self) -> bool:
-        """
-        Checks if ML is ready.
-        
-        Returns:
-            True if ML Predictor is available and healthy
-        """
-        if not self._ml_ready or not self.ml_predictor:
+        if not self._services_initialized:
             return False
-        
+        if not self.ml_predictor:
+            return False
+        if not self.dependencies_installed:
+            return False
+
         try:
-            if hasattr(self.ml_predictor, 'is_healthy'):
-                return self.ml_predictor.is_healthy()
-            else:
-                return True
+            is_healthy = self.ml_predictor.is_healthy()
+            self._ml_ready = is_healthy
+            return is_healthy
         except Exception as e:
-            _LOGGER.debug(f"ML Health check failed: {e}")
+            _LOGGER.warning(f"ML health check failed with an error: {e}")
+            self._ml_ready = False
             return False
-    
+
     def is_initialized(self) -> bool:
-        """
-        Checks if services are initialized.
-        
-        Returns:
-            True if initialized
-        """
         return self._services_initialized
-    
-    def get_service_status(self) -> dict[str, Any]:
-        """
-        NEW: Returns status of all services for debugging/UI.
-        
-        Returns:
-            Dict with service status
-        """
+
+    def get_service_status(self) -> Dict[str, Any]:
         return {
-            "initialized": self._services_initialized,
+            "initialization_complete": self._services_initialized,
+            "dependencies_installed": self.dependencies_installed,
             "error_handler_available": self.error_handler is not None,
             "notification_service_available": self.notification_service is not None,
+            "sun_guard_available": self.sun_guard is not None,
             "weather_service_available": self.weather_service is not None,
             "ml_predictor_available": self.ml_predictor is not None,
-            "ml_ready": self._ml_ready,
-            "dependencies_installed": self.dependencies_installed,
+            "ml_ready_flag": self._ml_ready,
+            "ml_healthy_check": self.is_ml_ready() if self._services_initialized else None,
         }
+
+    async def cleanup(self) -> None:
+        _LOGGER.info("Cleaning up ServiceManager and managed services...")
+        if self.ml_predictor:
+            await self.ml_predictor.async_will_remove_from_hass()
+        self._services_initialized = False
+        _LOGGER.info("ServiceManager cleanup complete.")
+
+    # --- Service Handler ---
+    async def _handle_service_retrain(self, service_call: Any) -> None:
+        _LOGGER.info("Service 'force_retrain' called. Triggering ML model training...")
+        if not self.ml_predictor:
+            _LOGGER.error("Cannot retrain model: ML Predictor service is not available.")
+            if self.notification_service:
+                await self.notification_service.show_installation_error(
+                    "ML Training Failed: The ML Predictor service is not running. Check logs.",
+                    notification_id="ml_retrain_fail_no_service"
+                )
+            return
+
+        try:
+            result = await self.ml_predictor.train_model()
+            if result and result.success:
+                accuracy_str = f"{result.accuracy * 100:.1f}%" if result.accuracy is not None else "N/A"
+                _LOGGER.info(f"Service-triggered ML training completed successfully. Accuracy: {accuracy_str}")
+                if self.notification_service:
+                    await self.notification_service.show_installation_success(
+                        "ML Training Successful",
+                        f"Manual ML training completed. New accuracy: {accuracy_str}",
+                        notification_id="ml_retrain_success"
+                    )
+            elif result:
+                _LOGGER.error(f"Service-triggered ML training failed: {result.error_message}")
+                if self.notification_service:
+                    await self.notification_service.show_installation_error(
+                        f"Manual ML training failed: {result.error_message}",
+                        notification_id="ml_retrain_fail"
+                    )
+            else:
+                _LOGGER.error("Service-triggered ML training failed with an unexpected result structure.")
+
+        except Exception as e:
+            _LOGGER.error(f"An unexpected error occurred during service-triggered ML training: {e}", exc_info=True)
+            if self.notification_service:
+                await self.notification_service.show_installation_error(
+                    f"An unexpected error occurred during training: {e}",
+                    notification_id="ml_retrain_fail_exception"
+                )
+
+    async def _handle_service_reset(self, service_call: Any) -> None:
+        _LOGGER.warning("Service 'reset_model' called. This will delete all learned data.")
+        if not self.data_manager:
+            _LOGGER.error("Cannot reset model: DataManager is not available.")
+            return
+        if not self.ml_predictor:
+            _LOGGER.error("Cannot reset model: ML Predictor is not available.")
+            return
+        if not self.coordinator:
+            _LOGGER.error("Cannot reset model: Coordinator reference is missing.")
+            return
+
+        try:
+            await self.data_manager.reset_ml_data()
+            _LOGGER.info("ML data files (weights, profile, samples) have been reset to default.")
+
+            from .ml_scaler import StandardScaler
+            self.ml_predictor.scaler = StandardScaler()
+            self.ml_predictor.current_weights = None
+            self.ml_predictor.current_profile = None
+            self.ml_predictor.model_loaded = False
+            self.ml_predictor.current_accuracy = None
+            self.ml_predictor.training_samples = 0
+            self.ml_predictor.last_training_time = None
+
+            await self.ml_predictor.initialize()
+            await self.coordinator.async_request_refresh()
+
+            _LOGGER.info("ML model has been reset and re-initialized.")
+            if self.notification_service:
+                await self.notification_service.show_installation_success(
+                    "ML Model Reset",
+                    "All ML data has been deleted. The model will start learning from scratch.",
+                    notification_id="ml_reset_success"
+                )
+
+        except Exception as e:
+            _LOGGER.error(f"An unexpected error occurred during model reset: {e}", exc_info=True)
+            if self.notification_service:
+                await self.notification_service.show_installation_error(
+                    f"An unexpected error occurred during reset: {e}",
+                    notification_id="ml_reset_fail_exception"
+                )
