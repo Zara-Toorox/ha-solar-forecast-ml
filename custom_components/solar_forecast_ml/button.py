@@ -31,7 +31,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 # Use constants for domain and potentially device info
 from .const import DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, ML_VERSION
-from .helpers import SafeDateTimeUtil as dt_util # Keep if used, remove if not
+from .core.helpers import SafeDateTimeUtil as dt_util # Keep if used, remove if not
 from .coordinator import SolarForecastMLCoordinator
 
 _LOGGER = logging.getLogger(__name__)

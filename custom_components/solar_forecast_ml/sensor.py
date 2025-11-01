@@ -1,6 +1,6 @@
 """
-Sensor platform setup for Solar Forecast ML Integration.
-Imports and registers sensor entities based on configuration.
+Sensor platform for Solar Forecast ML integration.
+Platform entry point - delegates to sensor implementations.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -18,24 +18,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Copyright (C) 2025 Zara-Toorox
 """
 import logging
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, CONF_HOURLY, CONF_DIAGNOSTIC
-from .coordinator import SolarForecastMLCoordinator
+from .const import DOMAIN, CONF_DIAGNOSTIC, CONF_HOURLY
 
-# Import sensors from their respective modules
-from .sensor_core import (
+# Import core sensors from sensors module
+from .sensors.base import (
     SolarForecastSensor,
-    NextHourSensor,
     PeakProductionHourSensor,
     ProductionTimeSensor,
     AverageYieldSensor,
     AutarkySensor,
+    NextHourSensor,
+    ExpectedDailyProductionSensor,
 )
-from .sensor_diagnostic import (
+
+# Import diagnostic sensors
+from .sensors.diagnostic import (
     DiagnosticStatusSensor,
     SolarAccuracySensor,
     YesterdayDeviationSensor,
@@ -47,11 +48,12 @@ from .sensor_diagnostic import (
     MLMetricsSensor,
     CoordinatorHealthSensor,
     DataFilesStatusSensor,
-    SunGuardWindowSensor, # <-- NEU (Block 4)
 )
-from .sensor_states import (
+
+# Import state sensors
+from .sensors.states import (
     ExternalTempSensor,
-    ExternalHumiditySensor, # <-- NEU (Block 3)
+    ExternalHumiditySensor,
     ExternalWindSensor,
     ExternalRainSensor,
     ExternalUVSensor,
@@ -60,7 +62,6 @@ from .sensor_states import (
     YieldSensorStateSensor,
 )
 
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -68,31 +69,32 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-) -> None:
+) -> bool:
     """Set up Solar Forecast ML sensors from config entry."""
-    coordinator: SolarForecastMLCoordinator = hass.data[DOMAIN][entry.entry_id]
-
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    
     # Determine which sensor sets to add based on options
-    diagnostic_mode_enabled = entry.options.get(CONF_DIAGNOSTIC, True) # Default to True
-    enable_hourly = entry.options.get(CONF_HOURLY, False) # Default to False
-
+    diagnostic_mode_enabled = entry.options.get(CONF_DIAGNOSTIC, True)
+    enable_hourly = entry.options.get(CONF_HOURLY, False)
+    
     _LOGGER.info(
         f"Setting up sensors: Diagnostic Mode={'Enabled' if diagnostic_mode_enabled else 'Disabled'}, "
         f"Hourly Sensor={'Enabled' if enable_hourly else 'Disabled'}"
     )
-
+    
     # Core sensors are always added
     core_entities = [
-        SolarForecastSensor(coordinator, entry, "today"),
+        SolarForecastSensor(coordinator, entry, "remaining"),
         SolarForecastSensor(coordinator, entry, "tomorrow"),
         PeakProductionHourSensor(coordinator, entry),
-        ProductionTimeSensor(coordinator, entry), # The live-updating sensor
+        ProductionTimeSensor(coordinator, entry),
         AverageYieldSensor(coordinator, entry),
         AutarkySensor(coordinator, entry),
+        ExpectedDailyProductionSensor(coordinator, entry),
     ]
-
+    
     entities_to_add = core_entities
-
+    
     # Add diagnostic sensors if enabled
     if diagnostic_mode_enabled:
         diagnostic_entities = [
@@ -107,37 +109,34 @@ async def async_setup_entry(
             MLMetricsSensor(coordinator, entry),
             CoordinatorHealthSensor(coordinator, entry),
             DataFilesStatusSensor(coordinator, entry),
-            SunGuardWindowSensor(coordinator, entry), # <-- NEU (Block 4)
-            # State sensors are now separate but often considered diagnostic
-            ExternalTempSensor(coordinator, entry),
-            ExternalHumiditySensor(coordinator, entry), # <-- NEU (Block 3)
-            ExternalWindSensor(coordinator, entry),
-            ExternalRainSensor(coordinator, entry),
-            ExternalUVSensor(coordinator, entry),
-            ExternalLuxSensor(coordinator, entry),
-            PowerSensorStateSensor(coordinator, entry), # Now a normal sensor
-            YieldSensorStateSensor(coordinator, entry), # Now a normal sensor
+            # State sensors use hass instead of coordinator
+            ExternalTempSensor(hass, entry),
+            ExternalHumiditySensor(hass, entry),
+            ExternalWindSensor(hass, entry),
+            ExternalRainSensor(hass, entry),
+            ExternalUVSensor(hass, entry),
+            ExternalLuxSensor(hass, entry),
+            PowerSensorStateSensor(hass, entry),
+            YieldSensorStateSensor(hass, entry),
         ]
         entities_to_add.extend(diagnostic_entities)
         _LOGGER.debug(f"Adding {len(diagnostic_entities)} diagnostic and state sensors.")
     else:
-        # If diagnostic mode is off, still add the NORMAL state sensors
+        # If diagnostic mode is off, still add the state sensors
         state_entities = [
-             PowerSensorStateSensor(coordinator, entry),
-             YieldSensorStateSensor(coordinator, entry),
+            PowerSensorStateSensor(hass, entry),
+            YieldSensorStateSensor(hass, entry),
         ]
         entities_to_add.extend(state_entities)
         _LOGGER.debug(f"Diagnostic mode disabled. Adding {len(state_entities)} state sensors.")
-
-
+    
     # Add hourly sensor if enabled
     if enable_hourly:
         entities_to_add.append(NextHourSensor(coordinator, entry))
         _LOGGER.debug("Adding Next Hour Forecast sensor.")
-
+    
     # Register all selected entities
-    async_add_entities(entities_to_add, True) # True enables automatic polling via coordinator where applicable
+    async_add_entities(entities_to_add, True)
     _LOGGER.info(f"Successfully added {len(entities_to_add)} Solar Forecast ML sensors.")
-
-# All sensor class definitions have been moved to sensor_core.py,
-# sensor_diagnostic.py, and sensor_states.py.
+    
+    return True

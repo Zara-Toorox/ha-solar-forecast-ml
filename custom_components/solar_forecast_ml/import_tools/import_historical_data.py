@@ -46,8 +46,8 @@ logging.basicConfig(
 _LOGGER = logging.getLogger(__name__)
 
 # Constants
-ML_MODEL_VERSION = "1.0.0"
-DATA_VERSION = "1.0.0"
+ML_MODEL_VERSION = "1.0"
+DATA_VERSION = "1.0"
 
 
 class HistoricalDataImporter:
@@ -225,11 +225,22 @@ class HistoricalDataImporter:
                     optional_data.get('lux', {}).get(hour_key, [])
                 )
                 
+                # Derive weather condition from sensor data
+                if rain > 0.5:
+                    condition = 'rainy'
+                elif uv_index > 5 and lux > 50000:
+                    condition = 'sunny'
+                elif uv_index > 2:
+                    condition = 'partlycloudy'
+                else:
+                    condition = 'cloudy'
+                
                 # Build weather_data dict (matching integration format)
                 weather_data = {
                     'temperature': round(temperature, 2),
                     'humidity': round(max(0.0, min(100.0, humidity_val)), 2),
-                    'cloudiness': 50.0,  # Default - not available from sensors
+                    'cloud_cover': 50.0,  # Default - not available from sensors
+                    'condition': condition,
                     'wind_speed': round(max(0.0, wind_speed), 2),
                     'pressure': 1013.0  # Default - not available from sensors
                 }

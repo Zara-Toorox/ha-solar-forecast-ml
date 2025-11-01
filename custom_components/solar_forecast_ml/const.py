@@ -45,7 +45,18 @@ CONF_LUX_SENSOR = "lux_sensor"
 CONF_TEMP_SENSOR = "temp_sensor"
 CONF_WIND_SENSOR = "wind_sensor"
 CONF_UV_SENSOR = "uv_sensor"
-CONF_HUMIDITY_SENSOR = "humidity_sensor" # <-- NEU (Block 3)
+CONF_HUMIDITY_SENSOR = "humidity_sensor"
+
+# --- External Sensor Mapping (Single Source of Truth) ---
+# Maps internal keys to config entry keys for centralized sensor handling
+EXTERNAL_SENSOR_MAPPING = {
+    'temperature': CONF_TEMP_SENSOR,
+    'humidity': CONF_HUMIDITY_SENSOR,
+    'wind_speed': CONF_WIND_SENSOR,
+    'rain': CONF_RAIN_SENSOR,
+    'uv_index': CONF_UV_SENSOR,
+    'lux': CONF_LUX_SENSOR,
+}
 
 # --- Removed Configuration Keys (Dead Ends) ---
 # CONF_CURRENT_POWER = "current_power" # Removed - Duplicated logic with CONF_POWER_ENTITY
@@ -67,7 +78,7 @@ CONF_NOTIFY_STARTUP = "notify_startup"
 CONF_NOTIFY_FORECAST = "notify_forecast"
 CONF_NOTIFY_LEARNING = "notify_learning"
 CONF_NOTIFY_SUCCESSFUL_LEARNING = "notify_successful_learning"
-CONF_LEARNING_ENABLED = "learning_enabled" # <-- WIEDER HINZUGEFÜGT
+CONF_LEARNING_ENABLED = "learning_enabled" # <-- WIEDER HINZUGEFÃƒÅ“GT
 
 # --- Deprecated/Legacy Configuration Keys (Keep for potential migration logic if needed) ---
 # CONF_PANEL_EFFICIENCY = "panel_efficiency" # Might be needed for migration from older versions
@@ -80,6 +91,14 @@ DEFAULT_SOLAR_CAPACITY = 5.0 # kWp
 # DEFAULT_AZIMUTH = 180.0
 # DEFAULT_TILT = 30.0
 UPDATE_INTERVAL = timedelta(minutes=30) # Default Coordinator update interval
+
+# --- Physical Limits and Units ---
+PEAK_POWER_UNIT = "kW"  # System-wide unit for peak power
+MAX_HOURLY_PRODUCTION_FACTOR = 1.0  # kWh per hour ≈ kWp under perfect conditions
+# Safety margin for hourly production (20% above theoretical max)
+HOURLY_PRODUCTION_SAFETY_MARGIN = 1.2
+# Fallback max hourly production if peak power not configured (in kWh)
+DEFAULT_MAX_HOURLY_KWH = 3.0
 
 # --- Scheduling Constants ---
 DAILY_UPDATE_HOUR = 6      # Hour for morning forecast update
@@ -99,7 +118,7 @@ DATA_DIR = f"/config/{DOMAIN}" # Use domain in path for uniqueness
 DATA_VERSION = "1.0" # Version for the data format within JSON files
 MAX_PREDICTION_HISTORY = 365 # Max days of prediction records to keep
 MAX_HOURLY_SAMPLES = 1440 # Max hourly samples (e.g., 60 days * 24 hours)
-MIN_TRAINING_DATA_POINTS = 50 # <-- GEÄNDERT (Stabilität)
+MIN_TRAINING_DATA_POINTS = 50 # <-- GEÃƒâ€žNDERT (StabilitÃƒÂ¤t)
 BACKUP_RETENTION_DAYS = 30 # How long to keep backups (if implemented)
 MAX_BACKUP_FILES = 10      # Max number of backup files (if implemented)
 
@@ -192,7 +211,7 @@ DEVICE_MANUFACTURER = "Zara-Toorox"
 # DEVICE_MODEL = INTEGRATION_MODEL # Use constant defined above
 # DEVICE_SW_VERSION = VERSION # Use constant defined above
 
-# --- Sun Calculation Constants (Used by sun_guard, production_calculator) ---
-SUN_BUFFER_HOURS = 1.5 # <-- GEÄNDERT (Block 4)
+# --- Sun Calculation Constants ---
+SUN_BUFFER_HOURS = 1.5 # <-- GEÃƒâ€žNDERT (Block 4)
 FALLBACK_PRODUCTION_START_HOUR = 5
 FALLBACK_PRODUCTION_END_HOUR = 21
