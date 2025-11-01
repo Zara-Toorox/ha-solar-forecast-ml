@@ -57,7 +57,7 @@ class BaseEntityStateSensor(SensorEntity):
         entry: ConfigEntry,
         source_entity_id_key: Optional[str],  # Key to look up in entry.data
         unique_id_key: str,
-        name: str,
+        translation_key: str,
         icon: str
     ):
         """Initialize the state sensor."""
@@ -65,7 +65,7 @@ class BaseEntityStateSensor(SensorEntity):
         self.entry = entry
         self._source_entity_id_key = source_entity_id_key
         self._attr_unique_id = f"{entry.entry_id}_{unique_id_key}"
-        self._attr_name = name
+        self._attr_translation_key = translation_key
         self._attr_icon = icon
         self._source_entity_id: Optional[str] = None  # Will be set in async_added_to_hass
 
@@ -127,7 +127,7 @@ class BaseEntityStateSensor(SensorEntity):
         
         _LOGGER.debug(
             f"StateSensor {self.entity_id} received update from {source_entity}: "
-            f"{old_value} â†’ {new_value}"
+            f"{old_value} Ã¢â€ â€™ {new_value}"
         )
         
         self.async_write_ha_state()
@@ -188,7 +188,7 @@ class ExternalTempSensor(BaseEntityStateSensor):
             entry,
             source_entity_id_key=CONF_TEMP_SENSOR,
             unique_id_key="external_temp_state",
-            name="External Temperature Sensor State",
+            translation_key="external_temp_state",
             icon="mdi:thermometer-check"
         )
 
@@ -201,7 +201,7 @@ class ExternalHumiditySensor(BaseEntityStateSensor):
             entry,
             source_entity_id_key=CONF_HUMIDITY_SENSOR,
             unique_id_key="external_humidity_state",
-            name="External Humidity Sensor State",
+            translation_key="external_humidity_state",
             icon="mdi:water-percent-alert"
         )
 
@@ -214,7 +214,7 @@ class ExternalWindSensor(BaseEntityStateSensor):
             entry,
             source_entity_id_key=CONF_WIND_SENSOR,
             unique_id_key="external_wind_state",
-            name="External Wind Sensor State",
+            translation_key="external_wind_state",
             icon="mdi:weather-windy-variant"
         )
 
@@ -227,7 +227,7 @@ class ExternalRainSensor(BaseEntityStateSensor):
             entry,
             source_entity_id_key=CONF_RAIN_SENSOR,
             unique_id_key="external_rain_state",
-            name="External Rain Sensor State",
+            translation_key="external_rain_state",
             icon="mdi:weather-rainy-check"
         )
 
@@ -240,7 +240,7 @@ class ExternalUVSensor(BaseEntityStateSensor):
             entry,
             source_entity_id_key=CONF_UV_SENSOR,
             unique_id_key="external_uv_state",
-            name="External UV Sensor State",
+            translation_key="external_uv_state",
             icon="mdi:sun-wireless-outline"
         )
 
@@ -253,7 +253,7 @@ class ExternalLuxSensor(BaseEntityStateSensor):
             entry,
             source_entity_id_key=CONF_LUX_SENSOR,
             unique_id_key="external_lux_state",
-            name="External Illuminance Sensor State",
+            translation_key="external_lux_state",
             icon="mdi:brightness-5-check"
         )
 
@@ -271,7 +271,7 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
             entry,
             source_entity_id_key=CONF_POWER_ENTITY,
             unique_id_key="power_sensor_state",
-            name="Power Sensor State",
+            translation_key="power_sensor_state",
             icon="mdi:flash-alert-outline"
         )
 
@@ -287,6 +287,6 @@ class YieldSensorStateSensor(BaseEntityStateSensor):
             entry,
             source_entity_id_key=CONF_SOLAR_YIELD_TODAY,
             unique_id_key="yield_sensor_state",
-            name="Yield Sensor State",
+            translation_key="yield_sensor_state",
             icon="mdi:counter"
         )

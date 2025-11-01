@@ -33,7 +33,33 @@
       },
       "reconfigure": {
         "title": "Reconfigure Solar Forecast ML",
-        "description": "Update configuration\nEmpty optional fields will clear their value"
+        "description": "Update configuration\nEmpty optional fields will clear their value",
+        "data": {
+          "weather_entity": "Weather Sensor",
+          "power_entity": "Power Sensor (W)",
+          "solar_yield_today": "Daily Yield (kWh)",
+          "total_consumption_today": "Daily Consumption (kWh)",
+          "solar_capacity": "System Capacity (kWp)",
+          "rain_sensor": "Rain Sensor",
+          "lux_sensor": "Illuminance Sensor (lx)",
+          "temp_sensor": "Temperature Sensor",
+          "wind_sensor": "Wind Sensor",
+          "uv_sensor": "UV Sensor",
+          "humidity_sensor": "Humidity Sensor"
+        },
+        "data_description": {
+          "weather_entity": "Weather entity for forecast (Required)",
+          "power_entity": "Current power in Watts (Required)",
+          "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
+          "total_consumption_today": "Daily consumption in kWh (Optional)",
+          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, default: 5.0 kWp)",
+          "rain_sensor": "External rain sensor (Optional)",
+          "lux_sensor": "External illuminance in Lux (Optional)",
+          "temp_sensor": "External temperature (Optional)",
+          "wind_sensor": "External wind speed (Optional)",
+          "uv_sensor": "External UV index (Optional)",
+          "humidity_sensor": "External humidity (Optional)"
+        }
       }
     },
     "error": {
@@ -111,7 +137,7 @@
   "entity": {
     "sensor": {
       "today_forecast": {
-        "name": "Forecast Today"
+        "name": "Forecast Today Remaining"
       },
       "tomorrow_forecast": {
         "name": "Forecast Tomorrow"
@@ -119,56 +145,77 @@
       "next_hour_forecast": {
         "name": "Next Hour Forecast"
       },
+      "peak_production_hour": {
+        "name": "Best Hour for Consumption"
+      },
+      "average_yield": {
+        "name": "Average Monthly Yield"
+      },
+      "self_sufficiency": {
+        "name": "Self-Sufficiency"
+      },
+      "expected_daily_production": {
+        "name": "Expected Daily Production"
+      },
       "production_time": {
         "name": "Production Time Today"
       },
-      "self_sufficiency": {
-        "name": "Self-Sufficiency Today"
+      "diagnostic_status": {
+        "name": "System Diagnostic Status"
       },
-      "efficiency": {
-        "name": "System Efficiency Today"
+      "yesterday_accuracy": {
+        "name": "Yesterday Forecast Accuracy"
       },
-      "model_state": {
-        "name": "ML Model State",
-        "state": {
-          "not_trained": "Not Trained",
-          "training": "Training",
-          "trained": "Trained",
-          "error": "Error",
-          "rule_based": "Rule-Based"
-        }
+      "yesterday_deviation": {
+        "name": "Yesterday Forecast Deviation"
       },
-      "training_samples": {
-        "name": "Training Samples"
+      "last_update_timestamp": {
+        "name": "Last Update Timestamp"
       },
-      "model_accuracy": {
-        "name": "Model Accuracy"
+      "data_age": {
+        "name": "Data Age"
       },
-      "last_training": {
-        "name": "Last Training"
+      "last_ml_training": {
+        "name": "Last ML Training"
       },
-      "next_training": {
-        "name": "Next Training"
+      "next_scheduled_task": {
+        "name": "Next Scheduled Task"
       },
-      "forecast_method": {
-        "name": "Forecast Method",
-        "state": {
-          "ml": "Machine Learning",
-          "rule_based": "Rule-Based",
-          "fallback": "Fallback"
-        }
+      "ml_service_status": {
+        "name": "ML Service Status"
       },
-      "data_quality": {
-        "name": "Data Quality"
+      "ml_metrics": {
+        "name": "ML Model Metrics"
       },
-      "api_status": {
-        "name": "Weather API Status",
-        "state": {
-          "ok": "OK",
-          "error": "Error",
-          "rate_limited": "Rate Limited",
-          "unavailable": "Unavailable"
-        }
+      "coordinator_health": {
+        "name": "Coordinator Health"
+      },
+      "data_files_status": {
+        "name": "Data Files Status"
+      },
+      "external_temp_state": {
+        "name": "External Temperature Sensor State"
+      },
+      "external_humidity_state": {
+        "name": "External Humidity Sensor State"
+      },
+      "external_wind_state": {
+        "name": "External Wind Sensor State"
+      },
+      "external_rain_state": {
+        "name": "External Rain Sensor State"
+      },
+      "external_uv_state": {
+        "name": "External UV Sensor State"
+      },
+      "external_lux_state": {
+        "name": "External Illuminance Sensor State"
+      },
+      "power_sensor_state": {
+        "name": "Power Sensor State"
+      },
+      "yield_sensor_state": {
+        "name": "Yield Sensor State"
       }
     },
     "button": {
@@ -177,61 +224,6 @@
       },
       "manual_learning": {
         "name": "Train Model"
-      }
-    }
-  },
-  "state_attributes": {
-    "forecast": {
-      "method": "Forecast Method",
-      "confidence": "Confidence",
-      "updated": "Last Update",
-      "weather_condition": "Weather Condition",
-      "cloud_coverage": "Cloud Coverage",
-      "temperature": "Temperature",
-      "uv_index": "UV Index",
-      "sunshine_duration": "Sunshine Duration"
-    },
-    "model": {
-      "accuracy": "Accuracy",
-      "samples": "Training Samples",
-      "last_trained": "Last Training",
-      "mae": "Mean Absolute Error",
-      "rmse": "Root Mean Square Error",
-      "features": "Feature Count"
-    },
-    "production": {
-      "start_time": "Production Start",
-      "end_time": "Production End",
-      "peak_time": "Peak Time",
-      "peak_power": "Peak Power",
-      "current_power": "Current Power",
-      "total_today": "Total Today"
-    }
-  },
-  "issues": {
-    "model_training_failed": {
-      "title": "ML Model Training Failed",
-      "description": "Training failed: {error}\nCheck logs for details."
-    },
-    "insufficient_data": {
-      "title": "Insufficient Training Data",
-      "description": "Need {required} samples, have {current}. Continue collecting data."
-    },
-    "weather_api_error": {
-      "title": "Weather API Error",
-      "description": "Weather API unavailable: {error}\nUsing fallback forecast."
-    },
-    "sensor_unavailable": {
-      "title": "Sensor Unavailable",
-      "description": "Required sensor '{entity}' unavailable. Check configuration."
-    }
-  },
-  "selector": {
-    "forecast_method": {
-      "options": {
-        "ml": "Machine Learning (if trained)",
-        "rule_based": "Rule-Based Only",
-        "auto": "Automatic (ML with fallback)"
       }
     }
   }

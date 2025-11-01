@@ -1,0 +1,230 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solar Forecast ML",
+        "description": "Pflicht: Wetter-Sensor, Leistungs-Sensor, Tagesertrag\nOptional: Alle anderen Felder",
+        "data": {
+          "weather_entity": "Wetter-Sensor",
+          "power_entity": "Leistungs-Sensor (W)",
+          "solar_yield_today": "Tagesertrag (kWh)",
+          "total_consumption_today": "Tagesverbrauch (kWh)",
+          "solar_capacity": "Anlagenleistung (kWp)",
+          "rain_sensor": "Regen-Sensor",
+          "lux_sensor": "Helligkeits-Sensor (lx)",
+          "temp_sensor": "Temperatur-Sensor",
+          "wind_sensor": "Wind-Sensor",
+          "uv_sensor": "UV-Sensor",
+          "humidity_sensor": "Luftfeuchtigkeits-Sensor"
+        },
+        "data_description": {
+          "weather_entity": "Wetter-Entität für Prognose (Pflicht)",
+          "power_entity": "Aktuelle Leistung in Watt (Pflicht)",
+          "solar_yield_today": "Tagesertrag in kWh - MUSS um Mitternacht zurückgesetzt werden (Pflicht)",
+          "total_consumption_today": "Tagesverbrauch in kWh (Optional)",
+          "solar_capacity": "Spitzenleistung in kWp, z.B. 5.5 (Optional, Standard: 5.0)",
+          "rain_sensor": "Externer Regen-Sensor (Optional)",
+          "lux_sensor": "Externe Helligkeit in Lux (Optional)",
+          "temp_sensor": "Externe Temperatur (Optional)",
+          "wind_sensor": "Externe Windgeschwindigkeit (Optional)",
+          "uv_sensor": "Externer UV-Index (Optional)",
+          "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)"
+        }
+      },
+      "reconfigure": {
+        "title": "Solar Forecast ML neu konfigurieren",
+        "description": "Konfiguration aktualisieren\nLeere optionale Felder löschen den aktuellen Wert",
+        "data": {
+          "weather_entity": "Wetter-Sensor",
+          "power_entity": "Leistungs-Sensor (W)",
+          "solar_yield_today": "Tagesertrag (kWh)",
+          "total_consumption_today": "Tagesverbrauch (kWh)",
+          "solar_capacity": "Anlagenleistung (kWp)",
+          "rain_sensor": "Regen-Sensor",
+          "lux_sensor": "Helligkeits-Sensor (lx)",
+          "temp_sensor": "Temperatur-Sensor",
+          "wind_sensor": "Wind-Sensor",
+          "uv_sensor": "UV-Sensor",
+          "humidity_sensor": "Luftfeuchtigkeits-Sensor"
+        },
+        "data_description": {
+          "weather_entity": "Wetter-Entität für Prognose (Pflicht)",
+          "power_entity": "Aktuelle Leistung in Watt (Pflicht)",
+          "solar_yield_today": "Tagesertrag in kWh - MUSS um Mitternacht zurückgesetzt werden (Pflicht)",
+          "total_consumption_today": "Tagesverbrauch in kWh (Optional)",
+          "solar_capacity": "Spitzenleistung in kWp, z.B. 5.5 (Optional, Standard: 5.0 kWp)",
+          "rain_sensor": "Externer Regen-Sensor (Optional)",
+          "lux_sensor": "Externe Helligkeit in Lux (Optional)",
+          "temp_sensor": "Externe Temperatur (Optional)",
+          "wind_sensor": "Externe Windgeschwindigkeit (Optional)",
+          "uv_sensor": "Externer UV-Index (Optional)",
+          "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Sensor fehlgeschlagen",
+      "invalid_auth": "Ungültige Authentifizierung",
+      "unknown": "Unbekannter Fehler aufgetreten",
+      "invalid_capacity": "Leistung muss zwischen 0.1 und 1000.0 kWp liegen",
+      "invalid_input": "Ungültiges Eingabeformat",
+      "required": "Feld erforderlich",
+      "already_configured": "Wetter-Entität bereits in Verwendung",
+      "sensor_not_found": "Sensor-Entität nicht gefunden",
+      "invalid_sensor_state": "Sensor-Status ungültig oder nicht verfügbar"
+    },
+    "abort": {
+      "already_configured": "Integration bereits konfiguriert",
+      "reconfigure_successful": "Neukonfiguration erfolgreich",
+      "not_reconfigure": "Nur für Neukonfiguration verfügbar",
+      "entry_not_found": "Konfigurationseintrag nicht gefunden"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Erweiterte Optionen",
+        "description": "Update-Intervalle und Benachrichtigungen konfigurieren",
+        "data": {
+          "update_interval": "Update-Intervall (s)",
+          "diagnostic": "Diagnose-Modus",
+          "hourly": "Stunden-Prognose Sensor",
+          "notify_startup": "Start-Benachrichtigung",
+          "notify_forecast": "Prognose-Benachrichtigungen",
+          "notify_learning": "Trainings-Benachrichtigungen",
+          "notify_successful_learning": "Erfolgs-Benachrichtigungen"
+        },
+        "data_description": {
+          "update_interval": "Prognose-Update-Intervall (300-86400s, Standard: 1800)",
+          "diagnostic": "Diagnose-Sensoren zur Überwachung aktivieren",
+          "hourly": "Nächste-Stunde-Prognose Sensor aktivieren",
+          "notify_startup": "Benachrichtigung beim Start anzeigen",
+          "notify_forecast": "Bei Prognose-Updates benachrichtigen",
+          "notify_learning": "Bei Trainingsstart benachrichtigen",
+          "notify_successful_learning": "Bei erfolgreichem Training benachrichtigen"
+        }
+      }
+    },
+    "error": {
+      "invalid_interval": "Intervall muss zwischen 300 und 86400 Sekunden liegen",
+      "invalid_input": "Ungültiges Eingabeformat"
+    }
+  },
+  "services": {
+    "train_model": {
+      "name": "ML-Modell trainieren",
+      "description": "Manuelles Training des ML-Modells mit gesammelten Produktionsdaten",
+      "fields": {
+        "force": {
+          "name": "Training erzwingen",
+          "description": "Training erzwingen, auch wenn Mindestanzahl an Samples nicht erreicht"
+        }
+      }
+    },
+    "force_forecast": {
+      "name": "Prognose-Update erzwingen",
+      "description": "Sofortiges Update aller Prognose-Sensoren"
+    },
+    "clear_training_data": {
+      "name": "Trainingsdaten löschen",
+      "description": "Alle gesammelten Trainings-Samples löschen (erfordert Bestätigung)"
+    },
+    "reset_model": {
+      "name": "ML-Modell zurücksetzen",
+      "description": "Trainiertes Modell zurücksetzen und auf regelbasierte Prognose umschalten"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "today_forecast": {
+        "name": "Prognose Heute Verbleibend"
+      },
+      "tomorrow_forecast": {
+        "name": "Prognose Morgen"
+      },
+      "next_hour_forecast": {
+        "name": "Prognose Nächste Stunde"
+      },
+      "peak_production_hour": {
+        "name": "Beste Stunde für Verbrauch"
+      },
+      "average_yield": {
+        "name": "Durchschnittlicher Monatsertrag"
+      },
+      "self_sufficiency": {
+        "name": "Autarkie"
+      },
+      "expected_daily_production": {
+        "name": "Erwartete Tagesproduktion"
+      },
+      "production_time": {
+        "name": "Produktionszeit Heute"
+      },
+      "diagnostic_status": {
+        "name": "System-Diagnosestatus"
+      },
+      "yesterday_accuracy": {
+        "name": "Prognosegenauigkeit Gestern"
+      },
+      "yesterday_deviation": {
+        "name": "Prognoseabweichung Gestern"
+      },
+      "last_update_timestamp": {
+        "name": "Letztes Update"
+      },
+      "data_age": {
+        "name": "Datenalter"
+      },
+      "last_ml_training": {
+        "name": "Letztes ML-Training"
+      },
+      "next_scheduled_task": {
+        "name": "Nächste geplante Aufgabe"
+      },
+      "ml_service_status": {
+        "name": "ML-Service Status"
+      },
+      "ml_metrics": {
+        "name": "ML-Modell Metriken"
+      },
+      "coordinator_health": {
+        "name": "Coordinator-Gesundheit"
+      },
+      "data_files_status": {
+        "name": "Datendateien Status"
+      },
+      "external_temp_state": {
+        "name": "Externer Temperatursensor Status"
+      },
+      "external_humidity_state": {
+        "name": "Externer Luftfeuchtigkeitssensor Status"
+      },
+      "external_wind_state": {
+        "name": "Externer Windsensor Status"
+      },
+      "external_rain_state": {
+        "name": "Externer Regensensor Status"
+      },
+      "external_uv_state": {
+        "name": "Externer UV-Sensor Status"
+      },
+      "external_lux_state": {
+        "name": "Externer Helligkeitssensor Status"
+      },
+      "power_sensor_state": {
+        "name": "Leistungssensor Status"
+      },
+      "yield_sensor_state": {
+        "name": "Ertragssensor Status"
+      }
+    },
+    "button": {
+      "manual_forecast": {
+        "name": "Prognose aktualisieren"
+      },
+      "manual_learning": {
+        "name": "Modell trainieren"
+      }
+    }
+  }
+}

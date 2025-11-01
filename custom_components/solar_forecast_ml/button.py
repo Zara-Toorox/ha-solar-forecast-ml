@@ -77,10 +77,7 @@ class ManualForecastButton(ButtonEntity):
     """Button entity to trigger a manual forecast refresh via the coordinator."""
 
     _attr_has_entity_name = True
-    # If you have translations:
-    # _attr_translation_key = "manual_forecast"
-    # Otherwise, set name directly:
-    _attr_name = "Manual Forecast"
+    _attr_translation_key = "manual_forecast"
     _attr_icon = "mdi:refresh-circle"
 
     def __init__(
@@ -115,10 +112,7 @@ class ManualLearningButton(ButtonEntity):
     """Button entity to trigger manual ML model training."""
 
     _attr_has_entity_name = True
-    # If you have translations:
-    # _attr_translation_key = "manual_learning"
-    # Otherwise, set name directly:
-    _attr_name = "Manual Learning Process"
+    _attr_translation_key = "manual_learning"
     _attr_icon = "mdi:brain"
 
     def __init__(

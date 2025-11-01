@@ -64,7 +64,7 @@ class DiagnosticStatusSensor(BaseSolarSensor):
         """Initialize the diagnostic status sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_diagnostic_status" # Changed from _status to avoid clash
-        self._attr_name = "System Diagnostic Status"
+        self._attr_translation_key = "diagnostic_status"
         self._attr_icon = "mdi:stethoscope" # More diagnostic icon
 
     @property
@@ -82,7 +82,7 @@ class SolarAccuracySensor(BaseSolarSensor):
         """Initialize the accuracy sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_yesterday_accuracy" # Use clearer ID
-        self._attr_name = "Yesterday Forecast Accuracy"
+        self._attr_translation_key = "yesterday_accuracy"
         self._attr_native_unit_of_measurement = PERCENTAGE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:target-arrow" # More specific icon
@@ -104,7 +104,7 @@ class YesterdayDeviationSensor(BaseSolarSensor):
         """Initialize the deviation sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_yesterday_deviation"
-        self._attr_name = "Yesterday Forecast Deviation"
+        self._attr_translation_key = "yesterday_deviation"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_device_class = None # Avoid conflict with state_class
@@ -126,7 +126,7 @@ class LastCoordinatorUpdateSensor(BaseSolarSensor):
         """Initialize the last update sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_last_coordinator_update"
-        self._attr_name = "Last Update Timestamp"
+        self._attr_translation_key = "last_update_timestamp"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
         self._attr_icon = "mdi:clock-check-outline" # Changed icon slightly
 
@@ -157,7 +157,7 @@ class UpdateAgeSensor(BaseSolarSensor):
         """Initialize the update age sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_update_age"
-        self._attr_name = "Data Age"
+        self._attr_translation_key = "data_age"
         self._attr_icon = "mdi:timer-sand"
         # No unit, state is a formatted string
 
@@ -209,7 +209,7 @@ class LastMLTrainingSensor(BaseSolarSensor):
         """Initialize the last ML training sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_last_ml_training"
-        self._attr_name = "Last ML Training"
+        self._attr_translation_key = "last_ml_training"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
         self._attr_icon = "mdi:brain"
 
@@ -263,7 +263,7 @@ class NextScheduledUpdateSensor(BaseSolarSensor):
         """Initialize the next scheduled update sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_next_scheduled_task" # Changed ID slightly
-        self._attr_name = "Next Scheduled Task"
+        self._attr_translation_key = "next_scheduled_task"
         self._attr_icon = "mdi:calendar-clock"
 
     # --- HIER DIE KORREKTUR ---
@@ -319,7 +319,7 @@ class MLServiceStatusSensor(BaseSolarSensor):
         """Initialize the ML service status sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_ml_service_status"
-        self._attr_name = "ML Service Status"
+        self._attr_translation_key = "ml_service_status"
         # Icon updated dynamically
 
     @property
@@ -377,7 +377,7 @@ class MLMetricsSensor(BaseSolarSensor):
         """Initialize the ML metrics sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_ml_metrics"
-        self._attr_name = "ML Model Metrics"
+        self._attr_translation_key = "ml_metrics"
         self._attr_icon = "mdi:chart-box-outline"
 
     @property
@@ -422,7 +422,7 @@ class CoordinatorHealthSensor(BaseSolarSensor):
         """Initialize the coordinator health sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_coordinator_health"
-        self._attr_name = "Coordinator Health"
+        self._attr_translation_key = "coordinator_health"
         self._attr_icon = "mdi:heart-pulse"
 
     @property
@@ -465,7 +465,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
         """Initialize the data files status sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_data_files_status"
-        self._attr_name = "Data Files Status"
+        self._attr_translation_key = "data_files_status"
         self._attr_icon = "mdi:file-check-outline"
         self._data_manager = getattr(coordinator, 'data_manager', None)
 

@@ -77,8 +77,8 @@ class SolarForecastSensor(BaseSolarSensor):
         
         # Mapping zwischen Entity-Key und Data-Key
         self._key_mapping = {
-            "remaining": {"data_key": "forecast_today", "name": "Solar Forecast Today Remaining"},
-            "tomorrow": {"data_key": "forecast_tomorrow", "name": "Solar Forecast Tomorrow"}
+            "remaining": {"data_key": "forecast_today", "translation_key": "today_forecast"},
+            "tomorrow": {"data_key": "forecast_tomorrow", "translation_key": "tomorrow_forecast"}
         }
         
         # Validierung
@@ -89,7 +89,7 @@ class SolarForecastSensor(BaseSolarSensor):
         self._data_key = config["data_key"]
         
         self._attr_unique_id = f"{entry.entry_id}_{key}"
-        self._attr_name = config["name"]
+        self._attr_translation_key = config["translation_key"]
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL # Represents total energy for the day
         self._attr_device_class = SensorDeviceClass.ENERGY
@@ -111,7 +111,7 @@ class NextHourSensor(BaseSolarSensor):
         """Initialize the next hour sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_next_hour"
-        self._attr_name = "Next Hour Forecast"
+        self._attr_translation_key = "next_hour_forecast"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         # --- HIER DIE KORREKTUR ---
         self._attr_state_class = SensorStateClass.TOTAL # Use TOTAL for energy amount in a period
@@ -133,7 +133,7 @@ class PeakProductionHourSensor(BaseSolarSensor):
         """Initialize the peak hour sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_peak_production_hour"
-        self._attr_name = "Best Hour for Consumption"
+        self._attr_translation_key = "peak_production_hour"
         self._attr_icon = "mdi:solar-power-variant-outline"
 
     @property
@@ -150,7 +150,7 @@ class AverageYieldSensor(BaseSolarSensor):
         """Initialize the average yield sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_average_yield"
-        self._attr_name = "Average Monthly Yield"
+        self._attr_translation_key = "average_yield"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:chart-line"
@@ -169,7 +169,7 @@ class AutarkySensor(BaseSolarSensor):
         """Initialize the autarky sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_autarky"
-        self._attr_name = "Self-Sufficiency"
+        self._attr_translation_key = "self_sufficiency"
         self._attr_native_unit_of_measurement = PERCENTAGE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:home-lightning-bolt-outline"
@@ -188,7 +188,7 @@ class ExpectedDailyProductionSensor(BaseSolarSensor):
         """Initialize the expected daily production sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_expected_daily_production"
-        self._attr_name = "Expected Daily Production"
+        self._attr_translation_key = "expected_daily_production"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL
         self._attr_device_class = SensorDeviceClass.ENERGY
@@ -215,7 +215,7 @@ class ProductionTimeSensor(SensorEntity):
         self._current_value: str = "Initializing..."
 
         self._attr_unique_id = f"{entry.entry_id}_production_time"
-        self._attr_name = "Production Time Today"
+        self._attr_translation_key = "production_time"
         self._attr_icon = "mdi:timer-outline"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
