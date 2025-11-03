@@ -24,11 +24,11 @@ from homeassistant.const import Platform
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
 # [Version Update] Set version numbers to 6.2.1
-VERSION = "6.4.1"
-RELEASE_VERSION = "6.4.1"
-SOFTWARE_VERSION = "6.4.1"
-INTEGRATION_MODEL = "v6.4.1" # Model string might differ based on ML changes
-ML_VERSION = "6.0" # Keep ML Model version unless model structure changed significantly
+VERSION = "6.8.0"
+RELEASE_VERSION = "6.8.0"
+SOFTWARE_VERSION = "6.8.0"
+INTEGRATION_MODEL = "v6.8.0" # Model string might differ based on ML changes
+ML_VERSION = "8.0.0" # Keep ML Model version unless model structure changed significantly
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 
@@ -78,7 +78,7 @@ CONF_NOTIFY_STARTUP = "notify_startup"
 CONF_NOTIFY_FORECAST = "notify_forecast"
 CONF_NOTIFY_LEARNING = "notify_learning"
 CONF_NOTIFY_SUCCESSFUL_LEARNING = "notify_successful_learning"
-CONF_LEARNING_ENABLED = "learning_enabled" # <-- WIEDER HINZUGEFÃƒÅ“GT
+CONF_LEARNING_ENABLED = "learning_enabled" # <-- WIEDER HINZUGEFÃƒÆ’Ã…â€œGT
 
 # --- Deprecated/Legacy Configuration Keys (Keep for potential migration logic if needed) ---
 # CONF_PANEL_EFFICIENCY = "panel_efficiency" # Might be needed for migration from older versions
@@ -94,7 +94,7 @@ UPDATE_INTERVAL = timedelta(minutes=30) # Default Coordinator update interval
 
 # --- Physical Limits and Units ---
 PEAK_POWER_UNIT = "kW"  # System-wide unit for peak power
-MAX_HOURLY_PRODUCTION_FACTOR = 1.0  # kWh per hour ≈ kWp under perfect conditions
+MAX_HOURLY_PRODUCTION_FACTOR = 1.0  # kWh per hour â‰ˆ kWp under perfect conditions
 # Safety margin for hourly production (20% above theoretical max)
 HOURLY_PRODUCTION_SAFETY_MARGIN = 1.2
 # Fallback max hourly production if peak power not configured (in kWh)
@@ -118,7 +118,7 @@ DATA_DIR = f"/config/{DOMAIN}" # Use domain in path for uniqueness
 DATA_VERSION = "1.0" # Version for the data format within JSON files
 MAX_PREDICTION_HISTORY = 365 # Max days of prediction records to keep
 MAX_HOURLY_SAMPLES = 1440 # Max hourly samples (e.g., 60 days * 24 hours)
-MIN_TRAINING_DATA_POINTS = 50 # <-- GEÃƒâ€žNDERT (StabilitÃƒÂ¤t)
+MIN_TRAINING_DATA_POINTS = 50 # <-- GEÃƒÆ’Ã¢â‚¬Å¾NDERT (StabilitÃƒÆ’Ã‚Â¤t)
 BACKUP_RETENTION_DAYS = 30 # How long to keep backups (if implemented)
 MAX_BACKUP_FILES = 10      # Max number of backup files (if implemented)
 
@@ -212,6 +212,6 @@ DEVICE_MANUFACTURER = "Zara-Toorox"
 # DEVICE_SW_VERSION = VERSION # Use constant defined above
 
 # --- Sun Calculation Constants ---
-SUN_BUFFER_HOURS = 1.5 # <-- GEÃƒâ€žNDERT (Block 4)
+SUN_BUFFER_HOURS = 1.5 # <-- GEÃƒÆ’Ã¢â‚¬Å¾NDERT (Block 4)
 FALLBACK_PRODUCTION_START_HOUR = 5
 FALLBACK_PRODUCTION_END_HOUR = 21

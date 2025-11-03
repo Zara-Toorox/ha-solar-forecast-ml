@@ -41,7 +41,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
     derived from weather factors (temperature, clouds, condition) and a
     learned correction factor.
     
-    Berechnet eine iterative stÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ndliche Prognose fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r alle 24 Stunden.
+    Berechnet eine iterative stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Prognose fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r alle 24 Stunden.
     """
 
     def __init__(
@@ -86,10 +86,10 @@ class RuleBasedForecastStrategy(ForecastStrategy):
     ) -> ForecastResult:
         """
         Calculates a forecast using simple weather rules combined with a learned
-        correction factor, iteriert ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ber die stÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage.
+        correction factor, iteriert ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ber die stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage.
 
         Args:
-            hourly_weather_forecast: Liste der verarbeiteten stÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ndlichen Wettervorhersagen.
+            hourly_weather_forecast: Liste der verarbeiteten stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndlichen Wettervorhersagen.
             sensor_data: Dictionary containing other relevant data (e.g., 'solar_capacity').
             correction_factor: A learned multiplier to adjust the rule-based estimate.
             **kwargs: Ignoriert 'lag_features'.
@@ -187,7 +187,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         
                         _LOGGER.info(
                             f"Mindest-Prognose Anpassung (Regel): Aktueller Ertrag {current_yield_float:.2f} kWh > "
-                            f"UrsprÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ngliche Prognose {today_forecast_kwh:.2f} kWh. "
+                            f"UrsprÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ngliche Prognose {today_forecast_kwh:.2f} kWh. "
                             f"Angepasst auf {adjusted_today_forecast:.2f} kWh."
                         )
                         
@@ -199,7 +199,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                             tomorrow_forecast_kwh = tomorrow_forecast_kwh * adjustment_ratio
                             
             except Exception as e:
-                _LOGGER.debug(f"Mindest-Prognose Check (Regel) konnte nicht durchgefÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼hrt werden: {e}")
+                _LOGGER.debug(f"Mindest-Prognose Check (Regel) konnte nicht durchgefÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼hrt werden: {e}")
 
             correction_deviation = abs(1.0 - correction_factor)
             confidence_base = max(0.0, 1.0 - correction_deviation * 0.5)
@@ -247,7 +247,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
     def _get_hour_factor(self, hour: int) -> float:
         """
         Berechnet einen Faktor (0.0 bis 1.0) basierend auf der Sonnenkurve (Sinus)
-        fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r eine gegebene Stunde. Nachtstunden (22-5) erhalten Faktor 0.
+        fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r eine gegebene Stunde. Nachtstunden (22-5) erhalten Faktor 0.
         """
         try:
             if hour >= 22 or hour <= 5:

@@ -50,6 +50,10 @@ class FeatureEngineer:
             # --- (Verbesserung 2) ENTFERNT ---
             # "production_last_hour", # Production from the previous hour (lag feature)
             # --- ENDE ---
+            # FIX 4: Enhanced cloudiness features
+            "cloudiness_primary",   # Sunshine percentage (100 - cloudiness)
+            "cloud_impact",         # Non-linear cloud penalty (cloudiness^1.5)
+            "sunshine_factor",      # Normalized sunshine (0-1)
         ]
 
         # Define derived polynomial features (e.g., squared terms)
@@ -83,7 +87,7 @@ class FeatureEngineer:
         self,
         weather_data: Dict[str, Any],
         sensor_data: Dict[str, Any],
-        # --- (LÃƒÂ¶sung 1) Signatur geÃƒÂ¤ndert ---
+        # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Signatur geÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ndert ---
         prediction_hour: int, 
         prediction_date: datetime 
         # --- ENDE ---
@@ -92,7 +96,7 @@ class FeatureEngineer:
         Asynchronously extracts and calculates all defined features for a given time context.
 
         Args:
-            weather_data: Dictionary containing weather information (fÃƒÂ¼r die prediction_hour).
+            weather_data: Dictionary containing weather information (fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die prediction_hour).
             sensor_data: Dictionary containing sensor readings (e.g., lag features).
             prediction_hour: The hour (0-23, local time) for which to calculate features.
             prediction_date: The date (local time) for which to calculate features.
@@ -102,7 +106,7 @@ class FeatureEngineer:
             Returns default features if extraction fails.
         """
         try:
-            # --- (LÃƒÂ¶sung 1) Zeit-Logik aktualisiert ---
+            # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Zeit-Logik aktualisiert ---
             target_hour = prediction_hour # Direkt verwenden
             # --- ENDE ---
 
@@ -125,7 +129,7 @@ class FeatureEngineer:
 
 
             # --- Calculate Time-Based Features ---
-            # --- (LÃƒÂ¶sung 1) Nutze ÃƒÂ¼bergebenes Datum ---
+            # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Nutze ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bergebenes Datum ---
             day_of_year = prediction_date.timetuple().tm_yday # Day number (1-366)
             # --- ENDE ---
             # Cosine function peaks in summer (around day 172) and troughs in winter
@@ -150,6 +154,11 @@ class FeatureEngineer:
                 # "production_last_hour": prod_last_hour,
                 # --- ENDE ---
             }
+
+            # FIX 4: Enhanced cloudiness features with non-linear response
+            base_features_dict['cloudiness_primary'] = 100.0 - cloudiness  # Sunshine percentage
+            base_features_dict['cloud_impact'] = cloudiness ** 1.5  # Non-linear cloud penalty
+            base_features_dict['sunshine_factor'] = (100.0 - cloudiness) / 100.0  # Normalized 0-1
 
             # --- Calculate Polynomial and Interaction Features ---
             # Use values from base_features_dict to ensure consistency
@@ -189,7 +198,7 @@ class FeatureEngineer:
         """
         Synchronously extracts and calculates all defined features, typically used during training.
         Derives time context from the provided record's timestamp.
-        (Diese Methode ist fÃƒÂ¼r LÃƒÂ¶sung 1 nicht relevant, bleibt aber fÃƒÂ¼r das Training)
+        (Diese Methode ist fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1 nicht relevant, bleibt aber fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r das Training)
         """
         try:
             # --- Determine Time Context ---
@@ -229,6 +238,11 @@ class FeatureEngineer:
                 # "production_last_hour": prod_last_hour,
                 # --- ENDE ---
             }
+
+            # FIX 4: Enhanced cloudiness features with non-linear response
+            base_features_dict['cloudiness_primary'] = 100.0 - cloudiness
+            base_features_dict['cloud_impact'] = cloudiness ** 1.5
+            base_features_dict['sunshine_factor'] = (100.0 - cloudiness) / 100.0
 
             poly_interaction_features = {
                 "temperature_sq": temp ** 2, "cloudiness_sq": cloudiness ** 2,
@@ -277,7 +291,7 @@ class FeatureEngineer:
         cloudiness = 50.0
         wind_speed = 5.0
         
-        # --- (LÃƒÂ¶sung 1) Nutze ÃƒÂ¼bergebenes Datum ---
+        # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Nutze ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bergebenes Datum ---
         day_of_year = date.timetuple().tm_yday
         seasonal_factor = 0.5 + 0.5 * math.cos((day_of_year - 172) * 2 * math.pi / 365.25)
         # --- ENDE ---
@@ -298,6 +312,10 @@ class FeatureEngineer:
             # --- (Verbesserung 2) ENTFERNT ---
             # "production_last_hour": 0.0,
             # --- ENDE ---
+            # FIX 4: Enhanced cloudiness features
+            "cloudiness_primary": 100.0 - cloudiness,
+            "cloud_impact": cloudiness ** 1.5,
+            "sunshine_factor": (100.0 - cloudiness) / 100.0,
         }
 
         # Calculate derived defaults based on base values

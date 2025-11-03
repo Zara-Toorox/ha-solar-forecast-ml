@@ -181,7 +181,7 @@ class DependencyChecker:
         """Asynchronously checks if a package is installed and gets its version."""
         def _sync_check() -> Tuple[bool, Optional[str], Optional[str]]:
             
-            # +++ IMPORT HIER EINGEFÃƒÅ“GT +++
+            # +++ IMPORT HIER EINGEFÃƒÆ’Ã…â€œGT +++
             # Wird erst importiert, wenn diese (ungenutzte) Funktion aufgerufen wird.
             # Verhindert den globalen Import-Crash.
             try:
@@ -193,7 +193,7 @@ class DependencyChecker:
                     _LOGGER.error("Konnte weder 'importlib.metadata' noch 'importlib_metadata' importieren.")
                     def get_version(_): # type: ignore
                         raise PackageNotFoundError
-            # +++ ENDE EINFÃƒÅ“GUNG +++
+            # +++ ENDE EINFÃƒÆ’Ã…â€œGUNG +++
             
             try:
                 spec = importlib.util.find_spec(package_name)

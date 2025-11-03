@@ -19,12 +19,12 @@ from datetime import timedelta, datetime, timezone
 from homeassistant.core import HomeAssistant
 
 from ..core.helpers import SafeDateTimeUtil as dt_util
-from ..ml.forecast_strategy import MLForecastStrategy
-from ..forecast.rule_based_strategy import RuleBasedForecastStrategy
-from ..forecast.weather_calculator import WeatherCalculator
-from ..ml.predictor import MLPredictor
-from ..services.error_handler import ErrorHandlingService
-from ..forecast.strategy import ForecastResult
+from .forecast_strategy import MLForecastStrategy
+from .forecast_rule_based_strategy import RuleBasedForecastStrategy
+from .weather_calculator import WeatherCalculator
+from ..ml.ml_predictor import MLPredictor
+from ..services.service_error_handler import ErrorHandlingService
+from .strategy import ForecastResult
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -90,10 +90,14 @@ class ForecastOrchestrator:
                     next_setting = dt_util.parse_datetime(next_setting_str)
                     
                     if next_rising and next_setting:
+                        # KRITISCH: Konvertiere UTC zu Local vor Vergleich
+                        next_rising_local = dt_util.as_local(next_rising)
+                        next_setting_local = dt_util.as_local(next_setting)
+                        
                         # 90-minute safety margins for realistic PV production
                         # PV needs strong sunlight, not just above horizon
-                        production_start = next_rising + timedelta(minutes=90)
-                        production_end = next_setting - timedelta(minutes=90)
+                        production_start = next_rising_local + timedelta(minutes=90)
+                        production_end = next_setting_local - timedelta(minutes=90)
                         
                         # Check if target is within production window
                         if production_start <= target_dt <= production_end:
@@ -183,15 +187,15 @@ class ForecastOrchestrator:
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
         """
-        Orchestriert die Forecast-Erstellung mit allen verfÃƒÆ’Ã‚Â¼gbaren Daten.
+        Orchestriert die Forecast-Erstellung mit allen verfÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼gbaren Daten.
         
         Args:
             current_weather: Aktuelle Wetterdaten
-            hourly_forecast: StÃƒÆ’Ã‚Â¼ndliche Wettervorhersage
+            hourly_forecast: StÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage
             external_sensors: Externe Sensordaten
             historical_avg: Historischer Durchschnitt (7-Tage)
-            ml_prediction_today: ML Vorhersage fÃƒÆ’Ã‚Â¼r heute
-            ml_prediction_tomorrow: ML Vorhersage fÃƒÆ’Ã‚Â¼r morgen
+            ml_prediction_today: ML Vorhersage fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r heute
+            ml_prediction_tomorrow: ML Vorhersage fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r morgen
             correction_factor: Gelernter Korrekturfaktor
             
         Returns:
@@ -216,13 +220,13 @@ class ForecastOrchestrator:
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
         """
-        Erstellt die tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤gliche Solarprognose (heute und morgen) durch
-        iterative Berechnung und Blending der verfÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼gbaren Strategien.
+        Erstellt die tÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤gliche Solarprognose (heute und morgen) durch
+        iterative Berechnung und Blending der verfÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼gbaren Strategien.
 
         Args:
-            hourly_weather_forecast: Verarbeitete stÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage vom WeatherService.
+            hourly_weather_forecast: Verarbeitete stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage vom WeatherService.
             sensor_data: Dictionary mit 'current_yield'.
-            correction_factor: Gelernter Faktor fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r die Regel-Strategie.
+            correction_factor: Gelernter Faktor fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die Regel-Strategie.
 
         Returns:
             Ein Dictionary mit den finalen, geblendeten Prognoseergebnissen.
@@ -303,17 +307,34 @@ class ForecastOrchestrator:
             model_accuracy = 0.0
             _LOGGER.debug("Blending: ML failed, using 100% Rule-Based result.")
         
+        # FIX 2: Sanity check - Reject unrealistic ML predictions
+        if ml_result:
+            max_realistic_daily = self.solar_capacity * 6.0  # 6 hours full capacity max
+            if today_ml > max_realistic_daily:
+                _LOGGER.warning(
+                    f"ML prediction unrealistic: {today_ml:.2f} kWh exceeds theoretical maximum "
+                    f"{max_realistic_daily:.2f} kWh (solar_capacity={self.solar_capacity} kW * 6h). "
+                    f"Rejecting ML, using Rule-Based only."
+                )
+                today_ml = today_rule
+                tomorrow_ml = tomorrow_rule
+                model_accuracy = 0.0
+        
         accuracy_weight = max(0.0, min(1.0, model_accuracy))
         
-        # CRITICAL: When ML accuracy is low (<60%), strongly favor Rule-Based strategy
-        # This prevents unrealistic predictions from poorly-trained ML models
-        ACCURACY_THRESHOLD = 0.60
+        # FIX 3: Aggressive blending - Only trust high-accuracy models
+        ACCURACY_THRESHOLD = 0.75  # ErhÃƒÂ¶ht von 0.60
+        MIN_ML_WEIGHT = 0.15       # Gesenkt von 0.30
+        
         if accuracy_weight < ACCURACY_THRESHOLD and ml_result:
+            # Quadratic damping for poor models: heavily penalize low accuracy
+            raw_weight = (accuracy_weight / ACCURACY_THRESHOLD) ** 2
+            accuracy_weight = MIN_ML_WEIGHT * raw_weight
             _LOGGER.info(
-                f"ML accuracy ({accuracy_weight:.1%}) below threshold ({ACCURACY_THRESHOLD:.0%}). "
-                f"Applying conservative ML weighting (30% ML / 70% Rule-Based)."
+                f"ML accuracy ({model_accuracy:.1%}) below threshold ({ACCURACY_THRESHOLD:.0%}). "
+                f"Applying aggressive ML damping: {accuracy_weight:.1%} ML / {(1-accuracy_weight):.1%} Rule-Based "
+                f"(raw_weight={raw_weight:.3f})"
             )
-            accuracy_weight = 0.30
         
         rule_weight = 1.0 - accuracy_weight
         
@@ -374,6 +395,14 @@ class ForecastOrchestrator:
 
             # Use new production hour check (sun.sun + safety margins)
             if not self.is_production_hour(target_dt_local):
+                # FIX 6a: Additional darkness check via lux sensor
+                if sensor_data and sensor_data.get('lux') is not None:
+                    if sensor_data['lux'] < 500:  # Too dark for meaningful production
+                        _LOGGER.debug(
+                            f"Target hour {target_hour} has insufficient light (lux={sensor_data['lux']}). "
+                            f"Next hour prediction is 0.0 kWh."
+                        )
+                        return 0.0
                 _LOGGER.debug(f"Target hour {target_hour} (local) is outside production hours. Next hour prediction is 0.0 kWh.")
                 return 0.0
 
@@ -394,6 +423,10 @@ class ForecastOrchestrator:
             for factor_name, factor_value in adjustment_factors.items():
                 adjusted_kwh *= factor_value
                 factors_log.append(f"{factor_name}={factor_value:.2f}")
+
+            # FIX 6b: Apply physical clipping - Cannot exceed installed capacity per hour
+            max_hourly_kwh = self.solar_capacity * 1.2  # 20% safety margin
+            adjusted_kwh = min(adjusted_kwh, max_hourly_kwh)
 
             final_prediction_kwh = max(0.0, adjusted_kwh)
 
@@ -487,7 +520,7 @@ class ForecastOrchestrator:
         if temp_value is not None:
             temp_factor = self.weather_calculator.get_temperature_factor(temp_value)
             factors['temperature'] = max(0.7, min(1.1, temp_factor))
-            _LOGGER.debug(f"Using Temperature ({temp_value}ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C) for adjustment factor: {factors['temperature']:.2f}")
+            _LOGGER.debug(f"Using Temperature ({temp_value}ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C) for adjustment factor: {factors['temperature']:.2f}")
         else:
             _LOGGER.debug("No Temperature data available for real-time adjustment.")
 

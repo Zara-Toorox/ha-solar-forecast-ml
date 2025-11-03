@@ -7,7 +7,7 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
+This program is distributed in the hope that it is useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
@@ -34,6 +34,7 @@ class ProductionTimeCalculator:
     """
     Live tracks production time based on power entity state changes.
     Uses a state machine to handle start, stop, and low-power/unavailable timeouts.
+    CRITICAL FIX: All internal timestamps now use LOCAL time for consistency.
     """
 
     def __init__(self, hass: HomeAssistant, power_entity: Optional[str] = None):
@@ -41,11 +42,11 @@ class ProductionTimeCalculator:
         self.hass = hass
         self.power_entity = power_entity
 
-        # State machine variables
+        # State machine variables - CRITICAL: Now using LOCAL time
         self._is_active = False  # Is production currently considered active?
-        self._start_time: Optional[datetime] = None # When the current active phase started (UTC)
+        self._start_time: Optional[datetime] = None # When the current active phase started (LOCAL)
         self._accumulated_hours = 0.0 # Total hours accumulated today before the current phase
-        self._zero_power_start: Optional[datetime] = None # Tracks start of zero/unavailable period (UTC)
+        self._zero_power_start: Optional[datetime] = None # Tracks start of zero/unavailable period (LOCAL)
         self._today_total_hours = 0.0 # Stores final value for the day after midnight reset
 
         # Configuration thresholds (using Watts for input sensor)
@@ -57,7 +58,7 @@ class ProductionTimeCalculator:
         self._state_listener_remove = None
         self._midnight_listener_remove = None
 
-        _LOGGER.info("ProductionTimeCalculator (Live Tracking) initialized")
+        _LOGGER.info("ProductionTimeCalculator (Live Tracking) initialized with LOCAL time")
 
     def start_tracking(self) -> None:
         """Starts the live tracking listeners and initializes state based on current power."""
@@ -85,7 +86,7 @@ class ProductionTimeCalculator:
             # Initialize the state based on the current power sensor value
             _LOGGER.debug(f"Initializing ProductionTimeCalculator state for {self.power_entity}")
             current_state = self.hass.states.get(self.power_entity)
-            now_utc = dt_util.utcnow() # Use UTC for internal tracking
+            now_local = dt_util.now() # Use LOCAL time for internal tracking
 
             if current_state and current_state.state not in ["unavailable", "unknown"]:
                 try:
@@ -94,18 +95,17 @@ class ProductionTimeCalculator:
                     # Check if currently producing based on initial state
                     if current_power_w >= self.MIN_POWER_THRESHOLD_W:
                         self._is_active = True
-                        # Approximate start time using last_changed (convert to UTC)
+                        # Approximate start time using last_changed (convert to LOCAL)
                         start_candidate_naive = getattr(current_state, 'last_changed', None)
                         if start_candidate_naive:
-                             # Ensure last_changed is treated as local and converted to UTC
-                             start_candidate_local = dt_util.as_local(start_candidate_naive)
-                             self._start_time = start_candidate_local.astimezone(timezone.utc)
+                             # Ensure last_changed is in LOCAL timezone
+                             self._start_time = dt_util.ensure_local(start_candidate_naive)
                         else:
-                             self._start_time = now_utc # Fallback to current time
+                             self._start_time = now_local # Fallback to current time
 
                         self._zero_power_start = None # Not in zero power state
                         _LOGGER.info(f"Initial state: Production detected ({current_power_w}W). "
-                                     f"Approximate start time (UTC): {self._start_time}")
+                                     f"Approximate start time (LOCAL): {self._start_time.strftime('%H:%M:%S')}")
                     else:
                         # Not producing initially
                         self._is_active = False
@@ -136,10 +136,11 @@ class ProductionTimeCalculator:
         Callback triggered by state changes of the power entity.
         Handles the state machine logic for tracking production time.
         Treats 'unavailable' like '0 Watts' using the timeout mechanism.
+        CRITICAL FIX: Now using LOCAL time for all timestamps.
         """
         try:
             new_state = event.data.get("new_state")
-            now_utc = dt_util.utcnow() # Use UTC for internal logic
+            now_local = dt_util.now() # Use LOCAL time for internal logic
             power_w: Optional[float] = None
             is_unavailable = False
 
@@ -168,68 +169,71 @@ class ProductionTimeCalculator:
             if power_w >= self.MIN_POWER_THRESHOLD_W:
                 # --- State: Production Started or Continuing ---
                 if not self._is_active:
-                    # Transition: Inactive -> Active
-                    self._is_active = True
-                    self._start_time = now_utc # Production starts *now*
-                    _LOGGER.debug(f"Production started: {power_w:.1f}W at {now_utc}")
-
-                # If production is active (newly or continuing), reset the zero power timer
-                if self._zero_power_start is not None:
-                     _LOGGER.debug(f"Zero-Power/Unavailable timer reset due to production ({power_w:.1f}W) at {now_utc}")
-                     self._zero_power_start = None
-                # self._last_production_time = now_utc # Can be used for staleness check if needed
-
-            elif self._is_active:
-                # --- State: Potentially Stopping (Was active, now power < threshold) ---
-                # Check if power is near zero OR if the sensor is unavailable
-                if power_w < self.ZERO_POWER_THRESHOLD_W or is_unavailable:
-                    # Start or check the zero power timeout
-                    if self._zero_power_start is None:
-                        # Timer not running, start it now
-                        self._zero_power_start = now_utc
-                        _LOGGER.debug(f"Zero-Power/Unavailable timer started: {power_w:.1f}W at {now_utc}")
-                    else:
-                        # Timer is running, check if timeout reached
-                        elapsed_since_zero = now_utc - self._zero_power_start
-                        if elapsed_since_zero >= self.ZERO_POWER_TIMEOUT:
-                            # Timeout reached, stop the production tracking
-                            # The logical stop time is when the zero power period began
-                            stop_time_utc = self._zero_power_start
-                            self._stop_production_tracking(stop_time_utc)
-                            _LOGGER.debug(
-                                f"Production stopped after {self.ZERO_POWER_TIMEOUT.total_seconds():.0f}s timeout "
-                                f"detected at {now_utc} (Logical stop time: {stop_time_utc})"
-                            )
-                            # State is now inactive, timer reset inside _stop_production_tracking
-
+                    # Production started
+                    self._start_production_tracking(now_local)
                 else:
-                    # Power is low (e.g., 5W) but not zero/unavailable
-                    # Reset the zero power timer if it was running
-                    if self._zero_power_start is not None:
-                        _LOGGER.debug(f"Zero-Power/Unavailable timer reset due to low power ({power_w:.1f}W) at {now_utc}")
-                        self._zero_power_start = None
-                    # Optionally update last production time if needed for other logic
-                    # self._last_production_time = now_utc
+                    # Production continuing, reset zero-power timer
+                    self._zero_power_start = None
+                    _LOGGER.debug(f"Production continuing: {power_w}W (Zero-power timer reset).")
 
-            # else: # State: Inactive and power < threshold - Remain Inactive, do nothing
+            elif power_w <= self.ZERO_POWER_THRESHOLD_W:
+                # --- State: Zero/Low Power or Unavailable ---
+                if self._is_active:
+                    # Production is/was active, start or check timeout
+                    if self._zero_power_start is None:
+                        # Start the zero-power timer
+                        self._zero_power_start = now_local
+                        _LOGGER.debug(f"Low/zero power detected ({power_w}W). "
+                                      f"Timeout timer started at {now_local.strftime('%H:%M:%S')}.")
+                    else:
+                        # Check if timeout elapsed
+                        elapsed = now_local - self._zero_power_start
+                        if elapsed >= self.ZERO_POWER_TIMEOUT:
+                            # Timeout: Stop production tracking
+                            _LOGGER.info(f"Zero-power timeout elapsed ({elapsed}). Stopping production.")
+                            self._stop_production_tracking(now_local)
+                        else:
+                            _LOGGER.debug(f"Zero-power timer active: {elapsed} elapsed "
+                                          f"(Timeout: {self.ZERO_POWER_TIMEOUT}).")
+                # else: Already inactive, no action needed
+
+            else:
+                # --- State: Power above zero threshold but below min threshold ---
+                _LOGGER.debug(f"Power {power_w}W is between thresholds. Resetting zero-power timer.")
+                self._zero_power_start = None
 
         except Exception as e:
-            # Catch unexpected errors in the handler
             _LOGGER.error(f"Error in power change handler: {e}", exc_info=True)
 
-
-    def _stop_production_tracking(self, stop_time_utc: datetime) -> None:
+    def _start_production_tracking(self, timestamp_local: datetime) -> None:
         """
-        Internal method: Stops the current production phase, calculates the duration,
-        adds it to the daily total, and resets the state machine.
-
+        Starts tracking a new production phase.
+        CRITICAL FIX: Now uses LOCAL time.
+        
         Args:
-            stop_time_utc: The timestamp (UTC) when the production logically stopped.
+            timestamp_local: Start time in LOCAL timezone
         """
-        if not self._is_active or not self._start_time:
-             # Should not happen if state machine is correct, but log defensively
-             _LOGGER.debug("Stop tracking called but not active or no start time recorded.")
-             # Ensure state consistency
+        self._is_active = True
+        self._start_time = timestamp_local  # Store as LOCAL time
+        self._zero_power_start = None # Reset zero-power timer
+        _LOGGER.info(f"Production started at {timestamp_local.strftime('%H:%M:%S')} local time")
+
+    def _stop_production_tracking(self, stop_time_local: datetime) -> None:
+        """
+        Stops tracking the current production phase and adds the duration
+        to the accumulated total for today.
+        CRITICAL FIX: Now uses LOCAL time for all calculations.
+        
+        Args:
+            stop_time_local: Stop time in LOCAL timezone
+        """
+        if not self._is_active:
+             _LOGGER.debug("Attempt to stop production, but tracking was not active.")
+             return
+
+        if not self._start_time:
+             _LOGGER.warning("Production phase was active, but start_time is None. "
+                             "Cannot calculate duration. Resetting state.")
              self._is_active = False
              self._start_time = None
              self._zero_power_start = None
@@ -237,12 +241,13 @@ class ProductionTimeCalculator:
 
         # Calculate duration of the just-ended phase
         # Ensure start_time is valid and before stop_time
-        if stop_time_utc < self._start_time:
-            _LOGGER.warning(f"Stop time ({stop_time_utc}) is before start time ({self._start_time}). "
+        if stop_time_local < self._start_time:
+            _LOGGER.warning(f"Stop time ({stop_time_local.strftime('%H:%M:%S')}) is before "
+                            f"start time ({self._start_time.strftime('%H:%M:%S')}). "
                             "This might indicate clock issues or out-of-order events. Duration set to 0.")
             duration = timedelta(seconds=0)
         else:
-            duration = stop_time_utc - self._start_time
+            duration = stop_time_local - self._start_time
 
         # Convert duration to hours
         hours_added = duration.total_seconds() / 3600.0
@@ -256,7 +261,8 @@ class ProductionTimeCalculator:
         self._accumulated_hours += hours_added
 
         _LOGGER.info(
-            f"Production phase ended. Duration: {hours_added:.2f}h. "
+            f"Production phase ended at {stop_time_local.strftime('%H:%M:%S')} local. "
+            f"Duration: {hours_added:.2f}h. "
             f"Total accumulated today: {self._accumulated_hours:.2f}h."
         )
 
@@ -270,19 +276,17 @@ class ProductionTimeCalculator:
         """
         Callback triggered shortly after midnight (local time).
         Finalizes the previous day's total and resets counters for the new day.
+        CRITICAL FIX: Now uses LOCAL time throughout.
         """
-        _LOGGER.info(f"Midnight reset triggered at local time {now_local}")
+        _LOGGER.info(f"Midnight reset triggered at local time {now_local.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        # Use UTC midnight as the definitive boundary for calculations
-        # Find the start of the current day in local time, then convert to UTC
-        start_of_today_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        midnight_boundary_utc = start_of_today_local.astimezone(timezone.utc)
+        # Use the current local midnight as boundary
+        midnight_boundary_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
 
-
-        # If production was active across the midnight boundary, stop it at UTC midnight
+        # If production was active across the midnight boundary, stop it at local midnight
         if self._is_active:
-            _LOGGER.info("Production was active across midnight. Stopping phase at UTC midnight.")
-            self._stop_production_tracking(midnight_boundary_utc)
+            _LOGGER.info("Production was active across midnight. Stopping phase at local midnight.")
+            self._stop_production_tracking(midnight_boundary_local)
             # Note: _stop_production_tracking resets _is_active and _start_time
 
         # Finalize the total for the completed day
@@ -337,6 +341,7 @@ class ProductionTimeCalculator:
         """
         Returns the current production time accumulated *today* as a float value (hours).
         Includes the duration of the current phase if active.
+        CRITICAL FIX: Now uses LOCAL time for calculations.
         """
         try:
             # Start with hours accumulated from completed phases today
@@ -344,22 +349,20 @@ class ProductionTimeCalculator:
 
             # If currently in an active production phase, add the duration so far
             if self._is_active and self._start_time:
-                now_utc = dt_util.utcnow()
+                now_local = dt_util.now()
                 # Ensure start_time is valid and before now
-                if now_utc >= self._start_time:
-                    current_duration = now_utc - self._start_time
+                if now_local >= self._start_time:
+                    current_duration = now_local - self._start_time
                     current_phase_hours = current_duration.total_seconds() / 3600.0
                     current_total_hours += current_phase_hours
                 else:
                      # Log if clock issues detected, but don't add negative time
-                     _LOGGER.warning(f"Current time {now_utc} is before active phase start time {self._start_time}. "
+                     _LOGGER.warning(f"Current time {now_local.strftime('%H:%M:%S')} is before "
+                                     f"active phase start time {self._start_time.strftime('%H:%M:%S')}. "
                                      "Ignoring current phase duration.")
 
             # Ensure the result is non-negative and round slightly for precision
             result = max(0.0, current_total_hours)
-            # Optional: Debug log to trace calculation
-            # _LOGGER.debug(f"Calculated production hours float: {result:.4f} "
-            #               f"(Accumulated: {self._accumulated_hours:.4f}, Active: {self._is_active})")
             return round(result, 4) # Round to 4 decimal places
 
         except Exception as e:
@@ -379,7 +382,7 @@ class ProductionTimeCalculator:
         # If tracking stops while active, finalize the current phase
         if self._is_active:
              _LOGGER.info("Production timer was active during stop. Finalizing last phase.")
-             self._stop_production_tracking(dt_util.utcnow()) # Stop at current time
+             self._stop_production_tracking(dt_util.now()) # Stop at current local time
 
         # Remove state change listener
         if self._state_listener_remove:

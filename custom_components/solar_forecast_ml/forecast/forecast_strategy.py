@@ -21,8 +21,8 @@ import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 
-from ..forecast.strategy import ForecastStrategy, ForecastResult
-from ..services.error_handler import ErrorHandlingService
+from .strategy import ForecastStrategy, ForecastResult
+from ..services.service_error_handler import ErrorHandlingService
 from ..exceptions import MLModelException
 from ..core.helpers import SafeDateTimeUtil as dt_util
 
@@ -35,7 +35,7 @@ class MLForecastStrategy(ForecastStrategy):
     Implements the forecast strategy using a trained Machine Learning model
     provided by an MLPredictor instance.
     
-    Berechnet eine iterative stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Prognose.
+    Berechnet eine iterative stuendliche Prognose.
     """
 
     def __init__(self, ml_predictor: Any, error_handler: Optional[ErrorHandlingService] = None):
@@ -57,7 +57,7 @@ class MLForecastStrategy(ForecastStrategy):
         peak_power_kw = getattr(ml_predictor, 'peak_power_kw', 0.0)
         
         if peak_power_kw > 0:
-            # Max hourly production â‰ˆ peak_power_kw * 1.2 (20% safety margin)
+            # Max hourly production ÃƒÂ¢Ã¢â‚¬Â°Ã‹â€  peak_power_kw * 1.2 (20% safety margin)
             from ..const import HOURLY_PRODUCTION_SAFETY_MARGIN, DEFAULT_MAX_HOURLY_KWH
             self.HOURLY_PREDICTION_MAX_VALUE = peak_power_kw * HOURLY_PRODUCTION_SAFETY_MARGIN
             _LOGGER.debug(f"MLForecastStrategy: Max hourly prediction set to {self.HOURLY_PREDICTION_MAX_VALUE:.2f} kWh "
@@ -107,11 +107,11 @@ class MLForecastStrategy(ForecastStrategy):
     ) -> ForecastResult:
         """
         Calculates the solar forecast using the ML model via the MLPredictor instance,
-        iteriert ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ber die stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage.
+        iteriert stuendliche Wettervorhersage.
 
         Args:
-            hourly_weather_forecast: Liste der verarbeiteten stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndlichen Wettervorhersagen.
-            sensor_data: Dictionary (wird fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r 'current_yield' Mindest-Check benÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶tigt).
+            hourly_weather_forecast: Liste der verarbeiteten stuendlichen Wettervorhersagen.
+            sensor_data: Dictionary (wird r 'current_yield' Mindest-Check benoetigt).
             lag_features: Dictionary mit Lag-Features (z.B. 'production_yesterday').
             correction_factor: Wird von dieser Strategie ignoriert.
 
@@ -219,7 +219,7 @@ class MLForecastStrategy(ForecastStrategy):
                         
                         _LOGGER.info(
                             f"Mindest-Prognose Anpassung (ML): Aktueller Ertrag {current_yield_float:.2f} kWh > "
-                            f"UrsprÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ngliche Prognose {total_today_kwh:.2f} kWh. "
+                            f"Ürspuengliche Prognose {total_today_kwh:.2f} kWh. "
                             f"Angepasst auf {adjusted_today_forecast:.2f} kWh."
                         )
                         
@@ -231,7 +231,7 @@ class MLForecastStrategy(ForecastStrategy):
                             total_tomorrow_kwh = total_tomorrow_kwh * adjustment_ratio
                             
             except Exception as e:
-                _LOGGER.debug(f"Mindest-Prognose Check (ML) konnte nicht durchgefÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼hrt werden: {e}")
+                _LOGGER.debug(f"Mindest-Prognose Check (ML) konnte nicht durchgefuehrt werden: {e}")
 
 
             model_accuracy = getattr(self.ml_predictor, 'current_accuracy', 0.0)

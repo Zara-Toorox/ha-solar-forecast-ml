@@ -22,13 +22,18 @@ Das machst du in der normalen Home Assistant Weboberfläche.
 
 4.  Speichere die Dateien mit **exakt** diesen Namen ab:
 
-      * `power_production.csv` (Dein Solar-Leistungssensor)
-      * `temperature.csv` (Dein Temperatursensor)
-      * `humidity.csv` (Dein Luftfeuchtigkeitssensor)
-      * `wind_speed.csv` (Windgeschwindigkeit)
-      * `rain.csv` (Regen)
-      * `uv_index.csv` (UV-Index)
-      * `lux.csv` (Helligkeit)
+/config/custom_components/solar_forecast_ml/
+├── import_historical_data.py
+├── import/                          ← CSV-Dateien hier ablegen
+│   ├── power_production.csv        ✅ PFLICHT
+│   ├── temperature.csv             ✅ PFLICHT
+│   ├── humidity.csv                ✅ PFLICHT
+│   ├── wind_speed.csv              ⭕ Optional
+│   ├── rain.csv                    ⭕ Optional
+│   ├── uv_index.csv                ⭕ Optional
+│   ├── irradiance.csv              ⭕ Optional (W/m²)
+│   └── lux.csv                     ⭕ Optional (LUX)
+└── hourly_samples.json             ← Output
 
 > **Wichtig:** Lade nur die CSV-Dateien für die Sensoren herunter, die du auch wirklich in der Integration konfiguriert hast. Die ersten drei (`power`, `temperature`, `humidity`) sind aber fast immer erforderlich.
 
@@ -118,13 +123,18 @@ You do this in the normal Home Assistant web interface.
 
 4.  Save the files with these **exact** names:
 
-      * `power_production.csv` (Your solar power sensor)
-      * `temperature.csv` (Your temperature sensor)
-      * `humidity.csv` (Your humidity sensor)
-      * `wind_speed.csv` (Wind speed)
-      * `rain.csv` (Rain)
-      * `uv_index.csv` (UV index)
-      * `lux.csv` (Brightness/Lux)
+/config/custom_components/solar_forecast_ml/
+├── import_historical_data.py
+├── import/                          ← CSV-Dateien hier ablegen
+│   ├── power_production.csv        ✅ needed
+│   ├── temperature.csv             ✅ needed
+│   ├── humidity.csv                ✅ needed
+│   ├── wind_speed.csv              ⭕ Optional
+│   ├── rain.csv                    ⭕ Optional
+│   ├── uv_index.csv                ⭕ Optional
+│   ├── irradiance.csv              ⭕ Optional (W/m²)
+│   └── lux.csv                     ⭕ Optional (LUX)
+└── hourly_samples.json             ← Output
 
 > **Important:** Only download the CSV files for the sensors that you have actually configured in the integration. The first three (`power`, `temperature`, `humidity`) are almost always required.
 

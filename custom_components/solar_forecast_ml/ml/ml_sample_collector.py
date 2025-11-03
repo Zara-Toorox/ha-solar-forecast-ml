@@ -19,20 +19,20 @@ Copyright (C) 2025 Zara-Toorox
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone # <-- timezone importiert
+from datetime import datetime, timedelta, timezone # <-- timezone imported
 from typing import Dict, Any, Optional, List, Tuple
 from homeassistant.core import HomeAssistant, State
 from ..core.helpers import SafeDateTimeUtil
-from homeassistant.util import dt as dt_util # <-- dt_util wird konsistent verwendet
+from homeassistant.util import dt as dt_util # <-- dt_util used consistently
 
-# --- IMPORTE HIER ENTFERNT ---
-# from homeassistant.components import recorder (Verschoben)
-# from homeassistant.components.recorder import history (Verschoben)
-# --- ENDE ENTFERNUNG ---
+# --- IMPORTS REMOVED HERE ---
+# from homeassistant.components import recorder (Moved)
+# from homeassistant.components.recorder import history (Moved)
+# --- END REMOVAL ---
 
-from ..data.manager import DataManager
+from ..data.data_manager import DataManager
 from ..const import ML_MODEL_VERSION
-from ..forecast.weather_calculator import WeatherCalculator # Import fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Condition-Mapping
+from ..forecast.weather_calculator import WeatherCalculator # Import for Condition-Mapping
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,33 +62,42 @@ class SampleCollector:
     
     async def collect_sample(self, target_local_hour: int) -> None:
         """
-        Sammelt die Daten fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die angegebene ZIELSTUNDE (Lokalzeit).
-        This function is called by MLPredictor, der die korrekte
-        target hour (the hour that just ended) ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bergibt.
+        Collects data for the specified target hour (local time).
+        This function is called by MLPredictor, which passes the correct
+        target hour (the hour that just ended).
         """
-        # 1. Sonnen-Check (Verwendet UTC intern, daher sicher)
-        # 2. Lock und Duplikat-Check (PERSISTENTE PRÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œFUNG)
+        # 1. Sun check (Uses UTC internally, so safe)
+        # 2. Lock and duplicate check (PERSISTENT FUNCTION)
         async with self._sample_lock:
             try:
                 last_collected = await self.data_manager.get_last_collected_hour()
                 
-                if last_collected == target_local_hour:
+                # Convert target_local_hour to datetime for comparison
+                now_local = dt_util.now()
+                target_datetime_local = now_local.replace(hour=target_local_hour, minute=0, second=0, microsecond=0)
+                
+                # If target hour is in the future (e.g., hour 23 at 01:00), use yesterday
+                if target_datetime_local > now_local:
+                    target_datetime_local = target_datetime_local - timedelta(days=1)
+                
+                if last_collected and last_collected.hour == target_datetime_local.hour and last_collected.date() == target_datetime_local.date():
                     _LOGGER.debug(
-                        f"Sample fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour} (Lokal) bereits persistent gesammelt, ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼berspringe."
+                        f"Sample for hour {target_local_hour} (local) already persistently collected, skipping."
                     )
                     return
 
-                # 3. Sammle die Daten fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bergebene Zielstunde
-                await self._collect_hourly_sample(target_local_hour)
+                # 3. Collect data for the passed target hour
+                sample_time_local = await self._collect_hourly_sample(target_local_hour)
 
-                # 4. Speichere erfolgreich gesammelte Stunde persistent
-                await self.data_manager.set_last_collected_hour(target_local_hour)
-                _LOGGER.debug(f"Persistenter Status: Stunde {target_local_hour} als gesammelt markiert.")
+                # 4. Persistently store successfully collected hour (only if collection was successful)
+                if sample_time_local:
+                    await self.data_manager.set_last_collected_hour(sample_time_local)
+                    _LOGGER.debug(f"Persistent status: Hour {target_local_hour} marked as collected at {sample_time_local.isoformat()}.")
 
             except Exception as e:
-                _LOGGER.error(f"Hourly sample collection fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour} fehlgeschlagen: {e}", exc_info=True)
+                _LOGGER.error(f"Hourly sample collection for hour {target_local_hour} failed: {e}", exc_info=True)
     
-    # --- (FEHLERBEHEBUNG) NEUE HILFSMETHODE fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Zeitgewichteten Durchschnitt ---
+    # --- (TROUBLESHOOTING) NEW HELPER METHOD for Time-Weighted Average ---
     async def _calculate_time_weighted_average(
         self,
         entity_id: str,
@@ -97,21 +106,21 @@ class SampleCollector:
         attribute: Optional[str] = None
     ) -> Optional[float]:
         """
-        Berechnet den zeitgewichteten Durchschnitt eines Sensors (oder Attributs) 
-        innerhalb eines Zeitfensters.
+        Calculates the time-weighted average of a sensor (or attribute) 
+        within a time window.
         """
         
-        # +++ IMPORT HIER EINGEFÃƒÆ’Ã†â€™Ãƒâ€¦Ã¢â‚¬Å“GT +++
+        # +++ IMPORT ADDED HERE +++
         try:
             from homeassistant.components.recorder import history
         except ImportError:
             _LOGGER.error("Recorder component not available. Cannot calculate Time Weighted Average.")
             return None
-        # +++ ENDE EINFÃƒÆ’Ã†â€™Ãƒâ€¦Ã¢â‚¬Å“GUNG +++
+        # +++ END ADDITION +++
         
-        _LOGGER.debug(f"Berechne TWA fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {entity_id} (Attribut: {attribute}) von {start_time_utc} bis {end_time_utc}")
+        _LOGGER.debug(f"Calculating TWA for {entity_id} (Attribute: {attribute}) from {start_time_utc} to {end_time_utc}")
         
-        # 1. Hole alle ZustÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤nde im Zeitfenster
+        # 1. Fetch all states in the time window
         try:
             history_list = await self.hass.async_add_executor_job(
                 history.get_significant_states,
@@ -121,27 +130,27 @@ class SampleCollector:
                 [entity_id],
                 None,
                 True, # include_start_time_state = True
-                True  # significant_changes_only = True (wichtig!)
+                True  # significant_changes_only = True (important!)
             )
             
             if not history_list or entity_id not in history_list:
-                _LOGGER.warning(f"Keine History fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r TWA von {entity_id} gefunden.")
+                _LOGGER.warning(f"No history for TWA of {entity_id} found.")
                 return None
             
             states = history_list[entity_id]
             if not states:
-                _LOGGER.debug(f"History fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r TWA von {entity_id} ist leer.")
+                _LOGGER.debug(f"History for TWA of {entity_id} is empty.")
                 return None
                 
         except Exception as e:
-            _LOGGER.error(f"Fehler beim Abrufen der History fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r TWA von {entity_id}: {e}")
+            _LOGGER.error(f"Error fetching history for TWA of {entity_id}: {e}")
             return None
 
-        # 2. Berechne zeitgewichteten Durchschnitt
+        # 2. Calculate time-weighted average
         total_value_duration = 0.0
         total_duration_sec = 0.0
         
-        # Finde den initialen Wert (letzter Wert vor oder bei start_time)
+        # Find initial value (last value before or at start_time)
         initial_value = None
         for state in states:
             if state.last_updated <= start_time_utc:
@@ -149,13 +158,13 @@ class SampleCollector:
                     val_str = state.attributes.get(attribute) if attribute else state.state
                     initial_value = float(val_str)
                 except (ValueError, TypeError, AttributeError):
-                    continue # Suche weiter nach einem gÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ltigen numerischen Wert
+                    continue # Continue searching for a valid numeric value
             else:
-                break # Zustand ist bereits nach start_time
+                break # State is already after start_time
 
         if initial_value is None:
-            _LOGGER.warning(f"Konnte keinen initialen Wert fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r TWA von {entity_id} finden. Beginne mit erstem Wert im Fenster.")
-            # Suche den ersten gÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ltigen Wert *im* Fenster
+            _LOGGER.warning(f"Could not find initial value for TWA of {entity_id}. Start with first value in the window.")
+            # Search for the first valid value *in* the window
             for state in states:
                 if state.last_updated > start_time_utc:
                      try:
@@ -165,13 +174,13 @@ class SampleCollector:
                      except (ValueError, TypeError, AttributeError):
                          continue
             if initial_value is None:
-                 _LOGGER.error(f"Keine gÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ltigen numerischen Werte fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r TWA von {entity_id} im gesamten Zeitraum gefunden.")
+                 _LOGGER.error(f"No valid numeric values for TWA of {entity_id} found in the entire period.")
                  return None
 
         prev_value = initial_value
         prev_time = start_time_utc
         
-        # Iteriere ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ber alle ZustÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤nde *nach* start_time
+        # Iterate over all states *after* start_time
         start_index_integration = 0
         while start_index_integration < len(states) and states[start_index_integration].last_updated <= start_time_utc:
             start_index_integration += 1
@@ -185,7 +194,7 @@ class SampleCollector:
                     total_value_duration += prev_value * duration_sec
                     total_duration_sec += duration_sec
                 
-                # Aktualisiere prev_value fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤chsten Schritt
+                # Update prev_value for next step
                 val_str = state.attributes.get(attribute) if attribute else state.state
                 prev_value = float(val_str)
                 prev_time = current_time
@@ -194,28 +203,28 @@ class SampleCollector:
                     break
                     
             except (ValueError, TypeError, AttributeError):
-                # UngÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ltiger Zustand (z.B. 'unknown'), fahre mit vorigem Wert fort
-                _LOGGER.debug(f"UngÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ltiger Zustand '{val_str}' bei TWA fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {entity_id}, verwende vorigen Wert.")
-                prev_time = min(state.last_updated, end_time_utc) # Zeit muss aber fortschreiten
+                # Invalid state (e.g. 'unknown'), continue with previous value
+                _LOGGER.debug(f"Invalid state '{val_str}' for TWA of {entity_id}, use previous value.")
+                prev_time = min(state.last_updated, end_time_utc) # Time must still progress
             except Exception as e_loop:
-                _LOGGER.warning(f"Fehler in TWA-Schleife: {e_loop}")
+                _LOGGER.warning(f"Error in TWA loop: {e_loop}")
                 prev_time = min(state.last_updated, end_time_utc)
 
-        # Letztes Segment von prev_time bis end_time_utc
+        # Last segment from prev_time to end_time_utc
         if prev_time < end_time_utc:
             duration_sec = (end_time_utc - prev_time).total_seconds()
             total_value_duration += prev_value * duration_sec
             total_duration_sec += duration_sec
             
         if total_duration_sec == 0:
-            _LOGGER.debug(f"TWA fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {entity_id}: Keine Dauer (0s), verwende initial_value.")
-            return initial_value # Nur ein Wert im Zeitfenster
+            _LOGGER.debug(f"TWA for {entity_id}: No duration (0s), use initial_value.")
+            return initial_value # Only one value in time window
 
         average = total_value_duration / total_duration_sec
-        _LOGGER.debug(f"TWA fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {entity_id} (Attribut: {attribute}) = {average:.2f}")
+        _LOGGER.debug(f"TWA for {entity_id} (Attribute: {attribute}) = {average:.2f}")
         return average
 
-    # --- (FEHLERBEHEBUNG) NEUE HILFSMETHODE fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r dominanten Zustand ---
+    # --- (TROUBLESHOOTING) NEW HELPER METHOD for dominant state ---
     async def _get_dominant_condition(
         self,
         start_time_utc: datetime, 
@@ -223,19 +232,18 @@ class SampleCollector:
         entity_id: str
     ) -> str:
         """
-        Ermittelt den Wetter-Zustand (Condition), der im Zeitfenster
-        am lÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ngsten angedauert hat.
+        Determines the weather condition that lasted the longest in the time window.
         """
         
-        # +++ IMPORT HIER EINGEFÃƒÆ’Ã†â€™Ãƒâ€¦Ã¢â‚¬Å“GT +++
+        # +++ IMPORT ADDED HERE +++
         try:
             from homeassistant.components.recorder import history
         except ImportError:
             _LOGGER.error("Recorder component not available. Cannot get dominant condition.")
             return "unknown"
-        # +++ ENDE EINFÃƒÆ’Ã†â€™Ãƒâ€¦Ã¢â‚¬Å“GUNG +++
+        # +++ END ADDITION +++
 
-        _LOGGER.debug(f"Ermittle dominante Condition fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {entity_id} von {start_time_utc} bis {end_time_utc}")
+        _LOGGER.debug(f"Determining dominant condition for {entity_id} from {start_time_utc} to {end_time_utc}")
         try:
             history_list = await self.hass.async_add_executor_job(
                 history.get_significant_states,
@@ -244,23 +252,23 @@ class SampleCollector:
             )
             
             if not history_list or entity_id not in history_list:
-                _LOGGER.warning(f"Keine History fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Condition von {entity_id} gefunden.")
+                _LOGGER.warning(f"No history for condition of {entity_id} found.")
                 return 'unknown'
             
             states = history_list[entity_id]
             if not states:
-                _LOGGER.debug(f"History fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Condition von {entity_id} ist leer.")
+                _LOGGER.debug(f"History for condition of {entity_id} is empty.")
                 return 'unknown'
 
             durations: Dict[str, float] = {}
             
-            # Initialen Zustand finden
+            # Find initial state
             prev_state_str = 'unknown'
             for state in states:
                 if state.last_updated <= start_time_utc:
                     prev_state_str = state.state
                 else:
-                    break # Zustand ist bereits nach start_time
+                    break # State is already after start_time
             
             prev_time = start_time_utc
 
@@ -280,23 +288,23 @@ class SampleCollector:
                 if prev_time >= end_time_utc:
                     break
 
-            # Letztes Segment
+            # Last segment
             if prev_time < end_time_utc:
                 duration_sec = (end_time_utc - prev_time).total_seconds()
                 if duration_sec > 0 and prev_state_str not in ['unknown', 'unavailable']:
                     durations[prev_state_str] = durations.get(prev_state_str, 0.0) + duration_sec
 
             if not durations:
-                _LOGGER.warning(f"Keine gÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ltigen Conditions fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {entity_id} im Zeitraum gefunden.")
+                _LOGGER.warning(f"No valid conditions for {entity_id} found in the period.")
                 return 'unknown'
 
-            # Finde den Zustand mit der lÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ngsten Dauer
+            # Find state with longest duration
             dominant_condition = max(durations, key=durations.get)
-            _LOGGER.debug(f"Dominante Condition fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {entity_id} ist '{dominant_condition}' (Dauern: {durations})")
+            _LOGGER.debug(f"Dominant condition for {entity_id} is '{dominant_condition}' (Durations: {durations})")
             return dominant_condition
 
         except Exception as e:
-            _LOGGER.error(f"Fehler bei Ermittlung der dominanten Condition: {e}", exc_info=True)
+            _LOGGER.error(f"Error determining dominant condition: {e}", exc_info=True)
             return 'unknown'
 
     async def _get_historical_forecast_data(
@@ -304,25 +312,25 @@ class SampleCollector:
         target_time_utc: datetime
     ) -> Optional[Dict[str, Any]]:
         """
-        Holt historische Forecast-Daten aus dem weather_forecast_cache.json
-        fÃƒÂ¼r die angegebene Ziel-Zeit.
+        Fetches historical forecast data from the weather_forecast_cache.json
+        for the specified target time.
         
         Args:
-            target_time_utc: Zielstunde in UTC
+            target_time_utc: Target hour in UTC
             
         Returns:
-            Dict mit Forecast-Daten oder None falls nicht gefunden
+            Dict with forecast data or None if not found
         """
         try:
-            # Lade Forecast-Cache
+            # Load forecast cache
             cache = await self.data_manager.load_weather_forecast_cache()
             if not cache or not cache.get("forecast_hours"):
-                _LOGGER.debug("Forecast-Cache leer oder nicht verfÃƒÂ¼gbar")
+                _LOGGER.debug("Forecast cache empty or not available")
                 return None
             
             forecast_hours = cache.get("forecast_hours", [])
             
-            # Suche Forecast fÃƒÂ¼r Ziel-Stunde (mit 30min Toleranz)
+            # Search forecast for target hour (with 30min tolerance)
             target_str = target_time_utc.isoformat()
             tolerance = timedelta(minutes=30)
             
@@ -336,7 +344,7 @@ class SampleCollector:
                     time_diff = abs((entry_dt - target_time_utc).total_seconds())
                     
                     if time_diff <= tolerance.total_seconds():
-                        # Forecast gefunden - extrahiere relevante Daten
+                        # Forecast found - extract relevant data
                         weather_data = {
                             'temperature': entry.get('temperature', 15.0),
                             'humidity': entry.get('humidity', 60.0),
@@ -347,55 +355,55 @@ class SampleCollector:
                         }
                         
                         _LOGGER.debug(
-                            f"Historischer Forecast gefunden fÃƒÂ¼r {target_time_utc.isoformat()}: "
-                            f"temp={weather_data['temperature']}Ã‚Â°C, cloud={weather_data['cloud_cover']}%"
+                            f"Historical forecast found for {target_time_utc.isoformat()}: "
+                            f"temp={weather_data['temperature']}Ãƒâ€šÃ‚Â°C, cloud={weather_data['cloud_cover']}%"
                         )
                         return weather_data
                         
                 except (ValueError, TypeError) as e:
-                    _LOGGER.debug(f"Fehler beim Parsen von Forecast-Eintrag: {e}")
+                    _LOGGER.debug(f"Error parsing forecast entry: {e}")
                     continue
             
-            _LOGGER.debug(f"Kein passender Forecast fÃƒÂ¼r {target_time_utc.isoformat()} im Cache gefunden")
+            _LOGGER.debug(f"No matching forecast for {target_time_utc.isoformat()} found in cache")
             return None
             
         except Exception as e:
-            _LOGGER.error(f"Fehler beim Abrufen historischer Forecast-Daten: {e}", exc_info=True)
+            _LOGGER.error(f"Error fetching historical forecast data: {e}", exc_info=True)
             return None
 
-    # --- (FEHLERBEHEBUNG & V1) VÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œLLIG NEU AUFGEBAUTE METHODE ---
+    # --- (TROUBLESHOOTING & V1) COMPLETELY REBUILT METHOD ---
     async def _get_historical_average_states(
         self, 
         start_time_utc: datetime, 
         end_time_utc: datetime
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
-        Holt historische Wetterdaten primÃƒÂ¤r aus Forecast-Cache,
-        Fallback auf Recorder TWA fÃƒÂ¼r Sensoren und Weather-Entity.
+        Fetches historical weather data primarily from forecast cache,
+        fallback to recorder TWA for sensors and weather entity.
         
         Returns:
             (weather_data, sensor_data)
         """
-        _LOGGER.debug(f"Rufe historische Daten ab fÃƒÂ¼r {start_time_utc} bis {end_time_utc}")
+        _LOGGER.debug(f"Fetching historical data for {start_time_utc} to {end_time_utc}")
         
         weather_data = self._get_default_weather()
         sensor_data = self._get_default_sensor_data()
         
-        # PRIORITÃƒâ€žT 1: Historischer Forecast aus Cache (Mitte des Zeitfensters)
+        # PRIORITY 1: Historical forecast from cache (middle of time window)
         mid_time_utc = start_time_utc + (end_time_utc - start_time_utc) / 2
         forecast_data = await self._get_historical_forecast_data(mid_time_utc)
         
         if forecast_data:
-            # Nutze Forecast-Daten fÃƒÂ¼r weather_data
+            # Use forecast data for weather_data
             weather_data.update(forecast_data)
-            _LOGGER.debug(f"Verwende historischen Forecast fÃƒÂ¼r Weather-Daten")
+            _LOGGER.debug(f"Using historical forecast for weather data")
             forecast_available = True
         else:
-            _LOGGER.debug(f"Kein historischer Forecast verfÃƒÂ¼gbar, nutze TWA fÃƒÂ¼r Weather-Entity")
+            _LOGGER.debug(f"No historical forecast available, use TWA for weather entity")
             forecast_available = False
         
-        # PRIORITÃƒâ€žT 2: Sensor-Daten via TWA (immer durchfÃƒÂ¼hren)
-        # Definiere Sensor-EntitÃƒÂ¤ten (keine Weather-Entity-Attribute mehr!)
+        # PRIORITY 2: Sensor data via TWA (always perform)
+        # Define sensor entities (no more weather entity attributes!)
         sensor_entities: List[Tuple[str, Optional[str], str, Dict]] = [
             (self.temp_sensor, None, 'temperature', sensor_data),
             (self.wind_sensor, None, 'wind_speed', sensor_data),
@@ -407,14 +415,14 @@ class SampleCollector:
         
         tasks = []
         
-        # TWA-Tasks nur fÃƒÂ¼r konfigurierte Sensoren
+        # TWA tasks only for configured sensors
         for entity_id, attr, key, target_dict in sensor_entities:
             if entity_id:
                 tasks.append(self._calculate_time_weighted_average(entity_id, start_time_utc, end_time_utc, attr))
             else:
                 tasks.append(asyncio.sleep(0, result=None))
         
-        # Wenn kein Forecast verfÃƒÂ¼gbar: TWA fÃƒÂ¼r Weather-Entity-Attribute als Fallback
+        # If no forecast available: TWA for weather entity attributes as fallback
         if not forecast_available and self.weather_entity:
             weather_fallback_attrs = [
                 ('temperature', 'temperature'),
@@ -426,27 +434,27 @@ class SampleCollector:
             for attr, key in weather_fallback_attrs:
                 tasks.append(self._calculate_time_weighted_average(self.weather_entity, start_time_utc, end_time_utc, attr))
         
-        # Condition: Immer via dominante Methode (falls Weather-Entity vorhanden)
+        # Condition: Always via dominant method (if weather entity present)
         if self.weather_entity and not forecast_available:
             tasks.append(self._get_dominant_condition(start_time_utc, end_time_utc, self.weather_entity))
         else:
             tasks.append(asyncio.sleep(0, result=None))
         
-        # Alle Tasks parallel ausfÃƒÂ¼hren
+        # Run all tasks in parallel
         try:
             results = await asyncio.gather(*tasks)
         except Exception as e:
-            _LOGGER.error(f"Fehler bei Abruf der TWA-Werte: {e}")
-            # Falls Forecast vorhanden, gib diesen zurÃƒÂ¼ck, sonst Defaults
+            _LOGGER.error(f"Error fetching TWA values: {e}")
+            # If forecast available, return it, otherwise defaults
             return weather_data, sensor_data
         
-        # Ergebnisse zuordnen
-        # Sensor-Daten (erste 6 Tasks)
+        # Assign results
+        # Sensor data (first 6 tasks)
         for i, (entity_id, attr, key, target_dict) in enumerate(sensor_entities):
             if i < len(results) and results[i] is not None:
                 target_dict[key] = max(0.0, results[i])
         
-        # Weather-Entity Fallback (falls kein Forecast)
+        # Weather entity fallback (if no forecast)
         if not forecast_available:
             offset = len(sensor_entities)
             weather_attrs = ['temperature', 'humidity', 'wind_speed', 'pressure', 'cloud_cover']
@@ -455,40 +463,44 @@ class SampleCollector:
                 if idx < len(results) and results[idx] is not None:
                     weather_data[key] = max(0.0, results[idx])
             
-            # Condition (letzter Task)
+            # Condition (last task)
             if len(results) > offset + len(weather_attrs):
                 condition_result = results[offset + len(weather_attrs)]
                 if condition_result:
                     weather_data['condition'] = condition_result
         
-        _LOGGER.debug(f"Historische Wetterdaten: {weather_data}")
-        _LOGGER.debug(f"Historische Sensordaten: {sensor_data}")
+        _LOGGER.debug(f"Historical weather data: {weather_data}")
+        _LOGGER.debug(f"Historical sensor data: {sensor_data}")
         return weather_data, sensor_data
 
 
-    # --- (Verbesserung 1) ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œBERARBEITETE METHODE ---
-    async def _collect_hourly_sample(self, target_local_hour: int) -> None:
-        """Sammelt die Daten fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die angegebene Zielstunde (Lokalzeit)
-           unter Verwendung von historischen Recorder-Daten."""
+    # --- (IMPROVEMENT 1) REVISED METHOD ---
+    async def _collect_hourly_sample(self, target_local_hour: int) -> Optional[datetime]:
+        """Collects data for the specified target hour (local time)
+           using historical recorder data.
+           
+           Returns:
+               sample_time_local datetime object if successful, None otherwise
+        """
         try:
-            # 1. Definiere den UTC-Zeitraum fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die Zielstunde
+            # 1. Define the UTC period for the target hour
             start_time_utc, end_time_utc, sample_time_local = self._get_utc_times_for_hour(target_local_hour)
             
             if start_time_utc is None or end_time_utc is None or sample_time_local is None:
-                _LOGGER.warning(f"Konnte UTC-Zeitfenster fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r lokale Stunde {target_local_hour} nicht bestimmen. Sample ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bersprungen.")
-                return
+                _LOGGER.warning(f"Could not determine UTC time window for local hour {target_local_hour}. Sample skipped.")
+                return None
 
-            # 2. Hole Ist-Wert (Riemann-Summe) fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r den UTC-Zeitraum
+            # 2. Fetch actual value (Riemann sum) for the UTC period
             actual_kwh = await self._perform_riemann_integration(start_time_utc, end_time_utc)
             if actual_kwh is None:
-                _LOGGER.warning(f"Konnte Ist-Produktion (Riemann) fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour} (Lokal) nicht abrufen (None). Sample ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bersprungen.")
-                return # Skip sample if essential data missing
+                _LOGGER.warning(f"Could not fetch actual production (Riemann) for hour {target_local_hour} (local) (None). Sample skipped.")
+                return None # Skip sample if essential data missing
 
-            # 3. Hole Tagesgesamtwert bis zum Ende der Zielstunde (Ende des UTC-Zeitraums)
+            # 3. Fetch daily total up to the end of the target hour (end of UTC period)
             daily_total = await self._get_daily_production_so_far(end_time_utc)
             if daily_total is None:
-                _LOGGER.warning(f"Konnte Tagesgesamtwert bis Stunde {target_local_hour} nicht abrufen. Setze auf 0 fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Sample.")
-                daily_total = 0.0 # Setze auf 0, wenn Abruf fehlschlÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤gt
+                _LOGGER.warning(f"Could not fetch daily total up to hour {target_local_hour}. Set to 0 for sample.")
+                daily_total = 0.0 # Set to 0 if fetch fails
 
             percentage = 0.0
             if daily_total > 0.01: 
@@ -496,12 +508,12 @@ class SampleCollector:
             elif actual_kwh <= 0.01 and daily_total <= 0.01:
                 percentage = 0.0 
 
-            # 4. (NEU) Hole historische Durchschnittsdaten fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Wetter und Sensoren
+            # 4. (NEW) Fetch historical average data for weather and sensors
             weather_data, sensor_data = await self._get_historical_average_states(start_time_utc, end_time_utc)
 
-            # 5. Sample zusammenstellen und speichern
+            # 5. Assemble and store sample
             sample = {
-                "timestamp": sample_time_local.isoformat(), # Speichere als LOKALEN ISO String
+                "timestamp": sample_time_local.isoformat(), # Store as LOCAL ISO string
                 "actual_kwh": round(actual_kwh, 4),
                 "daily_total": round(daily_total, 4), 
                 "percentage_of_day": round(percentage, 4),
@@ -513,57 +525,61 @@ class SampleCollector:
             await self.data_manager.add_hourly_sample(sample)
 
             _LOGGER.info(
-                f"Hourly Sample (HISTORICAL) gespeichert: {sample_time_local.strftime('%Y-%m-%d %H')}:00 local | "
-                f"Actual={actual_kwh:.2f}kWh ({percentage*100:.1f}% des Tages), "
-                f"TagesTotal={daily_total:.2f}kWh, "
-                f"Wetter-Temp={weather_data.get('temperature'):.1f}C, "
-                f"Wetter-Cloud={weather_data.get('cloud_cover'):.1f}%"
+                f"Hourly Sample (HISTORICAL) saved: {sample_time_local.strftime('%Y-%m-%d %H')}:00 local | "
+                f"Actual={actual_kwh:.2f}kWh ({percentage*100:.1f}% of day), "
+                f"DailyTotal={daily_total:.2f}kWh, "
+                f"Weather-Temp={weather_data.get('temperature'):.1f}C, "
+                f"Weather-Cloud={weather_data.get('cloud_cover'):.1f}%"
             )
+            
+            return sample_time_local
 
         except Exception as e:
-            _LOGGER.error(f"Fehler beim Sammeln des (historischen) hourly samples fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour}: {e}", exc_info=True)
+            _LOGGER.error(f"Error collecting (historical) hourly sample for hour {target_local_hour}: {e}", exc_info=True)
+            return None
 
-    # --- (Verbesserung 1) NEUE HILFSMETHODE ---
+    # --- (IMPROVEMENT 1) NEW HELPER METHOD ---
     def _get_utc_times_for_hour(self, target_local_hour: int) -> Tuple[Optional[datetime], Optional[datetime], Optional[datetime]]:
         """
-        Berechnet das UTC-Start/Ende-Fenster und den lokalen Sample-Zeitstempel 
-        fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r eine gegebene lokale Zielstunde.
+        Calculates the UTC start/end window and local sample timestamp 
+        for a given local target hour.
         """
         try:
-            now_local = SafeDateTimeUtil.as_local(SafeDateTimeUtil.utcnow())
+            # CRITICAL FIX: Use SafeDateTimeUtil.now() for proper local time
+            now_local = SafeDateTimeUtil.now()
             
-            # Nimm den Tag der aktuellen lokalen Zeit
-            # und setze die Stunde auf die Zielstunde
+            # Take the day of the current local time
+            # and set the hour to the target hour
             start_time_local_base = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
             
-            # Wenn die Zielstunde (z.B. 23) grÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸er ist als die aktuelle Stunde (z.B. 0),
-            # bedeutet das, dass der Trigger nach Mitternacht lief und wir den Vortag meinen.
+            # If the target hour (e.g. 23) is greater than the current hour (e.g. 0),
+            # it means the trigger ran after midnight and we mean the previous day.
             if target_local_hour > now_local.hour:
                 start_time_local_base -= timedelta(days=1)
-                _LOGGER.debug(f"Zielstunde {target_local_hour} liegt vor aktueller Stunde {now_local.hour}. Verwende Vortag: {start_time_local_base.date()}")
+                _LOGGER.debug(f"Target hour {target_local_hour} is after current hour {now_local.hour}. Use previous day: {start_time_local_base.date()}")
             
             start_time_local = start_time_local_base.replace(hour=target_local_hour)
             end_time_local = start_time_local + timedelta(hours=1)
 
-            # PrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼fen, ob der gesamte Zeitraum in der Vergangenheit liegt
+            # Check if the entire time period is in the past
             if end_time_local > now_local:
-                 _LOGGER.warning(f"Versuch, Daten fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r zukÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼nftige/aktuelle Stunde {target_local_hour} (bis {end_time_local}) zu sammeln. ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œberspringe.")
-                 return None, None, None # Kann keine zukÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼nftigen Daten sammeln
+                 _LOGGER.warning(f"Attempt to collect data for future/current hour {target_local_hour} (up to {end_time_local}). Skip.")
+                 return None, None, None # Cannot collect future data
 
-            # Konvertiere die LOKALEN Zeiten nach UTC fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die Recorder-Abfrage
+            # Convert LOCAL times to UTC for recorder query
             start_time_utc = start_time_local.astimezone(timezone.utc)
             end_time_utc = end_time_local.astimezone(timezone.utc)
             
-            # Der Sample-Zeitstempel ist der LOKALE Startzeitpunkt
+            # The sample timestamp is the LOCAL start time
             sample_time_local = start_time_local
 
             return start_time_utc, end_time_utc, sample_time_local
             
         except ValueError as e:
-            _LOGGER.warning(f"Konnte lokale Startzeit fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour} nicht erstellen (evtl. Zeitumstellung?): {e}")
+            _LOGGER.warning(f"Could not create local start time for hour {target_local_hour} (possibly daylight saving?): {e}")
             return None, None, None
         except Exception as tz_err:
-            _LOGGER.error(f"Fehler bei Zeitzonenkonvertierung fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour}: {tz_err}")
+            _LOGGER.error(f"Error in timezone conversion for hour {target_local_hour}: {tz_err}")
             return None, None, None
 
     async def _safe_parse_yield(self, state_obj: Optional[Any]) -> Optional[float]:
@@ -576,14 +592,14 @@ class SampleCollector:
             try:
                 cleaned_state = str(state_obj.state).split(" ")[0].replace(",", ".")
                 val = float(cleaned_state)
-                _LOGGER.debug(f"Status '{state_obj.state}' wurde zu {val} normalisiert")
+                _LOGGER.debug(f"State '{state_obj.state}' normalized to {val}")
                 return val if val >= 0 else 0.0 
             except (ValueError, TypeError):
-                _LOGGER.warning(f"Konnte normalisierten Status nicht in Zahl umwandeln: '{state_obj.state}'")
+                _LOGGER.warning(f"Could not convert normalized state to number: '{state_obj.state}'")
                 return None
 
     # =========================================================================
-    # Riemann-Summe (UnverÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ndert)
+    # Riemann Sum (Unchanged)
     # =========================================================================
     async def _perform_riemann_integration(
         self,
@@ -591,26 +607,26 @@ class SampleCollector:
         end_time: datetime
     ) -> Optional[float]:
         
-        # +++ IMPORT HIER EINGEFÃƒÆ’Ã†â€™Ãƒâ€¦Ã¢â‚¬Å“GT +++
+        # +++ IMPORT ADDED HERE +++
         try:
             from homeassistant.components.recorder import history
         except ImportError:
             _LOGGER.error("Recorder component not available. Cannot perform Riemann integration.")
             return None
-        # +++ ENDE EINFÃƒÆ’Ã†â€™Ãƒâ€¦Ã¢â‚¬Å“GUNG +++
+        # +++ END ADDITION +++
 
         if not self.power_entity:
-            _LOGGER.debug("Kein power_entity konfiguriert fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Riemann-Summe")
+            _LOGGER.debug("No power_entity configured for Riemann sum")
             return None
 
-        _LOGGER.debug(f"Starte Riemann-Summe fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {self.power_entity} von {start_time} bis {end_time}")
+        _LOGGER.debug(f"Starting Riemann sum for {self.power_entity} from {start_time} to {end_time}")
 
         try:
             if start_time.tzinfo is None or start_time.tzinfo.utcoffset(start_time) is None:
-                _LOGGER.error("Riemann: start_time muss timezone-aware (UTC) sein.")
+                _LOGGER.error("Riemann: start_time must be timezone-aware (UTC).")
                 start_time = start_time.replace(tzinfo=timezone.utc)
             if end_time.tzinfo is None or end_time.tzinfo.utcoffset(end_time) is None:
-                _LOGGER.error("Riemann: end_time muss timezone-aware (UTC) sein.")
+                _LOGGER.error("Riemann: end_time must be timezone-aware (UTC).")
                 end_time = end_time.replace(tzinfo=timezone.utc) 
 
             history_list = await self.hass.async_add_executor_job(
@@ -625,19 +641,19 @@ class SampleCollector:
             )
 
             if not history_list or self.power_entity not in history_list:
-                _LOGGER.warning(f"Keine History fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {self.power_entity} von {start_time} bis {end_time} gefunden.")
+                _LOGGER.warning(f"No history for {self.power_entity} from {start_time} to {end_time} found.")
                 current_state = self.hass.states.get(self.power_entity)
                 if current_state is None:
-                    _LOGGER.error(f"Power entity {self.power_entity} nicht in Home Assistant gefunden!")
+                    _LOGGER.error(f"Power entity {self.power_entity} not found in Home Assistant!")
                     return None 
                 else:
-                    _LOGGER.warning(f"Sensor {self.power_entity} existiert, aber liefert keine History im Zeitraum. Ergebnis ist 0.0 kWh.")
+                    _LOGGER.warning(f"Sensor {self.power_entity} exists, but provides no history in the period. Result is 0.0 kWh.")
                     return 0.0 
 
             states = history_list[self.power_entity]
 
             if not states:
-                _LOGGER.debug(f"History fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {self.power_entity} in Zeitraum ist leer.")
+                _LOGGER.debug(f"History for {self.power_entity} in period is empty.")
                 return 0.0
 
             total_wh = 0.0
@@ -656,17 +672,17 @@ class SampleCollector:
                     break 
 
             if not found_initial:
-                _LOGGER.warning(f"Konnte keinen gÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ltigen Zustand vor/bei {start_time} fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Riemann-Start finden. Beginne mit 0W.")
+                _LOGGER.warning(f"Could not find valid state before/at {start_time} for Riemann start. Start with 0W.")
             prev_power = initial_state_value
             prev_time = start_time 
 
-            _LOGGER.debug(f"Riemann Start: Initialer prev_power = {prev_power}W (basierend auf Zustand um {initial_state_time})")
+            _LOGGER.debug(f"Riemann Start: Initial prev_power = {prev_power}W (based on state around {initial_state_time})")
 
             start_index_integration = 0
             while start_index_integration < len(states) and states[start_index_integration].last_updated <= start_time:
                 start_index_integration += 1
 
-            _LOGGER.debug(f"Riemann Integration beginnt bei Index {start_index_integration} (Zeit > {start_time})")
+            _LOGGER.debug(f"Riemann integration starts at index {start_index_integration} (time > {start_time})")
 
             for state in states[start_index_integration:]:
                 try:
@@ -675,7 +691,7 @@ class SampleCollector:
                     time_diff_seconds = (current_end_time - prev_time).total_seconds()
                     
                     if time_diff_seconds <= 1e-6: 
-                        _LOGGER.debug(f"ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œberspringe Riemann Schritt: Zeitdifferenz ist Null oder negativ bei {current_end_time}.")
+                        _LOGGER.debug(f"Skip Riemann step: Time difference is zero or negative at {current_end_time}.")
                         prev_time = current_end_time
                         try: prev_power = max(0.0, float(state.state))
                         except (ValueError, TypeError): pass
@@ -684,7 +700,7 @@ class SampleCollector:
                     time_diff_hours = time_diff_seconds / 3600.0
                     wh = prev_power * time_diff_hours
                     total_wh += wh
-                    _LOGGER.debug(f"Riemann Schritt: von {prev_time.strftime('%H:%M:%S.%f')} bis {current_end_time.strftime('%H:%M:%S.%f')} ({time_diff_seconds:.1f}s) mit {prev_power:.1f}W -> {wh:.2f}Wh dazu (Total: {total_wh:.2f}Wh)")
+                    _LOGGER.debug(f"Riemann step: from {prev_time.strftime('%H:%M:%S.%f')} to {current_end_time.strftime('%H:%M:%S.%f')} ({time_diff_seconds:.1f}s) with {prev_power:.1f}W -> {wh:.2f}Wh added (Total: {total_wh:.2f}Wh)")
 
                     prev_time = current_end_time
 
@@ -692,14 +708,14 @@ class SampleCollector:
                          current_power = max(0.0, float(state.state))
                          prev_power = current_power 
                     except (ValueError, TypeError):
-                         _LOGGER.debug(f"UngÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ltiger Zustand '{state.state}' bei {state_time}. Verwende vorherigen Wert {prev_power}W weiter.")
+                         _LOGGER.debug(f"Invalid state '{state.state}' at {state_time}. Continue with previous value {prev_power}W.")
 
                     if prev_time >= end_time:
-                        _LOGGER.debug(f"Riemann erreicht/ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼berschreitet Endzeit {end_time}.")
+                        _LOGGER.debug(f"Riemann reached/exceeds end time {end_time}.")
                         break
 
                 except Exception as loop_err:
-                     _LOGGER.error(f"Fehler in Riemann-Schleife bei Zeit {state.last_updated}: {loop_err}", exc_info=True)
+                     _LOGGER.error(f"Error in Riemann loop at time {state.last_updated}: {loop_err}", exc_info=True)
                      if hasattr(state, 'last_updated'):
                          prev_time = min(state.last_updated, end_time)
                      continue
@@ -710,85 +726,85 @@ class SampleCollector:
                     time_diff_hours = time_diff_seconds / 3600.0
                     wh = prev_power * time_diff_hours 
                     total_wh += wh
-                    _LOGGER.debug(f"Riemann Abschluss: von {prev_time.strftime('%H:%M:%S.%f')} bis {end_time.strftime('%H:%M:%S.%f')} ({time_diff_seconds:.1f}s) mit {prev_power:.1f}W -> {wh:.2f}Wh dazu (Final Total: {total_wh:.2f}Wh)")
+                    _LOGGER.debug(f"Riemann completion: from {prev_time.strftime('%H:%M:%S.%f')} to {end_time.strftime('%H:%M:%S.%f')} ({time_diff_seconds:.1f}s) with {prev_power:.1f}W -> {wh:.2f}Wh added (Final Total: {total_wh:.2f}Wh)")
 
             kwh = max(0.0, total_wh / 1000.0)
-            _LOGGER.debug(f"Riemann-Summe Ergebnis: {kwh:.4f} kWh")
+            _LOGGER.debug(f"Riemann sum result: {kwh:.4f} kWh")
             return kwh
 
         except Exception as e:
-            _LOGGER.error(f"Kritischer Fehler bei Riemann-Integration fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r {self.power_entity}: {e}", exc_info=True)
+            _LOGGER.error(f"Critical error in Riemann integration for {self.power_entity}: {e}", exc_info=True)
             return None
 
-    # (UnverÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ndert)
+    # (Unchanged, except parameter type)
     async def _get_actual_production_for_hour(self, target_local_hour: int) -> Optional[float]:
-        _LOGGER.debug(f"Abruf der Ist-Produktion fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour} (Lokal)...")
+        _LOGGER.debug(f"Fetching actual production for hour {target_local_hour} (local)...")
         start_time_utc, end_time_utc, _ = self._get_utc_times_for_hour(target_local_hour)
         
         if start_time_utc is None or end_time_utc is None:
-            _LOGGER.warning(f"Konnte UTC-Zeitfenster fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour} nicht bestimmen.")
+            _LOGGER.warning(f"Could not determine UTC time window for hour {target_local_hour}.")
             return None
 
-        _LOGGER.debug(f"Frage Recorder ab fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour} Lokal: "
-                      f"UTC-Zeitraum: {start_time_utc.isoformat()} bis {end_time_utc.isoformat()}")
+        _LOGGER.debug(f"Query recorder for hour {target_local_hour} local: "
+                      f"UTC period: {start_time_utc.isoformat()} to {end_time_utc.isoformat()}")
 
         kwh = await self._perform_riemann_integration(start_time_utc, end_time_utc)
 
         if kwh is not None:
              _LOGGER.debug(
-                f"Produktion Stunde {target_local_hour} (Lokal) [UTC: {start_time_utc.strftime('%H:%M')}-{end_time_utc.strftime('%H:%M')}] (Riemann): {kwh:.4f} kWh"
+                f"Production hour {target_local_hour} (local) [UTC: {start_time_utc.strftime('%H:%M')}-{end_time_utc.strftime('%H:%M')}] (Riemann): {kwh:.4f} kWh"
             )
         else:
-             _LOGGER.warning(f"Riemann-Integration fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {target_local_hour} (Lokal) fehlgeschlagen.")
+             _LOGGER.warning(f"Riemann integration for hour {target_local_hour} (local) failed.")
 
         return kwh
     
-    # (UnverÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ndert, auÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸er Parameter-Typ)
+    # (Unchanged)
     async def _get_daily_production_so_far(self, end_of_hour_utc: datetime) -> Optional[float]:
-        """Holt die Tagesproduktion (bisher) via Riemann-Integration bis zum Ende der Zielstunde (UTC)."""
+        """Fetches the daily production (so far) via Riemann integration up to the end of the target hour (UTC)."""
         
-        # Bestimme Start des Tages (Lokalzeit) basierend auf der Endzeit
+        # Determine start of day (local time) based on the end time
         end_of_hour_local = SafeDateTimeUtil.as_local(end_of_hour_utc)
         start_of_day_local = end_of_hour_local.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Konvertiere nach UTC
+        # Convert to UTC
         try:
             start_of_day_utc = start_of_day_local.astimezone(timezone.utc)
         except Exception as tz_err:
-             _LOGGER.error(f"Fehler bei Zeitzonenkonvertierung fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Tagesproduktion: {tz_err}")
+             _LOGGER.error(f"Error in timezone conversion for daily production: {tz_err}")
              return None
 
-        _LOGGER.debug(f"Berechne Tagesproduktion bis Ende Stunde {end_of_hour_local.hour} (Lokal): "
-                      f"UTC-Zeitraum: {start_of_day_utc.isoformat()} bis {end_of_hour_utc.isoformat()}")
+        _LOGGER.debug(f"Calculate daily production up to end of hour {end_of_hour_local.hour} (local): "
+                      f"UTC period: {start_of_day_utc.isoformat()} to {end_of_hour_utc.isoformat()}")
 
         kwh = await self._perform_riemann_integration(start_of_day_utc, end_of_hour_utc)
 
         if kwh is not None:
-            _LOGGER.debug(f"Tagesertrag bis Ende Stunde {end_of_hour_local.hour} (Riemann): {kwh:.2f} kWh")
+            _LOGGER.debug(f"Daily yield up to end of hour {end_of_hour_local.hour} (Riemann): {kwh:.2f} kWh")
         else:
-            _LOGGER.warning(f"Abruf des Tagesertrags (bis Stunde {end_of_hour_local.hour}) via Riemann fehlgeschlagen.")
+            _LOGGER.warning(f"Fetching daily yield (up to hour {end_of_hour_local.hour}) via Riemann failed.")
 
         return kwh
 
-    # --- (Verbesserung 1) ENTFERNT ---
+    # --- (IMPROVEMENT 1) REMOVED ---
     # async def _collect_current_sensor_data(self) -> Dict[str, Any]:
     # async def _get_current_weather_data(self) -> Dict[str, Any]:
 
-    # --- (Verbesserung 1) NEUE HILFSMETHODEN ---
+    # --- (IMPROVEMENT 1) NEW HELPER METHODS ---
     def _get_default_weather(self) -> Dict[str, Any]:
-        """Gibt Standard-Wetterwerte zurÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ck."""
+        """Returns default weather values."""
         return {
             'temperature': 15.0, 'humidity': 60.0, 'cloud_cover': 50.0,
             'wind_speed': 5.0, 'pressure': 1013.0, 'condition': 'unknown'
         }
 
     def _get_default_sensor_data(self) -> Dict[str, Any]:
-        """Gibt Standard-Sensorwerte zurÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ck."""
+        """Returns default sensor values."""
         return {
             'temperature': 0.0, 'wind_speed': 0.0, 'rain': 0.0,
             'uv_index': 0.0, 'lux': 0.0, 'humidity': 0.0
         }
-    # --- ENDE ---
+    # --- END ---
 
     def set_forecast_cache(self, cache: Dict[str, Any]) -> None:
         self._forecast_cache = cache
@@ -805,8 +821,8 @@ class SampleCollector:
         humidity_sensor: Optional[str] = None, 
         solar_yield_today: Optional[str] = None 
     ) -> None:
-        """Konfiguriert die vom Collector verwendeten EntitÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ts-IDs."""
-        _LOGGER.debug("Konfiguriere EntitÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ten im SampleCollector...")
+        """Configures the entity IDs used by the collector."""
+        _LOGGER.debug("Configuring entities in SampleCollector...")
         self.weather_entity = weather_entity
         self.power_entity = power_entity
         self.temp_sensor = temp_sensor

@@ -108,9 +108,22 @@ class RidgeTrainer:
             num_features_incl_bias = X_with_bias.shape[1]
 
             # --- Hyperparameter Tuning (Lambda Selection) ---
+            # FIX 5: Adaptive alpha - Lower for more samples (less regularization)
+            # More samples = more confident in features = less penalty needed
+            adaptive_alpha = max(0.01, min(1.0, 1.0 / (len(y_train) / 100.0)))
+            _LOGGER.info(f"Using adaptive Ridge alpha={adaptive_alpha:.4f} for {len(y_train)} samples")
+            
             # Define candidate values for the regularization strength (lambda or alpha)
-            lambda_candidates = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
-            best_lambda_found = self.best_lambda # Initialize with default
+            # Build candidates around the adaptive alpha
+            lambda_candidates = [
+                adaptive_alpha * 0.01,
+                adaptive_alpha * 0.1,
+                adaptive_alpha,
+                adaptive_alpha * 10.0,
+                adaptive_alpha * 100.0,
+                adaptive_alpha * 1000.0
+            ]
+            best_lambda_found = adaptive_alpha  # Initialize with adaptive value
             best_validation_score = -np.inf # Track best R-squared on validation set
 
             # Create an 80/20 train/validation split from the provided training data
@@ -152,13 +165,13 @@ class RidgeTrainer:
                         # Calculate R-squared score (Coefficient of Determination)
                         if ss_tot_val > 1e-8: # Avoid division by zero if all validation targets are the same
                             r_squared_val = 1.0 - (ss_res_val / ss_tot_val)
-                            _LOGGER.debug(f"  Lambda={lambda_val:.3f}, Validation RÃ‚Â²={r_squared_val:.4f}")
+                            _LOGGER.debug(f"  Lambda={lambda_val:.3f}, Validation RÂ²={r_squared_val:.4f}")
                             # Update best lambda if this score is better
                             if r_squared_val > best_validation_score:
                                 best_validation_score = r_squared_val
                                 best_lambda_found = lambda_val
                         else:
-                            _LOGGER.debug(f"  Lambda={lambda_val:.3f}, Validation TSS is near zero, skipping RÃ‚Â².")
+                            _LOGGER.debug(f"  Lambda={lambda_val:.3f}, Validation TSS is near zero, skipping RÂ².")
 
 
                     except np.linalg.LinAlgError:
@@ -203,8 +216,8 @@ class RidgeTrainer:
                  final_accuracy = 0.0
                  if ss_tot_full > 1e-8:
                      r_squared_full = 1.0 - (ss_res_full / ss_tot_full)
-                     # Clamp R-squared: Handle cases where model fits worse than mean (RÃ‚Â² < 0)
-                     # or perfect fit issues (RÃ‚Â² slightly > 1 due to float precision)
+                     # Clamp R-squared: Handle cases where model fits worse than mean (RÂ² < 0)
+                     # or perfect fit issues (RÂ² slightly > 1 due to float precision)
                      final_accuracy = max(0.0, min(1.0, r_squared_full))
                      _LOGGER.debug(f"Training R-squared (raw)={r_squared_full:.4f}, Clamped Accuracy={final_accuracy:.4f}")
                  else:

@@ -13,7 +13,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from dataclasses import dataclass
-from ..ml.types import LearnedWeights, HourlyProfile
+from ..ml.ml_types import LearnedWeights, HourlyProfile
 from ..exceptions import MLModelException
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class MLModelStrategy(PredictionStrategy):
         self.peak_power_kw = float(peak_power_kw) if peak_power_kw else 0.0
         
         # Calculate max hourly production in kWh
-        # Under perfect conditions: 1 kWp ≈ 1 kWh per hour
+        # Under perfect conditions: 1 kWp Ã¢â€°Ë† 1 kWh per hour
         # Apply safety margin (20%) for theoretical peak conditions
         from ..const import HOURLY_PRODUCTION_SAFETY_MARGIN, DEFAULT_MAX_HOURLY_KWH
         if self.peak_power_kw > 0:

@@ -20,7 +20,8 @@ Copyright (C) 2025 Zara-Toorox
 import logging
 from typing import Any, Dict, Optional
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
+from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
@@ -101,7 +102,6 @@ class BaseEntityStateSensor(SensorEntity):
         await super().async_added_to_hass()
         source_id = self.source_entity_id  # Use property to get ID
         if source_id:
-            _LOGGER.debug(f"StateSensor {self.entity_id} tracking {source_id}")
             self.async_on_remove(
                 async_track_state_change_event(
                     self.hass, [source_id], self._handle_sensor_update
@@ -110,26 +110,12 @@ class BaseEntityStateSensor(SensorEntity):
             # Fetch initial state - False = no async_update call, just write state
             self.async_schedule_update_ha_state(False)
         else:
-            _LOGGER.debug(f"StateSensor {self.entity_id} has no source entity configured ({self._source_entity_id_key})")
             # Update state to "Not configured" - False = no async_update call
             self.async_schedule_update_ha_state(False)
 
     @callback
     def _handle_sensor_update(self, event) -> None:
         """Handle state update from the source entity."""
-        source_entity = event.data.get('entity_id')
-        new_state = event.data.get('new_state')
-        old_state = event.data.get('old_state')
-        
-        # Extract values for logging
-        new_value = new_state.state if new_state else "None"
-        old_value = old_state.state if old_state else "None"
-        
-        _LOGGER.debug(
-            f"StateSensor {self.entity_id} received update from {source_entity}: "
-            f"{old_value} Ã¢â€ â€™ {new_value}"
-        )
-        
         self.async_write_ha_state()
 
     @property
@@ -262,8 +248,13 @@ class ExternalLuxSensor(BaseEntityStateSensor):
 
 class PowerSensorStateSensor(BaseEntityStateSensor):
     """State sensor for the configured main power sensor."""
-    # Override category to make it a normal sensor
-    _attr_entity_category = None
+    # FIXED: Changed to diagnostic
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    
+    # FIXED: Added proper sensor attributes for POWER
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
         super().__init__(
@@ -274,12 +265,37 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
             translation_key="power_sensor_state",
             icon="mdi:flash-alert-outline"
         )
+    
+    # FIXED: Override to return float instead of string
+    @property
+    def native_value(self) -> float | None:
+        """Return the power value as float with units."""
+        source_id = self.source_entity_id
+        if not source_id:
+            return None
+        
+        state = self.hass.states.get(source_id)
+        if not state or state.state in ['unavailable', 'unknown', 'none', None, '']:
+            return None
+        
+        try:
+            # Parse state to float
+            cleaned_state = str(state.state).split(" ")[0].replace(",", ".")
+            return float(cleaned_state)
+        except (ValueError, TypeError):
+            _LOGGER.warning(f"Cannot parse power value from '{source_id}': {state.state}")
+            return None
 
 
 class YieldSensorStateSensor(BaseEntityStateSensor):
     """State sensor for the configured daily yield sensor."""
-    # Override category to make it a normal sensor
-    _attr_entity_category = None
+    # FIXED: Changed to diagnostic
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    
+    # FIXED: Added proper sensor attributes
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_state_class = SensorStateClass.TOTAL
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
         super().__init__(
@@ -290,3 +306,23 @@ class YieldSensorStateSensor(BaseEntityStateSensor):
             translation_key="yield_sensor_state",
             icon="mdi:counter"
         )
+    
+    # FIXED: Override to return float instead of string
+    @property
+    def native_value(self) -> float | None:
+        """Return the yield value as float with units."""
+        source_id = self.source_entity_id
+        if not source_id:
+            return None
+        
+        state = self.hass.states.get(source_id)
+        if not state or state.state in ['unavailable', 'unknown', 'none', None, '']:
+            return None
+        
+        try:
+            # Parse state to float
+            cleaned_state = str(state.state).split(" ")[0].replace(",", ".")
+            return float(cleaned_state)
+        except (ValueError, TypeError):
+            _LOGGER.warning(f"Cannot parse yield value from '{source_id}': {state.state}")
+            return None

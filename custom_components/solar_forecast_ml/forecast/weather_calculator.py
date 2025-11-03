@@ -75,8 +75,6 @@ class WeatherCalculator:
             # Consider adding others if relevant: 'cloudy', 'partlycloudy' handled by cloud factor
         }
 
-        _LOGGER.debug("WeatherCalculator initialized.")
-
     def get_temperature_factor(self, temperature_c: Optional[float]) -> float:
         """
         Calculates a simple efficiency factor based on ambient temperature.
@@ -89,7 +87,6 @@ class WeatherCalculator:
             A multiplier factor (typically between 0.7 and 1.0).
         """
         if temperature_c is None:
-             _LOGGER.debug("Temperature is None, using default factor 0.9.")
              return 0.9 # Default factor if temp is unavailable
 
         try:
@@ -98,7 +95,7 @@ class WeatherCalculator:
                 return 0.85 # Slightly higher than original guess
             elif temperature_c <= self.OPTIMAL_TEMPERATURE_C:
                 # Linear increase in efficiency up to the optimal temperature
-                # Starts at 0.85 at 0Ãƒâ€šÃ‚Â°C, reaches 1.0 at OPTIMAL_TEMPERATURE_C
+                # Starts at 0.85 at 0ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C, reaches 1.0 at OPTIMAL_TEMPERATURE_C
                 return 0.85 + (temperature_c / self.OPTIMAL_TEMPERATURE_C) * 0.15
             else:
                 # Linear decrease in efficiency above the optimal temperature
@@ -122,7 +119,6 @@ class WeatherCalculator:
             A multiplier factor (typically between 0.1 and 1.0).
         """
         if cloud_coverage_percent is None:
-            _LOGGER.debug("Cloud coverage is None, using default factor 0.6.")
             return 0.6 # Default factor for unknown cloud cover (partly cloudy guess)
 
         try:
@@ -259,11 +255,6 @@ class WeatherCalculator:
             if include_seasonal:
                 seasonal_factor = self.get_seasonal_adjustment() # Uses current time
                 combined_factor *= seasonal_factor
-                _LOGGER.debug(f"Combined factors: Temp={temp_factor:.2f}, Cloud={cloud_factor:.2f}, "
-                              f"Cond={condition_factor:.2f}, Seasonal={seasonal_factor:.2f} -> Combined={combined_factor:.3f}")
-            else:
-                 _LOGGER.debug(f"Combined factors (no seasonal): Temp={temp_factor:.2f}, Cloud={cloud_factor:.2f}, "
-                               f"Cond={condition_factor:.2f} -> Combined={combined_factor:.3f}")
 
 
             # Ensure final factor is non-negative

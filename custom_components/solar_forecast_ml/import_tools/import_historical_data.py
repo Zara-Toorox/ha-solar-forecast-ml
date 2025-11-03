@@ -15,7 +15,8 @@ File Requirements (place in same directory as this script):
 - wind_speed.csv (optional) - Wind speed sensor
 - rain.csv (optional) - Rain rate sensor
 - uv_index.csv (optional) - UV index sensor
-- lux.csv (optional) - Solar radiation sensor
+- lux.csv (optional) - Solar radiation sensor in LUX
+- irradiance.csv (optional) - Solar radiation sensor in W/m² (PREFERRED over lux)
 
 CSV Format (Home Assistant native export):
 entity_id,state,last_changed
@@ -48,6 +49,7 @@ _LOGGER = logging.getLogger(__name__)
 # Constants
 ML_MODEL_VERSION = "1.0"
 DATA_VERSION = "1.0"
+MAX_RETENTION_DAYS = 90  # Maximum days to keep in hourly_samples.json (60-365 recommended)
 
 
 class HistoricalDataImporter:
@@ -76,7 +78,8 @@ class HistoricalDataImporter:
             'wind_speed': 'wind_speed.csv',
             'rain': 'rain.csv',
             'uv_index': 'uv_index.csv',
-            'lux': 'lux.csv'
+            'lux': 'lux.csv',
+            'irradiance': 'irradiance.csv'  # W/m² (solar radiation)
         }
         
     def parse_csv_file(self, filepath: Path) -> Dict[str, List[tuple]]:
@@ -224,22 +227,77 @@ class HistoricalDataImporter:
                 lux = self.calculate_hourly_average(
                     optional_data.get('lux', {}).get(hour_key, [])
                 )
+                irradiance = self.calculate_hourly_average(
+                    optional_data.get('irradiance', {}).get(hour_key, [])
+                )
                 
-                # Derive weather condition from sensor data
-                if rain > 0.5:
-                    condition = 'rainy'
-                elif uv_index > 5 and lux > 50000:
-                    condition = 'sunny'
-                elif uv_index > 2:
-                    condition = 'partlycloudy'
+                # Derive cloud_cover and condition from sensor data
+                # PRIORITY: Use W/m² (irradiance) if available, else fallback to LUX
+                # Logic: High irradiance/lux + high UV = clear sky (low cloud_cover)
+                #        Low irradiance/lux or rain = overcast (high cloud_cover)
+                
+                # Use W/m² for calculation if available (more accurate for solar)
+                if irradiance > 0:
+                    # W/m² based calculation - ADJUSTED FOR CENTRAL EUROPEAN CLIMATE
+                    # Lower thresholds for fall/winter/spring conditions
+                    if rain > 0.5:
+                        condition = 'rainy'
+                        cloud_cover = 90.0
+                    elif irradiance > 400 and uv_index > 4:  # Very sunny (rare in fall/winter)
+                        condition = 'sunny'
+                        cloud_cover = 10.0
+                    elif irradiance > 250 and uv_index > 2:  # Sunny for season
+                        condition = 'sunny'
+                        cloud_cover = 25.0
+                    elif irradiance > 150 and uv_index > 1:  # Partly cloudy
+                        condition = 'partlycloudy'
+                        cloud_cover = 45.0
+                    elif irradiance > 80:  # Cloudy
+                        condition = 'partlycloudy'
+                        cloud_cover = 65.0
+                    else:  # Very cloudy (<80 W/m²)
+                        condition = 'cloudy'
+                        cloud_cover = 85.0
+                elif lux > 0:
+                    # LUX based calculation - ADJUSTED FOR CENTRAL EUROPEAN CLIMATE
+                    if rain > 0.5:
+                        condition = 'rainy'
+                        cloud_cover = 90.0
+                    elif lux > 50000 and uv_index > 4:  # Very sunny
+                        condition = 'sunny'
+                        cloud_cover = 10.0
+                    elif lux > 30000 and uv_index > 2:  # Sunny
+                        condition = 'sunny'
+                        cloud_cover = 25.0
+                    elif lux > 15000 and uv_index > 1:  # Partly cloudy
+                        condition = 'partlycloudy'
+                        cloud_cover = 45.0
+                    elif lux > 8000:  # Cloudy
+                        condition = 'partlycloudy'
+                        cloud_cover = 65.0
+                    else:  # Very cloudy
+                        condition = 'cloudy'
+                        cloud_cover = 85.0
                 else:
-                    condition = 'cloudy'
+                    # No light sensor available - use condition only
+                    if rain > 0.5:
+                        condition = 'rainy'
+                        cloud_cover = 90.0
+                    elif uv_index > 5:
+                        condition = 'sunny'
+                        cloud_cover = 20.0
+                    elif uv_index > 2:
+                        condition = 'partlycloudy'
+                        cloud_cover = 50.0
+                    else:
+                        condition = 'cloudy'
+                        cloud_cover = 80.0
                 
                 # Build weather_data dict (matching integration format)
                 weather_data = {
                     'temperature': round(temperature, 2),
                     'humidity': round(max(0.0, min(100.0, humidity_val)), 2),
-                    'cloud_cover': 50.0,  # Default - not available from sensors
+                    'cloud_cover': round(cloud_cover, 2),  # ✅ DERIVED from irradiance/lux/uv/rain
                     'condition': condition,
                     'wind_speed': round(max(0.0, wind_speed), 2),
                     'pressure': 1013.0  # Default - not available from sensors
@@ -252,6 +310,7 @@ class HistoricalDataImporter:
                     'rain': round(max(0.0, rain), 2),
                     'uv_index': round(max(0.0, uv_index), 2),
                     'lux': round(max(0.0, lux), 2),
+                    'irradiance': round(max(0.0, irradiance), 2),  # W/m²
                     'humidity': round(max(0.0, min(100.0, humidity_val)), 2)
                 }
                 
@@ -403,16 +462,19 @@ class HistoricalDataImporter:
         # Sort by timestamp
         existing_samples.sort(key=lambda x: x['timestamp'])
         
-        # Prune to last 60 days
+        # Prune to last MAX_RETENTION_DAYS
         now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(days=60)
+        cutoff = now - timedelta(days=MAX_RETENTION_DAYS)
         
         pruned_samples = [
             s for s in existing_samples
             if datetime.fromisoformat(s['timestamp']) >= cutoff
         ]
         
-        _LOGGER.info(f"Added {added} new samples, pruned to {len(pruned_samples)} total")
+        _LOGGER.info(
+            f"Added {added} new samples, pruned to {len(pruned_samples)} total "
+            f"(keeping last {MAX_RETENTION_DAYS} days)"
+        )
         
         # Update structure
         return {

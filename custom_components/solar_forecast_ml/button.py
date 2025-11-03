@@ -98,11 +98,38 @@ class ManualForecastButton(ButtonEntity):
         self._attr_device_info = device_info
 
     async def async_press(self) -> None:
-        """Handle the button press: request a coordinator refresh."""
-        _LOGGER.info("Manual Forecast button pressed - requesting data refresh.")
-        # Ask the coordinator to refresh its data
-        await self.coordinator.async_request_refresh()
-        _LOGGER.debug("Coordinator refresh requested.")
+        """Handle the button press: request a coordinator refresh with fresh weather data."""
+        _LOGGER.info("Manual Forecast button pressed - forcing weather update and data refresh.")
+        
+        # Force refresh
+        await self.coordinator.force_refresh_with_weather_update()
+        
+        # Update expected_daily_production if data is available
+        if self.coordinator.data and "forecast_today" in self.coordinator.data:
+            today_value = self.coordinator.data.get("forecast_today")
+            self.coordinator.expected_daily_production = today_value
+            
+            # Save to persistent storage
+            await self.coordinator.data_manager.save_expected_daily_production(today_value)
+            
+            _LOGGER.info(
+                f"Expected daily production updated to {today_value:.2f} kWh after manual forecast "
+                f"(saved to persistent storage)"
+            )
+            
+            # Force sensor update
+            self.coordinator.async_update_listeners()
+            
+            _LOGGER.info(
+                f"Coordinator data after refresh: "
+                f"today={today_value}, "
+                f"tomorrow={self.coordinator.data.get('forecast_tomorrow')}, "
+                f"method={self.coordinator.data.get('_forecast_method')}"
+            )
+        else:
+            _LOGGER.error("ERROR: Coordinator data is None or missing forecast_today after force refresh!")
+        
+        _LOGGER.debug("Force refresh with weather update completed.")
 
 
 # =============================================================================
@@ -136,8 +163,8 @@ class ManualLearningButton(ButtonEntity):
         """Handle the button press: trigger ML model training."""
         _LOGGER.info("Manual Learning button pressed - starting training process.")
 
-        # Access the ML predictor via the service manager in the coordinator
-        ml_predictor = getattr(getattr(self.coordinator, 'service_manager', None), 'ml_predictor', None)
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
 
         if not ml_predictor:
             _LOGGER.error("ML Predictor service is not available. Cannot start manual training.")

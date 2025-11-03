@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+import asyncio
 import logging
 from datetime import datetime, timedelta, date
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
@@ -25,8 +26,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_change
 
 from ..core.helpers import SafeDateTimeUtil as dt_util
-from ..ml.types import LearnedWeights, create_default_learned_weights
-from ..data.manager import DataManager
+from ..ml.ml_types import LearnedWeights, create_default_learned_weights
+from ..data.data_manager import DataManager
 from ..const import DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR, CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX
 
 if TYPE_CHECKING:
@@ -64,15 +65,16 @@ class ScheduledTasksManager:
         """Register the time-based listeners with Home Assistant."""
         self.cancel_listeners()
 
+        # Morning forecast update at 6 AM - MUST run BEFORE set_expected_production
         remove_morning = async_track_time_change(
             self.hass,
             self.scheduled_morning_update,
             hour=DAILY_UPDATE_HOUR,
             minute=0,
-            second=5
+            second=0  # Changed from 5 to 0
         )
         self._listeners.append(remove_morning)
-        _LOGGER.info(f"Scheduled morning forecast update trigger for {DAILY_UPDATE_HOUR:02d}:00:05 daily.")
+        _LOGGER.info(f"Scheduled morning forecast update trigger for {DAILY_UPDATE_HOUR:02d}:00:00 daily.")
 
         remove_evening = async_track_time_change(
             self.hass,
@@ -105,16 +107,16 @@ class ScheduledTasksManager:
         self._listeners.append(remove_reset_expected)
         _LOGGER.info("Scheduled expected daily production reset for 00:00:00 daily.")
 
-        # Set expected daily production at 6 AM
+        # Set expected daily production at 6 AM - MUST run AFTER morning update
         remove_set_expected = async_track_time_change(
             self.hass,
             self.set_expected_production,
             hour=6,
             minute=0,
-            second=0
+            second=10  # Changed from 0 to 10 - runs AFTER morning update
         )
         self._listeners.append(remove_set_expected)
-        _LOGGER.info("Scheduled expected daily production set for 06:00:00 daily.")
+        _LOGGER.info("Scheduled expected daily production set for 06:00:10 daily.")
 
     def cancel_listeners(self) -> None:
         """Remove any active time-based listeners."""
@@ -220,7 +222,8 @@ class ScheduledTasksManager:
     @callback
     async def scheduled_morning_update(self, now: datetime) -> None:
         """
-        Callback for the scheduled morning task. Triggers a full forecast update.
+        Callback for the scheduled morning task. Triggers a full forecast update
+        and then sets expected daily production from the fresh forecast.
 
         Args:
             now: The datetime object when the trigger occurred (local time).
@@ -228,11 +231,34 @@ class ScheduledTasksManager:
         _LOGGER.info(f"Triggering daily morning forecast update (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
 
         try:
+            # First: Trigger coordinator refresh to get fresh forecast
             await self.coordinator.async_request_refresh()
             _LOGGER.info("Morning forecast update request successful.")
+            
+            # Wait a moment for refresh to complete
+            await asyncio.sleep(0.5)
+            
+            # Second: Set expected_daily_production from the fresh forecast
+            if self.coordinator.data and "forecast_today" in self.coordinator.data:
+                forecast_today = self.coordinator.data.get("forecast_today")
+                if forecast_today is not None:
+                    self.coordinator.expected_daily_production = forecast_today
+                    
+                    # Save to persistent storage
+                    await self.data_manager.save_expected_daily_production(forecast_today)
+                    
+                    self.coordinator.async_update_listeners()
+                    _LOGGER.info(
+                        f"Morning update complete: Expected daily production set to {forecast_today:.2f} kWh "
+                        f"(saved to persistent storage)"
+                    )
+                else:
+                    _LOGGER.error("Morning update: forecast_today is None after refresh!")
+            else:
+                _LOGGER.error("Morning update: coordinator.data is missing or has no forecast_today!")
 
         except Exception as e:
-            _LOGGER.error(f"Failed to trigger morning forecast update: {e}", exc_info=True)
+            _LOGGER.error(f"Failed to complete morning forecast update: {e}", exc_info=True)
 
 
     @callback

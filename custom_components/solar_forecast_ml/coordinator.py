@@ -43,19 +43,20 @@ from .const import (
     UPDATE_INTERVAL,
     CONF_FALLBACK_ENTITY
 )
-from .data.manager import DataManager
+from .data.data_manager import DataManager
 from .exceptions import SolarForecastMLException, WeatherAPIException, MLModelException
 from .core.helpers import SafeDateTimeUtil as dt_util
 
 # Import modular components
-from .services.manager import ServiceManager
 from .forecast.weather_calculator import WeatherCalculator
 from .production.history import ProductionCalculator as HistoricalProductionCalculator
 from .production.tracker import ProductionTimeCalculator
 from .sensors.data_collector import SensorDataCollector
 from .forecast.orchestrator import ForecastOrchestrator
 from .production.scheduled_tasks import ScheduledTasksManager
-from .ml.predictor import ModelState
+from .ml.ml_predictor import ModelState, MLPredictor
+from .services.service_error_handler import ErrorHandlingService
+from .forecast.forecast_weather import WeatherService
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,29 +105,19 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             weather_calculator=self.weather_calculator
         )
 
-        self.service_manager = ServiceManager(
-            hass=hass,
-            entry=entry,
-            data_manager=self.data_manager,
-            weather_entity=self.current_weather_entity,
-            dependencies_ok=dependencies_ok,
-            power_entity=self.power_entity,
-            solar_yield_today=self.solar_yield_today,
-            solar_capacity=self.solar_capacity,
-            temp_sensor=self.sensor_collector.strip_entity_id(entry.data.get(CONF_TEMP_SENSOR)),
-            wind_sensor=self.sensor_collector.strip_entity_id(entry.data.get(CONF_WIND_SENSOR)),
-            rain_sensor=self.sensor_collector.strip_entity_id(entry.data.get(CONF_RAIN_SENSOR)),
-            uv_sensor=self.sensor_collector.strip_entity_id(entry.data.get(CONF_UV_SENSOR)),
-            lux_sensor=self.sensor_collector.strip_entity_id(entry.data.get(CONF_LUX_SENSOR)),
-            humidity_sensor=self.sensor_collector.strip_entity_id(entry.data.get(CONF_HUMIDITY_SENSOR)),
-        )
-
         self.scheduled_tasks = ScheduledTasksManager(
             hass=hass,
             coordinator=self,
             solar_yield_today_entity_id=self.solar_yield_today,
             data_manager=self.data_manager
         )
+
+        # Initialize services directly (no ServiceManager)
+        self.error_handler = ErrorHandlingService()
+        self.weather_service: Optional[WeatherService] = None
+        self.ml_predictor: Optional[MLPredictor] = None
+        self._services_initialized = False
+        self._ml_ready = False
 
         self.weather_fallback_active = False
         self._last_weather_update: Optional[datetime] = None
@@ -151,12 +142,88 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
         _LOGGER.info(f"SolarForecastMLCoordinator initialized - Using Weather Entity: {self.primary_weather_entity or 'None'}")
 
+    async def _load_persistent_state(self) -> None:
+        """Load persistent coordinator state (e.g., expected_daily_production)."""
+        try:
+            # Load expected_daily_production if it was set today
+            loaded_value = await self.data_manager.load_expected_daily_production()
+            if loaded_value is not None:
+                self.expected_daily_production = loaded_value
+                _LOGGER.info(
+                    f"Restored expected_daily_production from persistent storage: "
+                    f"{loaded_value:.2f} kWh"
+                )
+        except Exception as e:
+            _LOGGER.warning(f"Failed to load persistent coordinator state: {e}")
+
+    async def _initialize_services(self) -> bool:
+        """Initialize all services (weather, ML, error handler)."""
+        try:
+            # Error handler is already initialized
+            
+            # Initialize WeatherService
+            if self.current_weather_entity:
+                self.weather_service = WeatherService(
+                    hass=self.hass,
+                    weather_entity=self.current_weather_entity,
+                    data_manager=self.data_manager,
+                    error_handler=self.error_handler
+                )
+                await self.weather_service.initialize()
+                _LOGGER.info("WeatherService initialized")
+            
+            # Initialize MLPredictor if learning enabled
+            if self.learning_enabled and self.dependencies_ok:
+                self.ml_predictor = MLPredictor(
+                    hass=self.hass,
+                    data_manager=self.data_manager,
+                    error_handler=self.error_handler,
+                    notification_service=None
+                )
+                await self.ml_predictor.initialize()
+                
+                # Set peak power (FIX 1: update_strategies() wird NICHT hier aufgerufen)
+                if hasattr(self.ml_predictor, 'peak_power_kw'):
+                    self.ml_predictor.peak_power_kw = self.solar_capacity
+                
+                # CRITICAL FIX: Configure entities for sample collection
+                self.ml_predictor.set_entities(
+                    solar_capacity=self.solar_capacity,
+                    power_entity=self.power_entity,
+                    weather_entity=self.primary_weather_entity,
+                    temp_sensor=self.sensor_collector.get_sensor_entity_id('temperature'),
+                    wind_sensor=self.sensor_collector.get_sensor_entity_id('wind_speed'),
+                    rain_sensor=self.sensor_collector.get_sensor_entity_id('rain'),
+                    uv_sensor=self.sensor_collector.get_sensor_entity_id('uv_index'),
+                    lux_sensor=self.sensor_collector.get_sensor_entity_id('lux'),
+                    humidity_sensor=self.sensor_collector.get_sensor_entity_id('humidity')
+                )
+                _LOGGER.info("MLPredictor entities configured for sample collection")
+                
+                self._ml_ready = True
+                _LOGGER.info("MLPredictor initialized")
+            
+            # Start production time tracking
+            if self.production_time_calculator:
+                try:
+                    self.production_time_calculator.start_tracking()
+                    _LOGGER.info("Production time tracking started")
+                except Exception as track_err:
+                    _LOGGER.warning(f"Failed to start production time tracking (non-critical): {track_err}")
+            
+            self._services_initialized = True
+            return True
+            
+        except Exception as e:
+            _LOGGER.error(f"Service initialization failed: {e}")
+            return False
+
     async def _initialize_forecast_orchestrator(self) -> None:
         """Initialize forecast strategies after services are ready."""
         try:
             self.forecast_orchestrator.initialize_strategies(
-                ml_predictor=self.service_manager.ml_predictor if self.service_manager.is_ml_ready() else None,
-                error_handler=self.service_manager.error_handler
+                ml_predictor=self.ml_predictor if self._ml_ready else None,
+                error_handler=self.error_handler
             )
             _LOGGER.info("Forecast strategies initialized successfully")
         except Exception as e:
@@ -166,7 +233,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         """Calculate yesterday accuracy from prediction history."""
         try:
             history = await self.data_manager.get_prediction_history()
-            yesterday = (dt_util.as_local(dt_util.now()) - timedelta(days=1)).date()
+            yesterday = (dt_util.now() - timedelta(days=1)).date()  # now() already returns local time
             
             for pred in reversed(history.get('predictions', [])):
                 ts = dt_util.parse_datetime(pred.get('timestamp'))
@@ -245,244 +312,161 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     _LOGGER.warning("Not all entities ready, but continuing with initialization.")
 
             # 2. Service initialization (only once)
-            if not self.service_manager.is_initialized():
+            if not self._services_initialized:
                 _LOGGER.info("Initializing managed services...")
-                services_ok = await self.service_manager.initialize_all_services()
+                services_ok = await self._initialize_services()
                 if not services_ok:
                     _LOGGER.error("Service initialization incomplete - some features may be unavailable.")
                 
-                # CRITICAL: Ensure solar_capacity is properly set in ML predictor
-                # Safety check in case ServiceManager doesn't set it during initialization
-                if self.service_manager.is_ml_ready():
-                    ml_predictor = self.service_manager.ml_predictor
-                    if hasattr(ml_predictor, 'peak_power_kw'):
-                        if ml_predictor.peak_power_kw == 0.0 and self.solar_capacity > 0:
+                # Load persistent coordinator state (expected_daily_production)
+                await self._load_persistent_state()
+                
+                # CRITICAL FIX 1: Ensure solar_capacity is properly set in ML predictor
+                if self._ml_ready and self.ml_predictor:
+                    if hasattr(self.ml_predictor, 'peak_power_kw'):
+                        if self.ml_predictor.peak_power_kw == 0.0 and self.solar_capacity > 0:
                             _LOGGER.warning(
                                 f"ML Predictor peak_power_kw not set! "
                                 f"Setting from config: {self.solar_capacity} kW"
                             )
-                            ml_predictor.peak_power_kw = float(self.solar_capacity)
+                            self.ml_predictor.peak_power_kw = float(self.solar_capacity)
+                            
+                            # FIX 1: SOFORT update_strategies() aufrufen
+                            if hasattr(self.ml_predictor, 'prediction_orchestrator'):
+                                self.ml_predictor.prediction_orchestrator.update_strategies(
+                                    weights=self.ml_predictor.current_weights,
+                                    profile=self.ml_predictor.current_profile,
+                                    accuracy=self.ml_predictor.current_accuracy or 0.0,
+                                    peak_power_kw=self.ml_predictor.peak_power_kw
+                                )
+                                _LOGGER.info(f"Prediction strategies updated with corrected peak_power_kw: {self.ml_predictor.peak_power_kw} kW")
                         else:
                             _LOGGER.info(
-                                f"ML Predictor peak_power_kw verified: {ml_predictor.peak_power_kw} kW"
+                                f"ML Predictor peak_power_kw verified: {self.ml_predictor.peak_power_kw} kW"
                             )
                 
                 # Initialize forecast strategies after services
                 await self._initialize_forecast_orchestrator()
 
-            # 3. External sensor data
-            try:
-                external_sensor_data = self.sensor_collector.collect_all_sensor_data_dict()
-                _LOGGER.debug(f"External sensor data collected: {len(external_sensor_data)} sensors")
-            except AttributeError as e:
-                _LOGGER.error(f"Sensor collector method mismatch: {e} - using empty dict")
-                external_sensor_data = {}
-            except Exception as e:
-                _LOGGER.error(f"Failed to collect external sensor data: {e} - using empty dict")
-                external_sensor_data = {}
+            if not self.weather_service:
+                raise UpdateFailed("Weather service unavailable.")
 
-            # 4. Weather data
-            current_weather_data = None
-            hourly_forecast_list = []
-            
-            if self.service_manager.weather_service:
-                try:
-                    current_weather_data = await self.service_manager.weather_service.get_current_weather()
-                    if current_weather_data:
-                        _LOGGER.debug("Current weather data obtained.")
-                    else:
-                        _LOGGER.warning("Current weather unavailable - using defaults.")
-                        
-                    hourly_forecast_list = await self.service_manager.weather_service.try_get_forecast(
-                        timeout=10
-                    )
-                    if hourly_forecast_list:
-                        _LOGGER.debug(f"Hourly forecast obtained: {len(hourly_forecast_list)} hours")
-                    else:
-                        _LOGGER.warning("Hourly forecast unavailable.")
-                        
-                except Exception as weather_err:
-                    _LOGGER.error(f"Weather data fetch failed: {weather_err}", exc_info=True)
-            else:
-                _LOGGER.warning("Weather Service not initialized - using default weather data.")
+            error_yesterday, accuracy_yesterday = await self._get_yesterday_accuracy()
+            if error_yesterday is not None:
+                self.last_day_error_kwh = error_yesterday
+            if accuracy_yesterday is not None:
+                self.yesterday_accuracy = accuracy_yesterday
 
-            # 5. Historical production (7-day average)
-            historical_production_avg = None
+            current_weather_data = await self.weather_service.get_current_weather()
+            if not current_weather_data or not isinstance(current_weather_data, dict):
+                raise UpdateFailed("Weather data unavailable or invalid format.")
+
+            hourly_forecast_data = await self.weather_service.get_processed_hourly_forecast()
+
+            historical_avg = None
             try:
-                if self.solar_yield_today and self.historical_calculator:
-                    # FIX: ProductionCalculator hat keine calculate_historical_production() Methode
-                    # Verwende stattdessen get_last_7_days_average_yield()
-                    historical_production_avg = await self.historical_calculator.get_last_7_days_average_yield(
-                        yield_entity=self.solar_yield_today
-                    )
-                    if historical_production_avg is not None and historical_production_avg > 0:
-                        _LOGGER.debug(f"7-day avg production: {historical_production_avg:.2f} kWh")
-                    else:
-                        _LOGGER.debug("Historical production: No data available (Recorder-free mode)")
+                historical_avg = await self.historical_calculator.get_historical_average()
             except Exception as hist_err:
-                _LOGGER.warning(f"Historical calculation failed: {hist_err}")
+                _LOGGER.warning(f"Could not fetch historical average: {hist_err}")
 
-            # 6. ML prediction (if available) - FIXED VERSION
-            ml_prediction_today = None
-            ml_prediction_tomorrow = None
-            
-            if self.service_manager.is_ml_ready():
+            ml_pred_today_value = None
+            ml_pred_tomorrow_value = None
+            if self._ml_ready and self.ml_predictor:
                 try:
-                    # FIX: MLPredictor hat keine predict_today() Methode
-                    # Verwende predict() mit Peak-Stunde (12:00) als Indikator
-                    
-                    now_local = dt_util.as_local(dt_util.now())
-                    today_noon = now_local.replace(hour=12, minute=0, second=0, microsecond=0)
-                    
-                    # Prediction fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r heute: Nur Peak-Stunde (12:00) * 10 als grobe TagesschÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤tzung
-                    noon_result = await self.service_manager.ml_predictor.predict(
-                        weather_data=current_weather_data if current_weather_data else {},
-                        prediction_hour=12,
-                        prediction_date=today_noon,
-                        sensor_data=external_sensor_data
-                    )
-                    
-                    # Hochrechnen: Peak-Stunde * 10 (grobe SchÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤tzung fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r Tagesertrag)
-                    if noon_result and noon_result.prediction > 0:
-                        ml_prediction_today = noon_result.prediction * 10
-                        _LOGGER.debug(f"ML prediction today (from noon peak): {ml_prediction_today:.2f} kWh")
-                    
-                    # Prediction fÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼r morgen
-                    if hourly_forecast_list and len(hourly_forecast_list) >= 36:
-                        tomorrow_noon = today_noon + timedelta(days=1)
-                        tomorrow_forecast = hourly_forecast_list[36] if len(hourly_forecast_list) > 36 else {}
-                        
-                        tomorrow_result = await self.service_manager.ml_predictor.predict(
-                            weather_data=tomorrow_forecast,
-                            prediction_hour=12,
-                            prediction_date=tomorrow_noon,
-                            sensor_data=external_sensor_data
-                        )
-                        
-                        if tomorrow_result and tomorrow_result.prediction > 0:
-                            ml_prediction_tomorrow = tomorrow_result.prediction * 10
-                            _LOGGER.debug(f"ML prediction tomorrow (from noon peak): {ml_prediction_tomorrow:.2f} kWh")
-                    else:
-                        _LOGGER.debug("Insufficient forecast data for tomorrow's ML prediction")
-                        
+                    ml_pred_today_value = await self.ml_predictor.get_today_prediction()
+                    ml_pred_tomorrow_value = await self.ml_predictor.get_tomorrow_prediction()
+                    _LOGGER.debug(f"ML predictions: Today={ml_pred_today_value}, Tomorrow={ml_pred_tomorrow_value}")
                 except Exception as ml_err:
-                    _LOGGER.warning(f"ML prediction failed: {ml_err}")
-            else:
-                _LOGGER.debug("ML predictor not ready - using fallback strategy.")
+                    _LOGGER.warning(f"ML predictions unavailable: {ml_err}")
 
-            # 7. Orchestrate forecast
+            external_sensor_readings = self.sensor_collector.collect_all_sensor_data_dict()
+
             forecast_result = await self.forecast_orchestrator.orchestrate_forecast(
                 current_weather=current_weather_data,
-                hourly_forecast=hourly_forecast_list,
-                external_sensors=external_sensor_data,
-                historical_avg=historical_production_avg,
-                ml_prediction_today=ml_prediction_today,
-                ml_prediction_tomorrow=ml_prediction_tomorrow
-            )
-            
-            _LOGGER.info(
-                f"Forecast: Today={forecast_result.get('today', 0.0):.2f} kWh, "
-                f"Tomorrow={forecast_result.get('tomorrow', 0.0):.2f} kWh, "
-                f"Method={forecast_result.get('method', 'unknown')}"
+                hourly_forecast=hourly_forecast_data,
+                external_sensors=external_sensor_readings,
+                historical_avg=historical_avg,
+                ml_prediction_today=ml_pred_today_value,
+                ml_prediction_tomorrow=ml_pred_tomorrow_value,
+                correction_factor=self.learned_correction_factor
             )
 
-            # 8. Update sensor properties
-            await self._update_sensor_properties(forecast_result)
-
-            # 9. Autarky calculation
-            if self.total_consumption_today and self.solar_yield_today:
-                try:
-                    consumption_state = self.hass.states.get(self.total_consumption_today)
-                    yield_state = self.hass.states.get(self.solar_yield_today)
-                    
-                    if (consumption_state and yield_state and 
-                        consumption_state.state not in [STATE_UNAVAILABLE, STATE_UNKNOWN] and
-                        yield_state.state not in [STATE_UNAVAILABLE, STATE_UNKNOWN]):
-                        
-                        consumption_kwh = float(consumption_state.state)
-                        yield_kwh = float(yield_state.state)
-                        
-                        if consumption_kwh > 0:
-                            self.autarky_today = min(100.0, (yield_kwh / consumption_kwh) * 100.0)
-                            _LOGGER.debug(f"Autarky today: {self.autarky_today:.1f}%")
-                        else:
-                            self.autarky_today = None
-                    else:
-                        self.autarky_today = None
-                except Exception as autarky_err:
-                    _LOGGER.warning(f"Autarky calculation failed: {autarky_err}")
-                    self.autarky_today = None
-
-            # 10. Yesterday accuracy check
-            self.last_day_error_kwh, self.yesterday_accuracy = await self._get_yesterday_accuracy()
-            if self.yesterday_accuracy is not None:
-                _LOGGER.debug(f"Yesterday accuracy: {self.yesterday_accuracy:.1f}%")
-
-            # 11. Correction factor
-            try:
-                if self.service_manager.ml_predictor:
-                    learned_factor = getattr(self.service_manager.ml_predictor, 'learned_correction_factor', 1.0)
-                    if learned_factor and CORRECTION_FACTOR_MIN <= learned_factor <= CORRECTION_FACTOR_MAX:
-                        self.learned_correction_factor = learned_factor
-                        _LOGGER.debug(f"Learned correction factor: {self.learned_correction_factor:.3f}")
-            except Exception as factor_err:
-                _LOGGER.warning(f"Error getting correction factor: {factor_err}")
-
-            # 12. Next hour prediction
-            if self.enable_hourly and hourly_forecast_list:
-                if current_weather_data:
-                    try:
-                        self.next_hour_pred = self.forecast_orchestrator.calculate_next_hour_prediction(
-                            forecast_result.get("today", 0.0),
-                            weather_data=current_weather_data,
-                            sensor_data=external_sensor_data
-                        )
-                        _LOGGER.debug(f"Next Hour Prediction OK: {self.next_hour_pred:.3f} kWh")
-                    except Exception as next_hour_err:
-                        _LOGGER.error(f"Next hour prediction failed: {next_hour_err}", exc_info=True)
-                        self.next_hour_pred = 0.0
-                else:
-                    _LOGGER.warning("Cannot calculate next hour: current weather missing.")
-                    self.next_hour_pred = 0.0
-            else:
-                self.next_hour_pred = 0.0
-
-            # 13. Store prediction record (ALWAYS - no production window check)
-            try:
-                today_forecast_value = forecast_result.get("today")
-                
-                if not await self._should_skip_prediction_storage(today_forecast_value):
-                    prediction_record = {
-                        "timestamp": dt_util.now().isoformat(),
-                        "predicted_value": today_forecast_value,
-                        "actual_value": None,
-                        "weather_data": hourly_forecast_list[0] if hourly_forecast_list else {},
-                        "sensor_data": external_sensor_data,
-                        "accuracy": forecast_result.get("confidence", 75.0) / 100.0,
-                        "model_version": ML_MODEL_VERSION
-                    }
-                    await self.data_manager.add_prediction_record(prediction_record)
-                    _LOGGER.debug(f"Prediction record saved: {today_forecast_value:.2f} kWh")
-                else:
-                    _LOGGER.debug("Prediction storage skipped (duplicate prevention).")
-            except Exception as store_err:
-                _LOGGER.warning(f"Failed to save prediction record: {store_err}", exc_info=True)
-
-            # 14. Complete
-            self._last_update_success_time = dt_util.now()
-            update_duration = (self._last_update_success_time - update_start_time).total_seconds()
-            _LOGGER.info(f"Data update cycle completed in {update_duration:.2f}s.")
+            today_forecast_value = forecast_result.get("today", 0.0)
+            tomorrow_forecast_value = forecast_result.get("tomorrow", 0.0)
             
-            return {
-                "forecast_today": forecast_result.get("today"),
-                "forecast_tomorrow": forecast_result.get("tomorrow"),
-                "last_update": self._last_update_success_time.isoformat(),
+            # Prepare return data IMMEDIATELY after forecast calculation
+            # This ensures we always return data even if post-processing fails
+            final_data = {
+                "forecast_today": today_forecast_value,
+                "forecast_tomorrow": tomorrow_forecast_value,
+                "last_update": dt_util.now().isoformat(),
                 "_forecast_method": forecast_result.get("method", "unknown"),
                 "_model_accuracy": forecast_result.get("model_accuracy"),
                 "_confidence_today": forecast_result.get("confidence"),
                 "_weather_entity_used": self.current_weather_entity,
-                "_update_duration_sec": round(update_duration, 2)
+                "_update_duration_sec": 0.0
             }
+            
+            # Try to calculate next hour prediction (non-critical)
+            try:
+                current_weather_for_next_hour = current_weather_data
+                sensor_data_for_next_hour = external_sensor_readings
+                next_hour_prediction_kwh = self.forecast_orchestrator.calculate_next_hour_prediction(
+                    forecast_today_kwh=today_forecast_value,
+                    weather_data=current_weather_for_next_hour,
+                    sensor_data=sensor_data_for_next_hour
+                )
+                self.next_hour_pred = next_hour_prediction_kwh
+            except Exception as nhe:
+                _LOGGER.warning(f"Next hour prediction failed (non-critical): {nhe}")
+                self.next_hour_pred = 0.0
+
+            # Try to update sensor properties (non-critical)
+            try:
+                await self._update_sensor_properties(forecast_result)
+            except Exception as use:
+                _LOGGER.warning(f"Sensor properties update failed (non-critical): {use}")
+
+            # Try to save prediction record (non-critical)
+            try:
+                if not await self._should_skip_prediction_storage(today_forecast_value):
+                    local_now = dt_util.now()  # Already returns local time
+                    prediction_record = {
+                        'timestamp': local_now.isoformat(),
+                        'predicted_value': today_forecast_value,
+                        'actual_value': None,
+                        'weather_data': current_weather_data or {},
+                        'sensor_data': external_sensor_readings or {},
+                        'accuracy': max(0.0, min(1.0, float(forecast_result.get('model_accuracy') or 0.0))),
+                        'model_version': forecast_result.get('model_version', 'unknown'),
+                        'weather_entity': self.current_weather_entity,
+                        'method': forecast_result.get('method', 'unknown')
+                    }
+                    await self.data_manager.add_prediction_record(prediction_record)
+                    _LOGGER.debug(f"Prediction record saved: {today_forecast_value:.2f} kWh")
+            except Exception as store_err:
+                _LOGGER.warning(f"Failed to save prediction record (non-critical): {store_err}")
+
+            # Update final timing
+            self._last_update_success_time = dt_util.now()
+            update_duration = (self._last_update_success_time - update_start_time).total_seconds()
+            final_data["last_update"] = self._last_update_success_time.isoformat()
+            final_data["_update_duration_sec"] = round(update_duration, 2)
+            
+            # Auto-set expected_daily_production if still None (e.g., after restart or if 6 AM task failed)
+            if self.expected_daily_production is None and today_forecast_value is not None:
+                self.expected_daily_production = today_forecast_value
+                _LOGGER.info(
+                    f"Auto-setting expected_daily_production to {today_forecast_value:.2f} kWh "
+                    f"(was None, now using current forecast)"
+                )
+            
+            _LOGGER.info(
+                f"Data update completed in {update_duration:.2f}s: "
+                f"Today={today_forecast_value:.2f} kWh, Tomorrow={tomorrow_forecast_value:.2f} kWh"
+            )
+            
+            return final_data
 
         except UpdateFailed as uf_err:
             _LOGGER.warning(f"Update failed: {uf_err}")
@@ -511,7 +495,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(f"Error calculating average monthly yield: {e}")
             self.avg_month_yield = 0.0
 
-        ml_predictor = getattr(self.service_manager, 'ml_predictor', None)
+        ml_predictor = self.ml_predictor
         if ml_predictor:
             self.last_successful_learning = getattr(ml_predictor, 'last_training_time', None)
             if self.model_accuracy is None:
@@ -558,9 +542,9 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             return "Update Failed"
 
         weather_healthy = False
-        if self.service_manager and self.service_manager.weather_service:
+        if self.weather_service:
             try:
-                weather_healthy = self.service_manager.weather_service.get_health_status().get('healthy', False)
+                weather_healthy = self.weather_service.get_health_status().get('healthy', False)
             except:
                 pass
 
@@ -572,11 +556,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         else:
             update_age_ok = False
 
-        ml_active = self.service_manager.is_ml_ready() if self.service_manager else False
+        ml_active = self._ml_ready
         if ml_active and weather_healthy and update_age_ok:
             return "Optimal (ML Active)"
         elif weather_healthy and update_age_ok:
-            reason = "ML Disabled/Unavailable" if not self.service_manager or not self.service_manager.ml_predictor else "ML Not Ready"
+            reason = "ML Disabled/Unavailable" if not self.ml_predictor else "ML Not Ready"
             return f"Degraded ({reason})"
         elif not weather_healthy:
             return "Error (Weather Unavailable)"
@@ -593,18 +577,73 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self.async_update_listeners()
 
     async def set_expected_daily_production(self) -> None:
-        """Set expected daily production at 6 AM."""
+        """Set expected daily production at 6 AM and save persistently."""
         try:
-            forecast = await self.forecast_orchestrator.get_forecast()
-            today_forecast = forecast.get("today", {})
-            self.expected_daily_production = today_forecast.get("energy_sum")
-            _LOGGER.info(f"Expected daily production set to: {self.expected_daily_production} kWh")
-            self.async_update_listeners()
+            _LOGGER.info("Setting expected daily production (6 AM task)...")
+            
+            # Option A: Use existing coordinator data if available
+            if self.data and "forecast_today" in self.data and self.data.get("forecast_today") is not None:
+                self.expected_daily_production = self.data.get("forecast_today")
+                _LOGGER.info(
+                    f"Expected daily production set to: {self.expected_daily_production:.2f} kWh "
+                    f"(from existing coordinator data)"
+                )
+            else:
+                # Option B: Force a fresh update to get current forecast
+                _LOGGER.info("No forecast data available, forcing coordinator refresh...")
+                
+                await self.async_request_refresh()
+                
+                # Wait a moment for refresh to complete
+                await asyncio.sleep(0.5)
+                
+                # Check if refresh was successful
+                if self.data and "forecast_today" in self.data and self.data.get("forecast_today") is not None:
+                    self.expected_daily_production = self.data.get("forecast_today")
+                    _LOGGER.info(
+                        f"Expected daily production set to: {self.expected_daily_production:.2f} kWh "
+                        f"(from forced refresh)"
+                    )
+                else:
+                    _LOGGER.error("Failed to get forecast data even after forced refresh!")
+                    self.expected_daily_production = None
+            
+            # Save to persistent storage
+            if self.expected_daily_production is not None:
+                await self.data_manager.save_expected_daily_production(self.expected_daily_production)
+                self.async_update_listeners()
+                _LOGGER.info(
+                    f"Expected daily production saved to persistent storage: "
+                    f"{self.expected_daily_production:.2f} kWh (survives restarts)"
+                )
+            
         except Exception as err:
             _LOGGER.error(f"Failed to set expected daily production: {err}", exc_info=True)
+            self.expected_daily_production = None
 
     async def reset_expected_daily_production(self) -> None:
-        """Reset expected daily production at midnight."""
+        """Reset expected daily production at midnight and clear persistent storage."""
         self.expected_daily_production = None
-        _LOGGER.debug("Expected daily production reset to None")
+        await self.data_manager.clear_expected_daily_production()
+        _LOGGER.info("Expected daily production reset to None and cleared from persistent storage")
         self.async_update_listeners()
+
+    async def force_refresh_with_weather_update(self) -> None:
+        """
+        Force refresh with immediate weather update.
+        Called by manual forecast button to ensure fresh weather data.
+        """
+        _LOGGER.info("Force refresh requested - updating weather first...")
+        
+        # Force weather service to fetch fresh data
+        if self.weather_service:
+            success = await self.weather_service.force_update()
+            if success:
+                _LOGGER.info("Weather data successfully refreshed")
+            else:
+                _LOGGER.warning("Weather refresh failed - continuing with cached data")
+        
+        # Now trigger normal coordinator refresh
+        await self.async_request_refresh()
+        _LOGGER.info("Force refresh completed")
+

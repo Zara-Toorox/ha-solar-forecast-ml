@@ -36,9 +36,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .base import BaseSolarSensor
 from ..coordinator import SolarForecastMLCoordinator
 from ..core.helpers import SafeDateTimeUtil as dt_util
-from .external_helpers import format_time_ago
+from ..ml.ml_external_helpers import format_time_ago
 from ..const import UPDATE_INTERVAL, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR
-from ..ml.predictor import ModelState # Import Enum for state mapping
+from ..ml.ml_predictor import ModelState # Import Enum for state mapping
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -325,7 +325,8 @@ class MLServiceStatusSensor(BaseSolarSensor):
     @property
     def native_value(self) -> str:
         """Return a human-readable status of the ML service."""
-        ml_predictor = getattr(getattr(self.coordinator, 'service_manager', {}), 'ml_predictor', None)
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor:
             dep_ok = getattr(self.coordinator, 'dependencies_ok', False)
             return "Unavailable (Dependencies Missing)" if not dep_ok else "Unavailable (Init Failed)"
@@ -337,11 +338,8 @@ class MLServiceStatusSensor(BaseSolarSensor):
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Provide detailed ML service state."""
-        service_manager = getattr(self.coordinator, 'service_manager', None)
-        if not service_manager:
-             return {"status": "unavailable", "reason": "Service Manager not found"}
-
-        ml_predictor = service_manager.ml_predictor
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor:
             dep_ok = getattr(self.coordinator, 'dependencies_ok', False)
             reason = "Dependencies missing" if not dep_ok else "Initialization failed"
@@ -383,7 +381,8 @@ class MLMetricsSensor(BaseSolarSensor):
     @property
     def native_value(self) -> str:
         """Return the number of training samples used and accuracy."""
-        ml_predictor = getattr(getattr(self.coordinator, 'service_manager', {}), 'ml_predictor', None)
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor: return "ML Unavailable"
         samples = getattr(ml_predictor, 'training_samples', 0)
         accuracy = getattr(ml_predictor, 'current_accuracy', None)
@@ -393,10 +392,10 @@ class MLMetricsSensor(BaseSolarSensor):
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Provide detailed metrics."""
-        service_manager = getattr(self.coordinator, 'service_manager', None)
-        if not service_manager or not service_manager.ml_predictor: return {"status": "unavailable"}
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
+        if not ml_predictor: return {"status": "unavailable"}
 
-        ml_predictor = service_manager.ml_predictor
         feature_engineer = getattr(ml_predictor, 'feature_engineer', None)
         feature_count = len(feature_engineer.feature_names) if feature_engineer else 0
         perf_metrics = getattr(ml_predictor, 'performance_metrics', {})
@@ -474,7 +473,8 @@ class DataFilesStatusSensor(BaseSolarSensor):
         """Return a summary status of the data files."""
         if not self._data_manager: return "Unknown (No DataManager)"
 
-        ml_predictor = getattr(getattr(self.coordinator, 'service_manager', {}), 'ml_predictor', None)
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
         model_loaded = getattr(ml_predictor, 'model_loaded', False) if ml_predictor else False
         samples_count = 0
         if ml_predictor:
@@ -495,7 +495,8 @@ class DataFilesStatusSensor(BaseSolarSensor):
         """Provide status based on loaded model state rather than file checks."""
         if not self._data_manager: return {"status": "unknown", "reason": "DataManager unavailable"}
 
-        ml_predictor = getattr(getattr(self.coordinator, 'service_manager', {}), 'ml_predictor', None)
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
         weights_status = "Not Loaded/Missing"
         profile_status = "Not Loaded/Missing"
         samples_count = 0

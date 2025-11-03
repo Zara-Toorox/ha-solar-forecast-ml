@@ -24,7 +24,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 # Import the dataclasses and default creators
-from ..ml.types import (
+from ..ml.ml_types import (
     PredictionRecord, LearnedWeights, HourlyProfile,
     create_default_learned_weights, create_default_hourly_profile
 )

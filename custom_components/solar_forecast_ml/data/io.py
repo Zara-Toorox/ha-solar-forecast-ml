@@ -42,10 +42,16 @@ _LOGGER = logging.getLogger(__name__)
 class DateTimeEncoder(json.JSONEncoder):
     """
     Custom JSON Encoder that converts datetime and date objects to ISO format strings.
-    Ensures all datetime objects are properly serialized.
+    CRITICAL: All datetime objects are converted to LOCAL timezone before serialization.
+    This ensures consistent timezone handling throughout the integration.
     """
     def default(self, obj):
         if isinstance(obj, (datetime, date)):
+            if isinstance(obj, datetime):
+                # CRITICAL FIX: Force all datetimes to LOCAL timezone
+                from ..core.helpers import SafeDateTimeUtil as dt_util
+                obj = dt_util.ensure_local(obj)
+                _LOGGER.debug(f"DateTimeEncoder: Converting datetime to local timezone: {obj.isoformat()}")
             return obj.isoformat()
         return super().default(obj)
 
@@ -138,6 +144,7 @@ class DataManagerIO:
             # Asynchronously write JSON data to the temporary file
             async with aiofiles.open(temp_file, 'w', encoding='utf-8') as f:
                 # Use DateTimeEncoder to handle datetime objects automatically
+                # CRITICAL: DateTimeEncoder now forces all datetimes to LOCAL timezone
                 json_data = json.dumps(data, cls=DateTimeEncoder, indent=2, ensure_ascii=False, sort_keys=True)
                 await f.write(json_data)
                 await f.flush() # Ensure data is written before moving
@@ -215,8 +222,9 @@ class DataManagerIO:
             # Decode JSON content (potentially blocking for large files, run in executor)
             try:
                 data = await self.hass.async_add_executor_job(json.loads, content)
-                if not isinstance(data, dict):
-                     _LOGGER.warning("JSON content in %s is not a dictionary, returning default.", file_path.name)
+                # Allow both dict and list (list for weather_cache backward compatibility)
+                if not isinstance(data, (dict, list)):
+                     _LOGGER.warning("JSON content in %s is neither dict nor list, returning default.", file_path.name)
                      return default_structure
                 return data
             except json.JSONDecodeError as e:

@@ -91,9 +91,17 @@ class StandardScaler:
                 mean_val = float(np.mean(col))
                 std_val = float(np.std(col))
 
+                # FIX 4: Exclude features with no variance from training
+                if std_val < 0.01:
+                    _LOGGER.warning(
+                        f"Feature '{name}' has no variance (std={std_val:.6f}). "
+                        f"This feature will be excluded from training."
+                    )
+                    # Skip this feature - do NOT add to means/stds
+                    continue
+                
                 self.means[name] = mean_val
-                # Use a small epsilon (or 1.0) for features with zero variance to avoid division by zero
-                self.stds[name] = std_val if std_val > 1e-8 else 1.0
+                self.stds[name] = std_val
 
             self.is_fitted = True
             _LOGGER.info("StandardScaler fitted successfully for features: %s", feature_names)

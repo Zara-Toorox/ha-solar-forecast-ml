@@ -27,10 +27,6 @@ import logging
 
 from .const import DOMAIN, CONF_SOLAR_YIELD_TODAY, CONF_POWER_ENTITY, CONF_WEATHER_ENTITY
 
-# IMPORTE HIER ENTFERNT:
-# from .coordinator import SolarForecastMLCoordinator (Verschoben)
-# from .core.dependency_handler import DependencyHandler (Verschoben)
-
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
@@ -39,13 +35,9 @@ PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Solar Forecast ML from a config entry."""
     
-    # +++ IMPORTE HIER EINGEFÃœGT +++
-    # Importe werden erst hier ausgefÃ¼hrt, nachdem HA die Requirements (numpy, aiofiles)
-    # aus manifest.json installiert hat.
     from .coordinator import SolarForecastMLCoordinator
     from .core.dependency_handler import DependencyHandler
-    from .services.notification import create_notification_service
-    # +++ ENDE +++
+    from .services.service_notification import create_notification_service
     
     try:
         rec_instance = recorder.get_instance(hass)
@@ -92,7 +84,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as e:
         _LOGGER.warning(f"Could not check recorder status: {e}")
     
-    # +++ MIGRATION 6.4.0: Architekturwechsel - Einmaliger Reset +++
     import json
     from pathlib import Path
     from homeassistant.util import dt as dt_util
@@ -101,7 +92,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     versinfo_file = data_dir / "versinfo.json"
     migration_done = False
     
-    # Check if migration was already performed (async file read)
     def _read_versinfo():
         try:
             if versinfo_file.exists():
@@ -113,16 +103,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     migration_done = await hass.async_add_executor_job(_read_versinfo)
     
-    # Perform migration if not done yet
     if not migration_done:
         _LOGGER.warning("Architecture change detected (v6.4.0). Performing one-time ML data reset...")
         
         def _perform_migration():
             try:
-                # Ensure data directory exists
                 data_dir.mkdir(parents=True, exist_ok=True)
                 
-                # Delete all ML JSON files
                 ml_files = [
                     "prediction_history.json",
                     "learned_weights.json", 
@@ -138,7 +125,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         file_path.unlink()
                         deleted_count += 1
                 
-                # Create empty default files immediately
                 default_files = {
                     "prediction_history.json": {
                         "version": "1.0",
@@ -192,7 +178,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     with open(file_path, 'w', encoding='utf-8') as f:
                         json.dump(content, f, indent=2)
                 
-                # Create versinfo.json with migration flag
                 versinfo_data = {
                     "version": "6.4.0",
                     "migration_6_4_0": True,
@@ -214,15 +199,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info(f"Migration 6.4.0 completed. Deleted {deleted_count} ML data files and recreated defaults.")
         except Exception as migration_err:
             _LOGGER.error(f"Migration 6.4.0 failed: {migration_err}", exc_info=True)
-    # +++ ENDE MIGRATION +++
     
     dependency_handler = DependencyHandler()
-    dependencies_ok = await dependency_handler.check_dependencies(hass)  # Async mit hass
+    dependencies_ok = await dependency_handler.check_dependencies(hass)
     
     if not dependencies_ok:
         _LOGGER.warning("Some dependencies are missing. Integration will start with limited functionality.")
     
-    # +++ SINGLETON: NotificationService initialisieren BEVOR Coordinator erstellt wird +++
     hass.data.setdefault(DOMAIN, {})
     if "notification_service" not in hass.data[DOMAIN]:
         try:
@@ -230,7 +213,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data[DOMAIN]["notification_service"] = notification_service
             _LOGGER.info("NotificationService Singleton created and stored in hass.data")
             
-            # âœ… Zeige Startup-Benachrichtigung mit Option-PrÃ¼fung
             ml_mode = dependencies_ok
             installed = ["numpy", "aiofiles"] if dependencies_ok else []
             missing = [] if dependencies_ok else ["numpy", "aiofiles"]
@@ -242,7 +224,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         except Exception as e:
             _LOGGER.warning(f"Failed to initialize NotificationService Singleton: {e}")
-    # +++ ENDE +++
     
     coordinator = SolarForecastMLCoordinator(
         hass=hass,
@@ -250,7 +231,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         dependencies_ok=dependencies_ok,
     )
     
-    # Initialize DataManager (creates missing files, deploys import tools)
     _LOGGER.debug("Initializing DataManager...")
     dm_init_success = await coordinator.data_manager.initialize()
     if not dm_init_success:
@@ -270,22 +250,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     
     if unload_ok:
-        # Import hier nÃ¶tig, da Koordinator nicht global verfÃ¼gbar ist
         from .coordinator import SolarForecastMLCoordinator
         
         coordinator: SolarForecastMLCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         
-        # Cleanup-Logik (basierend auf deinem Original-Code)
         if hasattr(coordinator, 'scheduled_tasks') and coordinator.scheduled_tasks:
             coordinator.scheduled_tasks.cancel_listeners()
         elif hasattr(coordinator, 'scheduled_tasks_manager') and coordinator.scheduled_tasks_manager:
-             # Fallback auf alten Namen, falls noch verwendet
             await coordinator.scheduled_tasks_manager.cleanup()
         
-        # (Optional, aber empfohlen) Eigene Cleanup-Methode fÃ¼r den Koordinator
         if hasattr(coordinator, 'cleanup'):
-                await coordinator.cleanup()
-        
-        # NotificationService Singleton wird NICHT entfernt - bleibt Ã¼ber alle Config Entries bestehen
+            await coordinator.cleanup()
     
     return unload_ok

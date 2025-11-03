@@ -38,25 +38,25 @@ from ..const import (
     ML_MODEL_VERSION,
     CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX
 )
-from ..data.manager import DataManager
+from ..data.data_manager import DataManager
 from ..core.helpers import SafeDateTimeUtil as dt_util
-from ..ml.types import (
+from ..ml.ml_types import (
     LearnedWeights, HourlyProfile,
     create_default_learned_weights, create_default_hourly_profile
 )
-from ..data.adapter import TypedDataAdapter
-from ..services.error_handler import ErrorHandlingService
+from ..data.data_adapter import TypedDataAdapter
+from ..services.service_error_handler import ErrorHandlingService
 from ..exceptions import MLModelException, ErrorSeverity, DataIntegrityException
 
 # Import ML components
-from ..ml.scaler import StandardScaler
-from ..ml.feature_engineering import FeatureEngineer
-from ..ml.trainer import RidgeTrainer
-from ..ml.prediction_strategies import (
+from ..ml.ml_scaler import StandardScaler
+from ..ml.ml_feature_engineering import FeatureEngineer
+from ..ml.ml_trainer import RidgeTrainer
+from ..ml.ml_prediction_strategies import (
     PredictionOrchestrator, PredictionResult,
     MLModelStrategy, ProfileStrategy, FallbackStrategy 
 )
-from ..ml.sample_collector import SampleCollector
+from ..ml.ml_sample_collector import SampleCollector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,16 +123,16 @@ class MLPredictor:
         hass: HomeAssistant,
         data_manager: DataManager,
         error_handler: ErrorHandlingService,
-        notification_service = None  # ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ NEU: Optional fÃƒÆ’Ã‚Â¼r AbwÃƒÆ’Ã‚Â¤rtskompatibilitÃƒÆ’Ã‚Â¤t
+        notification_service = None  # NEW: Optional for backward compatibility
     ):
         """Initialize the MLPredictor."""
         self.hass = hass
         self.data_manager = data_manager
         self.error_handler = error_handler
-        self.notification_service = notification_service  # ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ NEU
+        self.notification_service = notification_service  # NEW
         self.data_adapter = TypedDataAdapter()
         
-        # Historisches Cache fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Lag-Features
+        # Historical cache for lag features
         self._historical_cache: Dict[str, Dict[str, float]] = {
             'daily_productions': {},
             'hourly_productions': {},
@@ -206,7 +206,7 @@ class MLPredictor:
                 if self.training_samples >= MIN_TRAINING_DATA_POINTS:
                     self.model_state = ModelState.READY
                 else:
-                    self.model_state = ModelState.UNINITIALIZED # Bereit, aber nicht trainiert
+                    self.model_state = ModelState.UNINITIALIZED # Ready, but not trained
 
                 if hasattr(loaded_weights, 'feature_means') and loaded_weights.feature_means:
                     try:
@@ -243,6 +243,43 @@ class MLPredictor:
                 _LOGGER.info("No existing hourly profile found. Using default.")
                 self.current_profile = create_default_hourly_profile()
 
+            # 2b. Load Model State (for performance metrics and additional status info)
+            loaded_model_state = await self.data_manager.load_model_state()
+            if loaded_model_state and loaded_model_state.get("version") == DATA_VERSION:
+                # Restore performance metrics if available
+                if "performance_metrics" in loaded_model_state:
+                    perf_metrics = loaded_model_state["performance_metrics"]
+                    if perf_metrics:
+                        self.performance_metrics.update({
+                            "avg_prediction_time_ms": perf_metrics.get("avg_prediction_time_ms", 0.0),
+                            "error_rate": perf_metrics.get("error_rate", 0.0)
+                        })
+                        _LOGGER.debug("Performance metrics restored from model_state.json")
+                
+                # Restore peak_power if stored and not already set
+                if self.peak_power_kw == 0.0 and "peak_power_kw" in loaded_model_state:
+                    self.peak_power_kw = loaded_model_state.get("peak_power_kw", 0.0)
+                    _LOGGER.debug("Peak power restored: %.2f kW", self.peak_power_kw)
+                
+                # If no weights were loaded, try to restore basic state from model_state
+                if not loaded_weights and loaded_model_state.get("model_loaded"):
+                    _LOGGER.info("No weights file found, but model_state indicates previous training existed.")
+                    self.training_samples = loaded_model_state.get("training_samples", 0)
+                    self.current_accuracy = loaded_model_state.get("current_accuracy", 0.0)
+                    
+                    # Parse last_training if available
+                    if loaded_model_state.get("last_training"):
+                        try:
+                            parsed_time = dt_util.parse_datetime(loaded_model_state["last_training"])
+                            if parsed_time:
+                                self.last_training_time = dt_util.as_local(parsed_time) if parsed_time.tzinfo is None else parsed_time
+                        except (ValueError, TypeError):
+                            pass
+                
+                _LOGGER.info("Model state loaded successfully from model_state.json")
+            else:
+                _LOGGER.debug("No valid model_state.json found or version mismatch.")
+
             # 3. Update Prediction Strategies
             self.prediction_orchestrator.update_strategies(
                 weights=self.current_weights,
@@ -278,9 +315,10 @@ class MLPredictor:
         """Loads historical production data into memory for lag feature calculation."""
         _LOGGER.debug("Loading historical production cache...")
         try:
-            # Lade stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Samples, da diese die genauesten Daten enthalten
-            samples_data = await self.data_manager.get_hourly_samples(days=60) # Lade letzte 60 Tage
-            records = samples_data.get('samples', [])
+            # Load hourly samples, as these contain the most accurate data
+            samples_data = await self.data_manager.get_hourly_samples(days=60) # Load last 60 days
+            # FIX: get_hourly_samples returns List[Dict], not Dict
+            records = samples_data if isinstance(samples_data, list) else []
 
             daily_productions_cache: Dict[str, float] = {}
             hourly_productions_cache: Dict[str, float] = {}
@@ -308,9 +346,9 @@ class MLPredictor:
                     date_key = timestamp_local.date().isoformat()
                     hour_key = f"{date_key}_{timestamp_local.hour:02d}"
 
-                    # Speichere stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndlichen Wert
+                    # Store hourly value
                     hourly_productions_cache[hour_key] = actual_kwh
-                    # Addiere zum Tagessummen-Cache
+                    # Add to daily totals cache
                     daily_productions_cache[date_key] = daily_productions_cache.get(date_key, 0.0) + actual_kwh
                     
                     processed_records += 1
@@ -336,20 +374,20 @@ class MLPredictor:
             self._historical_cache = {'daily_productions': {}, 'hourly_productions': {}}
 
 
-    # --- KORREKTUR: Parameter-Reihenfolge ---
+    # --- CORRECTION: Parameter order ---
     async def predict(
         self,
         weather_data: Dict[str, Any],
-        # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Parameter verschoben (wg. SyntaxError) ---
+        # --- (IMPROVEMENT 1) Parameters moved (due to SyntaxError) ---
         prediction_hour: int,
         prediction_date: datetime,
-        # --- ENDE ---
+        # --- END ---
         sensor_data: Optional[Dict[str, Any]] = None
     ) -> PredictionResult:
-    # --- ENDE KORREKTUR ---
+    # --- END CORRECTION ---
         """
         Generates a solar production prediction for a specific hour.
-        (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) This is now the core *hourly* prediction engine.
+        This is now the core *hourly* prediction engine.
         """
         prediction_start_time = dt_util.now()
         result: PredictionResult | None = None
@@ -358,20 +396,20 @@ class MLPredictor:
             _ensure_numpy()
             if sensor_data is None: sensor_data = {}
             
-            # (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Zeit-Parameter werden jetzt direkt ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bergeben
+            # (IMPROVEMENT 1) Time parameters are now passed directly
             # prediction_time_local = dt_util.as_local(prediction_start_time)
             # prediction_hour = prediction_time_local.hour 
 
             try:
-                # Hole Produktion von GESTERN (Lokalzeit)
+                # Fetch production from YESTERDAY (local time)
                 yesterday_dt = prediction_date - timedelta(days=1)
                 yesterday_key = yesterday_dt.date().isoformat()
                 yesterday_total_kwh = self._historical_cache['daily_productions'].get(yesterday_key, 0.0)
                 sensor_data['production_yesterday'] = float(yesterday_total_kwh)
                 
-                # --- (Verbesserung 2) ENTFERNT ---
-                # sensor_data['production_last_hour'] = 0.0 # Wird nicht mehr verwendet
-                # --- ENDE ---
+                # --- (IMPROVEMENT 2) REMOVED ---
+                # sensor_data['production_last_hour'] = 0.0 # No longer used
+                # --- END ---
                 
             except Exception as e:
                 _LOGGER.warning(f"Could not retrieve lag features (yesterday) for prediction: {e}")
@@ -381,8 +419,8 @@ class MLPredictor:
             features = await self.feature_engineer.extract_features(
                 weather_data, 
                 sensor_data, 
-                prediction_hour,  # (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“bergebe Stunde
-                prediction_date   # (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“bergebe Datum
+                prediction_hour,  # (IMPROVEMENT 1) Pass hour
+                prediction_date  # (IMPROVEMENT 1) Pass date
             )
 
             if self.scaler.is_fitted:
@@ -445,10 +483,10 @@ class MLPredictor:
         self.model_state = ModelState.TRAINING
         await self._update_model_state_file(status_override=ModelState.TRAINING)
 
-        # ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ NEU: Benachrichtigung bei Training-Start
+        # NEW: Notification on training start
         if self.notification_service:
             try:
-                # Hole Anzahl verfÃƒÆ’Ã‚Â¼gbarer Samples
+                # Fetch number of available samples
                 try:
                     records = await self.data_manager.get_all_training_records(days=60)
                     samples_count = len(records)
@@ -466,7 +504,7 @@ class MLPredictor:
 
         try:
             np = _ensure_numpy()
-            await self._load_historical_cache() # Lade den Cache, um Lag-Features zu erstellen
+            await self._load_historical_cache() # Load the cache to create lag features
             if not self._historical_cache['daily_productions']:
                  _LOGGER.warning("Historical cache for daily productions is empty. 'production_yesterday' feature will be 0.")
 
@@ -487,7 +525,11 @@ class MLPredictor:
             for record in training_records:
                 weather_data = record.get('weather_data', {})
                 sensor_data = record.get('sensor_data', {})
-                actual_kwh = record['actual_value']
+                # FIX: Handle both 'actual_kwh' (hourly samples) and 'actual_value' (predictions)
+                actual_kwh = record.get('actual_kwh') or record.get('actual_value')
+                if actual_kwh is None:
+                    _LOGGER.debug(f"Skipping record without actual value: {record.get('timestamp')}")
+                    continue
                 try:
                     # CRITICAL: Parse timestamp and ENSURE it's in local timezone
                     # This handles mixed UTC/local timestamps from migration
@@ -499,15 +541,15 @@ class MLPredictor:
                     # FORCE conversion to local timezone (handles UTC records from old data)
                     record_time_local = dt_util.ensure_local(record_time_dt)
                     
-                    # Hole Gestern (Lokal)
+                    # Fetch yesterday (local)
                     yesterday_dt = record_time_local - timedelta(days=1)
                     yesterday_key = yesterday_dt.date().isoformat()
                     yesterday_total = self._historical_cache['daily_productions'].get(yesterday_key, 0.0)
                     sensor_data['production_yesterday'] = float(yesterday_total)
                     
-                    # --- (Verbesserung 2) ENTFERNT ---
+                    # --- (IMPROVEMENT 2) REMOVED ---
                     # sensor_data['production_last_hour'] = 0.0
-                    # --- ENDE ---
+                    # --- END ---
                     
                 except Exception as e:
                     _LOGGER.debug(f"Could not find lag features for record {record['timestamp']}: {e}")
@@ -580,7 +622,7 @@ class MLPredictor:
                 duration_seconds=duration_seconds
             )
             
-            # ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ NEU: Benachrichtigung bei erfolgreichem Training
+            # NEW: Notification on successful training
             if self.notification_service:
                 try:
                     await self.notification_service.show_training_complete(
@@ -590,7 +632,7 @@ class MLPredictor:
                         duration=duration_seconds
                     )
                 except Exception as notify_err:
-                    _LOGGER.debug(f"Training complete notification failed: {notify_err}")
+                    _LOGGER.debug(f"Training notification failed: {notify_err}")
             
             return result
 
@@ -623,7 +665,7 @@ class MLPredictor:
                 if not self.model_loaded:
                     self.model_state = ModelState.UNINITIALIZED
                 else:
-                    self.model_state = ModelState.READY # Behalte alten Status bei
+                    self.model_state = ModelState.READY # Keep old status
             else:
                 self.model_state = ModelState.ERROR # Fallback
 
@@ -634,7 +676,7 @@ class MLPredictor:
                  training_time_override=result.training_time_seconds if result else None
             )
 
-            # ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ NEU: Benachrichtigung bei Fehlschlag
+            # NEW: Notification on failure
             if self.notification_service and result and not result.success:
                 try:
                     await self.notification_service.show_training_complete(
@@ -665,7 +707,7 @@ class MLPredictor:
                     timestamp_str = record.get('timestamp')
                     if actual_kwh is None or actual_kwh <= 0 or not timestamp_str: continue
                     
-                    # LOKALE Stunde aus Zeitstempel lesen
+                    # Read LOCAL hour from timestamp
                     timestamp = dt_util.parse_datetime(timestamp_str) 
                     if not timestamp: continue
                     hour = timestamp.hour 
@@ -749,7 +791,7 @@ class MLPredictor:
         """Checks how many valid hourly samples are available for training."""
         try:
             records_data = await self.data_manager.get_hourly_samples(days=60)
-            records = records_data.get('samples', [])
+            records = records_data if isinstance(records_data, list) else []
             # Count all samples with valid actual_kwh (including zeros - night hours are valid!)
             valid_count = sum(1 for r in records 
                             if r.get('actual_kwh') is not None and r['actual_kwh'] >= 0)
@@ -773,7 +815,7 @@ class MLPredictor:
         """Callback triggered every hour to collect the sample for the previous hour."""
         previous_hour_dt = now_local - timedelta(hours=1)
         hour_to_collect = previous_hour_dt.hour 
-        _LOGGER.debug(f"Hourly callback triggered at {now_local.strftime('%H:%M:%S')}. Requesting sample collection for hour {hour_to_collect} (Lokal).")
+        _LOGGER.debug(f"Hourly callback triggered at {now_local.strftime('%H:%M:%S')}. Requesting sample collection for hour {hour_to_collect} (local).")
         
         task = asyncio.create_task(self.sample_collector.collect_sample(hour_to_collect))
         
@@ -781,7 +823,7 @@ class MLPredictor:
             try:
                 task.result()
             except Exception as e:
-                _LOGGER.error(f"Fehler bei stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndlicher Datensammlung fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r Stunde {hour_to_collect}: {e}", exc_info=True)
+                _LOGGER.error(f"Error during hourly sample collection for hour {hour_to_collect}: {e}", exc_info=True)
         
         task.add_done_callback(_handle_task_error)
 
@@ -946,6 +988,34 @@ class MLPredictor:
         except Exception as e: 
             _LOGGER.error(f"Error during ML predictor health check: {e}", exc_info=True)
             return False
+
+    async def get_today_prediction(self) -> Optional[float]:
+        """
+        Get total daily prediction for today.
+        
+        STUB: Not implemented - orchestrator calculates forecasts directly.
+        The ML strategy in forecast_orchestrator already iterates through
+        hourly predictions to calculate daily totals.
+        
+        Returns:
+            None (use orchestrator.create_forecast() instead)
+        """
+        _LOGGER.debug("get_today_prediction stub called, returning None (use orchestrator)")
+        return None
+
+    async def get_tomorrow_prediction(self) -> Optional[float]:
+        """
+        Get total daily prediction for tomorrow.
+        
+        STUB: Not implemented - orchestrator calculates forecasts directly.
+        The ML strategy in forecast_orchestrator already iterates through
+        hourly predictions to calculate daily totals.
+        
+        Returns:
+            None (use orchestrator.create_forecast() instead)
+        """
+        _LOGGER.debug("get_tomorrow_prediction stub called, returning None (use orchestrator)")
+        return None
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up resources when the integration is unloaded or HA stops."""

@@ -112,9 +112,19 @@ class WeatherService:
                 _LOGGER.warning("Generating dummy forecast (48h) to ensure integration starts")
                 self._cached_forecast = self._generate_dummy_forecast()
                 
-                # Save dummy forecast to cache immediately
+                # Save dummy forecast to cache immediately with metadata wrapper
                 if self.data_manager:
-                    await self.data_manager.save_weather_forecast_cache(self._cached_forecast)
+                    cache_wrapper = {
+                        "forecast_hours": self._cached_forecast,
+                        "cached_at": dt_util.now().isoformat(),  # LOCAL time
+                        "data_quality": {
+                            "today_hours": 24,
+                            "tomorrow_hours": 24,
+                            "total_hours": len(self._cached_forecast)
+                        },
+                        "is_dummy": True
+                    }
+                    await self.data_manager.save_weather_forecast_cache(cache_wrapper)
                     _LOGGER.info(f"Saved dummy forecast to cache: {len(self._cached_forecast)} hours")
             
             # Setup event listener for weather entity state changes
@@ -150,10 +160,24 @@ class WeatherService:
             )
             
             if result:
-                # Save to cache immediately
+                # Save to cache immediately with metadata wrapper
                 if self.data_manager:
-                    await self.data_manager.save_weather_forecast_cache(result)
-                    _LOGGER.debug(f"Saved {len(result)} forecast hours to cache")
+                    # Calculate data quality metrics
+                    now_local = dt_util.now()
+                    today_hours = sum(1 for h in result if dt_util.parse_datetime(h["datetime"]).date() == now_local.date())
+                    tomorrow_hours = sum(1 for h in result if dt_util.parse_datetime(h["datetime"]).date() == (now_local + timedelta(days=1)).date())
+                    
+                    cache_wrapper = {
+                        "forecast_hours": result,
+                        "cached_at": now_local.isoformat(),  # LOCAL time
+                        "data_quality": {
+                            "today_hours": today_hours,
+                            "tomorrow_hours": tomorrow_hours,
+                            "total_hours": len(result)
+                        }
+                    }
+                    await self.data_manager.save_weather_forecast_cache(cache_wrapper)
+                    _LOGGER.debug(f"Saved {len(result)} forecast hours to cache (today: {today_hours}h, tomorrow: {tomorrow_hours}h)")
                 
                 self._cached_forecast = result
                 return result
@@ -313,7 +337,7 @@ class WeatherService:
         }
 
         _LOGGER.debug(
-            f"Current weather: {weather_data['temperature']}ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C, "
+            f"Current weather: {weather_data['temperature']}ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C, "
             f"{weather_data['cloud_cover']}% clouds, {weather_data['condition']}"
         )
         return weather_data
@@ -564,6 +588,33 @@ class WeatherService:
         )
         
         _LOGGER.info(f"Weather entity listener registered for {self.weather_entity}")
+
+    async def force_update(self) -> bool:
+        """
+        PUBLIC: Force immediate forecast update (blocking).
+        Used by manual refresh buttons and force-update operations.
+        
+        Returns:
+            bool: True if fresh forecast retrieved, False otherwise
+        """
+        try:
+            _LOGGER.info("Force update requested - fetching fresh forecast...")
+            
+            # Try to fetch fresh forecast with extended timeout
+            fresh_forecast = await self.try_get_forecast(timeout=15)
+            
+            if fresh_forecast:
+                _LOGGER.info(
+                    f"Force update successful: {len(fresh_forecast)} hours retrieved"
+                )
+                return True
+            else:
+                _LOGGER.warning("Force update returned no data - check weather entity")
+                return False
+                
+        except Exception as e:
+            _LOGGER.error(f"Force update failed: {e}", exc_info=True)
+            return False
 
     async def _immediate_forecast_update(self) -> None:
         """

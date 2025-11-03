@@ -123,6 +123,31 @@ class ProductionCalculator:
             "days_with_data": 0
         }
 
+    async def get_historical_average(self) -> Optional[float]:
+        """
+        Get historical average production.
+        
+        STUB: Not implemented - orchestrator calculates forecasts directly.
+        
+        Returns:
+            None (use orchestrator.create_forecast() instead)
+        """
+        _LOGGER.debug("Historical average: Stub called, returning None (use orchestrator)")
+        return None
+
+    async def get_historical_average(self) -> Optional[float]:
+        """
+        Get historical average production.
+        
+        RECORDER REMOVED: Returns None (no historical data access).
+        Use ML prediction records or DataManager instead.
+        
+        Returns:
+            None (no historical access)
+        """
+        _LOGGER.debug("Historical average: Not available without Recorder")
+        return None
+
 
 # ============================================================================
 # MIGRATION NOTES:
