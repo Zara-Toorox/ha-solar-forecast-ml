@@ -86,7 +86,15 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self.data_manager = DataManager(hass, entry.entry_id, data_dir_path)
         self.sensor_collector = SensorDataCollector(hass, entry)
 
-        self.solar_capacity = float(entry.data.get(CONF_SOLAR_CAPACITY, DEFAULT_SOLAR_CAPACITY))
+        # Migration: Support old plant_kwp field for backward compatibility
+        solar_capacity_value = entry.data.get(CONF_SOLAR_CAPACITY)
+        if solar_capacity_value is None or solar_capacity_value == 0:
+            # Try old field name for backward compatibility
+            solar_capacity_value = entry.data.get("plant_kwp", DEFAULT_SOLAR_CAPACITY)
+            if solar_capacity_value != DEFAULT_SOLAR_CAPACITY:
+                _LOGGER.warning(f"Using legacy 'plant_kwp' value: {solar_capacity_value} kW. Please reconfigure to update.")
+        
+        self.solar_capacity = float(solar_capacity_value)
         self.learning_enabled = entry.options.get(CONF_LEARNING_ENABLED, True)
         self.enable_hourly = entry.options.get(CONF_HOURLY, False)
 
@@ -394,31 +402,58 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             today_forecast_value = forecast_result.get("today", 0.0)
             tomorrow_forecast_value = forecast_result.get("tomorrow", 0.0)
             
+            # Calculate remaining forecast for today (forecast_today minus already produced)
+            forecast_today_remaining = today_forecast_value
+            if self.solar_yield_today:
+                try:
+                    yield_state = self.hass.states.get(self.solar_yield_today)
+                    if yield_state and yield_state.state not in (None, "unknown", "unavailable"):
+                        already_produced = float(yield_state.state)
+                        forecast_today_remaining = max(0.0, today_forecast_value - already_produced)
+                        _LOGGER.debug(
+                            f"Remaining forecast: {forecast_today_remaining:.2f} kWh "
+                            f"(Total: {today_forecast_value:.2f} - Produced: {already_produced:.2f})"
+                        )
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning(f"Could not read solar yield for remaining calculation: {e}")
+            
             # Prepare return data IMMEDIATELY after forecast calculation
             # This ensures we always return data even if post-processing fails
             final_data = {
-                "forecast_today": today_forecast_value,
+                "forecast_today": forecast_today_remaining,  # NOW shows remaining, not total
                 "forecast_tomorrow": tomorrow_forecast_value,
                 "last_update": dt_util.now().isoformat(),
                 "_forecast_method": forecast_result.get("method", "unknown"),
                 "_model_accuracy": forecast_result.get("model_accuracy"),
                 "_confidence_today": forecast_result.get("confidence"),
                 "_weather_entity_used": self.current_weather_entity,
-                "_update_duration_sec": 0.0
+                "_update_duration_sec": 0.0,
+                "_total_forecast_today": today_forecast_value,  # Store original total for reference
+                "_already_produced_today": today_forecast_value - forecast_today_remaining  # Already produced
             }
             
             # Try to calculate next hour prediction (non-critical)
             try:
                 current_weather_for_next_hour = current_weather_data
                 sensor_data_for_next_hour = external_sensor_readings
+                
+                _LOGGER.debug(
+                    f"Calculating next hour prediction - forecast_today={today_forecast_value:.2f} kWh, "
+                    f"weather_available={current_weather_for_next_hour is not None}, "
+                    f"sensors_available={sensor_data_for_next_hour is not None}"
+                )
+                
                 next_hour_prediction_kwh = self.forecast_orchestrator.calculate_next_hour_prediction(
                     forecast_today_kwh=today_forecast_value,
                     weather_data=current_weather_for_next_hour,
                     sensor_data=sensor_data_for_next_hour
                 )
                 self.next_hour_pred = next_hour_prediction_kwh
+                
+                _LOGGER.debug(f"Next hour prediction result: {next_hour_prediction_kwh:.3f} kWh")
+                
             except Exception as nhe:
-                _LOGGER.warning(f"Next hour prediction failed (non-critical): {nhe}")
+                _LOGGER.warning(f"Next hour prediction failed (non-critical): {nhe}", exc_info=True)
                 self.next_hour_pred = 0.0
 
             # Try to update sensor properties (non-critical)
@@ -453,13 +488,26 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             final_data["last_update"] = self._last_update_success_time.isoformat()
             final_data["_update_duration_sec"] = round(update_duration, 2)
             
-            # Auto-set expected_daily_production if still None (e.g., after restart or if 6 AM task failed)
+            # Auto-set expected_daily_production ONLY on first set (not after restart)
+            # Persistent value takes priority - only set if truly None AND not yet saved today
             if self.expected_daily_production is None and today_forecast_value is not None:
-                self.expected_daily_production = today_forecast_value
-                _LOGGER.info(
-                    f"Auto-setting expected_daily_production to {today_forecast_value:.2f} kWh "
-                    f"(was None, now using current forecast)"
-                )
+                # Check if we already have a saved value from today (double-check)
+                loaded_check = await self.data_manager.load_expected_daily_production()
+                if loaded_check is None:
+                    # Truly first forecast of the day - save it
+                    self.expected_daily_production = today_forecast_value
+                    await self.data_manager.save_expected_daily_production(today_forecast_value)
+                    _LOGGER.info(
+                        f"Auto-setting expected_daily_production to {today_forecast_value:.2f} kWh "
+                        f"(first forecast of the day)"
+                    )
+                else:
+                    # We have a saved value but it wasn't loaded - reload it
+                    self.expected_daily_production = loaded_check
+                    _LOGGER.info(
+                        f"Restored expected_daily_production from storage: {loaded_check:.2f} kWh "
+                        f"(after restart, NOT overwriting with current forecast)"
+                    )
             
             _LOGGER.info(
                 f"Data update completed in {update_duration:.2f}s: "

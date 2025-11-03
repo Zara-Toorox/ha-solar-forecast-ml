@@ -703,7 +703,7 @@ class DataManager(DataManagerIO):
                 "last_updated": now_local.isoformat()
             }
             
-            success = await self._write_json_file(self.coordinator_state_file, state)
+            success = await self._atomic_write_json(self.coordinator_state_file, state)
             if success:
                 _LOGGER.debug(f"Expected daily production saved: {value:.2f} kWh")
             return success
@@ -768,7 +768,7 @@ class DataManager(DataManagerIO):
             now_local = dt_util.as_local(dt_util.now())
             state["last_updated"] = now_local.isoformat()
             
-            success = await self._write_json_file(self.coordinator_state_file, state)
+            success = await self._atomic_write_json(self.coordinator_state_file, state)
             if success:
                 _LOGGER.debug("Expected daily production cleared from persistent storage")
             return success
