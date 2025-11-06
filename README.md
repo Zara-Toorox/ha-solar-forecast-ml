@@ -1,4 +1,4 @@
-# Solar Forecast ML - Version 6 "Risa" 🌟
+# Solar Forecast ML - Version 8 "Sarpeidon" 🌟
 
 **First machine learning solar forecasting for Home Assistant**
 
@@ -21,11 +21,13 @@ The integration collects daily weather data and compares it with your actual sol
 ## Features at a Glance
 
 ### 📊 Core Functions
-- **Daily yield forecasts** for today and tomorrow with automatic ML optimization
+- **3 Day yield forecasts** for today, tomorrow and the day after tomorrow (3days!) with automatic ML optimization
 - **Hourly predictions** for detailed planning (optional)
-- **Intelligent weather integration** with automatic fallback on DWD failures
+- **Intelligent weather integration** with automatic fallback on failures
 - **Self-learning system** - gets more precise every day without your intervention
 - **Real-time accuracy tracking** - see the precision of your forecasts
+- **No RAM** - everything is on your disk to keep it
+- **100% private** - everything stays on your disk / everything is calculated on your System
 
 ### 🎯 Production Analytics
 - **Peak hour detection** - when do you produce the most?
