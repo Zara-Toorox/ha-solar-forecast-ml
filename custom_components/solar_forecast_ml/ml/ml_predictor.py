@@ -639,9 +639,8 @@ class MLPredictor:
                 try:
                     await self.notification_service.show_training_complete(
                         success=True,
-                        accuracy=accuracy,
-                        samples_used=valid_records_count,
-                        duration=duration_seconds
+                        accuracy=accuracy * 100,  # Convert to percentage
+                        sample_count=valid_records_count
                     )
                 except Exception as notify_err:
                     _LOGGER.debug(f"Training notification failed: {notify_err}")
@@ -693,8 +692,7 @@ class MLPredictor:
                 try:
                     await self.notification_service.show_training_complete(
                         success=False,
-                        samples_used=result.samples_used if result.samples_used else 0,
-                        error_message=result.error_message
+                        sample_count=result.samples_used if result.samples_used else 0
                     )
                 except Exception as notify_err:
                     _LOGGER.debug(f"Training failure notification failed: {notify_err}")
@@ -858,20 +856,32 @@ class MLPredictor:
 
     def _schedule_daily_training_check(self, reschedule_delay_sec: Optional[float] = None) -> None:
         """Schedules the next daily check to see if model retraining is needed."""
-        if self._daily_training_task: self._daily_training_task.cancel(); self._daily_training_task = None
+        if self._daily_training_task:
+            self._daily_training_task.cancel()
+            self._daily_training_task = None
+
         if reschedule_delay_sec is not None:
              delay = reschedule_delay_sec
              _LOGGER.info(f"Scheduling next training check in {delay:.0f} seconds.")
         else:
              now_local = dt_util.now()  # now() already returns local time
              target_time_local = now_local.replace(hour=23, minute=5, second=0, microsecond=0)
-             if now_local >= target_time_local: target_time_local += timedelta(days=1)
+             if now_local >= target_time_local:
+                 target_time_local += timedelta(days=1)
              delay = (target_time_local - now_local).total_seconds()
              _LOGGER.info(f"Scheduling next daily training check at {target_time_local} (in {delay:.0f} seconds).")
 
-        self._daily_training_task = self.hass.loop.call_later(
-            delay, lambda: asyncio.create_task(self._daily_training_check_callback())
-        )
+        # Create a proper wrapper function that handles the async task correctly
+        def _trigger_training_check():
+            """Wrapper function to properly create and handle the async task."""
+            try:
+                task = self.hass.async_create_task(self._daily_training_check_callback())
+                # Add error callback to catch any exceptions
+                task.add_done_callback(lambda t: self._handle_training_task_error(t))
+            except Exception as e:
+                _LOGGER.error(f"Failed to create daily training check task: {e}", exc_info=True)
+
+        self._daily_training_task = self.hass.loop.call_later(delay, _trigger_training_check)
 
     async def _daily_training_check_callback(self) -> None:
         """Callback executed daily to check if retraining is needed and trigger it."""
@@ -925,6 +935,15 @@ class MLPredictor:
             _LOGGER.error(f"Error during _should_retrain check: {e}", exc_info=True)
             return False
 
+    def _handle_training_task_error(self, task: asyncio.Task) -> None:
+        """Handle errors from the daily training check task."""
+        try:
+            # This will raise if the task had an exception
+            task.result()
+        except asyncio.CancelledError:
+            _LOGGER.debug("Daily training check task was cancelled")
+        except Exception as e:
+            _LOGGER.error(f"Daily training check task failed with error: {e}", exc_info=True)
 
     def _update_performance_metrics(self, prediction_time_ms: float, success: bool) -> None:
         """Updates rolling average prediction time and error rate."""
@@ -1044,6 +1063,77 @@ class MLPredictor:
         """
         _LOGGER.debug("get_tomorrow_prediction stub called, returning None (use orchestrator)")
         return None
+
+    async def force_training(self) -> bool:
+        """
+        Force model training regardless of conditions.
+        Used by the force_retrain service.
+
+        Returns:
+            bool: True if training was successful, False otherwise
+        """
+        _LOGGER.info("Force training requested via service...")
+        try:
+            result = await self.train_model()
+            return result.success if result else False
+        except Exception as e:
+            _LOGGER.error(f"Force training failed: {e}", exc_info=True)
+            return False
+
+    async def reset_model(self) -> bool:
+        """
+        Reset the ML model by clearing learned weights and reverting to rule-based predictions.
+        Used by the reset_model service.
+
+        Returns:
+            bool: True if reset was successful, False otherwise
+        """
+        _LOGGER.info("Resetting ML model...")
+        try:
+            # Clear current weights and model state
+            self.current_weights = None
+            self.current_accuracy = None
+            self.training_samples = 0
+            self.last_training_time = None
+            self.model_loaded = False
+            self.model_state = ModelState.UNINITIALIZED
+
+            # Delete learned weights file
+            success = await self.data_manager.delete_learned_weights()
+            if not success:
+                _LOGGER.warning("Could not delete learned weights file (may not exist)")
+
+            # Reset scaler
+            self.scaler = StandardScaler()
+
+            # Update prediction orchestrator to use fallback strategies only
+            self.prediction_orchestrator.update_strategies(
+                weights=None,
+                profile=self.current_profile,
+                accuracy=None,
+                peak_power_kw=self.peak_power_kw
+            )
+
+            # Update model state file
+            await self._update_model_state_file(
+                status_override=ModelState.UNINITIALIZED.value,
+                accuracy_override=None,
+                samples_override=0,
+                training_time_override=None
+            )
+
+            _LOGGER.info("ML model reset successfully. System will use rule-based predictions.")
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to reset ML model: {e}", exc_info=True)
+            await self.error_handler.handle_error(
+                error=MLModelException(f"Model reset failed: {e}"),
+                source="ml_predictor",
+                pipeline_position="reset_model"
+            )
+            return False
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up resources when the integration is unloaded or HA stops."""

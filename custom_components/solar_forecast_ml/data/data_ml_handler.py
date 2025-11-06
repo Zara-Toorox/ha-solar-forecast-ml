@@ -110,6 +110,20 @@ class DataMLHandler(DataManagerIO):
         """Get learned weights. Alias for load_learned_weights()."""
         return await self.load_learned_weights()
 
+    async def delete_learned_weights(self) -> bool:
+        """Delete learned weights file."""
+        try:
+            if self.learned_weights_file.exists():
+                await self.hass.async_add_executor_job(self.learned_weights_file.unlink)
+                _LOGGER.info("Learned weights file deleted successfully")
+                return True
+            else:
+                _LOGGER.debug("Learned weights file does not exist, nothing to delete")
+                return True
+        except Exception as e:
+            _LOGGER.error(f"Failed to delete learned weights: {e}")
+            return False
+
     # =============================================================
     # HOURLY PROFILE Methods
     # =============================================================

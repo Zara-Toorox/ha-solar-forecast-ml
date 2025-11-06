@@ -251,6 +251,10 @@ class DataManager(DataManagerIO):
         """Get learned weights."""
         return await self.ml_handler.get_learned_weights()
 
+    async def delete_learned_weights(self) -> bool:
+        """Delete learned weights."""
+        return await self.ml_handler.delete_learned_weights()
+
     async def save_hourly_profile(self, profile: HourlyProfile) -> bool:
         """Save hourly profile."""
         return await self.ml_handler.save_hourly_profile(profile)
@@ -317,6 +321,29 @@ class DataManager(DataManagerIO):
     async def get_hourly_samples_count(self) -> int:
         """Get hourly samples count."""
         return await self.ml_handler.get_hourly_samples_count()
+
+    async def get_all_training_records(self, days: int = 60) -> List[Dict[str, Any]]:
+        """Get all training records (hourly samples) for the specified number of days.
+
+        Args:
+            days: Number of days to look back (default: 60)
+
+        Returns:
+            List of hourly sample records
+        """
+        from ..core.core_helpers import SafeDateTimeUtil as dt_util
+        from datetime import timedelta
+
+        # Calculate start date (days ago from now)
+        now = dt_util.now()
+        start_date = (now - timedelta(days=days)).isoformat()
+
+        # Get hourly samples from the specified date range
+        return await self.ml_handler.get_hourly_samples(
+            limit=None,  # No limit, get all
+            start_date=start_date,
+            end_date=None  # Up to now
+        )
 
     async def cleanup_duplicate_samples(self) -> Dict[str, int]:
         """Cleanup duplicate samples."""
