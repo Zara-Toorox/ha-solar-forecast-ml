@@ -138,10 +138,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         # Remove coordinator from hass.data
         coordinator = hass.data[DOMAIN].pop(entry.entry_id)
-        
+
         # Cleanup coordinator
         if hasattr(coordinator, 'scheduled_tasks'):
-            await coordinator.scheduled_tasks.async_cleanup()
+            coordinator.scheduled_tasks.cancel_listeners()
         
         # Unregister services only if this is the last entry
         if not hass.data[DOMAIN]:
