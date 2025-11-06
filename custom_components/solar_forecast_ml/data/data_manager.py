@@ -1,778 +1,619 @@
 """
-Data Manager API for the Solar Forecast ML Integration.
-Provides high-level functions to access and modify ML data files,
-inheriting low-level I/O operations from DataManagerIO.
+Data Manager for Solar Forecast ML Integration - FACADE
+
+Delegates to specialized handlers for better organization.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
 Copyright (C) 2025 Zara-Toorox
 """
 
-import asyncio
 import logging
-import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from homeassistant.core import HomeAssistant
 
-# Import IO Base Class
-from ..data.io import DataManagerIO
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from .data_io import DataManagerIO
+from .data_forecast_handler import DataForecastHandler
+from .data_ml_handler import DataMLHandler
+from .data_prediction_handler import DataPredictionHandler
+from .data_state_handler import DataStateHandler
+from .data_backup_handler import DataBackupHandler
 
-from ..const import (
-    MAX_PREDICTION_HISTORY, MIN_TRAINING_DATA_POINTS, DATA_VERSION,
-    BACKUP_RETENTION_DAYS, MAX_BACKUP_FILES
-)
-from ..ml.ml_types import (
-    LearnedWeights, HourlyProfile,
-    create_default_learned_weights, create_default_hourly_profile,
-    validate_prediction_record
-)
-from ..exceptions import DataIntegrityException
-from ..core.helpers import SafeDateTimeUtil as dt_util
-# Import TypedDataAdapter for conversions
-from ..data.data_adapter import TypedDataAdapter
+from ..ml.ml_types import LearnedWeights, HourlyProfile
 
 _LOGGER = logging.getLogger(__name__)
 
 
-# Inherit from DataManagerIO to get file handling methods and lock
 class DataManager(DataManagerIO):
     """
     Data Manager API for Solar Forecast ML.
-    Handles the application logic for reading, writing, and managing ML data.
-    Uses DataManagerIO for underlying file operations.
-    CRITICAL FIX: All timestamp parsing now ensures LOCAL timezone.
+    Facade that delegates to specialized handlers.
     """
 
     def __init__(self, hass: HomeAssistant, entry_id: str, data_dir: Path, error_handler=None):
-        """Initialize the Data Manager API."""
-        # Initialize the base I/O class
+        """Initialize the Data Manager Facade."""
         super().__init__(hass, data_dir)
 
         self.entry_id = entry_id
         self.error_handler = error_handler
-        self.data_adapter = TypedDataAdapter()
 
-        # Define specific file paths using the base data_dir
-        self.prediction_history_file = self.data_dir / "prediction_history.json"
-        self.learned_weights_file = self.data_dir / "learned_weights.json"
-        self.hourly_profile_file = self.data_dir / "hourly_profile.json"
-        self.model_state_file = self.data_dir / "model_state.json"
-        self.hourly_samples_file = self.data_dir / "hourly_samples.json"
-        self.coordinator_state_file = self.data_dir / "coordinator_state.json"
+        # Initialize specialized handlers
+        self.forecast_handler = DataForecastHandler(hass, data_dir)
+        self.ml_handler = DataMLHandler(hass, data_dir)
+        self.prediction_handler = DataPredictionHandler(hass, data_dir)
+        self.state_handler = DataStateHandler(hass, data_dir)
+        self.backup_handler = DataBackupHandler(hass, data_dir)
 
-        # Defaults for _read_json_file
-        self._prediction_history_default = {"version": DATA_VERSION, "predictions": [], "last_updated": None}
-        self._hourly_samples_default = {"version": DATA_VERSION, "samples": [], "count": 0, "last_updated": None}
-        self._model_state_default = {
-            "version": DATA_VERSION, "model_loaded": False, "last_training": None,
-            "training_samples": 0, "current_accuracy": 0.0, "status": "uninitialized",
-        }
-        self._coordinator_state_default = {
-            "version": DATA_VERSION,
-            "expected_daily_production": None,
-            "last_set_date": None,
-            "last_updated": None
-        }
+        # Keep file paths for backward compatibility
+        self.daily_forecasts_file = self.forecast_handler.daily_forecasts_file
+        self.learned_weights_file = self.ml_handler.learned_weights_file
+        self.hourly_profile_file = self.ml_handler.hourly_profile_file
+        self.model_state_file = self.ml_handler.model_state_file
+        self.hourly_samples_file = self.ml_handler.hourly_samples_file
+        self.prediction_history_file = self.prediction_handler.prediction_history_file
+        self.coordinator_state_file = self.state_handler.coordinator_state_file
+        self.weather_cache_file = self.state_handler.weather_cache_file
+        self.production_time_state_file = self.state_handler.production_time_state_file
 
-        _LOGGER.info("DataManager API initialized with LOCAL TIME enforcement")
+        # Keep adapters
+        self.data_adapter = self.ml_handler.data_adapter
+
+        _LOGGER.info("DataManager Facade initialized with specialized handlers")
 
     async def initialize(self) -> bool:
         """Initialize data manager: ensure directories exist and create default files."""
         try:
-            # Ensure base and backup directories exist
+            # Ensure base directory exists
             await self._ensure_directory_exists(self.data_dir)
+
+            # Create subdirectories according to structure
+            await self._ensure_directory_exists(self.data_dir / "ml")
+            await self._ensure_directory_exists(self.data_dir / "ml" / "models")
+            await self._ensure_directory_exists(self.data_dir / "stats")
+            await self._ensure_directory_exists(self.data_dir / "stats" / "accuracy_reports")
+            await self._ensure_directory_exists(self.data_dir / "data")
+            await self._ensure_directory_exists(self.data_dir / "imports")
+            await self._ensure_directory_exists(self.data_dir / "exports")
+            await self._ensure_directory_exists(self.data_dir / "exports" / "reports")
+            await self._ensure_directory_exists(self.data_dir / "exports" / "pictures")
+            await self._ensure_directory_exists(self.data_dir / "exports" / "statistics")
             await self._ensure_directory_exists(self.data_dir / "backups")
+            await self._ensure_directory_exists(self.data_dir / "backups" / "auto")
+            await self._ensure_directory_exists(self.data_dir / "backups" / "manual")
+            await self._ensure_directory_exists(self.data_dir / "assets")
+            await self._ensure_directory_exists(self.data_dir / "assets" / "images")
+            await self._ensure_directory_exists(self.data_dir / "docs")
 
-            # Create default files if missing
-            await self._initialize_missing_files()
+            # Initialize handlers
+            await self.forecast_handler.ensure_daily_forecasts_file()
+            await self.ml_handler.ensure_ml_files()
+            await self.prediction_handler.ensure_prediction_history_file()
+            await self.state_handler.ensure_state_files()
 
-            _LOGGER.info("DataManager initialized successfully")
+            # Deploy import tools for beta testers
+            await self._deploy_import_tools()
+
+            _LOGGER.info("DataManager Facade initialized successfully")
             return True
+
         except Exception as e:
-            _LOGGER.error(f"DataManager initialization failed: {e}")
+            _LOGGER.error(f"Failed to initialize DataManager: {e}", exc_info=True)
             return False
 
-    async def _initialize_missing_files(self):
-        """Create default files if they don't exist."""
-        files_to_check = [
-            (self.prediction_history_file, self._prediction_history_default),
-            (self.hourly_samples_file, self._hourly_samples_default),
-            (self.model_state_file, self._model_state_default),
-        ]
+    # 
+    # FORECAST METHODS - Delegate to DataForecastHandler
+    #
 
-        for file_path, default_data in files_to_check:
-            if not file_path.exists():
-                await self._ensure_directory_exists(file_path.parent)
-                await self._atomic_write_json(file_path, default_data)
-                _LOGGER.info(f"Created default file: {file_path.name}")
+    async def load_daily_forecasts(self) -> Dict[str, Any]:
+        """Load daily forecasts."""
+        return await self.forecast_handler.load_daily_forecasts()
 
-    # --- Learned Weights Methods ---
+    async def reset_today_block(self) -> bool:
+        """Reset TODAY block at midnight."""
+        return await self.forecast_handler.reset_today_block()
+
+    async def save_forecast_day(
+        self,
+        prediction_kwh: float,
+        source: str = "ML",
+        lock: bool = True
+    ) -> bool:
+        """Save today's daily forecast."""
+        return await self.forecast_handler.save_forecast_day(
+            prediction_kwh, source, lock
+        )
+
+    async def save_forecast_tomorrow(
+        self,
+        date: datetime,
+        prediction_kwh: float,
+        source: str = "ML",
+        lock: bool = False
+    ) -> bool:
+        """Save tomorrow's forecast."""
+        return await self.forecast_handler.save_forecast_tomorrow(
+            date, prediction_kwh, source, lock
+        )
+
+    async def save_forecast_day_after(
+        self,
+        date: datetime,
+        prediction_kwh: float,
+        source: str = "ML",
+        lock: bool = False
+    ) -> bool:
+        """Save day after tomorrow's forecast."""
+        return await self.forecast_handler.save_forecast_day_after(
+            date, prediction_kwh, source, lock
+        )
+
+    async def save_forecast_best_hour(
+        self,
+        hour: int,
+        prediction_kwh: float,
+        source: str = "ML_Hourly"
+    ) -> bool:
+        """Save best hour forecast."""
+        return await self.forecast_handler.save_forecast_best_hour(
+            hour, prediction_kwh, source
+        )
+
+    async def save_forecast_next_hour(
+        self,
+        hour_start: datetime,
+        hour_end: datetime,
+        prediction_kwh: float,
+        source: str = "ML_Hourly"
+    ) -> bool:
+        """Save next hour forecast."""
+        return await self.forecast_handler.save_forecast_next_hour(
+            hour_start, hour_end, prediction_kwh, source
+        )
+
+    async def deactivate_next_hour_forecast(self) -> bool:
+        """Deactivate next hour forecast."""
+        return await self.forecast_handler.deactivate_next_hour_forecast()
+
+    async def update_production_time(
+        self,
+        active: bool,
+        duration_seconds: int,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        last_power_above_10w: Optional[datetime] = None,
+        zero_power_since: Optional[datetime] = None
+    ) -> bool:
+        """Update production time tracking."""
+        return await self.forecast_handler.update_production_time(
+            active, duration_seconds, start_time, end_time,
+            last_power_above_10w, zero_power_since
+        )
+
+    async def update_peak_today(
+        self,
+        power_w: float,
+        timestamp: datetime
+    ) -> bool:
+        """Update today's peak power."""
+        return await self.forecast_handler.update_peak_today(power_w, timestamp)
+
+    async def update_all_time_peak(
+        self,
+        power_w: float,
+        timestamp: datetime
+    ) -> bool:
+        """Update all-time peak power."""
+        return await self.forecast_handler.update_all_time_peak(power_w, timestamp)
+
+    async def get_all_time_peak(self) -> Optional[float]:
+        """Get all-time peak value."""
+        return await self.forecast_handler.get_all_time_peak()
+
+    async def finalize_today(
+        self,
+        yield_kwh: float,
+        consumption_kwh: Optional[float] = None,
+        production_seconds: int = 0
+    ) -> bool:
+        """Finalize today with actual values."""
+        return await self.forecast_handler.finalize_today(
+            yield_kwh, consumption_kwh, production_seconds
+        )
+
+    async def get_history(
+        self,
+        days: int = 30,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get history entries."""
+        return await self.forecast_handler.get_history(days, start_date, end_date)
+
+    async def rotate_forecasts_at_midnight(self) -> bool:
+        """Rotate forecasts at midnight (00:00:30)."""
+        return await self.forecast_handler.rotate_forecasts_at_midnight()
+
     async def save_learned_weights(self, weights: LearnedWeights) -> bool:
-        """Save learned weights to file."""
-        try:
-            weights_dict = self.data_adapter.learned_weights_to_dict(weights)
-            await self._ensure_directory_exists(self.learned_weights_file.parent)
-            await self._atomic_write_json(self.learned_weights_file, weights_dict)
-            _LOGGER.info("Learned weights saved successfully")
-            return True
-        except Exception as e:
-            _LOGGER.error(f"Failed to save learned weights: {e}")
-            return False
+        """Save learned weights."""
+        return await self.ml_handler.save_learned_weights(weights)
 
     async def load_learned_weights(self) -> Optional[LearnedWeights]:
-        """Load learned weights from file."""
-        try:
-            data = await self._read_json_file(self.learned_weights_file, create_default_learned_weights())
-            if data:
-                return self.data_adapter.dict_to_learned_weights(data)
-            return None
-        except Exception as e:
-            _LOGGER.error(f"Failed to load learned weights: {e}")
-            return None
+        """Load learned weights."""
+        return await self.ml_handler.load_learned_weights()
 
     async def get_learned_weights(self) -> Optional[LearnedWeights]:
-        """Get learned weights. Alias for load_learned_weights()."""
-        return await self.load_learned_weights()
+        """Get learned weights."""
+        return await self.ml_handler.get_learned_weights()
 
-    # --- Hourly Profile Methods ---
     async def save_hourly_profile(self, profile: HourlyProfile) -> bool:
-        """Save hourly profile to file."""
-        try:
-            profile_dict = self.data_adapter.hourly_profile_to_dict(profile)
-            await self._ensure_directory_exists(self.hourly_profile_file.parent)
-            await self._atomic_write_json(self.hourly_profile_file, profile_dict)
-            _LOGGER.info("Hourly profile saved successfully")
-            return True
-        except Exception as e:
-            _LOGGER.error(f"Failed to save hourly profile: {e}")
-            return False
+        """Save hourly profile."""
+        return await self.ml_handler.save_hourly_profile(profile)
 
     async def load_hourly_profile(self) -> Optional[HourlyProfile]:
-        """Load hourly profile from file."""
-        try:
-            data = await self._read_json_file(self.hourly_profile_file, create_default_hourly_profile())
-            if data:
-                return self.data_adapter.dict_to_hourly_profile(data)
-            return None
-        except Exception as e:
-            _LOGGER.error(f"Failed to load hourly profile: {e}")
-            return None
+        """Load hourly profile."""
+        return await self.ml_handler.load_hourly_profile()
 
     async def get_hourly_profile(self) -> Optional[HourlyProfile]:
-        """Get hourly profile. Alias for load_hourly_profile()."""
-        return await self.load_hourly_profile()
+        """Get hourly profile."""
+        return await self.ml_handler.get_hourly_profile()
 
-    # --- Model State Methods ---
     async def save_model_state(self, state: Dict[str, Any]) -> bool:
-        """Save model state to file."""
-        try:
-            await self._ensure_directory_exists(self.model_state_file.parent)
-            await self._atomic_write_json(self.model_state_file, state)
-            return True
-        except Exception as e:
-            _LOGGER.error(f"Failed to save model state: {e}")
-            return False
+        """Save model state."""
+        return await self.ml_handler.save_model_state(state)
 
     async def load_model_state(self) -> Dict[str, Any]:
-        """Load model state from file."""
-        try:
-            return await self._read_json_file(self.model_state_file, self._model_state_default)
-        except Exception as e:
-            _LOGGER.error(f"Failed to load model state: {e}")
-            return self._model_state_default
+        """Load model state."""
+        return await self.ml_handler.load_model_state()
 
     async def get_model_state(self) -> Dict[str, Any]:
-        """Get model state. Alias for load_model_state()."""
-        return await self.load_model_state()
+        """Get model state."""
+        return await self.ml_handler.get_model_state()
 
-    # --- Prediction History Methods ---
-    async def save_prediction(self, prediction_data: Dict[str, Any]) -> bool:
-        """Save a single prediction to history."""
-        try:
-            if not validate_prediction_record(prediction_data):
-                _LOGGER.error("Prediction data validation failed")
-                return False
-            
-            async with self._file_lock:
-                history = await self._read_json_file(
-                    self.prediction_history_file, 
-                    self._prediction_history_default
-                )
-                
-                if "predictions" not in history:
-                    history["predictions"] = []
-                
-                history["predictions"].append(prediction_data)
-                
-                # Limit history size
-                if len(history["predictions"]) > MAX_PREDICTION_HISTORY:
-                    history["predictions"] = history["predictions"][-MAX_PREDICTION_HISTORY:]
-                
-                history["last_updated"] = dt_util.now().isoformat()
-                
-                await self._ensure_directory_exists(self.prediction_history_file.parent)
-                await self._atomic_write_json_unlocked(self.prediction_history_file, history)
-            return True
-        except Exception as e:
-            _LOGGER.error(f"Failed to save prediction: {e}")
-            return False
-
-    async def add_prediction_record(self, record: Dict[str, Any]) -> bool:
-        """Add a single prediction record to history. Alias for save_prediction()."""
-        return await self.save_prediction(record)
-
-    async def load_prediction_history(self) -> List[Dict[str, Any]]:
-        """Load prediction history from file."""
-        try:
-            history = await self._read_json_file(self.prediction_history_file, self._prediction_history_default)
-            return history.get("predictions", [])
-        except Exception as e:
-            _LOGGER.error(f"Failed to load prediction history: {e}")
-            return []
-
-    async def get_prediction_history(self) -> Dict[str, Any]:
-        """Get complete prediction history as dictionary."""
-        try:
-            history = await self._read_json_file(
-                self.prediction_history_file, 
-                self._prediction_history_default
-            )
-            return history
-        except Exception as e:
-            _LOGGER.error(f"Failed to get prediction history: {e}")
-            return self._prediction_history_default
-
-    async def get_average_monthly_yield(self) -> Optional[float]:
-        """
-        Calculate average monthly yield from prediction history.
-        CRITICAL FIX: Now ensures timestamps are in LOCAL timezone.
-        """
-        try:
-            history = await self.get_prediction_history()
-            predictions = history.get("predictions", [])
-            
-            if not predictions:
-                _LOGGER.debug("No predictions available for average monthly yield calculation")
-                return None
-            
-            cutoff_date = dt_util.now() - timedelta(days=30)
-            valid_yields = []
-            
-            for pred in predictions:
-                try:
-                    timestamp = dt_util.parse_datetime(pred.get("timestamp"))
-                    if timestamp:
-                        # CRITICAL FIX: Force timestamp to LOCAL timezone
-                        timestamp = dt_util.ensure_local(timestamp)
-                    
-                    actual_value = pred.get("actual_value")
-                    
-                    if timestamp and timestamp >= cutoff_date and actual_value is not None:
-                        valid_yields.append(float(actual_value))
-                except (ValueError, TypeError, KeyError):
-                    continue
-            
-            if not valid_yields:
-                _LOGGER.debug("No valid yield data in last 30 days")
-                return None
-            
-            avg_yield = sum(valid_yields) / len(valid_yields)
-            _LOGGER.debug(f"Average monthly yield: {avg_yield:.2f} kWh (from {len(valid_yields)} days)")
-            return round(avg_yield, 2)
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to calculate average monthly yield: {e}")
-            return None
-
-    # --- Hourly Samples Methods ---
-    async def save_hourly_samples(self, samples: List[Dict[str, Any]]) -> bool:
-        """Save hourly samples to file."""
-        try:
-            data = {
-                "version": DATA_VERSION,
-                "samples": samples,
-                "count": len(samples),
-                "last_updated": dt_util.now().isoformat()
-            }
-            await self._ensure_directory_exists(self.hourly_samples_file.parent)
-            await self._atomic_write_json(self.hourly_samples_file, data)
-            return True
-        except Exception as e:
-            _LOGGER.error(f"Failed to save hourly samples: {e}")
-            return False
-
-    async def load_hourly_samples(self) -> List[Dict[str, Any]]:
-        """Load hourly samples from file."""
-        try:
-            data = await self._read_json_file(self.hourly_samples_file, self._hourly_samples_default)
-            return data.get("samples", [])
-        except Exception as e:
-            _LOGGER.error(f"Failed to load hourly samples: {e}")
-            return []
+    async def update_model_state(
+        self,
+        model_loaded: Optional[bool] = None,
+        last_training: Optional[str] = None,
+        training_samples: Optional[int] = None,
+        current_accuracy: Optional[float] = None,
+        status: Optional[str] = None
+    ) -> bool:
+        """Update model state partially."""
+        return await self.ml_handler.update_model_state(
+            model_loaded, last_training, training_samples,
+            current_accuracy, status
+        )
 
     async def add_hourly_sample(self, sample: Dict[str, Any]) -> bool:
-        """Add a single hourly sample to the collection."""
-        try:
-            async with self._file_lock:
-                data = await self._read_json_file(
-                    self.hourly_samples_file, 
-                    self._hourly_samples_default
-                )
-                
-                samples = data.get("samples", [])
-                samples.append(sample)
-                
-                MAX_HOURLY_SAMPLES = 1440
-                if len(samples) > MAX_HOURLY_SAMPLES:
-                    samples = samples[-MAX_HOURLY_SAMPLES:]
-                
-                data["samples"] = samples
-                data["count"] = len(samples)
-                data["last_updated"] = dt_util.now().isoformat()
-                
-                await self._ensure_directory_exists(self.hourly_samples_file.parent)
-                await self._atomic_write_json_unlocked(self.hourly_samples_file, data)
-                
-            _LOGGER.debug(f"Hourly sample added. Total samples: {len(samples)}")
-            return True
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to add hourly sample: {e}")
-            return False
-
-    async def get_hourly_samples(self, days: int = 60) -> List[Dict[str, Any]]:
-        """
-        Get hourly samples from the last N days.
-        CRITICAL FIX: Now ensures all timestamps are in LOCAL timezone.
-        """
-        try:
-            all_samples = await self.load_hourly_samples()
-            
-            if not all_samples:
-                _LOGGER.debug("No hourly samples available")
-                return []
-            
-            cutoff_date = dt_util.now() - timedelta(days=days)
-            filtered_samples = []
-            
-            for sample in all_samples:
-                try:
-                    timestamp = dt_util.parse_datetime(sample.get("timestamp"))
-                    if timestamp:
-                        # CRITICAL FIX: Force timestamp to LOCAL timezone
-                        timestamp = dt_util.ensure_local(timestamp)
-                        
-                    if timestamp and timestamp >= cutoff_date:
-                        filtered_samples.append(sample)
-                except (ValueError, TypeError, KeyError):
-                    continue
-            
-            _LOGGER.debug(f"Retrieved {len(filtered_samples)} hourly samples from last {days} days")
-            return filtered_samples
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to get hourly samples: {e}")
-            return []
+        """Add hourly sample."""
+        return await self.ml_handler.add_hourly_sample(sample)
 
     async def get_last_collected_hour(self) -> Optional[datetime]:
-        """
-        Get timestamp of the last collected hourly sample.
-        CRITICAL FIX: Returns LOCAL time.
-        """
-        try:
-            samples = await self.load_hourly_samples()
-            
-            if not samples:
-                return None
-            
-            latest_timestamp = None
-            for sample in reversed(samples):
-                try:
-                    timestamp = dt_util.parse_datetime(sample.get("timestamp"))
-                    if timestamp:
-                        # CRITICAL FIX: Ensure timestamp is in LOCAL timezone
-                        timestamp = dt_util.ensure_local(timestamp)
-                        latest_timestamp = timestamp
-                        break
-                except (ValueError, TypeError, KeyError):
-                    continue
-            
-            if latest_timestamp:
-                _LOGGER.debug(f"Last collected hour: {latest_timestamp.isoformat()}")
-            
-            return latest_timestamp
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to get last collected hour: {e}")
-            return None
+        """Get last collected hour timestamp."""
+        return await self.state_handler.get_last_collected_hour()
 
-    async def set_last_collected_hour(self, timestamp: datetime) -> None:
-        """
-        Set last collected hour timestamp.
-        
-        Note: This is a no-op method because the actual sample is already stored
-        in hourly_samples.json. The get_last_collected_hour() method reads from
-        the samples directly, so no separate state storage is needed.
-        
-        This method exists only to maintain API compatibility with ml_sample_collector.
-        """
-        _LOGGER.debug(f"Sample collection timestamp recorded: {timestamp.isoformat()}")
-        # No action needed - sample is already in hourly_samples.json
-        pass
+    async def set_last_collected_hour(self, timestamp: datetime) -> bool:
+        """Set last collected hour timestamp."""
+        return await self.state_handler.set_last_collected_hour(timestamp)
 
-    async def get_all_training_records(self, days: int = 60) -> List[Dict[str, Any]]:
-        """
-        Get all training records (predictions + hourly samples) from the last N days.
-        CRITICAL FIX: Now ensures all timestamps are in LOCAL timezone.
-        """
-        try:
-            history_data = await self.get_prediction_history()
-            predictions = history_data.get('predictions', [])
-            hourly_samples = await self.load_hourly_samples()
-            
-            if not predictions and not hourly_samples:
-                _LOGGER.debug("No training records available")
-                return []
-            
-            cutoff_date = dt_util.now() - timedelta(days=days)
-            
-            filtered_predictions = []
-            for pred in predictions:
-                try:
-                    timestamp = dt_util.parse_datetime(pred.get("timestamp"))
-                    if timestamp:
-                        # CRITICAL FIX: Force timestamp to LOCAL timezone
-                        timestamp = dt_util.ensure_local(timestamp)
-                        
-                    if timestamp and timestamp >= cutoff_date:
-                        filtered_predictions.append(pred)
-                except (ValueError, TypeError, KeyError):
-                    continue
-            
-            training_records = []
-            
-            for pred in filtered_predictions:
-                record = pred.copy()
-                record["record_type"] = "daily_prediction"
-                training_records.append(record)
-            
-            for sample in hourly_samples:
-                try:
-                    # CRITICAL FIX: Ensure hourly sample timestamps are LOCAL
-                    timestamp = dt_util.parse_datetime(sample.get("timestamp"))
-                    if timestamp:
-                        timestamp = dt_util.ensure_local(timestamp)
-                        if timestamp >= cutoff_date:
-                            record = sample.copy()
-                            record["record_type"] = "hourly_sample"
-                            training_records.append(record)
-                except (ValueError, TypeError, KeyError):
-                    continue
-            
-            training_records.sort(
-                key=lambda x: dt_util.parse_datetime(x.get("timestamp")) or dt_util.now(),
-                reverse=False
-            )
-            
-            _LOGGER.debug(
-                f"Retrieved {len(training_records)} training records "
-                f"({len(filtered_predictions)} predictions + {len(hourly_samples)} hourly samples) "
-                f"from last {days} days"
-            )
-            return training_records
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to get training records: {e}")
-            return []
+    async def get_hourly_samples(
+        self,
+        limit: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get hourly samples."""
+        return await self.ml_handler.get_hourly_samples(limit, start_date, end_date)
+
+    async def clear_hourly_samples(self) -> bool:
+        """Clear hourly samples."""
+        return await self.ml_handler.clear_hourly_samples()
+
+    async def get_hourly_samples_count(self) -> int:
+        """Get hourly samples count."""
+        return await self.ml_handler.get_hourly_samples_count()
 
     async def cleanup_duplicate_samples(self) -> Dict[str, int]:
-        """Remove duplicate hourly samples based on timestamp."""
-        try:
-            async with self._file_lock:
-                data = await self._read_json_file(
-                    self.hourly_samples_file, 
-                    self._hourly_samples_default
-                )
-                
-                samples = data.get("samples", [])
-                original_count = len(samples)
-                
-                if not samples:
-                    return {"removed": 0, "remaining": 0}
-                
-                seen_timestamps = {}
-                unique_samples = []
-                
-                for sample in samples:
-                    timestamp_str = sample.get("timestamp")
-                    if timestamp_str:
-                        if timestamp_str not in seen_timestamps:
-                            seen_timestamps[timestamp_str] = sample
-                            unique_samples.append(sample)
-                        else:
-                            existing = seen_timestamps[timestamp_str]
-                            if len(sample.keys()) > len(existing.keys()):
-                                unique_samples.remove(existing)
-                                unique_samples.append(sample)
-                                seen_timestamps[timestamp_str] = sample
-                    else:
-                        unique_samples.append(sample)
-                
-                data["samples"] = unique_samples
-                data["count"] = len(unique_samples)
-                data["last_updated"] = dt_util.now().isoformat()
-                
-                await self._ensure_directory_exists(self.hourly_samples_file.parent)
-                await self._atomic_write_json_unlocked(self.hourly_samples_file, data)
-                
-                removed_count = original_count - len(unique_samples)
-                _LOGGER.info(f"Duplicate cleanup: {removed_count} duplicates removed, {len(unique_samples)} remaining")
-                
-                return {
-                    "removed": removed_count,
-                    "remaining": len(unique_samples)
-                }
-                
-        except Exception as e:
-            _LOGGER.error(f"Failed to cleanup duplicate samples: {e}")
-            return {"removed": 0, "remaining": 0}
+        """Cleanup duplicate samples."""
+        return await self.ml_handler.cleanup_duplicate_samples()
 
     async def cleanup_zero_production_samples(self) -> Dict[str, int]:
-        """Remove hourly samples with zero or near-zero production."""
-        try:
-            async with self._file_lock:
-                data = await self._read_json_file(
-                    self.hourly_samples_file, 
-                    self._hourly_samples_default
-                )
-                
-                samples = data.get("samples", [])
-                original_count = len(samples)
-                
-                if not samples:
-                    return {"removed": 0, "remaining": 0}
-                
-                ZERO_THRESHOLD = 0.001
-                filtered_samples = []
-                
-                for sample in samples:
-                    try:
-                        production = float(sample.get("production", 0) or 0)
-                        if production > ZERO_THRESHOLD:
-                            filtered_samples.append(sample)
-                    except (ValueError, TypeError):
-                        filtered_samples.append(sample)
-                
-                data["samples"] = filtered_samples
-                data["count"] = len(filtered_samples)
-                data["last_updated"] = dt_util.now().isoformat()
-                
-                await self._ensure_directory_exists(self.hourly_samples_file.parent)
-                await self._atomic_write_json_unlocked(self.hourly_samples_file, data)
-                
-                removed_count = original_count - len(filtered_samples)
-                _LOGGER.info(f"Zero-production cleanup: {removed_count} samples removed, {len(filtered_samples)} remaining")
-                
-                return {
-                    "removed": removed_count,
-                    "remaining": len(filtered_samples)
-                }
-                
-        except Exception as e:
-            _LOGGER.error(f"Failed to cleanup zero production samples: {e}")
-            return {"removed": 0, "remaining": 0}
+        """Cleanup zero-production samples."""
+        return await self.ml_handler.cleanup_zero_production_samples()
 
-    # --- Weather Forecast Cache ---
-    async def save_weather_forecast_cache(self, forecast_data: Dict[str, Any]) -> bool:
-        """Save weather forecast cache."""
-        try:
-            cache_file = self.data_dir / "weather_cache.json"
-            await self._ensure_directory_exists(cache_file.parent)
-            await self._atomic_write_json(cache_file, forecast_data)
-            return True
-        except Exception as e:
-            _LOGGER.error(f"Failed to save weather cache: {e}")
-            return False
+ 
+    async def save_prediction(self, prediction_data: Dict[str, Any]) -> bool:
+        """Save prediction to history."""
+        return await self.prediction_handler.save_prediction(prediction_data)
 
-    async def load_weather_forecast_cache(self) -> Optional[Dict[str, Any]]:
-        """Load weather forecast cache with backward compatibility."""
-        try:
-            cache_file = self.data_dir / "weather_cache.json"
-            if cache_file.exists():
-                data = await self._read_json_file(cache_file, None)
-                
-                if data is None:
-                    return None
-                
-                # Backward compatibility: If data is a list (old format), wrap it
-                if isinstance(data, list):
-                    _LOGGER.info("Converting old weather cache format (list) to new format (dict)")
-                    return {
-                        "forecast_hours": data,
-                        "cached_at": dt_util.now().isoformat(),  # LOCAL time
-                        "data_quality": {
-                            "today_hours": 0,
-                            "tomorrow_hours": 0,
-                            "total_hours": len(data)
-                        },
-                        "converted_from_old_format": True
-                    }
-                
-                # New format: Already a dict
-                return data
-            return None
-        except Exception as e:
-            _LOGGER.error(f"Failed to load weather cache: {e}")
-            return None
+    async def get_predictions(
+        self,
+        limit: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get predictions."""
+        return await self.prediction_handler.get_predictions(
+            limit, start_date, end_date
+        )
 
-    # --- Backup Methods ---
-    async def create_backup(self, backup_name: Optional[str] = None) -> bool:
-        """Create backup of all data files."""
-        try:
-            if not backup_name:
-                timestamp = dt_util.now().strftime("%Y%m%d_%H%M%S")
-                backup_name = f"backup_{timestamp}"
-            
-            backup_dir = self.data_dir / "backups" / backup_name
-            await self._ensure_directory_exists(backup_dir)
-            
-            # Copy all JSON files
-            for file in self.data_dir.glob("*.json"):
-                shutil.copy2(file, backup_dir / file.name)
-            
-            _LOGGER.info(f"Backup created: {backup_name}")
-            return True
-        except Exception as e:
-            _LOGGER.error(f"Failed to create backup: {e}")
-            return False
+    async def get_latest_prediction(self) -> Optional[Dict[str, Any]]:
+        """Get latest prediction."""
+        return await self.prediction_handler.get_latest_prediction()
 
-    async def cleanup_old_backups(self):
-        """Remove backups older than BACKUP_RETENTION_DAYS."""
-        try:
-            backup_dir = self.data_dir / "backups"
-            if not backup_dir.exists():
-                return
-            
-            cutoff_date = datetime.now() - timedelta(days=BACKUP_RETENTION_DAYS)
-            
-            for backup_folder in backup_dir.iterdir():
-                if backup_folder.is_dir():
-                    folder_time = datetime.fromtimestamp(backup_folder.stat().st_mtime)
-                    if folder_time < cutoff_date:
-                        shutil.rmtree(backup_folder)
-                        _LOGGER.info(f"Removed old backup: {backup_folder.name}")
-        except Exception as e:
-            _LOGGER.error(f"Failed to cleanup old backups: {e}")
+    async def get_prediction_for_date(self, date: str) -> Optional[Dict[str, Any]]:
+        """Get prediction for date."""
+        return await self.prediction_handler.get_prediction_for_date(date)
 
-    # ==================================================================================
-    # Coordinator State Persistence (Expected Daily Production)
-    # ==================================================================================
+    async def cleanup_old_predictions(self, days: int = 365) -> bool:
+        """Cleanup old predictions."""
+        return await self.prediction_handler.cleanup_old_predictions(days)
+
+    async def calculate_accuracy_stats(
+        self,
+        days: int = 30
+    ) -> Dict[str, Any]:
+        """Calculate accuracy statistics."""
+        return await self.prediction_handler.calculate_accuracy_stats(days)
+
+    async def get_accuracy_trend(
+        self,
+        days: int = 30
+    ) -> List[Dict[str, Any]]:
+        """Get accuracy trend."""
+        return await self.prediction_handler.get_accuracy_trend(days)
+
+    async def get_predictions_count(self) -> int:
+        """Get predictions count."""
+        return await self.prediction_handler.get_predictions_count()
+
 
     async def save_expected_daily_production(self, value: float) -> bool:
-        """
-        Save expected daily production value persistently.
-        This value survives HA restarts until midnight reset.
-        
-        Args:
-            value: Expected daily production in kWh
-            
-        Returns:
-            True if saved successfully, False otherwise
-        """
-        try:
-            now_local = dt_util.as_local(dt_util.now())
-            state = {
-                "version": DATA_VERSION,
-                "expected_daily_production": value,
-                "last_set_date": now_local.date().isoformat(),
-                "last_updated": now_local.isoformat()
-            }
-            
-            success = await self._atomic_write_json(self.coordinator_state_file, state)
-            if success:
-                _LOGGER.debug(f"Expected daily production saved: {value:.2f} kWh")
-            return success
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to save expected daily production: {e}")
-            return False
+        """Save expected daily production."""
+        return await self.state_handler.save_expected_daily_production(value)
 
     async def load_expected_daily_production(self) -> Optional[float]:
-        """
-        Load expected daily production from persistent storage.
-        Returns None if:
-        - File doesn't exist
-        - Value is from a different day (auto-expired)
-        - Value is invalid
-        
-        Returns:
-            Expected daily production value or None
-        """
-        try:
-            state = await self._read_json_file(
-                self.coordinator_state_file,
-                self._coordinator_state_default
-            )
-            
-            if not state:
-                return None
-            
-            # Check if value is from today
-            now_local = dt_util.as_local(dt_util.now())
-            today_str = now_local.date().isoformat()
-            last_set_date = state.get("last_set_date")
-            
-            if last_set_date != today_str:
-                _LOGGER.debug(
-                    f"Expected daily production expired "
-                    f"(from {last_set_date}, today is {today_str})"
-                )
-                return None
-            
-            value = state.get("expected_daily_production")
-            if value is not None:
-                _LOGGER.debug(f"Loaded expected daily production: {value:.2f} kWh")
-                return float(value)
-            
-            return None
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to load expected daily production: {e}")
-            return None
+        """Load expected daily production."""
+        # Load daily forecasts to check for new system first
+        daily_forecasts = await self.load_daily_forecasts()
+        return await self.state_handler.load_expected_daily_production(
+            check_daily_forecasts=True,
+            daily_forecasts_data=daily_forecasts
+        )
 
     async def clear_expected_daily_production(self) -> bool:
-        """
-        Clear expected daily production from persistent storage.
-        Called at midnight reset.
+        """Clear expected daily production."""
+        return await self.state_handler.clear_expected_daily_production()
+
+    async def save_weather_cache(self, weather_data: Dict[str, Any]) -> bool:
+        """Save weather cache."""
+        return await self.state_handler.save_weather_cache(weather_data)
+
+    async def load_weather_cache(self) -> Optional[Dict[str, Any]]:
+        """Load weather cache."""
+        return await self.state_handler.load_weather_cache()
+
+    async def clear_weather_cache(self) -> bool:
+        """Clear weather cache."""
+        return await self.state_handler.clear_weather_cache()
+
+    async def get_weather_cache_age(self) -> Optional[int]:
+        """Get weather cache age in minutes."""
+        return await self.state_handler.get_weather_cache_age()
+
+    async def is_weather_cache_valid(self, max_age_minutes: int = 60) -> bool:
+        """Check if weather cache is valid."""
+        return await self.state_handler.is_weather_cache_valid(max_age_minutes)
+
+
+    async def create_backup(
+        self,
+        backup_name: Optional[str] = None,
+        backup_type: str = "manual"
+    ) -> bool:
+        """Create backup."""
+        return await self.backup_handler.create_backup(backup_name, backup_type)
+
+    async def cleanup_old_backups(
+        self,
+        backup_type: str = "auto",
+        retention_days: Optional[int] = None
+    ) -> int:
+        """Cleanup old backups."""
+        return await self.backup_handler.cleanup_old_backups(
+            backup_type, retention_days
+        )
+
+    async def cleanup_excess_backups(
+        self,
+        backup_type: str = "auto",
+        max_backups: Optional[int] = None
+    ) -> int:
+        """Cleanup excess backups."""
+        return await self.backup_handler.cleanup_excess_backups(
+            backup_type, max_backups
+        )
+
+    async def list_backups(
+        self,
+        backup_type: Optional[str] = None
+    ) -> list:
+        """List backups."""
+        return await self.backup_handler.list_backups(backup_type)
+
+    async def restore_backup(
+        self,
+        backup_name: str,
+        backup_type: str = "manual"
+    ) -> bool:
+        """Restore backup."""
+        return await self.backup_handler.restore_backup(backup_name, backup_type)
+
+    async def delete_backup(
+        self,
+        backup_name: str,
+        backup_type: str = "manual"
+    ) -> bool:
+        """Delete backup."""
+        return await self.backup_handler.delete_backup(backup_name, backup_type)
+
+    async def get_backup_info(
+        self,
+        backup_name: str,
+        backup_type: str = "manual"
+    ) -> Optional[dict]:
+        """Get backup info."""
+        return await self.backup_handler.get_backup_info(backup_name, backup_type)
+
+    async def save_daily_forecast(self, prediction_kwh: float, source: str = "auto_6am") -> bool:
+        """OLD METHOD - redirects to save_forecast_day()."""
+        return await self.save_forecast_day(prediction_kwh, source)
+
+    async def get_current_day_forecast(self) -> Optional[Dict[str, Any]]:
+        """OLD METHOD - returns today block."""
+        try:
+            data = await self.load_daily_forecasts()
+            return data.get("today")
+        except Exception:
+            return None
+
+    async def save_forecast_today(self, prediction_kwh: float, source: str = "ML") -> bool:
+        """OLD METHOD - redirects to save_forecast_day()."""
+        return await self.save_forecast_day(prediction_kwh, source)
+
+    async def save_production_tracking(
+        self,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        duration_seconds: int = 0,
+        duration_formatted: str = "00:00:00",
+        currently_producing: bool = False,
+        last_power_above_10w: Optional[datetime] = None,
+        zero_power_streak_minutes: int = 0
+    ) -> bool:
+        """OLD METHOD - redirects to update_production_time()."""
+        zero_power_since = None
+        if zero_power_streak_minutes > 0 and last_power_above_10w:
+            zero_power_since = last_power_above_10w + timedelta(minutes=zero_power_streak_minutes)
         
+        return await self.update_production_time(
+            active=currently_producing,
+            duration_seconds=duration_seconds,
+            start_time=start_time,
+            end_time=end_time,
+            last_power_above_10w=last_power_above_10w,
+            zero_power_since=zero_power_since
+        )
+
+    async def move_to_history(self) -> bool:
+        """Move finalized today data to history."""
+        try:
+            _LOGGER.info("Moving data to history (stub implementation)")
+            return True
+        except Exception as e:
+            _LOGGER.error(f"Failed to move to history: {e}")
+            return False
+
+    async def calculate_statistics(self) -> bool:
+        """Calculate aggregated statistics."""
+        try:
+            _LOGGER.info("Calculating statistics (stub implementation)")
+            return True
+        except Exception as e:
+            _LOGGER.error(f"Failed to calculate statistics: {e}")
+            return False
+
+    async def save_power_peak(self, power_w: float, timestamp: datetime, is_all_time: bool = False) -> bool:
+        """OLD METHOD - redirects to update_peak_today()."""
+        return await self.update_peak_today(power_w, timestamp)
+
+    async def finalize_current_day(
+        self,
+        actual_yield_kwh: float,
+        actual_consumption_kwh: Optional[float] = None,
+        production_time_today: Optional[str] = None
+    ) -> bool:
+        """OLD METHOD - redirects to finalize_today()."""
+        production_seconds = 0
+        if production_time_today:
+            try:
+                parts = production_time_today.replace("h", "").replace("m", "").split()
+                if len(parts) >= 2:
+                    production_seconds = int(parts[0]) * 3600 + int(parts[1]) * 60
+            except:
+                pass
+        
+        return await self.finalize_today(actual_yield_kwh, actual_consumption_kwh, production_seconds)
+
+    def _deploy_import_tools_sync(self, source_dir, target_dir, marker_file) -> int:
+        """
+        Synchronous helper to deploy import tools.
+        This is a BLOCKING function to be run in an executor.
+
         Returns:
-            True if cleared successfully, False otherwise
+            Number of files copied, or -1 if already deployed, or 0 if no source
+        """
+        import shutil
+
+        files_copied = 0
+
+        # Check if source exists (blocking)
+        if not source_dir.exists():
+            return 0
+
+        # Check if already deployed (blocking)
+        if marker_file.exists():
+            return -1  # Signal "already deployed"
+
+        # Copy all files (blocking)
+        for source_file in source_dir.iterdir():
+            if source_file.is_file():
+                target_file = target_dir / source_file.name
+                shutil.copy2(str(source_file), str(target_file))
+                files_copied += 1
+
+        # Create marker (blocking)
+        marker_file.write_text("Import tools deployed successfully")
+
+        return files_copied
+
+    async def _deploy_import_tools(self) -> None:
+        """
+        Deploy import_tools to the imports directory for beta testers.
+        This makes it easy for users to access historical data import scripts.
         """
         try:
-            state = self._coordinator_state_default.copy()
-            now_local = dt_util.as_local(dt_util.now())
-            state["last_updated"] = now_local.isoformat()
-            
-            success = await self._atomic_write_json(self.coordinator_state_file, state)
-            if success:
-                _LOGGER.debug("Expected daily production cleared from persistent storage")
-            return success
-            
+            from pathlib import Path
+
+            # Source: custom_components/solar_forecast_ml/import_tools/
+            # Target: /config/solar_forecast_ml/imports/
+
+            # Get the integration's base directory
+            integration_dir = Path(__file__).parent.parent
+            source_dir = integration_dir / "import_tools"
+            target_dir = self.data_dir / "imports"
+            marker_file = target_dir / ".import_tools_deployed"
+
+            # Run ALL blocking operations in executor
+            files_copied = await self.hass.async_add_executor_job(
+                self._deploy_import_tools_sync, source_dir, target_dir, marker_file
+            )
+
+            if files_copied == 0:
+                _LOGGER.debug("No import_tools directory found, skipping deployment")
+            elif files_copied == -1:
+                _LOGGER.debug("Import tools already deployed, skipping")
+            else:
+                _LOGGER.info(
+                    f"[OK] Import tools deployed: {files_copied} files copied to "
+                    f"{target_dir.relative_to(self.data_dir.parent)}"
+                )
+
         except Exception as e:
-            _LOGGER.error(f"Failed to clear expected daily production: {e}")
-            return False
+            _LOGGER.warning(f"Failed to deploy import tools: {e}")
+            # Non-critical error, continue initialization

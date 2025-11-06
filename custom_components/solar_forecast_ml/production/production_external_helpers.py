@@ -1,9 +1,5 @@
 """
-Helper module for external sensor displays.
-Common base class and helper functions for external sensors.
-Version 1.1 - by Zara (Bugfix by Gemini)
-
-Copyright (C) 2025 Zara-Toorox
+External Helper Functions for Production
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -20,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from datetime import datetime
 from typing import Optional, Any, Dict
@@ -29,7 +26,7 @@ from homeassistant.core import callback, HomeAssistant, State
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.event import async_track_state_change_event
 
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,12 +37,12 @@ def format_time_ago(last_changed: datetime) -> str:
     Space-saving: <1min = '< 1 min ago' - by Zara
     
     Args:
-        last_changed: Timestamp of the last change
+        last_changed: Timestamp of the last change (LOCAL timezone)
         
     Returns:
         Formatted string like "5 min ago" or "2 h ago"
     """
-    now = dt_util.utcnow()
+    now = dt_util.now() # Use LOCAL time - last_changed is also LOCAL
     delta = now - last_changed
     
     seconds = delta.total_seconds()

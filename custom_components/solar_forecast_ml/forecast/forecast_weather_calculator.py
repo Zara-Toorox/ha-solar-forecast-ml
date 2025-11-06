@@ -1,9 +1,5 @@
 """
-Weather Calculator for Solar Forecast ML.
-Calculates rule-based factors (Temperature, Cloud, Condition, Seasonal)
-for the fallback forecast strategy.
-
-Copyright (C) 2025 Zara-Toorox
+Weather Calculation Utilities
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -20,12 +16,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional # Added Optional
 
 # Use SafeDateTimeUtil for consistent timezone handling
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,7 +92,7 @@ class WeatherCalculator:
                 return 0.85 # Slightly higher than original guess
             elif temperature_c <= self.OPTIMAL_TEMPERATURE_C:
                 # Linear increase in efficiency up to the optimal temperature
-                # Starts at 0.85 at 0ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C, reaches 1.0 at OPTIMAL_TEMPERATURE_C
+                # Starts at 0°C reaches 1.0 at OPTIMAL_TEMPERATURE_C
                 return 0.85 + (temperature_c / self.OPTIMAL_TEMPERATURE_C) * 0.15
             else:
                 # Linear decrease in efficiency above the optimal temperature
@@ -177,17 +174,17 @@ class WeatherCalculator:
             A seasonal multiplier factor (clamped between 0.2 and 1.2).
         """
         try:
-            # Use current UTC time if no specific time is provided
+            # Use current local time if no specific time is provided
             if now is None:
-                now_utc = dt_util.utcnow()
-            # Ensure provided datetime is timezone-aware (assume UTC if naive)
+                now_local = dt_util.now()
+            # Ensure provided datetime is timezone-aware (use local timezone if naive)
             elif now.tzinfo is None:
-                 now_utc = now.replace(tzinfo=timezone.utc)
+                 now_local = dt_util.ensure_local(now)
             else:
-                 now_utc = now.astimezone(timezone.utc)
+                 now_local = dt_util.as_local(now)
 
 
-            month = now_utc.month
+            month = now_local.month
             # Determine season based on month
             season = self.SEASONAL_MONTH_MAPPING.get(month, "autumn") # Default to autumn if month mapping fails
             # Get base factor for the season
@@ -209,9 +206,9 @@ class WeatherCalculator:
     def get_current_season(self, now: Optional[datetime] = None) -> str:
         """Returns the current season name ('winter', 'spring', 'summer', 'autumn')."""
         try:
-            if now is None: now = dt_util.utcnow()
-            elif now.tzinfo is None: now = now.replace(tzinfo=timezone.utc)
-            else: now = now.astimezone(timezone.utc)
+            if now is None: now = dt_util.now()
+            elif now.tzinfo is None: now = dt_util.ensure_local(now)
+            else: now = dt_util.as_local(now)
 
             month = now.month
             return self.SEASONAL_MONTH_MAPPING.get(month, "autumn") # Default to autumn

@@ -15,8 +15,53 @@ reset_model:
     Use with caution.
   fields: {} # No fields required
 
-# Removed services (not implemented or handled differently):
-# install_dependencies: (Handled via UI button/HA core)
-# check_dependencies: (Handled via diagnostic sensors/logs)
-# clear_history: (Can be done by deleting the prediction_history.json file manually if needed)
-# manual_forecast: (Handled via UI button)
+# EMERGENCY SERVICES - Day-End Tasks
+finalize_day:
+  name: Finalize Current Day
+  description: >
+    EMERGENCY: Manually trigger day finalization (normally runs at 23:30).
+    Saves today's forecast and actual values before midnight.
+  fields: {}
+
+move_to_history:
+  name: Move Day to History
+  description: >
+    EMERGENCY: Manually move finalized day to history (normally runs at 23:31).
+    Transfers current day data to historical records.
+  fields: {}
+
+calculate_stats:
+  name: Calculate Statistics
+  description: >
+    EMERGENCY: Manually calculate statistics (normally runs at 23:32).
+    Computes accuracy metrics from historical data.
+  fields: {}
+
+run_all_day_end_tasks:
+  name: Run All Day-End Tasks
+  description: >
+    EMERGENCY: Execute complete day-end sequence (finalize → history → stats).
+    Use before midnight to save today's data!
+  fields: {}
+
+# DEBUGGING SERVICE
+trigger_6am_forecast:
+  name: Trigger 6 AM Forecast Lock
+  description: >
+    DEBUGGING: Manually trigger the 6 AM forecast lock mechanism outside scheduled time.
+    Executes set_expected_daily_production() to test morning forecast logic.
+    Useful for debugging forecast persistence and lock behavior.
+  fields: {}
+
+forecast_day_after_tomorrow:
+  name: Forecast Day After Tomorrow
+  description: >
+    Triggers the forecast for the day after tomorrow and updates the daily_forecasts attribute.
+  fields: {}
+
+collect_hourly_sample:
+  name: Collect Hourly Sample
+  description: >
+    Manually triggers the collection of an hourly sample for ML training.
+    This will collect data for the previous full hour and save it to hourly_samples.json.
+  fields: {}

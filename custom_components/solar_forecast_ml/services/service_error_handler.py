@@ -1,12 +1,12 @@
 """
-Error handling service with circuit breaker pattern for Solar Forecast ML.
+Error Handling Service for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
-This program is distributed in the hope that it is useful,
+This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
@@ -16,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,7 +27,7 @@ from enum import Enum
 from typing import Any, Callable, Coroutine, Optional, Dict # Added Coroutine
 
 # Import specific exception types used
-from ..exceptions import (
+from ..core.core_exceptions import (
     ConfigurationException,
     WeatherAPIException,
     CircuitBreakerOpenException,

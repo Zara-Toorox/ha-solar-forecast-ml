@@ -1,15 +1,14 @@
 """
-Low-level Data I/O for Solar Forecast ML Integration.
-Handles thread-safe file operations (read, write, directories).
+Low-Level Data I/O Operations
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
-This program is distributed in the hope that it is useful,
+This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import asyncio
 import json
 import logging
@@ -34,7 +34,7 @@ from homeassistant.core import HomeAssistant
 # Use constants for versioning, accessible by inheriting classes
 from ..const import DATA_VERSION
 # Import specific exception types
-from ..exceptions import DataIntegrityException, create_context
+from ..core.core_exceptions import DataIntegrityException, create_context
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,9 +49,12 @@ class DateTimeEncoder(json.JSONEncoder):
         if isinstance(obj, (datetime, date)):
             if isinstance(obj, datetime):
                 # CRITICAL FIX: Force all datetimes to LOCAL timezone
-                from ..core.helpers import SafeDateTimeUtil as dt_util
-                obj = dt_util.ensure_local(obj)
-                _LOGGER.debug(f"DateTimeEncoder: Converting datetime to local timezone: {obj.isoformat()}")
+                try:
+                    from ..core.core_helpers import SafeDateTimeUtil as dt_util
+                    obj = dt_util.ensure_local(obj)
+                    _LOGGER.debug(f"DateTimeEncoder: Converting datetime to local timezone: {obj.isoformat()}")
+                except Exception as e:
+                    _LOGGER.warning(f"Failed to convert datetime to local timezone: {e}, using original")
             return obj.isoformat()
         return super().default(obj)
 
@@ -74,9 +77,30 @@ class DataManagerIO:
         self.hass = hass
         self.data_dir = Path(data_dir) # Ensure it's a Path object
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="DataManagerIO")
-        self._file_lock = asyncio.Lock() # Lock for critical read-modify-write sequences
+        # Per-file locks: Each file gets its own lock to prevent unnecessary blocking
+        self._file_locks: Dict[str, asyncio.Lock] = {}
+        self._locks_lock = asyncio.Lock()  # Lock for accessing the locks dictionary
 
         _LOGGER.debug("DataManagerIO initialized for directory: %s", self.data_dir)
+
+    async def _get_file_lock(self, file_path: Path) -> asyncio.Lock:
+        """
+        Get or create a lock for a specific file.
+        Thread-safe access to the locks dictionary.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            asyncio.Lock for the specific file
+        """
+        file_key = str(file_path)  # Use full path as key
+
+        async with self._locks_lock:
+            if file_key not in self._file_locks:
+                self._file_locks[file_key] = asyncio.Lock()
+                _LOGGER.debug(f"Created new file lock for: {file_path.name}")
+            return self._file_locks[file_key]
 
     async def _ensure_directory_exists(self, directory: Path) -> None:
         """
@@ -129,15 +153,19 @@ class DataManagerIO:
         Uses a temporary file and `shutil.move` for atomicity.
         Blocking file operations (move, unlink) are run in the executor.
         """
-        
-        # +++ IMPORT HIER EINGEFÃƒÅ“GT +++
+
+        # +++ IMPORT HIER EINGEF +++
         # Wird erst importiert, wenn die Funktion aufgerufen wird
         try:
             import aiofiles
         except ImportError:
             _LOGGER.error("AIOFiles ist nicht installiert. Dateischreiben fehlgeschlagen.")
             raise DataIntegrityException("AIOFiles dependency missing, cannot write file")
-        # +++ ENDE EINFÃƒÅ“GUNG +++
+        # +++ ENDE EINF +++
+
+        # Ensure parent directory exists
+        parent_dir = file_path.parent
+        await self._ensure_directory_exists(parent_dir)
 
         temp_file = file_path.with_suffix(f'.tmp_{asyncio.current_task().get_name()}') # Unique temp name
         try:
@@ -171,18 +199,38 @@ class DataManagerIO:
             )
         finally:
             # Ensure temp file is removed even if move fails unexpectedly (belt-and-suspenders)
-             if await self._file_exists(temp_file):
-                 try: await self.hass.async_add_executor_job(temp_file.unlink)
-                 except: pass
+            if await self._file_exists(temp_file):
+                try:
+                    await self.hass.async_add_executor_job(temp_file.unlink)
+                except:
+                    pass
 
 
     async def _atomic_write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
         """
         Public, thread-safe method for atomically writing JSON data to a file.
-        Acquires the `_file_lock` before writing.
+        Uses per-file locks to prevent unnecessary blocking between different files.
         """
-        async with self._file_lock:
-            await self._atomic_write_json_unlocked(file_path, data)
+        try:
+            # Get the lock specific to this file
+            file_lock = await self._get_file_lock(file_path)
+
+            # Try to acquire lock with timeout to prevent infinite blocking
+            _LOGGER.debug(f"Waiting for file lock to write {file_path.name}...")
+            async with asyncio.timeout(15.0):  # Increased from 5s to 15s
+                async with file_lock:
+                    _LOGGER.debug(f"File lock acquired for {file_path.name}, writing...")
+                    await self._atomic_write_json_unlocked(file_path, data)
+                    _LOGGER.debug(f"File lock released for {file_path.name}")
+        except asyncio.TimeoutError:
+            _LOGGER.error(
+                f"Timeout acquiring file lock for {file_path.name} after 15 seconds. "
+                f"Another operation may be blocking the lock. This should not happen with per-file locks!"
+            )
+            raise DataIntegrityException(
+                f"Failed to acquire file lock for {file_path.name} - timeout after 15s",
+                context=create_context(file=str(file_path))
+            )
 
     async def _read_json_file(self, file_path: Path, default_structure: Dict | None = None) -> Dict[str, Any]:
         """
@@ -192,14 +240,14 @@ class DataManagerIO:
         Does NOT attempt to write or create files.
         """
         
-        # +++ IMPORT HIER EINGEFÃƒÅ“GT +++
+        # +++ IMPORT HIER EINGEF +++
         try:
             import aiofiles
         except ImportError:
             _LOGGER.error("AIOFiles ist nicht installiert. Dateilesen fehlgeschlagen.")
             if default_structure is None: return {}
             return default_structure
-        # +++ ENDE EINFÃƒÅ“GUNG +++
+        # +++ ENDE EINF +++
 
         if default_structure is None:
             default_structure = {} # Default to empty dict if not specified

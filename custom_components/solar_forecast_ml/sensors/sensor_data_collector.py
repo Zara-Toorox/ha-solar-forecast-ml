@@ -1,6 +1,5 @@
 """
-Sensor Data Collector Module
-Collects and processes configured external sensor data centrally.
+Sensor Data Collection
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 import asyncio # Import asyncio for sleep
 from typing import Any, Dict, Optional

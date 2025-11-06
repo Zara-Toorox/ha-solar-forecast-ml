@@ -216,6 +216,39 @@
       },
       "yield_sensor_state": {
         "name": "Ertragssensor Status"
+      },
+      "max_peak_today": {
+        "name": "Max. Peak Heute"
+      },
+      "max_peak_all_time": {
+        "name": "Max. Peak Rekord"
+      },
+      "forecast_day_after_tomorrow": {
+        "name": "Prognose Übermorgen"
+      },
+      "monthly_yield": {
+        "name": "Monatsertrag"
+      },
+      "monthly_consumption": {
+        "name": "Monatsverbrauch"
+      },
+      "weekly_yield": {
+        "name": "Wochenertrag"
+      },
+      "weekly_consumption": {
+        "name": "Wochenverbrauch"
+      },
+      "avg_yield_7d": {
+        "name": "Ø Ertrag 7 Tage"
+      },
+      "avg_yield_30d": {
+        "name": "Ø Ertrag 30 Tage"
+      },
+      "avg_autarky_month": {
+        "name": "Ø Autarkie Monat"
+      },
+      "avg_accuracy_30d": {
+        "name": "Ø Genauigkeit 30 Tage"
       }
     },
     "button": {

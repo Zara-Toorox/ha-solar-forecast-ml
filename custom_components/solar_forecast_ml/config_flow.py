@@ -1,6 +1,5 @@
 """
-Config flow for the Solar Forecast ML integration.
-Defines the user interface for adding and configuring the integration.
+Configuration Flow for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 from __future__ import annotations
 from typing import Any
 import voluptuous as vol

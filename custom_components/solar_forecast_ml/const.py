@@ -1,7 +1,5 @@
 """
-Constants for the Solar Forecast ML Integration.
-
-Copyright (C) 2025 Zara-Toorox
+Constants for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -18,17 +16,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 from datetime import timedelta
 from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-# [Version Update] Set version numbers to 6.2.1
-VERSION = "6.8.1"
-RELEASE_VERSION = "6.8.1"
-SOFTWARE_VERSION = "6.8.1"
-INTEGRATION_MODEL = "v6.8.1" # Model string might differ based on ML changes
-ML_VERSION = "8.0.0" # Keep ML Model version unless model structure changed significantly
+# [Version Update] Set version numbers to 8.0.2
+VERSION = "8.0.2"
+RELEASE_VERSION = "8.0.2"
+SOFTWARE_VERSION = "8.0.0"
+INTEGRATION_MODEL = "v8.0.2" # Model string might differ based on ML changes
+ML_VERSION = "10.0.0" # Keep ML Model version unless model structure changed significantly
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 
@@ -78,7 +77,7 @@ CONF_NOTIFY_STARTUP = "notify_startup"
 CONF_NOTIFY_FORECAST = "notify_forecast"
 CONF_NOTIFY_LEARNING = "notify_learning"
 CONF_NOTIFY_SUCCESSFUL_LEARNING = "notify_successful_learning"
-CONF_LEARNING_ENABLED = "learning_enabled" # <-- WIEDER HINZUGEFÃƒÆ’Ã…â€œGT
+CONF_LEARNING_ENABLED = "learning_enabled"
 
 # --- Deprecated/Legacy Configuration Keys (Keep for potential migration logic if needed) ---
 # CONF_PANEL_EFFICIENCY = "panel_efficiency" # Might be needed for migration from older versions
@@ -94,7 +93,7 @@ UPDATE_INTERVAL = timedelta(minutes=30) # Default Coordinator update interval
 
 # --- Physical Limits and Units ---
 PEAK_POWER_UNIT = "kW"  # System-wide unit for peak power
-MAX_HOURLY_PRODUCTION_FACTOR = 1.0  # kWh per hour â‰ˆ kWp under perfect conditions
+MAX_HOURLY_PRODUCTION_FACTOR = 1.0  # kWh per hour per kWp under perfect conditions
 # Safety margin for hourly production (20% above theoretical max)
 HOURLY_PRODUCTION_SAFETY_MARGIN = 1.2
 # Fallback max hourly production if peak power not configured (in kWh)
@@ -104,21 +103,48 @@ DEFAULT_MAX_HOURLY_KWH = 3.0
 DAILY_UPDATE_HOUR = 6      # Hour for morning forecast update
 DAILY_VERIFICATION_HOUR = 21 # Hour for evening verification
 
-# --- File Names (Relative to DATA_DIR) ---
-PREDICTION_HISTORY_FILE = "prediction_history.json"
+# --- Directory Structure (Hierarchical) ---
+BASE_DATA_DIR = f"/config/{DOMAIN}"  # Base directory for all integration data
+
+# Subdirectories
+ML_DIR = "ml"                    # Machine Learning models, weights, profiles
+STATS_DIR = "stats"              # Statistics & forecast history
+DATA_DIR = "data"                # Runtime state files
+IMPORTS_DIR = "imports"          # User imports (external forecasts)
+EXPORTS_DIR = "exports"          # User exports (reports, pictures, statistics)
+BACKUPS_DIR = "backups"          # Automatic and manual backups
+ASSETS_DIR = "assets"            # Internal assets (logos, icons)
+DOCS_DIR = "docs"                # Documentation files
+
+# Exports subdirectories
+EXPORTS_REPORTS_DIR = "reports"
+EXPORTS_PICTURES_DIR = "pictures"
+EXPORTS_STATISTICS_DIR = "statistics"
+
+# Backups subdirectories
+BACKUPS_AUTO_DIR = "auto"
+BACKUPS_MANUAL_DIR = "manual"
+
+# --- File Names (Relative paths within subdirectories) ---
+# ML Files
 LEARNED_WEIGHTS_FILE = "learned_weights.json"
 HOURLY_PROFILE_FILE = "hourly_profile.json"
-MODEL_STATE_FILE = "model_state.json"
-# ERROR_LOG_FILE = "error_log.json" # Not used by data_manager, maybe error_handler?
 HOURLY_SAMPLES_FILE = "hourly_samples.json"
-# HOURLY_STATE_FILE = "hourly_state.json" # Not used
+MODEL_STATE_FILE = "model_state.json"
+
+# Stats Files
+DAILY_FORECASTS_FILE = "daily_forecasts.json"  # NEW: Expected daily production history
+PREDICTION_HISTORY_FILE = "prediction_history.json"
+
+# Runtime State Files
+COORDINATOR_STATE_FILE = "coordinator_state.json"
+PRODUCTION_TIME_STATE_FILE = "production_time_state.json"  # NEW: For production time persistence
 
 # --- Data Management Constants ---
-DATA_DIR = f"/config/{DOMAIN}" # Use domain in path for uniqueness
 DATA_VERSION = "1.0" # Version for the data format within JSON files
 MAX_PREDICTION_HISTORY = 365 # Max days of prediction records to keep
 MAX_HOURLY_SAMPLES = 1440 # Max hourly samples (e.g., 60 days * 24 hours)
-MIN_TRAINING_DATA_POINTS = 50 # <-- GEÃƒÆ’Ã¢â‚¬Å¾NDERT (StabilitÃƒÆ’Ã‚Â¤t)
+MIN_TRAINING_DATA_POINTS = 50  # Minimum samples for stable training
 BACKUP_RETENTION_DAYS = 30 # How long to keep backups (if implemented)
 MAX_BACKUP_FILES = 10      # Max number of backup files (if implemented)
 
@@ -163,6 +189,13 @@ BUTTON_MANUAL_LEARNING = "manual_learning" # Changed from retrain_model for cons
 SERVICE_MANUAL_FORECAST = "manual_forecast" # Check services.yaml
 SERVICE_RETRAIN_MODEL = "force_retrain" # Match services.yaml
 SERVICE_RESET_LEARNING_DATA = "reset_model" # Match services.yaml
+SERVICE_FINALIZE_DAY = "finalize_day" # Emergency day-end service
+SERVICE_MOVE_TO_HISTORY = "move_to_history" # Emergency history service
+SERVICE_CALCULATE_STATS = "calculate_stats" # Emergency statistics service
+SERVICE_RUN_ALL_DAY_END_TASKS = "run_all_day_end_tasks" # Emergency complete day-end
+SERVICE_TRIGGER_6AM_FORECAST = "trigger_6am_forecast" # Debugging: manual 6 AM forecast lock
+SERVICE_FORECAST_DAY_AFTER_TOMORROW = "forecast_day_after_tomorrow"
+SERVICE_COLLECT_HOURLY_SAMPLE = "collect_hourly_sample"
 
 # --- Other Constants ---
 ICON_SOLAR = "mdi:solar-power"
@@ -212,6 +245,6 @@ DEVICE_MANUFACTURER = "Zara-Toorox"
 # DEVICE_SW_VERSION = VERSION # Use constant defined above
 
 # --- Sun Calculation Constants ---
-SUN_BUFFER_HOURS = 1.5 # <-- GEÃƒÆ’Ã¢â‚¬Å¾NDERT (Block 4)
+SUN_BUFFER_HOURS = 1.5  # Buffer hours for sun calculations
 FALLBACK_PRODUCTION_START_HOUR = 5
 FALLBACK_PRODUCTION_END_HOUR = 21

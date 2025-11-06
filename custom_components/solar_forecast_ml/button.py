@@ -1,6 +1,5 @@
 """
-Button platform for the Solar Forecast ML integration.
-Provides buttons for manual forecast refresh and ML training.
+Button Platform for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -31,7 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 # Use constants for domain and potentially device info
 from .const import DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, ML_VERSION
-from .core.helpers import SafeDateTimeUtil as dt_util # Keep if used, remove if not
+from .core.core_helpers import SafeDateTimeUtil as dt_util # Keep if used, remove if not
 from .coordinator import SolarForecastMLCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -98,8 +97,22 @@ class ManualForecastButton(ButtonEntity):
         self._attr_device_info = device_info
 
     async def async_press(self) -> None:
-        """Handle the button press: request a coordinator refresh with fresh weather data."""
-        _LOGGER.info("Manual Forecast button pressed - forcing weather update and data refresh.")
+        """Handle the button press: Only create new forecast if NOT locked."""
+        _LOGGER.info("Manual Forecast button pressed - checking lock status...")
+        
+        # Check if today's forecast is already locked
+        current_day = await self.coordinator.data_manager.get_current_day_forecast()
+        
+        if current_day and current_day.get("locked"):
+            _LOGGER.warning(
+                f"Expected daily production already locked for today "
+                f"({current_day.get('date')}) with {current_day.get('prediction_kwh')} kWh. "
+                f"Button has no effect after 06:00 lock."
+            )
+            return  # Exit - button does NOTHING if locked
+        
+        # NOT locked yet - create new forecast
+        _LOGGER.info("No locked forecast found - creating new forecast...")
         
         # Force refresh
         await self.coordinator.force_refresh_with_weather_update()
@@ -109,12 +122,19 @@ class ManualForecastButton(ButtonEntity):
             today_value = self.coordinator.data.get("forecast_today")
             self.coordinator.expected_daily_production = today_value
             
-            # Save to persistent storage
+            # Save to persistent storage (BOTH systems)
+            # OLD system (coordinator_state.json)
             await self.coordinator.data_manager.save_expected_daily_production(today_value)
             
+            # NEW system (daily_forecasts.json) - lock forecast with manual source
+            await self.coordinator.data_manager.save_daily_forecast(
+                prediction_kwh=today_value,
+                source="manual_button"
+            )
+            
             _LOGGER.info(
-                f"Expected daily production updated to {today_value:.2f} kWh after manual forecast "
-                f"(saved to persistent storage)"
+                f"Expected daily production set to {today_value:.2f} kWh "
+                f"(saved to persistent storage, source: manual_button)"
             )
             
             # Force sensor update
@@ -176,7 +196,7 @@ class ManualLearningButton(ButtonEntity):
             # Trigger the training method on the predictor
             _LOGGER.info("Calling ml_predictor.train_model()...")
             result = await ml_predictor.train_model()
-            timestamp = dt_util.utcnow() # Use helper for consistency
+            timestamp = dt_util.now() # LOCAL time for consistency
 
             # Log result and potentially update coordinator state
             if result and result.success:

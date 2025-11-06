@@ -1,0 +1,237 @@
+"""
+Production History Tracking
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import timedelta
+from typing import Optional
+
+from homeassistant.core import HomeAssistant
+
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class ProductionCalculator:
+    """
+    Historical Production Calculator - Simplified Version.
+    
+    REMOVED: Recorder-based peak time calculation (caused blocking).
+    USES: ML-based predictions and fallback values.
+    """
+
+    def __init__(self, hass: HomeAssistant, data_manager):
+        """Initialize the Production Calculator."""
+        self.hass = hass
+        self.data_manager = data_manager
+        _LOGGER.info("ProductionCalculator initialized (Recorder-free mode)")
+
+    async def async_get_peak_production_time(
+        self,
+        power_entity: Optional[str] = None
+    ) -> str:
+        """
+        Calculate peak production time using ML data.
+        Returns default if no ML data available.
+        
+        RECORDER REMOVED: No longer queries Home Assistant database.
+        
+        Args:
+            power_entity: Not used anymore (kept for compatibility)
+            
+        Returns:
+            Peak hour as "HH:00" or "12:00" as fallback
+        """
+        _LOGGER.debug("Peak time calculation: Using ML-based approach (no Recorder)")
+        
+        try:
+            today = dt_util.now().date()
+            hourly_samples = await self.data_manager.get_hourly_samples()
+
+            today_samples = [
+                s for s in hourly_samples
+                if dt_util.parse_datetime(s.get("timestamp")).date() == today
+            ]
+
+            if not today_samples:
+                return "12:00"
+
+            # Find the hour with the maximum production
+            max_production = -1
+            peak_hour = 12
+
+            for sample in today_samples:
+                production = sample.get("actual_kwh")  # FIX: Use 'actual_kwh' key
+                if production is not None and production > max_production:
+                    max_production = production
+                    timestamp = dt_util.parse_datetime(sample.get("timestamp"))
+                    if timestamp:
+                        peak_hour = timestamp.hour
+
+            return f"{peak_hour:02d}:00"
+
+        except Exception as e:
+            _LOGGER.error(f"Error calculating peak production time: {e}")
+            return "12:00"
+
+    async def calculate_yesterday_total_yield(self, yield_entity: str) -> float:
+        """
+        Calculate yesterday's total yield from prediction history.
+        
+        Args:
+            yield_entity: Not used.
+            
+        Returns:
+            Yesterday's actual kWh or 0.0 if not available.
+        """
+        try:
+            yesterday_str = (dt_util.now() - timedelta(days=1)).date().isoformat()
+            prediction = await self.data_manager.get_prediction_for_date(yesterday_str)
+            
+            if prediction and "actual_kwh" in prediction:
+                return prediction["actual_kwh"]
+            
+            _LOGGER.debug("No actual kWh found for yesterday in prediction history.")
+            return 0.0
+            
+        except Exception as e:
+            _LOGGER.error(f"Error calculating yesterday's yield from history: {e}")
+            return 0.0
+
+    async def get_last_7_days_average_yield(self, yield_entity: str) -> float:
+        """
+        Get average yield for the last 7 days from prediction history.
+
+        Args:
+            yield_entity: Not used.
+
+        Returns:
+            Average yield over the last 7 days or 0.0.
+        """
+        try:
+            start_date = (dt_util.now() - timedelta(days=7)).date().isoformat()
+            predictions = await self.data_manager.get_predictions(start_date=start_date)
+
+            total_yield = 0
+            count = 0
+
+            for pred in predictions:
+                if "actual_kwh" in pred:
+                    total_yield += pred["actual_kwh"]
+                    count += 1
+
+            return total_yield / count if count > 0 else 0.0
+
+        except Exception as e:
+            _LOGGER.error(f"Error calculating 7-day average yield: {e}")
+            return 0.0
+
+    async def get_monthly_production_statistics(
+        self,
+        yield_entity: str
+    ) -> dict:
+        """
+        Get monthly production statistics from prediction history.
+
+        Args:
+            yield_entity: Not used.
+
+        Returns:
+            Dictionary with monthly statistics.
+        """
+        try:
+            start_of_month = dt_util.now().replace(day=1).date().isoformat()
+            predictions = await self.data_manager.get_predictions(start_date=start_of_month)
+
+            actuals = [p["actual_kwh"] for p in predictions if "actual_kwh" in p]
+
+            if not actuals:
+                return {
+                    "total_kwh": 0.0,
+                    "average_daily_kwh": 0.0,
+                    "best_day_kwh": 0.0,
+                    "worst_day_kwh": 0.0,
+                    "days_with_data": 0
+                }
+
+            total_kwh = sum(actuals)
+            days_with_data = len(actuals)
+            average_daily_kwh = total_kwh / days_with_data
+            best_day_kwh = max(actuals)
+            worst_day_kwh = min(actuals)
+
+            return {
+                "total_kwh": round(total_kwh, 2),
+                "average_daily_kwh": round(average_daily_kwh, 2),
+                "best_day_kwh": round(best_day_kwh, 2),
+                "worst_day_kwh": round(worst_day_kwh, 2),
+                "days_with_data": days_with_data
+            }
+
+        except Exception as e:
+            _LOGGER.error(f"Error calculating monthly production statistics: {e}")
+            return {
+                "total_kwh": 0.0,
+                "average_daily_kwh": 0.0,
+                "best_day_kwh": 0.0,
+                "worst_day_kwh": 0.0,
+                "days_with_data": 0
+            }
+
+    async def get_historical_average(self) -> Optional[float]:
+        """
+        Get historical average production.
+        
+        RECORDER REMOVED: Returns None (no historical data access).
+        Use ML prediction records or DataManager instead.
+        
+        Returns:
+            None (no historical access)
+        """
+        _LOGGER.debug("Historical average: Not available without Recorder")
+        return None
+
+
+# ============================================================================
+# MIGRATION NOTES:
+# ============================================================================
+#
+# WHAT WAS REMOVED:
+# - _get_state_history() - Blocking Recorder DB access
+# - calculate_peak_production_time() - 14-day history analysis
+# - All HomeAssistant Recorder imports and dependencies
+# - Executor jobs for synchronous history queries
+#
+# WHAT TO USE INSTEAD:
+# - Peak Time: Use ML hourly samples or default 12:00
+# - Historical Data: Use DataManager prediction_history.json
+# - Monthly Stats: Use DataManager get_average_monthly_yield()
+#
+# BENEFITS:
+# - Zero startup blocking
+# - No database load
+# - Faster, more reliable
+# - Independent of Recorder configuration
+#
+# FUTURE ENHANCEMENTS:
+# - Analyze hourly_samples.json for peak time patterns
+# - Use weather_forecast_history.json for correlations
+# - ML-based peak time prediction from training data

@@ -1,6 +1,5 @@
 """
-Sensor platform for Solar Forecast ML integration.
-Platform entry point - delegates to sensor implementations.
+Sensor Platform for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -25,7 +25,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, CONF_DIAGNOSTIC, CONF_HOURLY
 
 # Import core sensors from sensors module
-from .sensors.base import (
+from .sensors.sensor_base import (
     SolarForecastSensor,
     PeakProductionHourSensor,
     ProductionTimeSensor,
@@ -33,10 +33,21 @@ from .sensors.base import (
     AutarkySensor,
     NextHourSensor,
     ExpectedDailyProductionSensor,
+    MaxPeakTodaySensor,
+    MaxPeakAllTimeSensor,
+    ForecastDayAfterTomorrowSensor,
+    MonthlyYieldSensor,
+    MonthlyConsumptionSensor,
+    WeeklyYieldSensor,
+    WeeklyConsumptionSensor,
+    AverageYield7DaysSensor,
+    AverageYield30DaysSensor,
+    AverageAutarkyMonthSensor,
+    AverageAccuracy30DaysSensor,
 )
 
 # Import diagnostic sensors
-from .sensors.diagnostic import (
+from .sensors.sensor_diagnostic import (
     DiagnosticStatusSensor,
     SolarAccuracySensor,
     YesterdayDeviationSensor,
@@ -51,7 +62,7 @@ from .sensors.diagnostic import (
 )
 
 # Import state sensors
-from .sensors.states import (
+from .sensors.sensor_states import (
     ExternalTempSensor,
     ExternalHumiditySensor,
     ExternalWindSensor,
@@ -91,6 +102,17 @@ async def async_setup_entry(
         AverageYieldSensor(coordinator, entry),
         AutarkySensor(coordinator, entry),
         ExpectedDailyProductionSensor(coordinator, entry),
+        MaxPeakTodaySensor(coordinator, entry),
+        MaxPeakAllTimeSensor(coordinator, entry),
+        ForecastDayAfterTomorrowSensor(coordinator, entry),
+        MonthlyYieldSensor(coordinator, entry),
+        MonthlyConsumptionSensor(coordinator, entry),
+        WeeklyYieldSensor(coordinator, entry),
+        WeeklyConsumptionSensor(coordinator, entry),
+        AverageYield7DaysSensor(coordinator, entry),
+        AverageYield30DaysSensor(coordinator, entry),
+        AverageAutarkyMonthSensor(coordinator, entry),
+        AverageAccuracy30DaysSensor(coordinator, entry),
     ]
     
     entities_to_add = core_entities

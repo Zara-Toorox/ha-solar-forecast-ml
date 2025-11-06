@@ -1,8 +1,5 @@
 """
-Typed Data Adapter for Solar Forecast ML Integration.
-Handles conversion between dictionaries and dataclasses defined in ml_types.py.
-
-Copyright (C) 2025 Zara-Toorox
+Data Adapter for Type Conversions
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -19,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -31,7 +29,7 @@ from ..ml.ml_types import (
 # Import constants needed for defaults or validation
 from ..const import DATA_VERSION, ML_MODEL_VERSION, CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX
 # Import SafeDateTimeUtil for timestamps
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,7 +61,7 @@ class TypedDataAdapter:
 
         try:
             # Extract values with defaults for optional/potentially missing fields
-            timestamp = data.get("timestamp", dt_util.utcnow().isoformat())
+            timestamp = data.get("timestamp", dt_util.now().isoformat()) # Fallback to LOCAL time
             predicted = float(data.get("predicted_value", 0.0))
             # Handle actual_value which can be None
             actual_raw = data.get("actual_value")
@@ -137,7 +135,7 @@ class TypedDataAdapter:
             # Metadata with defaults
             accuracy = float(data.get("accuracy", 0.0)) # Default to 0.0 if never trained
             training_samples = int(data.get("training_samples", 0))
-            last_trained = data.get("last_trained", dt_util.utcnow().isoformat()) # Default to now if missing
+            last_trained = data.get("last_trained", dt_util.now().isoformat()) # Fallback to LOCAL time
             model_version = data.get("model_version", ML_MODEL_VERSION)
 
             # Fallback correction factor
@@ -216,7 +214,7 @@ class TypedDataAdapter:
             "feature_importance": weights.feature_importance,
             # Add file format version and update timestamp for traceability
             "file_format_version": DATA_VERSION, # Use const for file format version
-            "last_saved": dt_util.utcnow().isoformat()
+            "last_saved": dt_util.now().isoformat() # LOCAL time for consistency
         }
 
 
@@ -244,7 +242,7 @@ class TypedDataAdapter:
 
             # Metadata
             samples_count = int(data.get("samples_count", 0))
-            last_updated = data.get("last_updated", dt_util.utcnow().isoformat())
+            last_updated = data.get("last_updated", dt_util.now().isoformat()) # Fallback to LOCAL time
             confidence = float(data.get("confidence", 0.1)) # Default to low confidence
 
             # Deprecated fields (load if present, default factory handles if absent)
@@ -300,7 +298,7 @@ class TypedDataAdapter:
             "seasonal_adjustment": profile.seasonal_adjustment,
             # File format info
             "file_format_version": DATA_VERSION,
-            "last_saved": dt_util.utcnow().isoformat()
+            "last_saved": dt_util.now().isoformat() # LOCAL time for consistency
         }
 
 

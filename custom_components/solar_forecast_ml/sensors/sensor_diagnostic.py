@@ -1,6 +1,5 @@
 """
-Diagnostic Sensor platform for Solar Forecast ML Integration.
-Contains sensors for monitoring and troubleshooting.
+Diagnostic Sensors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from datetime import datetime, timedelta # Import timedelta
 from typing import Any, Dict, Optional
@@ -33,9 +33,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 # Import BaseSolarSensor from the base sensor module
-from .base import BaseSolarSensor
+from .sensor_base import BaseSolarSensor
 from ..coordinator import SolarForecastMLCoordinator
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..ml.ml_external_helpers import format_time_ago
 from ..const import UPDATE_INTERVAL, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR
 from ..ml.ml_predictor import ModelState # Import Enum for state mapping
@@ -66,6 +66,7 @@ class DiagnosticStatusSensor(BaseSolarSensor):
         self._attr_unique_id = f"{entry.entry_id}_diagnostic_status" # Changed from _status to avoid clash
         self._attr_translation_key = "diagnostic_status"
         self._attr_icon = "mdi:stethoscope" # More diagnostic icon
+        self._attr_name = "Diagnostic Status"
 
     @property
     def native_value(self) -> str | None:
@@ -86,6 +87,7 @@ class SolarAccuracySensor(BaseSolarSensor):
         self._attr_native_unit_of_measurement = PERCENTAGE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:target-arrow" # More specific icon
+        self._attr_name = "Yesterday Accuracy"
 
     @property
     def native_value(self) -> float | None:
@@ -109,6 +111,7 @@ class YesterdayDeviationSensor(BaseSolarSensor):
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_device_class = None # Avoid conflict with state_class
         self._attr_icon = "mdi:delta"
+        self._attr_name = "Yesterday Deviation"
 
     @property
     def native_value(self) -> float | None:
@@ -129,6 +132,7 @@ class LastCoordinatorUpdateSensor(BaseSolarSensor):
         self._attr_translation_key = "last_update_timestamp"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
         self._attr_icon = "mdi:clock-check-outline" # Changed icon slightly
+        self._attr_name = "Last Update"
 
     @property
     def native_value(self) -> datetime | None: # Use standard datetime hint
@@ -159,50 +163,20 @@ class UpdateAgeSensor(BaseSolarSensor):
         self._attr_unique_id = f"{entry.entry_id}_update_age"
         self._attr_translation_key = "data_age"
         self._attr_icon = "mdi:timer-sand"
+        self._attr_name = "Update Age"
         # No unit, state is a formatted string
 
     @property
     def native_value(self) -> str:
-        """Return the formatted time since the last successful update."""
-        last_update = getattr(self.coordinator, 'last_update_success_time', None)
-        if last_update:
-            # Use utcnow for age calculation
-            return format_time_ago(last_update)
-        elif getattr(self.coordinator, 'last_update', None): # Check if any update attempt was made
-             return "Update Failed"
-        else:
-             return "No data yet"
-
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide age in seconds and a status."""
+        """Return how long ago the last update was, in a human-readable format."""
         last_update = getattr(self.coordinator, 'last_update_success_time', None)
         if not last_update:
-            status = "initializing" if not getattr(self.coordinator, 'last_update', None) else "failed"
-            return {"status": status, "age_seconds": None, "age_minutes": None}
-
-        age_delta = dt_util.utcnow() - last_update # Use utcnow
-        age_seconds = age_delta.total_seconds()
-
-        status = "fresh"
-        # Compare age to the actual update interval being used by coordinator
-        interval_seconds = self.coordinator.update_interval.total_seconds() if self.coordinator.update_interval else UPDATE_INTERVAL.total_seconds()
-        if age_seconds > (interval_seconds * 1.5): # Older than 1.5 intervals
-            status = "stale"
-        if age_seconds > 3600: # Older than 1 hour is definitely outdated
-            status = "outdated"
-
-        return {
-            "age_seconds": int(age_seconds),
-            "age_minutes": round(age_seconds / 60, 1),
-            "status": status,
-            "last_success_iso": last_update.isoformat()
-        }
+            return "Never"
+        return format_time_ago(last_update)
 
 
 class LastMLTrainingSensor(BaseSolarSensor):
-    """Sensor showing the timestamp of the last successful ML model training."""
+    """Sensor showing the timestamp of the last ML model training."""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -211,108 +185,91 @@ class LastMLTrainingSensor(BaseSolarSensor):
         self._attr_unique_id = f"{entry.entry_id}_last_ml_training"
         self._attr_translation_key = "last_ml_training"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
-        self._attr_icon = "mdi:brain"
+        self._attr_icon = "mdi:school-outline" # Training icon
+        self._attr_name = "Last ML Training"
 
     @property
-    def native_value(self) -> datetime | None: # Use standard datetime hint
-        """Return the timestamp of the last successful training."""
-        # Value is directly on the coordinator instance (synced from predictor)
-        return getattr(self.coordinator, 'last_successful_learning', None)
+    def native_value(self) -> datetime | None:
+        """Return the timestamp of the last ML training."""
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
+        if not ml_predictor: return None
+        return getattr(ml_predictor, 'last_training_time', None)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide model state and time since training."""
-        ml_predictor = getattr(getattr(self.coordinator, 'service_manager', {}), 'ml_predictor', None) # Access via service_manager
-        if not ml_predictor:
-            return {
-                "status": "ML unavailable",
-                "model_state": "unavailable",
-                "model_state_text": ML_STATE_TRANSLATIONS["unavailable"],
-                "time_since_training": None,
-                "training_completed": False
-            }
-
-        last_training = getattr(ml_predictor, 'last_training_time', None) # Get directly from predictor
-
-        # Get model state enum and convert its value to string
-        model_state_obj = getattr(ml_predictor, 'model_state', ModelState.UNINITIALIZED)
-        model_state_val = model_state_obj.value if isinstance(model_state_obj, ModelState) else str(model_state_obj)
-
-        attrs = {
-            "status": "ML available",
-            "model_state": model_state_val,
-            "model_state_text": ML_STATE_TRANSLATIONS.get(model_state_val, 'Unknown')
+        """Provide additional context like time ago."""
+        # FIXED: Direct access to ml_predictor instead of service_manager
+        ml_predictor = self.coordinator.ml_predictor
+        last_training = getattr(ml_predictor, 'last_training_time', None) if ml_predictor else None
+        return {
+            "last_training_iso": last_training.isoformat() if last_training else None,
+            "time_ago": format_time_ago(last_training) if last_training else "Never",
         }
-
-        if last_training:
-            attrs["training_completed"] = True
-            attrs["time_since_training"] = format_time_ago(last_training)
-        else:
-            attrs["training_completed"] = False
-            attrs["time_since_training"] = "Never"
-            attrs["note"] = "No training performed yet or ML service recently restarted"
-
-        return attrs
 
 
 class NextScheduledUpdateSensor(BaseSolarSensor):
-    """Sensor showing the time of the next scheduled coordinator update/verification."""
+    """Sensor showing the time of the next scheduled update (evening verify)."""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize the next scheduled update sensor."""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_next_scheduled_task" # Changed ID slightly
-        self._attr_translation_key = "next_scheduled_task"
+        self._attr_unique_id = f"{entry.entry_id}_next_scheduled_update"
+        self._attr_translation_key = "next_scheduled_update"
         self._attr_icon = "mdi:calendar-clock"
-
-    # --- HIER DIE KORREKTUR ---
-    @property
-    def available(self) -> bool:
-        """This sensor is always available as it calculates based on time."""
-        return True
-    # --- ENDE KORREKTUR ---
+        self._attr_name = "Next Scheduled Update"
+        # No device class for now, it's a formatted string
 
     @property
     def native_value(self) -> str:
-        """Return the time string for the next scheduled task."""
-        now_local = dt_util.as_local(dt_util.utcnow()) # Use local time for comparison
+        """Return the time of the next scheduled update in a readable format."""
+        now = dt_util.now()
+        today_update = dt_util.now().replace(hour=DAILY_UPDATE_HOUR, minute=0, second=0, microsecond=0)
+        evening_verify = dt_util.now().replace(hour=DAILY_VERIFICATION_HOUR, minute=0, second=0, microsecond=0)
 
-        # Define scheduled times in local timezone (using constants)
-        morning_update_time = now_local.replace(hour=DAILY_UPDATE_HOUR, minute=0, second=5, microsecond=0) # Add seconds offset
-        evening_verify_time = now_local.replace(hour=DAILY_VERIFICATION_HOUR, minute=0, second=10, microsecond=0) # Add seconds offset
+        # If before today's update, next update is today_update
+        if now < today_update:
+            next_time = today_update
+            event_type = "Morning Forecast"
+        # If before today's verification, next update is evening_verify
+        elif now < evening_verify:
+            next_time = evening_verify
+            event_type = "Evening Verify"
+        # Otherwise, next update is tomorrow's morning update
+        else:
+            next_time = (dt_util.now() + timedelta(days=1)).replace(hour=DAILY_UPDATE_HOUR, minute=0, second=0, microsecond=0)
+            event_type = "Morning Forecast"
 
-        next_tasks = []
-        # Check if morning update is still pending today
-        if now_local < morning_update_time:
-            next_tasks.append(("Morning Update", morning_update_time))
-        # Check if evening verification is still pending today
-        if now_local < evening_verify_time:
-             next_tasks.append(("Evening Verify", evening_verify_time))
-
-        # If both tasks are past for today, the next task is tomorrow morning
-        if not next_tasks:
-             next_morning = morning_update_time + timedelta(days=1)
-             return f"Tomorrow {next_morning.strftime('%H:%M')} (Morning Update)"
-
-        # Find the soonest task for today
-        next_tasks.sort(key=lambda x: x[1]) # Sort by time
-        task_name, task_time = next_tasks[0] # Get the first one
-
-        return f"Today {task_time.strftime('%H:%M')} ({task_name})"
-
+        return f"{next_time.strftime('%H:%M')} ({event_type})"
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide the configured schedule times."""
+        """Provide more details about the schedule."""
+        now = dt_util.now()
+        today_update = dt_util.now().replace(hour=DAILY_UPDATE_HOUR, minute=0, second=0, microsecond=0)
+        evening_verify = dt_util.now().replace(hour=DAILY_VERIFICATION_HOUR, minute=0, second=0, microsecond=0)
+
+        if now < today_update:
+            next_time = today_update
+            event_type = "Morning Forecast"
+        elif now < evening_verify:
+            next_time = evening_verify
+            event_type = "Evening Verify"
+        else:
+            next_time = (dt_util.now() + timedelta(days=1)).replace(hour=DAILY_UPDATE_HOUR, minute=0, second=0, microsecond=0)
+            event_type = "Morning Forecast"
+
         return {
-            "daily_update_time": f"{DAILY_UPDATE_HOUR:02d}:00:05", # Show exact trigger time
-            "daily_verification_time": f"{DAILY_VERIFICATION_HOUR:02d}:00:10", # Show exact trigger time
+            "next_update_time_iso": next_time.isoformat(),
+            "event_type": event_type,
+            "morning_forecast_time": f"{DAILY_UPDATE_HOUR}:00",
+            "evening_verify_time": f"{DAILY_VERIFICATION_HOUR}:00",
         }
 
 
 class MLServiceStatusSensor(BaseSolarSensor):
-    """Sensor reflecting the operational state of the ML Predictor service."""
+    """Sensor showing the status of the ML prediction service."""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -320,40 +277,39 @@ class MLServiceStatusSensor(BaseSolarSensor):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_ml_service_status"
         self._attr_translation_key = "ml_service_status"
-        # Icon updated dynamically
+        self._attr_icon = "mdi:robot-outline"
+        self._attr_name = "ML Service Status"
 
     @property
     def native_value(self) -> str:
-        """Return a human-readable status of the ML service."""
+        """Return the ML service status as a translated string."""
         # FIXED: Direct access to ml_predictor instead of service_manager
         ml_predictor = self.coordinator.ml_predictor
-        if not ml_predictor:
-            dep_ok = getattr(self.coordinator, 'dependencies_ok', False)
-            return "Unavailable (Dependencies Missing)" if not dep_ok else "Unavailable (Init Failed)"
-
-        model_state_obj = getattr(ml_predictor, 'model_state', ModelState.UNINITIALIZED)
-        model_state_val = model_state_obj.value if isinstance(model_state_obj, ModelState) else str(model_state_obj)
-        return ML_STATE_TRANSLATIONS.get(model_state_val, 'Unknown')
+        if not ml_predictor: return ML_STATE_TRANSLATIONS["unavailable"]
+        state_enum = getattr(ml_predictor, 'model_state', None)
+        if state_enum is None:
+            return ML_STATE_TRANSLATIONS["unknown"]
+        state_str = state_enum.value if hasattr(state_enum, 'value') else str(state_enum)
+        return ML_STATE_TRANSLATIONS.get(state_str, ML_STATE_TRANSLATIONS["unknown"])
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide detailed ML service state."""
+        """Provide detailed service status."""
         # FIXED: Direct access to ml_predictor instead of service_manager
         ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor:
-            dep_ok = getattr(self.coordinator, 'dependencies_ok', False)
-            reason = "Dependencies missing" if not dep_ok else "Initialization failed"
-            return {"status": "unavailable", "reason": reason}
+            return {"status": "unavailable"}
 
-        model_state_obj = getattr(ml_predictor, 'model_state', ModelState.UNINITIALIZED)
-        model_state_val = model_state_obj.value if isinstance(model_state_obj, ModelState) else str(model_state_obj)
+        state_enum = getattr(ml_predictor, 'model_state', None)
+        state_str = state_enum.value if hasattr(state_enum, 'value') and state_enum else "unknown"
+        model_loaded = getattr(ml_predictor, 'model_loaded', False)
+        can_predict = getattr(ml_predictor, 'can_predict', False)
 
         return {
-            "status": "available" if model_state_val != "unavailable" else "unavailable",
-            "model_state": model_state_val,
+            "model_state": state_str,
+            "model_loaded": model_loaded,
+            "can_predict": can_predict,
             "training_samples": getattr(ml_predictor, 'training_samples', 0),
-            "model_loaded": getattr(ml_predictor, 'model_loaded', False),
-            "current_accuracy": round(getattr(ml_predictor, 'current_accuracy', 0.0), 4) if getattr(ml_predictor, 'current_accuracy', None) is not None else None,
             "last_training_iso": getattr(ml_predictor, 'last_training_time', None).isoformat() if getattr(ml_predictor, 'last_training_time', None) else None
         }
 
@@ -377,6 +333,7 @@ class MLMetricsSensor(BaseSolarSensor):
         self._attr_unique_id = f"{entry.entry_id}_ml_metrics"
         self._attr_translation_key = "ml_metrics"
         self._attr_icon = "mdi:chart-box-outline"
+        self._attr_name = "ML Metrics"
 
     @property
     def native_value(self) -> str:
@@ -423,6 +380,7 @@ class CoordinatorHealthSensor(BaseSolarSensor):
         self._attr_unique_id = f"{entry.entry_id}_coordinator_health"
         self._attr_translation_key = "coordinator_health"
         self._attr_icon = "mdi:heart-pulse"
+        self._attr_name = "Coordinator Health"
 
     @property
     def native_value(self) -> str:
@@ -434,7 +392,7 @@ class CoordinatorHealthSensor(BaseSolarSensor):
         elif not last_update_success_flag: return "Update Failed"
         if not last_success_time: return "Initializing"
 
-        age_seconds = (dt_util.utcnow() - last_success_time).total_seconds()
+        age_seconds = (dt_util.now() - last_success_time).total_seconds() # LOCAL time - last_success_time is LOCAL
         interval_seconds = self.coordinator.update_interval.total_seconds() if self.coordinator.update_interval else UPDATE_INTERVAL.total_seconds()
 
         if age_seconds < (interval_seconds * 1.5): return "Healthy"
@@ -466,6 +424,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
         self._attr_unique_id = f"{entry.entry_id}_data_files_status"
         self._attr_translation_key = "data_files_status"
         self._attr_icon = "mdi:file-check-outline"
+        self._attr_name = "Data Files Status"
         self._data_manager = getattr(coordinator, 'data_manager', None)
 
     @property

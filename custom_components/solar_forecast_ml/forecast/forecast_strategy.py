@@ -1,6 +1,5 @@
 """
-ML-based Forecast Strategy.
-Uses an MLPredictor instance for Machine Learning predictions.
+Forecast Strategy Implementation
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,14 +16,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 
-from .strategy import ForecastStrategy, ForecastResult
+from .forecast_strategy_base import ForecastStrategy, ForecastResult
 from ..services.service_error_handler import ErrorHandlingService
-from ..exceptions import MLModelException
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_exceptions import MLModelException
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class MLForecastStrategy(ForecastStrategy):
         peak_power_kw = getattr(ml_predictor, 'peak_power_kw', 0.0)
         
         if peak_power_kw > 0:
-            # Max hourly production ÃƒÂ¢Ã¢â‚¬Â°Ã‹â€  peak_power_kw * 1.2 (20% safety margin)
+            # Max hourly production ≈ peak_power_kw * 1.2 (20% safety margin)
             from ..const import HOURLY_PRODUCTION_SAFETY_MARGIN, DEFAULT_MAX_HOURLY_KWH
             self.HOURLY_PREDICTION_MAX_VALUE = peak_power_kw * HOURLY_PRODUCTION_SAFETY_MARGIN
             _LOGGER.debug(f"MLForecastStrategy: Max hourly prediction set to {self.HOURLY_PREDICTION_MAX_VALUE:.2f} kWh "
@@ -107,13 +107,13 @@ class MLForecastStrategy(ForecastStrategy):
     ) -> ForecastResult:
         """
         Calculates the solar forecast using the ML model via the MLPredictor instance,
-        iteriert stuendliche Wettervorhersage.
+        iterates through hourly weather forecast.
 
         Args:
-            hourly_weather_forecast: Liste der verarbeiteten stuendlichen Wettervorhersagen.
-            sensor_data: Dictionary (wird r 'current_yield' Mindest-Check benoetigt).
-            lag_features: Dictionary mit Lag-Features (z.B. 'production_yesterday').
-            correction_factor: Wird von dieser Strategie ignoriert.
+            hourly_weather_forecast: List of processed hourly weather forecasts.
+            sensor_data: Dictionary (needed for 'current_yield' minimum check).
+            lag_features: Dictionary with lag features (e.g. 'production_yesterday').
+            correction_factor: Ignored by this strategy.
 
         Returns:
             A ForecastResult object containing the prediction details.
@@ -131,10 +131,12 @@ class MLForecastStrategy(ForecastStrategy):
         try:
             total_today_kwh = 0.0
             total_tomorrow_kwh = 0.0
+            total_day_after_kwh = 0.0
             
-            now_local = dt_util.as_local(dt_util.utcnow())
+            now_local = dt_util.now() # now() already returns LOCAL time
             today_date = now_local.date()
             tomorrow_date = today_date + timedelta(days=1)
+            day_after_tomorrow_date = today_date + timedelta(days=2)
 
             for hour_data in hourly_weather_forecast:
                 try:
@@ -152,7 +154,7 @@ class MLForecastStrategy(ForecastStrategy):
                     
                     # CRITICAL: Skip hours outside realistic production time
                     # This prevents ML from predicting production during darkness
-                    from ..forecast.orchestrator import ForecastOrchestrator
+                    from ..forecast.forecast_orchestrator import ForecastOrchestrator
                     # We need access to hass for sun.sun check - use simplified check here
                     hour_local = hour_dt_local.hour
                     month = hour_dt_local.month
@@ -195,14 +197,22 @@ class MLForecastStrategy(ForecastStrategy):
                         total_today_kwh += hourly_kwh
                     elif hour_date == tomorrow_date:
                         total_tomorrow_kwh += hourly_kwh
+                    elif hour_date == day_after_tomorrow_date:
+                        total_day_after_kwh += hourly_kwh
                         
                 except Exception as e_inner:
                     _LOGGER.warning(f"ML strategy failed to process hour {hour_data.get('local_hour')}: {e_inner}")
                     continue
 
             total_tomorrow_kwh *= self.TOMORROW_DISCOUNT_FACTOR
+            total_day_after_kwh *= self.TOMORROW_DISCOUNT_FACTOR * 0.95  # Additional discount for day after
             
-            _LOGGER.debug(f"ML (Iterative) iteration complete. Today (raw): {total_today_kwh:.2f} kWh, Tomorrow (raw): {total_tomorrow_kwh:.2f} kWh")
+            _LOGGER.debug(
+                f"ML (Iterative) iteration complete. "
+                f"Today (raw): {total_today_kwh:.2f} kWh, "
+                f"Tomorrow (raw): {total_tomorrow_kwh:.2f} kWh, "
+                f"Day After (raw): {total_day_after_kwh:.2f} kWh"
+            )
 
             try:
                 current_yield = sensor_data.get("current_yield")
@@ -218,9 +228,9 @@ class MLForecastStrategy(ForecastStrategy):
                         adjusted_today_forecast = current_yield_float + additional_forecast
                         
                         _LOGGER.info(
-                            f"Mindest-Prognose Anpassung (ML): Aktueller Ertrag {current_yield_float:.2f} kWh > "
-                            f"Ürspuengliche Prognose {total_today_kwh:.2f} kWh. "
-                            f"Angepasst auf {adjusted_today_forecast:.2f} kWh."
+                            f"Minimum forecast adjustment (ML): Current yield {current_yield_float:.2f} kWh > "
+                            f" Forecast {total_today_kwh:.2f} kWh. "
+                            f"Adjusted to {adjusted_today_forecast:.2f} kWh."
                         )
                         
                         original_today_forecast = total_today_kwh
@@ -229,23 +239,27 @@ class MLForecastStrategy(ForecastStrategy):
                         if original_today_forecast > 0:
                             adjustment_ratio = total_today_kwh / original_today_forecast
                             total_tomorrow_kwh = total_tomorrow_kwh * adjustment_ratio
+                            total_day_after_kwh = total_day_after_kwh * adjustment_ratio
                             
             except Exception as e:
-                _LOGGER.debug(f"Mindest-Prognose Check (ML) konnte nicht durchgefuehrt werden: {e}")
+                _LOGGER.debug(f"Minimum forecast check (ML) could not be performed: {e}")
 
 
             model_accuracy = getattr(self.ml_predictor, 'current_accuracy', 0.0)
             
             confidence_today = max(0.0, min(100.0, (model_accuracy or 0.0) * 100.0))
             confidence_tomorrow = max(0.0, min(100.0, confidence_today * 0.95))
+            confidence_day_after = max(0.0, min(100.0, confidence_tomorrow * 0.90))
             
             feature_count = len(self.ml_predictor.feature_engineer.feature_names) if self.ml_predictor.feature_engineer else 0
 
             result = ForecastResult(
                 forecast_today=total_today_kwh,
                 forecast_tomorrow=total_tomorrow_kwh,
+                forecast_day_after_tomorrow=total_day_after_kwh,
                 confidence_today=confidence_today,
                 confidence_tomorrow=confidence_tomorrow,
+                confidence_day_after=confidence_day_after,
                 method="ml_iterative",
                 calibrated=True,
                 features_used=feature_count,
@@ -254,8 +268,10 @@ class MLForecastStrategy(ForecastStrategy):
 
             accuracy_str = f", model_acc={result.model_accuracy:.3f}" if result.model_accuracy is not None else ""
             _LOGGER.info(
-                f"ML (Iterative) Forecast successful: Today={result.forecast_today:.2f} kWh, "
+                f"ML (Iterative) Forecast successful: "
+                f"Today={result.forecast_today:.2f} kWh, "
                 f"Tomorrow={result.forecast_tomorrow:.2f} kWh, "
+                f"Day After={result.forecast_day_after_tomorrow:.2f} kWh, "
                 f"Confidence={result.confidence_today:.1f}%, Method='{result.method}'{accuracy_str}"
             )
 

@@ -1,7 +1,5 @@
 """
-Weather service for Solar Forecast ML integration.
-Fetches and processes data from Home Assistant weather entities.
-NON-BLOCKING DESIGN: Uses cached forecast from file if live data unavailable.
+Weather Data Provider for Forecasting
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -18,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,8 +26,8 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from ..exceptions import ConfigurationException, WeatherAPIException
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_exceptions import ConfigurationException, WeatherAPIException
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,8 +75,8 @@ class WeatherService:
 
         state = self.hass.states.get(self.weather_entity)
         if state is None:
-            _LOGGER.warning(
-                f"Weather Entity {self.weather_entity} currently not available. "
+            _LOGGER.info(
+                f"Weather Entity {self.weather_entity} not available yet (normal during startup). "
                 f"Will use cached forecast if available."
             )
         else:
@@ -94,7 +93,7 @@ class WeatherService:
             # Load cached forecast from file (instant)
             cache_loaded = False
             if self.data_manager:
-                cached = await self.data_manager.load_weather_forecast_cache()
+                cached = await self.data_manager.load_weather_cache()
                 if cached:
                     self._cached_forecast = cached.get("forecast_hours", [])
                     quality = cached.get("data_quality", {})
@@ -124,7 +123,7 @@ class WeatherService:
                         },
                         "is_dummy": True
                     }
-                    await self.data_manager.save_weather_forecast_cache(cache_wrapper)
+                    await self.data_manager.save_weather_cache(cache_wrapper)
                     _LOGGER.info(f"Saved dummy forecast to cache: {len(self._cached_forecast)} hours")
             
             # Setup event listener for weather entity state changes
@@ -176,7 +175,7 @@ class WeatherService:
                             "total_hours": len(result)
                         }
                     }
-                    await self.data_manager.save_weather_forecast_cache(cache_wrapper)
+                    await self.data_manager.save_weather_cache(cache_wrapper)
                     _LOGGER.debug(f"Saved {len(result)} forecast hours to cache (today: {today_hours}h, tomorrow: {tomorrow_hours}h)")
                 
                 self._cached_forecast = result
@@ -209,7 +208,7 @@ class WeatherService:
         
         # Load from file as last resort
         if self.data_manager:
-            cached = await self.data_manager.load_weather_forecast_cache()
+            cached = await self.data_manager.load_weather_cache()
             if cached:
                 forecast = cached.get("forecast_hours", [])
                 self._cached_forecast = forecast
@@ -221,7 +220,7 @@ class WeatherService:
 
     async def _fetch_and_process_forecast(self) -> List[Dict[str, Any]]:
         """Fetch raw forecast and process it."""
-        raw_forecast = await self.get_forecast(hours=48)
+        raw_forecast = await self.get_forecast(hours=72)
         if not raw_forecast:
             return []
 
@@ -292,18 +291,79 @@ class WeatherService:
                 # Continue running despite errors
 
     async def get_current_weather(self) -> dict[str, Any]:
-        """Get current weather data from Home Assistant Weather Entity."""
+        """Get current weather data from Home Assistant Weather Entity with cache fallback."""
         try:
-            return await self._get_ha_weather()
+            current = await self._get_ha_weather()
+            
+            # Save to cache for future fallback
+            if self.data_manager:
+                try:
+                    await self._update_current_weather_cache(current)
+                except Exception as cache_err:
+                    _LOGGER.debug(f"Failed to cache current weather: {cache_err}")
+            
+            return current
+            
         except ConfigurationException as err:
             _LOGGER.error("Current Weather retrieval failed (Config): %s", err)
             raise
         except WeatherAPIException as err:
-            _LOGGER.error("Current Weather retrieval failed (API/Data): %s", err)
-            raise
+            _LOGGER.info("Could not fetch live weather data, using fallback. Reason: %s", err)
+            
+            # Try cache fallback
+            cached = await self._get_cached_current_weather()
+            if cached:
+                _LOGGER.debug("Using cached current weather as fallback")
+                return cached
+            
+            # Last resort: default data
+            _LOGGER.warning("Using default weather data as fallback")
+            return DEFAULT_WEATHER_DATA.copy()
+            
         except Exception as err:
             _LOGGER.error("Unexpected error in get_current_weather: %s", err, exc_info=True)
-            raise WeatherAPIException(f"Unexpected weather retrieval error: {err}")
+            
+            # Try cache fallback even on unexpected errors
+            cached = await self._get_cached_current_weather()
+            if cached:
+                _LOGGER.info("Using cached current weather after unexpected error")
+                return cached
+            
+            return DEFAULT_WEATHER_DATA.copy()
+
+    async def _update_current_weather_cache(self, current_weather: dict[str, Any]) -> None:
+        """Update current weather in cache file."""
+        if not self.data_manager:
+            return
+        
+        # Load existing cache
+        cache = await self.data_manager.load_weather_cache()
+        if not cache:
+            cache = {}
+        
+        # Update current_weather section
+        cache["current_weather"] = {
+            **current_weather,
+            "cached_at": dt_util.now().isoformat()
+        }
+        
+        # Save back
+        await self.data_manager.save_weather_cache(cache)
+
+    async def _get_cached_current_weather(self) -> Optional[dict[str, Any]]:
+        """Get cached current weather from file."""
+        if not self.data_manager:
+            return None
+        
+        cache = await self.data_manager.load_weather_cache()
+        if not cache or "current_weather" not in cache:
+            return None
+        
+        cached_weather = cache["current_weather"].copy()
+        # Remove cached_at from returned data
+        cached_weather.pop("cached_at", None)
+        
+        return cached_weather
 
     async def _get_ha_weather(self) -> dict[str, Any]:
         """Get weather data from Home Assistant Weather Entity."""
@@ -337,7 +397,7 @@ class WeatherService:
         }
 
         _LOGGER.debug(
-            f"Current weather: {weather_data['temperature']}°C, "
+            f"Current weather: {weather_data['temperature']} "
             f"{weather_data['cloud_cover']}% clouds, {weather_data['condition']}"
         )
         return weather_data

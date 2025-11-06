@@ -1,6 +1,5 @@
 """
-Training Logic for ML Model using Ridge Regression.
-Includes hyperparameter tuning via validation split.
+Machine Learning Model Trainer
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -16,14 +15,14 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
-
 """
+
 import logging
 from typing import Dict, List, Tuple, Optional, Any
 
 # Import specific exception type
-from ..exceptions import MLModelException
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_exceptions import MLModelException
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 # Lazy import NumPy
 _np: Optional[Any] = None
@@ -88,7 +87,7 @@ class RidgeTrainer:
             ImportError: If NumPy is not available.
         """
         _LOGGER.info(f"Starting Ridge Regression training with {len(y_train)} samples.")
-        training_start_time = dt_util.utcnow() # Assuming dt_util is available or use time.time()
+        training_start_time = dt_util.now() # Use LOCAL time for consistency
 
         try:
             np = _ensure_numpy() # Ensure NumPy is loaded
@@ -165,13 +164,13 @@ class RidgeTrainer:
                         # Calculate R-squared score (Coefficient of Determination)
                         if ss_tot_val > 1e-8: # Avoid division by zero if all validation targets are the same
                             r_squared_val = 1.0 - (ss_res_val / ss_tot_val)
-                            _LOGGER.debug(f"  Lambda={lambda_val:.3f}, Validation RÂ²={r_squared_val:.4f}")
+                            _LOGGER.debug(f"  Lambda={lambda_val:.3f}, Validation R2={r_squared_val:.4f}")
                             # Update best lambda if this score is better
                             if r_squared_val > best_validation_score:
                                 best_validation_score = r_squared_val
                                 best_lambda_found = lambda_val
                         else:
-                            _LOGGER.debug(f"  Lambda={lambda_val:.3f}, Validation TSS is near zero, skipping RÂ².")
+                            _LOGGER.debug(f"  Lambda={lambda_val:.3f}, Validation TSS is near zero, skipping R2 calculation")
 
 
                     except np.linalg.LinAlgError:
@@ -216,8 +215,8 @@ class RidgeTrainer:
                  final_accuracy = 0.0
                  if ss_tot_full > 1e-8:
                      r_squared_full = 1.0 - (ss_res_full / ss_tot_full)
-                     # Clamp R-squared: Handle cases where model fits worse than mean (RÂ² < 0)
-                     # or perfect fit issues (RÂ² slightly > 1 due to float precision)
+                     # Clamp R-squared: Handle cases where model fits worse than mean (R < 0)
+                     # or perfect fit issues (R slightly > 1 due to float precision)
                      final_accuracy = max(0.0, min(1.0, r_squared_full))
                      _LOGGER.debug(f"Training R-squared (raw)={r_squared_full:.4f}, Clamped Accuracy={final_accuracy:.4f}")
                  else:
@@ -238,7 +237,7 @@ class RidgeTrainer:
 
                  # Store the best lambda found
                  self.best_lambda = best_lambda_found
-                 training_end_time = dt_util.utcnow()
+                 training_end_time = dt_util.now()
                  duration = (training_end_time - training_start_time).total_seconds()
 
                  _LOGGER.info(f"Ridge Training completed in {duration:.2f}s. "

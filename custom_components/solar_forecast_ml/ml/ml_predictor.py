@@ -1,6 +1,5 @@
 """
-ML Predictor for the Solar Forecast ML Integration.
-Handles model training, prediction, and hourly data sampling.
+Machine Learning Predictor
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -26,9 +25,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 # Lazy import NumPy
-if TYPE_CHECKING:
-    import numpy as np
-_np = None
+# if TYPE_CHECKING:
+#     import numpy as np
+# _np = None
 
 from homeassistant.core import HomeAssistant, callback 
 from homeassistant.helpers.event import async_track_time_change, async_call_later
@@ -39,14 +38,17 @@ from ..const import (
     CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX
 )
 from ..data.data_manager import DataManager
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..ml.ml_types import (
     LearnedWeights, HourlyProfile,
     create_default_learned_weights, create_default_hourly_profile
 )
 from ..data.data_adapter import TypedDataAdapter
 from ..services.service_error_handler import ErrorHandlingService
-from ..exceptions import MLModelException, ErrorSeverity, DataIntegrityException
+from ..core.core_exceptions import MLModelException, ErrorSeverity, DataIntegrityException
+
+# Lazy import NumPy
+_np = None
 
 # Import ML components
 from ..ml.ml_scaler import StandardScaler
@@ -293,8 +295,17 @@ class MLPredictor:
             asyncio.create_task(self._load_historical_cache())
 
             # 5. Schedule Background Tasks
+            _LOGGER.info("=== Scheduling background tasks ===")
+            
             self._schedule_hourly_sampling()
+            _LOGGER.info("[OK] Hourly sampling scheduled (triggers at XX:02)")
+
             self._schedule_daily_training_check()
+            _LOGGER.info("[OK] Daily training check scheduled")
+            
+            # Log current status
+            samples_count = await self._check_training_data_availability()
+            _LOGGER.info(f"Current hourly samples available: {samples_count}")
 
             _LOGGER.info("ML Predictor initialized successfully.")
             init_success = True
@@ -315,8 +326,9 @@ class MLPredictor:
         """Loads historical production data into memory for lag feature calculation."""
         _LOGGER.debug("Loading historical production cache...")
         try:
-            # Load hourly samples, as these contain the most accurate data
-            samples_data = await self.data_manager.get_hourly_samples(days=60) # Load last 60 days
+            # Load hourly samples from last 60 days, as these contain the most accurate data
+            start_date = (dt_util.now() - timedelta(days=60)).date().isoformat()
+            samples_data = await self.data_manager.get_hourly_samples(start_date=start_date)
             # FIX: get_hourly_samples returns List[Dict], not Dict
             records = samples_data if isinstance(samples_data, list) else []
 
@@ -790,7 +802,10 @@ class MLPredictor:
     async def _check_training_data_availability(self) -> int:
         """Checks how many valid hourly samples are available for training."""
         try:
-            records_data = await self.data_manager.get_hourly_samples(days=60)
+            # Load samples from last 60 days
+            from ..core.core_helpers import SafeDateTimeUtil as dt_util
+            start_date = (dt_util.now() - timedelta(days=60)).date().isoformat()
+            records_data = await self.data_manager.get_hourly_samples(start_date=start_date)
             records = records_data if isinstance(records_data, list) else []
             # Count all samples with valid actual_kwh (including zeros - night hours are valid!)
             valid_count = sum(1 for r in records 
@@ -813,17 +828,30 @@ class MLPredictor:
     @callback 
     async def _hourly_learning_callback(self, now_local: datetime) -> None:
         """Callback triggered every hour to collect the sample for the previous hour."""
-        previous_hour_dt = now_local - timedelta(hours=1)
-        hour_to_collect = previous_hour_dt.hour 
-        _LOGGER.debug(f"Hourly callback triggered at {now_local.strftime('%H:%M:%S')}. Requesting sample collection for hour {hour_to_collect} (local).")
+        hour_to_collect_dt = now_local - timedelta(hours=1)
         
-        task = asyncio.create_task(self.sample_collector.collect_sample(hour_to_collect))
+        _LOGGER.info(
+            f"=== Hourly sampling triggered at {now_local.strftime('%H:%M:%S')} for hour {hour_to_collect_dt.hour} ==="
+        )
+        
+        # Check if sample collector is available
+        if not hasattr(self, 'sample_collector') or self.sample_collector is None:
+            _LOGGER.error("[X] Sample collector not initialized!")
+            return
+            
+        _LOGGER.debug(f"Sample collector ready: {type(self.sample_collector).__name__}")
+        
+        task = asyncio.create_task(self.sample_collector.collect_sample(hour_to_collect_dt))
         
         def _handle_task_error(task):
             try:
-                task.result()
+                result = task.result()
+                _LOGGER.info(f"[OK] Sample collection completed for hour {hour_to_collect_dt.hour}")
             except Exception as e:
-                _LOGGER.error(f"Error during hourly sample collection for hour {hour_to_collect}: {e}", exc_info=True)
+                _LOGGER.error(
+                    f"[X] Error during hourly sample collection for hour {hour_to_collect_dt.hour}: {e}",
+                    exc_info=True
+                )
         
         task.add_done_callback(_handle_task_error)
 

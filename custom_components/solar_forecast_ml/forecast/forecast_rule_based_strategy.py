@@ -1,9 +1,5 @@
 """
-Rule-based Forecast Strategy (Fallback) for Solar Forecast ML.
-Uses simple rules based on weather factors for predictions
-when the ML model is unavailable or fails.
-
-Copyright (C) 2025 Zara-Toorox
+Rule-Based Forecast Strategy
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -20,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 import math
 from typing import Any, Dict, Optional, List
@@ -27,9 +24,9 @@ from datetime import datetime, timedelta
 
 from homeassistant.util import dt as dt_util
 
-from .strategy import ForecastStrategy, ForecastResult
-from .weather_calculator import WeatherCalculator
-from ..core.helpers import SafeDateTimeUtil as dt_util_safe
+from .forecast_strategy_base import ForecastStrategy, ForecastResult
+from .forecast_weather_calculator import WeatherCalculator
+from ..core.core_helpers import SafeDateTimeUtil as dt_util_safe
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,7 +38,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
     derived from weather factors (temperature, clouds, condition) and a
     learned correction factor.
     
-    Berechnet eine iterative stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Prognose fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r alle 24 Stunden.
+    Calculates iterative hourly forecast for all 72 hours.
     """
 
     def __init__(
@@ -86,13 +83,13 @@ class RuleBasedForecastStrategy(ForecastStrategy):
     ) -> ForecastResult:
         """
         Calculates a forecast using simple weather rules combined with a learned
-        correction factor, iteriert ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ber die stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage.
+        correction factor, iterates through hourly weather forecast.
 
         Args:
-            hourly_weather_forecast: Liste der verarbeiteten stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndlichen Wettervorhersagen.
+            hourly_weather_forecast: List of processed hourly weather forecasts.
             sensor_data: Dictionary containing other relevant data (e.g., 'solar_capacity').
             correction_factor: A learned multiplier to adjust the rule-based estimate.
-            **kwargs: Ignoriert 'lag_features'.
+            **kwargs: Ignores 'lag_features'.
 
         Returns:
             A ForecastResult object.
@@ -111,10 +108,12 @@ class RuleBasedForecastStrategy(ForecastStrategy):
 
             total_today_kwh = 0.0
             total_tomorrow_kwh = 0.0
+            total_day_after_kwh = 0.0
             
-            now_local = dt_util_safe.as_local(dt_util_safe.utcnow())
+            now_local = dt_util_safe.now()
             today_date = now_local.date()
             tomorrow_date = today_date + timedelta(days=1)
+            day_after_tomorrow_date = today_date + timedelta(days=2)
 
             for hour_data in hourly_weather_forecast:
                 try:
@@ -154,18 +153,30 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         total_today_kwh += hourly_kwh
                     elif hour_date == tomorrow_date:
                         total_tomorrow_kwh += hourly_kwh
+                    elif hour_date == day_after_tomorrow_date:
+                        total_day_after_kwh += hourly_kwh
                         
                 except Exception as e_inner:
                     _LOGGER.warning(f"Failed to process hour {hour_data.get('local_hour')}: {e_inner}")
                     continue
             
-            _LOGGER.debug(f"Rule-based iteration complete. Today (raw): {total_today_kwh:.2f} kWh, Tomorrow (raw): {total_tomorrow_kwh:.2f} kWh")
+            _LOGGER.debug(
+                f"Rule-based iteration complete. "
+                f"Today (raw): {total_today_kwh:.2f} kWh, "
+                f"Tomorrow (raw): {total_tomorrow_kwh:.2f} kWh, "
+                f"Day After (raw): {total_day_after_kwh:.2f} kWh"
+            )
+
+            # Apply discount factors for future days, similar to ML strategy
+            total_tomorrow_kwh *= self.TOMORROW_DISCOUNT_FACTOR
+            total_day_after_kwh *= self.TOMORROW_DISCOUNT_FACTOR * 0.95
 
             min_forecast_kwh = 0.0
             max_realistic_kwh = base_capacity_kwp * self.MAX_REALISTIC_DAILY_KWH_PER_KWP
             
             today_forecast_kwh = max(min_forecast_kwh, min(total_today_kwh, max_realistic_kwh))
             tomorrow_forecast_kwh = max(min_forecast_kwh, min(total_tomorrow_kwh, max_realistic_kwh))
+            day_after_forecast_kwh = max(min_forecast_kwh, min(total_day_after_kwh, max_realistic_kwh))
 
             try:
                 current_yield = sensor_data.get("current_yield")
@@ -186,9 +197,9 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         adjusted_today_forecast = current_yield_float + additional_forecast
                         
                         _LOGGER.info(
-                            f"Mindest-Prognose Anpassung (Regel): Aktueller Ertrag {current_yield_float:.2f} kWh > "
-                            f"UrsprÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ngliche Prognose {today_forecast_kwh:.2f} kWh. "
-                            f"Angepasst auf {adjusted_today_forecast:.2f} kWh."
+                            f"Minimum forecast adjustment (Rule): Current yield {current_yield_float:.2f} kWh > "
+                            f"Original forecast {today_forecast_kwh:.2f} kWh. "
+                            f"Adjusted to {adjusted_today_forecast:.2f} kWh."
                         )
                         
                         original_today_forecast = today_forecast_kwh
@@ -197,21 +208,25 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         if original_today_forecast > 0:
                             adjustment_ratio = today_forecast_kwh / original_today_forecast
                             tomorrow_forecast_kwh = tomorrow_forecast_kwh * adjustment_ratio
+                            day_after_forecast_kwh = day_after_forecast_kwh * adjustment_ratio
                             
             except Exception as e:
-                _LOGGER.debug(f"Mindest-Prognose Check (Regel) konnte nicht durchgefÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼hrt werden: {e}")
+                _LOGGER.debug(f"Minimum forecast check (Rule) could not be performed: {e}")
 
             correction_deviation = abs(1.0 - correction_factor)
             confidence_base = max(0.0, 1.0 - correction_deviation * 0.5)
             confidence_today = max(30.0, min(95.0, confidence_base * 85.0))
             confidence_tomorrow = confidence_today * 0.9
+            confidence_day_after = confidence_tomorrow * 0.85
 
 
             result = ForecastResult(
                 forecast_today=today_forecast_kwh,
                 forecast_tomorrow=tomorrow_forecast_kwh,
+                forecast_day_after_tomorrow=day_after_forecast_kwh,
                 confidence_today=confidence_today,
                 confidence_tomorrow=confidence_tomorrow,
+                confidence_day_after=confidence_day_after,
                 method="rule_based_iterative",
                 calibrated=True,
                 base_capacity=base_capacity_kwp,
@@ -219,8 +234,10 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             )
 
             _LOGGER.info(
-                f"Rule-based (Iterative) Forecast successful: Today={result.forecast_today:.2f} kWh, "
+                f"Rule-based (Iterative) Forecast successful: "
+                f"Today={result.forecast_today:.2f} kWh, "
                 f"Tomorrow={result.forecast_tomorrow:.2f} kWh, "
+                f"Day After={result.forecast_day_after_tomorrow:.2f} kWh, "
                 f"Confidence={result.confidence_today:.1f}%, "
                 f"(CorrectionFactor={correction_factor:.2f})"
             )
@@ -237,8 +254,10 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             return ForecastResult(
                 forecast_today=emergency_yield,
                 forecast_tomorrow=emergency_yield * 0.9,
+                forecast_day_after_tomorrow=emergency_yield * 0.8,
                 confidence_today=20.0,
                 confidence_tomorrow=15.0,
+                confidence_day_after=10.0,
                 method="emergency_fallback_rule",
                 calibrated=False,
                 base_capacity=fallback_capacity
@@ -246,8 +265,8 @@ class RuleBasedForecastStrategy(ForecastStrategy):
 
     def _get_hour_factor(self, hour: int) -> float:
         """
-        Berechnet einen Faktor (0.0 bis 1.0) basierend auf der Sonnenkurve (Sinus)
-        fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r eine gegebene Stunde. Nachtstunden (22-5) erhalten Faktor 0.
+        Calculates a factor (0.0 to 1.0) based on sun curve (sine)
+        for a given hour. Night hours (22-5) get factor 0.
         """
         try:
             if hour >= 22 or hour <= 5:

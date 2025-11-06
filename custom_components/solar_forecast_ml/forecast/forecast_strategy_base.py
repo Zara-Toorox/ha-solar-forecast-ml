@@ -1,8 +1,5 @@
 """
-Abstract Base Strategy and Result Dataclass for Forecast calculations
-in the Solar Forecast ML integration. Defines the common interface.
-
-Copyright (C) 2025 Zara-Toorox
+Base Strategy Interface for Forecasting
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -19,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field # Import field
 from typing import Any, Dict, Optional
@@ -36,8 +34,10 @@ class ForecastResult:
     # Core forecast values
     forecast_today: float        # Predicted energy for today (e.g., kWh)
     forecast_tomorrow: float     # Predicted energy for tomorrow (e.g., kWh)
+    forecast_day_after_tomorrow: float  # Predicted energy for day after tomorrow (e.g., kWh)
     confidence_today: float    # Confidence score for today's forecast (percentage, 0-100)
     confidence_tomorrow: float # Confidence score for tomorrow's forecast (percentage, 0-100)
+    confidence_day_after: float # Confidence score for day after tomorrow's forecast (percentage, 0-100)
 
     # Metadata about the forecast generation
     method: str                # Identifier for the strategy used (e.g., "ml_model", "rule_based")
@@ -54,9 +54,11 @@ class ForecastResult:
          # Ensure forecasts are non-negative
          self.forecast_today = max(0.0, self.forecast_today)
          self.forecast_tomorrow = max(0.0, self.forecast_tomorrow)
+         self.forecast_day_after_tomorrow = max(0.0, self.forecast_day_after_tomorrow)
          # Clamp confidence to 0-100 range
          self.confidence_today = max(0.0, min(100.0, self.confidence_today))
          self.confidence_tomorrow = max(0.0, min(100.0, self.confidence_tomorrow))
+         self.confidence_day_after = max(0.0, min(100.0, self.confidence_day_after))
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -67,8 +69,10 @@ class ForecastResult:
         result = {
             "forecast_today": round(self.forecast_today, 2),
             "forecast_tomorrow": round(self.forecast_tomorrow, 2),
+            "forecast_day_after_tomorrow": round(self.forecast_day_after_tomorrow, 2),
             "confidence_today": round(self.confidence_today, 1),
             "confidence_tomorrow": round(self.confidence_tomorrow, 1),
+            "confidence_day_after": round(self.confidence_day_after, 1),
             # Include metadata keys for diagnostics/internal use
             "_method": self.method,
             "_calibrated": self.calibrated,
@@ -184,7 +188,8 @@ class ForecastStrategy(ABC):
         self._logger.info(
             f"Forecast calculated using '{self.name}': "
             f"Today={result.forecast_today:.2f} kWh ({result.confidence_today:.1f}%), "
-            f"Tomorrow={result.forecast_tomorrow:.2f} kWh ({result.confidence_tomorrow:.1f}%)"
+            f"Tomorrow={result.forecast_tomorrow:.2f} kWh ({result.confidence_tomorrow:.1f}%), "
+            f"Day After={result.forecast_day_after_tomorrow:.2f} kWh ({result.confidence_day_after:.1f}%)"
         )
         if details:
             self._logger.debug(f"  Calculation details: {details}")

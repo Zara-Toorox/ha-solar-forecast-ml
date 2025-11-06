@@ -1,20 +1,29 @@
 """
-Prediction Strategies using the Strategy Pattern.
-
-Copyright (C) 2025 Zara-Toorox
+ML Prediction Strategy Implementations
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
 """
+
 import math
 import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from dataclasses import dataclass
 from ..ml.ml_types import LearnedWeights, HourlyProfile
-from ..exceptions import MLModelException
+from ..core.core_exceptions import MLModelException
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +61,7 @@ class MLModelStrategy(PredictionStrategy):
         self.peak_power_kw = float(peak_power_kw) if peak_power_kw else 0.0
         
         # Calculate max hourly production in kWh
-        # Under perfect conditions: 1 kWp Ã¢â€°Ë† 1 kWh per hour
+        # Under perfect conditions: 1 kWp ≈ 1 kWh per hour
         # Apply safety margin (20%) for theoretical peak conditions
         from ..const import HOURLY_PRODUCTION_SAFETY_MARGIN, DEFAULT_MAX_HOURLY_KWH
         if self.peak_power_kw > 0:

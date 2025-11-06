@@ -1,6 +1,5 @@
 """
-State Sensor platform for Solar Forecast ML Integration.
-Contains sensors that reflect the state of other entities.
+Sensor State Management
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from typing import Any, Dict, Optional
 
@@ -177,6 +177,7 @@ class ExternalTempSensor(BaseEntityStateSensor):
             translation_key="external_temp_state",
             icon="mdi:thermometer-check"
         )
+        self._attr_name = "External Temperature State"
 
 
 class ExternalHumiditySensor(BaseEntityStateSensor):
@@ -190,6 +191,7 @@ class ExternalHumiditySensor(BaseEntityStateSensor):
             translation_key="external_humidity_state",
             icon="mdi:water-percent-alert"
         )
+        self._attr_name = "External Humidity State"
 
 
 class ExternalWindSensor(BaseEntityStateSensor):
@@ -203,6 +205,7 @@ class ExternalWindSensor(BaseEntityStateSensor):
             translation_key="external_wind_state",
             icon="mdi:weather-windy-variant"
         )
+        self._attr_name = "External Wind State"
 
 
 class ExternalRainSensor(BaseEntityStateSensor):
@@ -216,6 +219,7 @@ class ExternalRainSensor(BaseEntityStateSensor):
             translation_key="external_rain_state",
             icon="mdi:weather-rainy-check"
         )
+        self._attr_name = "External Rain State"
 
 
 class ExternalUVSensor(BaseEntityStateSensor):
@@ -229,6 +233,7 @@ class ExternalUVSensor(BaseEntityStateSensor):
             translation_key="external_uv_state",
             icon="mdi:sun-wireless-outline"
         )
+        self._attr_name = "External UV State"
 
 
 class ExternalLuxSensor(BaseEntityStateSensor):
@@ -242,6 +247,7 @@ class ExternalLuxSensor(BaseEntityStateSensor):
             translation_key="external_lux_state",
             icon="mdi:brightness-5-check"
         )
+        self._attr_name = "External Lux State"
 
 
 # --- State Sensors for Core Entities ---
@@ -265,6 +271,7 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
             translation_key="power_sensor_state",
             icon="mdi:flash-alert-outline"
         )
+        self._attr_name = "Power Sensor State"
     
     # FIXED: Override to return float instead of string
     @property
@@ -306,6 +313,7 @@ class YieldSensorStateSensor(BaseEntityStateSensor):
             translation_key="yield_sensor_state",
             icon="mdi:counter"
         )
+        self._attr_name = "Yield Sensor State"
     
     # FIXED: Override to return float instead of string
     @property

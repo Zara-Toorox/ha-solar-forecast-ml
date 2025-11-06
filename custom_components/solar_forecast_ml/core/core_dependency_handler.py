@@ -1,5 +1,5 @@
 """
-Dependency handler for Solar Forecast ML integration.
+Dependency Handler for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -16,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 from __future__ import annotations
 
 import logging
@@ -155,19 +156,19 @@ class DependencyHandler:
         """
         Get the status of all dependencies.
         Async version with executor for blocking I/O
-        
+
         Args:
             hass: HomeAssistant instance for async_add_executor_job (optional)
-            
+
         Returns:
             Dict with package status
         """
         status = {}
-        
+
         for package, min_version in REQUIRED_DEPENDENCIES.items():
             # Use the already checked status if available
             is_satisfied = self._package_status.get(package)
-            
+
             # If not checked yet (e.g., direct call), run the check
             if is_satisfied is None:
                 if hass:
@@ -186,12 +187,38 @@ class DependencyHandler:
             else:
                 # Fallback without hass (e.g., tests)
                 version = self._get_package_version_sync(package)
-            
+
             status[package] = {
                 "installed": is_satisfied,
                 "version": version,
                 "required": min_version,
                 "satisfied": is_satisfied,
             }
-        
+
         return status
+
+    def get_installed_packages(self) -> list[str]:
+        """
+        Get list of installed package names.
+
+        Returns:
+            List of installed package names
+        """
+        if not self._checked:
+            _LOGGER.warning("Dependencies not checked yet, returning empty list")
+            return []
+
+        return [pkg for pkg, status in self._package_status.items() if status]
+
+    def get_missing_packages(self) -> list[str]:
+        """
+        Get list of missing package names.
+
+        Returns:
+            List of missing package names
+        """
+        if not self._checked:
+            _LOGGER.warning("Dependencies not checked yet, returning empty list")
+            return []
+
+        return [pkg for pkg, status in self._package_status.items() if not status]

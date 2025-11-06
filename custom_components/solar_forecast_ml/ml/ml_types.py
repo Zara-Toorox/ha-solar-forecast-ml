@@ -1,7 +1,5 @@
 """
-ML Data Type Definitions (Dataclasses) for Solar Forecast ML Integration.
-
-Copyright (C) 2025 Zara-Toorox
+ML Type Definitions and Data Classes
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -18,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import math
 import logging # Import logging for potential use in validation
 from dataclasses import dataclass, field
@@ -26,7 +25,7 @@ from datetime import datetime, timezone, tzinfo # Ensure timezone is imported
 from enum import Enum
 
 # Import SafeDateTimeUtil if needed for default timestamps
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 # Import constants if needed for defaults or validation ranges
 from ..const import ML_MODEL_VERSION, CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX
 
@@ -185,7 +184,7 @@ def create_default_learned_weights() -> LearnedWeights:
         "temperature", "humidity", "cloudiness", "wind_speed",
         "hour_of_day", "seasonal_factor", "weather_trend",
         "production_yesterday"
-        # 'production_last_hour' entfernt
+        # 'production_last_hour' removed
     ]
     # --- ENDE ANPASSUNG ---
     
@@ -197,7 +196,7 @@ def create_default_learned_weights() -> LearnedWeights:
         feature_stds={},  # Scaler not fitted yet
         accuracy=0.0, # Start with zero accuracy
         training_samples=0,
-        last_trained=dt_util.utcnow().isoformat(), # Timestamp of creation
+        last_trained=dt_util.now().isoformat(), # Timestamp of creation (LOCAL time)
         model_version=ML_MODEL_VERSION,
         correction_factor=1.0, # Default fallback factor
         # Deprecated fields initialized empty
@@ -233,7 +232,7 @@ def create_default_hourly_profile() -> HourlyProfile:
     return HourlyProfile(
         hourly_averages=default_hourly_averages,
         samples_count=0, # No real samples used
-        last_updated=dt_util.utcnow().isoformat(),
+        last_updated=dt_util.now().isoformat(), # LOCAL time
         confidence=0.1, # Low confidence for default profile
         # Deprecated fields initialized empty
         hourly_factors={},

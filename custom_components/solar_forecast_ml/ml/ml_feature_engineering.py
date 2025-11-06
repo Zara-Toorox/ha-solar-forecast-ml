@@ -1,9 +1,8 @@
 """
-Feature Engineering for the Solar Forecast ML Predictor.
-Extracts and creates features from weather and sensor data.
+Feature Engineering for ML Models
 
 This program is free software: you can redistribute it and/or modify
-it under a terms of the GNU Affero General Public License as
+it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
@@ -17,13 +16,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import math
 import logging # Import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional # Added Optional
 
 # Use SafeDateTimeUtil for consistent timezone handling
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +33,19 @@ class FeatureEngineer:
     Handles the creation and extraction of features used by the ML model.
     Includes base weather features, lag features, polynomial features,
     and interaction features.
+
+    FEATURE COUNT: 23 total features (14 base + 4 polynomial + 5 interaction)
+    - Base features: temperature, humidity, cloudiness, wind_speed, hour_of_day,
+      seasonal_factor, weather_trend, production_yesterday, cloudiness_primary,
+      cloud_impact, sunshine_factor, rain, uv_index, lux
+    - Polynomial features: temperature_sq, cloudiness_sq, hour_of_day_sq, seasonal_factor_sq
+    - Interaction features: cloudiness_x_hour, temperature_x_seasonal, humidity_x_cloudiness,
+      wind_x_hour, weather_trend_x_seasonal
+
+    BETA EXPANSION (Nov 2025): Added rain, uv_index, lux features
+    - This is a BREAKING CHANGE: Existing models must be retrained
+    - Optional sensors: If rain/uv/lux sensors unavailable, defaults to 0.0
+    - Expected accuracy improvement: 10-20% with proper sensor data
     """
 
     def __init__(self):
@@ -54,6 +67,10 @@ class FeatureEngineer:
             "cloudiness_primary",   # Sunshine percentage (100 - cloudiness)
             "cloud_impact",         # Non-linear cloud penalty (cloudiness^1.5)
             "sunshine_factor",      # Normalized sunshine (0-1)
+            # BETA EXPANSION: Additional weather features (optional sensors)
+            "rain",                 # Rain intensity (mm/h or 0-100 scale)
+            "uv_index",             # UV index (0-11+)
+            "lux",                  # Light intensity (W/m² or lux)
         ]
 
         # Define derived polynomial features (e.g., squared terms)
@@ -87,7 +104,7 @@ class FeatureEngineer:
         self,
         weather_data: Dict[str, Any],
         sensor_data: Dict[str, Any],
-        # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Signatur geÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ndert ---
+        # --- (SOLUTION 1) Signature changed ---
         prediction_hour: int, 
         prediction_date: datetime 
         # --- ENDE ---
@@ -96,7 +113,7 @@ class FeatureEngineer:
         Asynchronously extracts and calculates all defined features for a given time context.
 
         Args:
-            weather_data: Dictionary containing weather information (fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die prediction_hour).
+            weather_data: Dictionary containing weather information (for the prediction_hour).
             sensor_data: Dictionary containing sensor readings (e.g., lag features).
             prediction_hour: The hour (0-23, local time) for which to calculate features.
             prediction_date: The date (local time) for which to calculate features.
@@ -106,8 +123,8 @@ class FeatureEngineer:
             Returns default features if extraction fails.
         """
         try:
-            # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Zeit-Logik aktualisiert ---
-            target_hour = prediction_hour # Direkt verwenden
+            # --- (SOLUTION 1) Time logic updated ---
+            target_hour = prediction_hour # Use directly
             # --- ENDE ---
 
             # --- Extract Base Weather Features ---
@@ -120,8 +137,14 @@ class FeatureEngineer:
             wind_speed = self._safe_extract(weather_data, 'wind_speed', default=5.0)
             # pressure = self._safe_extract(weather_data, 'pressure', default=1013.0) # Not currently used as base feature
 
+            # --- Extract Additional Weather Features (Optional Sensors) ---
+            # BETA EXPANSION: rain, uv_index, lux from sensor_data (collected by sample_collector)
+            rain = self._safe_extract(sensor_data, 'rain', default=0.0)
+            uv_index = self._safe_extract(sensor_data, 'uv_index', default=0.0)
+            lux = self._safe_extract(sensor_data, 'lux', default=0.0)
+
             # --- Extract Lag Features (Expected to be in sensor_data) ---
-            # 'production_yesterday' wird vom Aufrufer (forecast_strategy) bereitgestellt
+            # 'production_yesterday' is provided by the caller (forecast_strategy)
             prod_yesterday = self._safe_extract(sensor_data, 'production_yesterday', default=0.0)
             # --- (Verbesserung 2) ENTFERNT ---
             # prod_last_hour = self._safe_extract(sensor_data, 'production_last_hour', default=0.0)
@@ -129,7 +152,7 @@ class FeatureEngineer:
 
 
             # --- Calculate Time-Based Features ---
-            # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Nutze ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bergebenes Datum ---
+            # --- (LÂ Â Â Â  1) Nutze Â Â Â Â  date ---
             day_of_year = prediction_date.timetuple().tm_yday # Day number (1-366)
             # --- ENDE ---
             # Cosine function peaks in summer (around day 172) and troughs in winter
@@ -159,6 +182,11 @@ class FeatureEngineer:
             base_features_dict['cloudiness_primary'] = 100.0 - cloudiness  # Sunshine percentage
             base_features_dict['cloud_impact'] = cloudiness ** 1.5  # Non-linear cloud penalty
             base_features_dict['sunshine_factor'] = (100.0 - cloudiness) / 100.0  # Normalized 0-1
+
+            # BETA EXPANSION: Additional weather features (graceful defaults if sensors unavailable)
+            base_features_dict['rain'] = rain
+            base_features_dict['uv_index'] = uv_index
+            base_features_dict['lux'] = lux
 
             # --- Calculate Polynomial and Interaction Features ---
             # Use values from base_features_dict to ensure consistency
@@ -198,7 +226,7 @@ class FeatureEngineer:
         """
         Synchronously extracts and calculates all defined features, typically used during training.
         Derives time context from the provided record's timestamp.
-        (Diese Methode ist fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1 nicht relevant, bleibt aber fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r das Training)
+        (This method is not relevant for SOLUTION 1, but remains for training)
         """
         try:
             # --- Determine Time Context ---
@@ -220,10 +248,15 @@ class FeatureEngineer:
                                             weather_data.get('cloud_cover', 50.0))
             wind_speed = self._safe_extract(weather_data, 'wind_speed', default=5.0)
 
+            # BETA EXPANSION: Additional weather features (optional sensors)
+            rain = self._safe_extract(sensor_data, 'rain', default=0.0)
+            uv_index = self._safe_extract(sensor_data, 'uv_index', default=0.0)
+            lux = self._safe_extract(sensor_data, 'lux', default=0.0)
+
             # Lag features expected in sensor_data (added by caller, e.g., train_model)
             prod_yesterday = self._safe_extract(sensor_data, 'production_yesterday', default=0.0)
             # --- (Verbesserung 2) ENTFERNT ---
-            # prod_last_hour = self._safe_extract(sensor_data, 'production_last_hour', default=0.0) 
+            # prod_last_hour = self._safe_extract(sensor_data, 'production_last_hour', default=0.0)
             # --- ENDE ---
 
             seasonal_factor = 0.5 + 0.5 * math.cos((day_of_year - 172) * 2 * math.pi / 365.25)
@@ -244,6 +277,11 @@ class FeatureEngineer:
             base_features_dict['cloud_impact'] = cloudiness ** 1.5
             base_features_dict['sunshine_factor'] = (100.0 - cloudiness) / 100.0
 
+            # BETA EXPANSION: Additional weather features
+            base_features_dict['rain'] = rain
+            base_features_dict['uv_index'] = uv_index
+            base_features_dict['lux'] = lux
+
             poly_interaction_features = {
                 "temperature_sq": temp ** 2, "cloudiness_sq": cloudiness ** 2,
                 "hour_of_day_sq": hour_float ** 2, "seasonal_factor_sq": seasonal_factor ** 2,
@@ -262,8 +300,8 @@ class FeatureEngineer:
             # Catch errors during synchronous extraction
             _LOGGER.warning(f"Sync feature extraction failed for record {record.get('timestamp')}: {e}")
             # Return default features based on the record's hour (if possible)
-            fallback_hour = dt_util.utcnow().hour # Default hour if record timestamp fails
-            fallback_date = dt_util.utcnow()
+            fallback_hour = dt_util.now().hour # Default to LOCAL time if record timestamp fails
+            fallback_date = dt_util.now()
             try: 
                 record_dt = dt_util.parse_datetime(record.get('timestamp'))
                 fallback_hour = record_dt.hour
@@ -291,7 +329,7 @@ class FeatureEngineer:
         cloudiness = 50.0
         wind_speed = 5.0
         
-        # --- (LÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶sung 1) Nutze ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼bergebenes Datum ---
+        # --- (LÂ Â Â Â  1) Nutze Â Â Â Â  date ---
         day_of_year = date.timetuple().tm_yday
         seasonal_factor = 0.5 + 0.5 * math.cos((day_of_year - 172) * 2 * math.pi / 365.25)
         # --- ENDE ---
@@ -316,6 +354,10 @@ class FeatureEngineer:
             "cloudiness_primary": 100.0 - cloudiness,
             "cloud_impact": cloudiness ** 1.5,
             "sunshine_factor": (100.0 - cloudiness) / 100.0,
+            # BETA EXPANSION: Additional weather features (defaults for missing sensors)
+            "rain": 0.0,
+            "uv_index": 0.0,
+            "lux": 0.0,
         }
 
         # Calculate derived defaults based on base values

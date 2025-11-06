@@ -1,15 +1,22 @@
 """
-Forecast Orchestrator for Solar Forecast ML.
-Manages the selection and execution of different forecast strategies
-(ML, Rule-based, Fallback) and calculates short-term predictions.
+Forecast Orchestrator for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from typing import Any, Dict, Optional, List
 import asyncio
@@ -18,13 +25,14 @@ from datetime import timedelta, datetime, timezone
 
 from homeassistant.core import HomeAssistant
 
-from ..core.helpers import SafeDateTimeUtil as dt_util
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from .forecast_strategy import MLForecastStrategy
 from .forecast_rule_based_strategy import RuleBasedForecastStrategy
-from .weather_calculator import WeatherCalculator
+from .forecast_weather_calculator import WeatherCalculator
 from ..ml.ml_predictor import MLPredictor
 from ..services.service_error_handler import ErrorHandlingService
-from .strategy import ForecastResult
+from .forecast_strategy_base import ForecastResult
+from ..const import ML_MODEL_VERSION
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,6 +50,7 @@ class ForecastOrchestrator:
     def __init__(
         self,
         hass: HomeAssistant,
+        data_manager: Any, # Replace with DataManager once type hints are cleaner
         solar_capacity: float,
         weather_calculator: WeatherCalculator
     ):
@@ -54,6 +63,7 @@ class ForecastOrchestrator:
             weather_calculator: Instance of WeatherCalculator for rule-based factors.
         """
         self.hass = hass
+        self.data_manager = data_manager
         self.solar_capacity = solar_capacity
         self.weather_calculator = weather_calculator
 
@@ -70,15 +80,15 @@ class ForecastOrchestrator:
     def is_production_hour(self, target_dt: datetime) -> bool:
         """
         Checks if a given datetime is within realistic solar production hours.
-        Uses sun.sun entity with 90-minute safety margins, falls back to seasonal times.
+        Uses sun.sun entity times with margins, falls back to seasonal times.
         
         Args:
-            target_dt: Timezone-aware datetime to check
+            target_dt: Timezone-aware datetime to check (can be in the future)
             
         Returns:
             True if target_dt is within production hours, False otherwise
         """
-        # Method 1: sun.sun with safety margins (most accurate)
+        # Method 1: sun.sun with margins (most accurate)
         sun_state = self.hass.states.get("sun.sun")
         if sun_state and sun_state.attributes:
             try:
@@ -90,28 +100,39 @@ class ForecastOrchestrator:
                     next_setting = dt_util.parse_datetime(next_setting_str)
                     
                     if next_rising and next_setting:
-                        # KRITISCH: Konvertiere UTC zu Local vor Vergleich
+                        # CRITICAL: Convert UTC to Local
                         next_rising_local = dt_util.as_local(next_rising)
                         next_setting_local = dt_util.as_local(next_setting)
+                        now_local = dt_util.now()
                         
-                        # 90-minute safety margins for realistic PV production
-                        # PV needs strong sunlight, not just above horizon
-                        production_start = next_rising_local + timedelta(minutes=90)
-                        production_end = next_setting_local - timedelta(minutes=90)
-                        
-                        # Check if target is within production window
+                        # Determine production window based on time of day
+                        if next_rising_local.date() > now_local.date():
+                            # next_rising is tomorrow = sun has already risen today
+                            # Production start was early today (estimate: 6:00)
+                            production_start = now_local.replace(hour=6, minute=0, second=0, microsecond=0)
+                            # Production end is 60 min after today's sunset
+                            production_end = next_setting_local + timedelta(minutes=60)
+                        else:
+                            # next_rising is today = we are before sunrise
+                            # Production starts 60 min before sunrise
+                            production_start = next_rising_local - timedelta(minutes=60)
+                            # Production ends 60 min after sunset
+                            production_end = next_setting_local + timedelta(minutes=60)
+
+                        # Check if target_dt is within production window
                         if production_start <= target_dt <= production_end:
                             _LOGGER.debug(
-                                f"Production check (sun.sun): {target_dt.strftime('%H:%M')} is within "
+                                f"Production check: {target_dt.strftime('%H:%M')} within "
                                 f"{production_start.strftime('%H:%M')}-{production_end.strftime('%H:%M')}"
                             )
                             return True
                         else:
                             _LOGGER.debug(
-                                f"Production check (sun.sun): {target_dt.strftime('%H:%M')} is outside "
+                                f"Production check: {target_dt.strftime('%H:%M')} outside "
                                 f"{production_start.strftime('%H:%M')}-{production_end.strftime('%H:%M')}"
                             )
                             return False
+                            
             except Exception as e:
                 _LOGGER.debug(f"sun.sun parsing failed, using fallback: {e}")
         
@@ -119,13 +140,13 @@ class ForecastOrchestrator:
         hour = target_dt.hour
         month = target_dt.month
         
-        # Conservative production hours by season
-        if month in [11, 12, 1]:  # Winter: 7-16 Uhr
-            is_production = 7 <= hour <= 16
-        elif month in [5, 6, 7, 8]:  # Summer: 5-20 Uhr
-            is_production = 5 <= hour <= 20
-        else:  # Spring/Fall: 6-18 Uhr
-            is_production = 6 <= hour <= 18
+        # Extended production times with twilight
+        if month in [11, 12, 1, 2]:  # Winter: 6-17 (incl. twilight)
+            is_production = 6 <= hour <= 17
+        elif month in [5, 6, 7, 8]:  # Summer: 4-21 (long days)
+            is_production = 4 <= hour <= 21
+        else:  # Spring/Fall: 5-19
+            is_production = 5 <= hour <= 19
         
         _LOGGER.debug(
             f"Production check (fallback): {target_dt.strftime('%H:%M')} month={month} "
@@ -187,19 +208,19 @@ class ForecastOrchestrator:
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
         """
-        Orchestriert die Forecast-Erstellung mit allen verfÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼gbaren Daten.
-        
+        Orchestrates forecast creation with all available data.
+
         Args:
-            current_weather: Aktuelle Wetterdaten
-            hourly_forecast: StÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage
-            external_sensors: Externe Sensordaten
-            historical_avg: Historischer Durchschnitt (7-Tage)
-            ml_prediction_today: ML Vorhersage fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r heute
-            ml_prediction_tomorrow: ML Vorhersage fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r morgen
-            correction_factor: Gelernter Korrekturfaktor
-            
+            current_weather: Current weather data
+            hourly_forecast: Hourly weather forecast
+            external_sensors: External sensor data
+            historical_avg: Historical average (7-day)
+            ml_prediction_today: ML prediction for today
+            ml_prediction_tomorrow: ML prediction for tomorrow
+            correction_factor: Learned correction factor
+
         Returns:
-            Dictionary mit Prognoseergebnissen
+            Dictionary with forecast results
         """
         hourly_weather_forecast = hourly_forecast if hourly_forecast else []
         sensor_data = external_sensors if external_sensors else {}
@@ -220,16 +241,16 @@ class ForecastOrchestrator:
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
         """
-        Erstellt die tÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤gliche Solarprognose (heute und morgen) durch
-        iterative Berechnung und Blending der verfÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼gbaren Strategien.
+        Creates daily solar forecast (today, tomorrow, day after tomorrow) through
+        iterative calculation and blending of available strategies.
 
         Args:
-            hourly_weather_forecast: Verarbeitete stÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼ndliche Wettervorhersage vom WeatherService.
-            sensor_data: Dictionary mit 'current_yield'.
-            correction_factor: Gelernter Faktor fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r die Regel-Strategie.
+            hourly_weather_forecast: Processed hourly weather forecast from WeatherService.
+            sensor_data: Dictionary with 'current_yield'.
+            correction_factor: Learned factor for rule strategy.
 
         Returns:
-            Ein Dictionary mit den finalen, geblendeten Prognoseergebnissen.
+            A dictionary with the final blended forecast results.
         """
         _LOGGER.debug("Creating blended daily forecast (Iterative Pipeline)...")
 
@@ -239,7 +260,7 @@ class ForecastOrchestrator:
 
         lag_features = {}
         try:
-            now_local = dt_util.as_local(dt_util.utcnow())
+            now_local = dt_util.now()
             yesterday_dt = now_local - timedelta(days=1)
             yesterday_key = yesterday_dt.date().isoformat()
             yesterday_total_kwh = self._historical_cache.get('daily_productions', {}).get(yesterday_key, 0.0)
@@ -261,7 +282,12 @@ class ForecastOrchestrator:
                 )
                 if ml_result.model_accuracy is not None:
                     model_accuracy = ml_result.model_accuracy
-                _LOGGER.debug(f"ML Strategy Success. Today={ml_result.forecast_today:.2f} kWh. Accuracy={model_accuracy:.3f}")
+                _LOGGER.debug(
+                    f"ML Strategy Success. Today={ml_result.forecast_today:.2f} kWh, "
+                    f"Tomorrow={ml_result.forecast_tomorrow:.2f} kWh, "
+                    f"Day After={ml_result.forecast_day_after_tomorrow:.2f} kWh. "
+                    f"Accuracy={model_accuracy:.3f}"
+                )
                 
             except Exception as ml_err:
                 _LOGGER.warning(f"ML (Iterative) forecast strategy failed: {ml_err}. ML result set to 0.")
@@ -279,7 +305,11 @@ class ForecastOrchestrator:
                     correction_factor=correction_factor,
                     lag_features=lag_features
                 )
-                _LOGGER.debug(f"Rule-Based Strategy Success. Today={rule_result.forecast_today:.2f} kWh.")
+                _LOGGER.debug(
+                    f"Rule-Based Strategy Success. Today={rule_result.forecast_today:.2f} kWh, "
+                    f"Tomorrow={rule_result.forecast_tomorrow:.2f} kWh, "
+                    f"Day After={rule_result.forecast_day_after_tomorrow:.2f} kWh."
+                )
                 
             except Exception as rb_err:
                 _LOGGER.error(f"Rule-Based (Iterative) forecast strategy also failed: {rb_err}.", exc_info=True)
@@ -290,20 +320,23 @@ class ForecastOrchestrator:
         
         today_ml = ml_result.forecast_today if ml_result else 0.0
         tomorrow_ml = ml_result.forecast_tomorrow if ml_result else 0.0
+        day_after_ml = ml_result.forecast_day_after_tomorrow if ml_result else 0.0
         
         if rule_result:
             today_rule = rule_result.forecast_today
             tomorrow_rule = rule_result.forecast_tomorrow
+            day_after_rule = rule_result.forecast_day_after_tomorrow
         else:
             _LOGGER.critical("Emergency Fallback: ML and Rule-Based strategies failed. Returning 0.0")
             today_rule = 0.0
             tomorrow_rule = 0.0
+            day_after_rule = 0.0
             
             if ml_result:
-                today_rule, tomorrow_rule = today_ml, tomorrow_ml
+                today_rule, tomorrow_rule, day_after_rule = today_ml, tomorrow_ml, day_after_ml
         
         if not ml_result:
-            today_ml, tomorrow_ml = today_rule, tomorrow_rule
+            today_ml, tomorrow_ml, day_after_ml = today_rule, tomorrow_rule, day_after_rule
             model_accuracy = 0.0
             _LOGGER.debug("Blending: ML failed, using 100% Rule-Based result.")
         
@@ -318,13 +351,14 @@ class ForecastOrchestrator:
                 )
                 today_ml = today_rule
                 tomorrow_ml = tomorrow_rule
+                day_after_ml = day_after_rule
                 model_accuracy = 0.0
         
         accuracy_weight = max(0.0, min(1.0, model_accuracy))
         
         # FIX 3: Aggressive blending - Only trust high-accuracy models
-        ACCURACY_THRESHOLD = 0.75  # ErhÃƒÂ¶ht von 0.60
-        MIN_ML_WEIGHT = 0.15       # Gesenkt von 0.30
+        ACCURACY_THRESHOLD = 0.75
+        MIN_ML_WEIGHT = 0.15
         
         if accuracy_weight < ACCURACY_THRESHOLD and ml_result:
             # Quadratic damping for poor models: heavily penalize low accuracy
@@ -340,6 +374,7 @@ class ForecastOrchestrator:
         
         final_today = (today_ml * accuracy_weight) + (today_rule * rule_weight)
         final_tomorrow = (tomorrow_ml * accuracy_weight) + (tomorrow_rule * rule_weight)
+        final_day_after = (day_after_ml * accuracy_weight) + (day_after_rule * rule_weight)
         
         method_str = f"blended (ML: {accuracy_weight*100:.0f}% | Rule: {rule_weight*100:.0f}%)"
         if accuracy_weight == 0.0:
@@ -354,14 +389,38 @@ class ForecastOrchestrator:
 
         _LOGGER.info(
             f"Blending complete (Accuracy={accuracy_weight:.3f}): "
-            f"ML=({today_ml:.2f}, {tomorrow_ml:.2f}), "
-            f"Rule=({today_rule:.2f}, {tomorrow_rule:.2f}) -> "
-            f"Final=({final_today:.2f}, {final_tomorrow:.2f}) kWh"
+            f"ML=({today_ml:.2f}, {tomorrow_ml:.2f}, {day_after_ml:.2f}), "
+            f"Rule=({today_rule:.2f}, {tomorrow_rule:.2f}, {day_after_rule:.2f}) -> "
+            f"Final=({final_today:.2f}, {final_tomorrow:.2f}, {final_day_after:.2f}) kWh"
         )
+
+        _LOGGER.debug(
+            f"Final values before returning - today: {final_today}, tomorrow: {final_tomorrow}, day_after: {final_day_after}"
+        )
+
+        # Save prediction to history
+        try:
+            model_version = self._ml_predictor.current_weights.model_version if self._ml_predictor and self._ml_predictor.current_weights else ML_MODEL_VERSION
+            prediction_record = {
+                "timestamp": dt_util.now().isoformat(),
+                "predicted_value": final_today,
+                "actual_value": None,
+                "weather_data": hourly_weather_forecast[0] if hourly_weather_forecast else {},
+                "sensor_data": sensor_data,
+                "accuracy": 0.0, # Will be calculated later
+                "model_version": model_version,
+                "source": method_str,
+                "date": dt_util.now().date().isoformat(),
+            }
+            # Fire and forget
+            asyncio.create_task(self.data_manager.save_prediction(prediction_record))
+        except Exception as e:
+            _LOGGER.error(f"Failed to save prediction to history: {e}")
 
         return {
             "today": round(final_today, 2),
             "tomorrow": round(final_tomorrow, 2),
+            "day_after_tomorrow": round(final_day_after, 2),
             "peak_time": "12:00",
             "confidence": round(final_confidence, 1),
             "method": method_str,
@@ -520,7 +579,7 @@ class ForecastOrchestrator:
         if temp_value is not None:
             temp_factor = self.weather_calculator.get_temperature_factor(temp_value)
             factors['temperature'] = max(0.7, min(1.1, temp_factor))
-            _LOGGER.debug(f"Using Temperature ({temp_value}ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°C) for adjustment factor: {factors['temperature']:.2f}")
+            _LOGGER.debug(f"Using Temperature ({temp_value}C) for adjustment factor: {factors['temperature']:.2f}")
         else:
             _LOGGER.debug("No Temperature data available for real-time adjustment.")
 

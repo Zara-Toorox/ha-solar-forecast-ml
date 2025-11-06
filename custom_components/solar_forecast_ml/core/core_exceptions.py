@@ -1,6 +1,5 @@
 """
-Custom exception classes for the Solar Forecast ML integration.
-Provides specific error types for better handling and diagnosis.
+Exception Classes for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, Optional, Dict # Use Dict instead of dict
 
 # Use SafeDateTimeUtil for consistent timestamps
-from .core.helpers import SafeDateTimeUtil as dt_util
+from .core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -194,10 +194,10 @@ def create_context(**kwargs) -> Dict[str, Any]:
         **kwargs: Key-value pairs to include in the context.
 
     Returns:
-        A dictionary containing the provided kwargs and a UTC timestamp.
+        A dictionary containing the provided kwargs and a local timestamp.
     """
     context = {
-        "timestamp_utc": dt_util.utcnow().isoformat(), # Use UTC timestamp
+        "timestamp": dt_util.now().isoformat(), # Use LOCAL timestamp
         **kwargs # Add other context details
     }
     return context

@@ -1,6 +1,5 @@
 """
-Standard Scaler for Feature Normalization in Solar Forecast ML.
-Calculates mean and standard deviation for scaling features.
+Data Scaling for ML Models
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 

@@ -1,6 +1,5 @@
 """
-Helper functions for Solar Forecast ML Integration.
-Includes dependency checking and safe datetime utilities.
+Core Helper Utilities for Solar Forecast ML Integration
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import asyncio
 import importlib.util
 import logging
@@ -26,12 +26,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone, tzinfo
 from homeassistant.core import HomeAssistant
 
-# --- IMPORT HIER ENTFERNT ---
+# --- IMPORT REMOVED ---
 # try:
 #     from importlib.metadata import version as get_version, PackageNotFoundError
 # except ImportError:
 #     from importlib_metadata import version as get_version, PackageNotFoundError # type: ignore
-# --- ENDE ENTFERNUNG ---
+# --- END REMOVAL ---
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -181,7 +181,7 @@ class DependencyChecker:
         """Asynchronously checks if a package is installed and gets its version."""
         def _sync_check() -> Tuple[bool, Optional[str], Optional[str]]:
             
-            # +++ IMPORT HIER EINGEFÃƒÆ’Ã…â€œGT +++
+            # +++ IMPORT HIER EINGEF +++
             # Wird erst importiert, wenn diese (ungenutzte) Funktion aufgerufen wird.
             # Verhindert den globalen Import-Crash.
             try:
@@ -193,7 +193,7 @@ class DependencyChecker:
                     _LOGGER.error("Konnte weder 'importlib.metadata' noch 'importlib_metadata' importieren.")
                     def get_version(_): # type: ignore
                         raise PackageNotFoundError
-            # +++ ENDE EINFÃƒÆ’Ã…â€œGUNG +++
+            # +++ ENDE EINF +++
             
             try:
                 spec = importlib.util.find_spec(package_name)
