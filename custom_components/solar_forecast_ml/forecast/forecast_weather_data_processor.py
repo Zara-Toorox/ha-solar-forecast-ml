@@ -25,19 +25,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class WeatherDataProcessor:
-    """Processes and transforms weather data for ML features."""
+    """Processes and transforms weather data for ML features by Zara"""
     
     @staticmethod
     def process_forecast_data(forecast_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Process raw forecast data into standardized format.
-        
-        Args:
-            forecast_list: List of raw forecast data
-            
-        Returns:
-            List of processed forecast data
-        """
+        """Process raw forecast data into standardized format by Zara"""
         processed = []
         
         for entry in forecast_list:
@@ -65,17 +57,7 @@ class WeatherDataProcessor:
         hour: int,
         latitude: float = 50.0
     ) -> float:
-        """
-        Estimate solar radiation based on cloud cover and time.
-        
-        Args:
-            cloud_cover: Cloud coverage in percent (0-100)
-            hour: Hour of day (0-23)
-            latitude: Latitude for solar angle calculation
-            
-        Returns:
-            Estimated solar radiation in W/m²
-        """
+        """Estimate solar radiation based on cloud cover and time by Zara"""
         # Simple solar radiation model
         # Peak radiation around noon, reduced by cloud cover
         
@@ -104,15 +86,7 @@ class WeatherDataProcessor:
     
     @staticmethod
     def normalize_weather_features(weather_data: Dict[str, Any]) -> Dict[str, float]:
-        """
-        Normalize weather features for ML input.
-        
-        Args:
-            weather_data: Raw weather data
-            
-        Returns:
-            Normalized features dictionary
-        """
+        """Normalize weather features for ML input by Zara"""
         return {
             "temperature_norm": WeatherDataProcessor._normalize(
                 weather_data.get("temperature", 15.0),
@@ -143,7 +117,7 @@ class WeatherDataProcessor:
     
     @staticmethod
     def _safe_float(value: Any, default: float) -> float:
-        """Safely convert value to float with default."""
+        """Safely convert value to float with default by Zara"""
         try:
             return float(value) if value is not None else default
         except (ValueError, TypeError):
@@ -151,7 +125,7 @@ class WeatherDataProcessor:
     
     @staticmethod
     def _normalize(value: float, min_val: float, max_val: float) -> float:
-        """Normalize value to range [0, 1]."""
+        """Normalize value to range 0 1 by Zara"""
         if max_val == min_val:
             return 0.5
         return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))

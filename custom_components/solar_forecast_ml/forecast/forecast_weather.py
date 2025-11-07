@@ -43,10 +43,7 @@ DEFAULT_WEATHER_DATA = {
 
 
 class WeatherService:
-    """
-    Weather Service with file-based caching.
-    NEVER blocks startup - uses cached data if live unavailable.
-    """
+    """Weather Service with file-based caching by Zara"""
 
     def __init__(
         self, 
@@ -55,7 +52,7 @@ class WeatherService:
         data_manager=None,
         error_handler=None
     ):
-        """Initialize weather service."""
+        """Initialize weather service by Zara"""
         self.hass = hass
         self.weather_entity = weather_entity
         self.data_manager = data_manager
@@ -69,7 +66,7 @@ class WeatherService:
         self._validate_config()
 
     def _validate_config(self):
-        """Validate Weather Service configuration."""
+        """Validate Weather Service configuration by Zara"""
         if not self.weather_entity:
             raise ConfigurationException("Weather Entity not configured")
 
@@ -83,12 +80,7 @@ class WeatherService:
             _LOGGER.info(f"Weather Service configured with entity: {self.weather_entity}")
 
     async def initialize(self) -> bool:
-        """
-        Async initialization - loads cached forecast immediately.
-        Uses dummy forecast if no cache available.
-        Sets up event listener for weather entity state changes.
-        Does NOT wait for live data.
-        """
+        """Async initialization - loads cached forecast immediately by Zara"""
         try:
             # Load cached forecast from file (instant)
             cache_loaded = False
@@ -142,16 +134,7 @@ class WeatherService:
             return False
 
     async def try_get_forecast(self, timeout: int = 5) -> List[Dict[str, Any]]:
-        """
-        Try to fetch live forecast with timeout.
-        Returns empty list on failure - caller handles fallback.
-        
-        Args:
-            timeout: Max seconds to wait for live data
-            
-        Returns:
-            List of processed forecast hours or empty list
-        """
+        """Try to fetch live forecast with timeout by Zara"""
         try:
             result = await asyncio.wait_for(
                 self._fetch_and_process_forecast(),
@@ -192,10 +175,7 @@ class WeatherService:
             return []
 
     async def get_processed_hourly_forecast(self) -> List[Dict[str, Any]]:
-        """
-        Get forecast - returns cached immediately, updates in background.
-        NEVER blocks.
-        """
+        """Get forecast - returns cached immediately updates in background by Zara"""
         # Return cached data immediately
         if self._cached_forecast:
             _LOGGER.debug(f"Returning cached forecast ({len(self._cached_forecast)} hours)")
@@ -219,7 +199,7 @@ class WeatherService:
         return []
 
     async def _fetch_and_process_forecast(self) -> List[Dict[str, Any]]:
-        """Fetch raw forecast and process it."""
+        """Fetch raw forecast and process it by Zara"""
         raw_forecast = await self.get_forecast(hours=72)
         if not raw_forecast:
             return []
@@ -265,10 +245,7 @@ class WeatherService:
         return processed
 
     async def _background_forecast_update(self):
-        """
-        Background task: Periodically update forecast cache.
-        Runs silently, never blocks anything.
-        """
+        """Background task Periodically update forecast cache by Zara"""
         update_interval = 1800  # 30 minutes
         
         while True:
@@ -291,7 +268,7 @@ class WeatherService:
                 # Continue running despite errors
 
     async def get_current_weather(self) -> dict[str, Any]:
-        """Get current weather data from Home Assistant Weather Entity with cache fallback."""
+        """Get current weather data from Home Assistant Weather Entity with cache fallback by Zara"""
         try:
             current = await self._get_ha_weather()
             
@@ -332,7 +309,7 @@ class WeatherService:
             return DEFAULT_WEATHER_DATA.copy()
 
     async def _update_current_weather_cache(self, current_weather: dict[str, Any]) -> None:
-        """Update current weather in cache file."""
+        """Update current weather in cache file by Zara"""
         if not self.data_manager:
             return
         
@@ -351,7 +328,7 @@ class WeatherService:
         await self.data_manager.save_weather_cache(cache)
 
     async def _get_cached_current_weather(self) -> Optional[dict[str, Any]]:
-        """Get cached current weather from file."""
+        """Get cached current weather from file by Zara"""
         if not self.data_manager:
             return None
         
@@ -366,7 +343,7 @@ class WeatherService:
         return cached_weather
 
     async def _get_ha_weather(self) -> dict[str, Any]:
-        """Get weather data from Home Assistant Weather Entity."""
+        """Get weather data from Home Assistant Weather Entity by Zara"""
         if not self.weather_entity:
             raise ConfigurationException("Weather Entity not configured")
 
@@ -403,7 +380,7 @@ class WeatherService:
         return weather_data
 
     def _extract_cloud_cover(self, attributes: Dict[str, Any], condition: str) -> float:
-        """Extract cloud cover from attributes or map from condition."""
+        """Extract cloud cover from attributes or map from condition by Zara"""
         for key in ["cloud_coverage", "cloudiness"]:
             value = attributes.get(key)
             if value is not None:
@@ -416,7 +393,7 @@ class WeatherService:
         return max(0.0, min(100.0, self._map_condition_to_cloud_cover(condition)))
 
     def _map_condition_to_cloud_cover(self, condition: str | None) -> float:
-        """Map weather condition to cloud cover percentage."""
+        """Map weather condition to cloud cover percentage by Zara"""
         if not condition:
             return DEFAULT_WEATHER_DATA["cloud_cover"]
 
@@ -442,7 +419,7 @@ class WeatherService:
         return condition_map.get(condition_lower, DEFAULT_WEATHER_DATA["cloud_cover"])
 
     def _extract_precipitation(self, attributes: dict[str, Any]) -> float:
-        """Extract precipitation from various keys."""
+        """Extract precipitation from various keys by Zara"""
         keys = [
             "precipitation", "precipitation_intensity", "precipitation_amount",
             "rain", "rainfall", "snow", "snowfall"
@@ -458,10 +435,7 @@ class WeatherService:
         return DEFAULT_WEATHER_DATA["precipitation"]
 
     async def get_forecast(self, hours: int = 24) -> list[dict[str, Any]]:
-        """
-        Get forecast using weather.get_forecasts service (HA 2024.3+).
-        Falls back to attribute access for older versions.
-        """
+        """Get forecast using weatherget_forecasts service HA 20243 by Zara"""
         if not self.weather_entity:
             raise ConfigurationException("Weather Entity not configured")
 
@@ -517,7 +491,7 @@ class WeatherService:
         return result
 
     def get_health_status(self) -> dict[str, Any]:
-        """Check health status of the weather service."""
+        """Check health status of the weather service by Zara"""
         if not self.weather_entity:
             return {"healthy": False, "status": "error", "message": "Weather Entity not configured"}
 
@@ -557,7 +531,7 @@ class WeatherService:
         }
 
     def update_weather_entity(self, new_entity: str) -> None:
-        """Update the weather entity ID."""
+        """Update the weather entity ID by Zara"""
         old_entity = self.weather_entity
         self.weather_entity = new_entity
         _LOGGER.info(f"Weather Entity updated: {old_entity} -> {new_entity}")
@@ -567,14 +541,7 @@ class WeatherService:
             _LOGGER.error(f"Validation failed after update: {err}")
 
     def _generate_dummy_forecast(self) -> List[Dict[str, Any]]:
-        """
-        Generate dummy forecast data for 48 hours (today + tomorrow).
-        Uses LOCAL time for all datetime fields.
-        Ensures integration can start even without weather data.
-        
-        Returns:
-            List of 48 hourly forecast entries with standard weather values
-        """
+        """Generate dummy forecast data for 48 hours today  tomorrow by Zara"""
         now_local = dt_util.now()  # Current time in LOCAL timezone
         dummy_forecast = []
         
@@ -601,16 +568,13 @@ class WeatherService:
         return dummy_forecast
 
     def _setup_weather_entity_listener(self) -> None:
-        """
-        Setup event listener for weather entity state changes.
-        Triggers immediate forecast update when weather becomes available.
-        """
+        """Setup event listener for weather entity state changes by Zara"""
         from homeassistant.core import callback
         from homeassistant.helpers.event import async_track_state_change_event
         
         @callback
         def weather_state_changed(event):
-            """Handle weather entity state change."""
+            """Handle weather entity state change by Zara"""
             new_state = event.data.get("new_state")
             old_state = event.data.get("old_state")
             
@@ -650,13 +614,7 @@ class WeatherService:
         _LOGGER.info(f"Weather entity listener registered for {self.weather_entity}")
 
     async def force_update(self) -> bool:
-        """
-        PUBLIC: Force immediate forecast update (blocking).
-        Used by manual refresh buttons and force-update operations.
-        
-        Returns:
-            bool: True if fresh forecast retrieved, False otherwise
-        """
+        """PUBLIC Force immediate forecast update blocking by Zara"""
         try:
             _LOGGER.info("Force update requested - fetching fresh forecast...")
             
@@ -677,10 +635,7 @@ class WeatherService:
             return False
 
     async def _immediate_forecast_update(self) -> None:
-        """
-        Perform immediate forecast update when weather becomes available.
-        Non-blocking, logs errors but doesn't raise.
-        """
+        """Perform immediate forecast update when weather becomes available by Zara"""
         try:
             _LOGGER.debug("Starting immediate forecast update...")
             
@@ -699,7 +654,7 @@ class WeatherService:
             _LOGGER.warning(f"Immediate forecast update failed: {e}", exc_info=True)
 
     async def cleanup(self):
-        """Cleanup resources."""
+        """Cleanup resources by Zara"""
         # Remove event listener
         if self._weather_entity_listener:
             self._weather_entity_listener()

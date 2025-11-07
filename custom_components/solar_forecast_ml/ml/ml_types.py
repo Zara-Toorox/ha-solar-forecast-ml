@@ -34,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Enums ---
 class ErrorCategory(Enum):
-    """Enumeration of error categories within the ML system."""
+    """Enumeration of error categories within the ML system by Zara"""
     DATA_INTEGRITY = "data_integrity"
     MODEL_TRAINING = "model_training"
     PREDICTION = "prediction"
@@ -49,7 +49,7 @@ class ErrorCategory(Enum):
 
 @dataclass
 class PredictionRecord:
-    """Represents a single prediction record, typically stored in history."""
+    """Represents a single prediction record typically stored in history by Zara"""
     timestamp: str          # ISO 8601 timestamp string (preferably UTC)
     predicted_value: float  # The predicted energy value (e.g., kWh)
     actual_value: Optional[float] # The actual energy value (if available)
@@ -59,7 +59,7 @@ class PredictionRecord:
     model_version: str      # Version of the ML model used for this prediction
 
     def __post_init__(self):
-        """Perform validation after initialization."""
+        """Perform validation after initialization by Zara"""
         if self.predicted_value < 0:
             _LOGGER.warning(f"PredictionRecord created with negative predicted_value: {self.predicted_value}. Clamping to 0.")
             self.predicted_value = 0.0
@@ -77,10 +77,7 @@ class PredictionRecord:
 
 @dataclass
 class LearnedWeights:
-    """
-    Stores the learned parameters (weights, bias) of the ML model,
-    along with metadata like accuracy, sample count, and scaler state.
-    """
+    """Stores the learned parameters weights bias of the ML model by Zara"""
     # Core model parameters
     weights: Dict[str, float]           # Weights for each named feature
     bias: float                         # Bias (intercept) term
@@ -106,7 +103,7 @@ class LearnedWeights:
     feature_importance: Dict[str, float] = field(default_factory=dict) # Can be calculated post-training
 
     def __post_init__(self):
-        """Validate fields after initialization."""
+        """Validate fields after initialization by Zara"""
         if not (CORRECTION_FACTOR_MIN <= self.correction_factor <= CORRECTION_FACTOR_MAX):
             _LOGGER.warning(f"LearnedWeights correction_factor {self.correction_factor} outside valid range "
                             f"[{CORRECTION_FACTOR_MIN}, {CORRECTION_FACTOR_MAX}]. Clamping.")
@@ -133,10 +130,7 @@ class LearnedWeights:
 
 @dataclass
 class HourlyProfile:
-    """
-    Represents the typical hourly production profile, often used as a fallback
-    or simpler prediction method. Calculated from historical hourly samples.
-    """
+    """Represents the typical hourly production profile often used as a fallback by Zara"""
     # Calculated median/average production value for each hour (0-23)
     # Keys should be strings '0' through '23' for JSON compatibility
     hourly_averages: Dict[str, float]
@@ -151,7 +145,7 @@ class HourlyProfile:
     seasonal_adjustment: Dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self):
-        """Validate and ensure profile structure."""
+        """Validate and ensure profile structure by Zara"""
         if self.samples_count < 0:
             _LOGGER.error(f"HourlyProfile samples_count cannot be negative ({self.samples_count}). Setting to 0.")
             self.samples_count = 0
@@ -175,27 +169,42 @@ class HourlyProfile:
 # --- Default Creation Functions ---
 
 def create_default_learned_weights() -> LearnedWeights:
-    """
-    Creates a LearnedWeights object with default values, used for initialization
-    when no weights file exists.
-    """
-    # --- (Verbesserung 2) ANGEPASST ---
-    default_feature_names = [ # Match FeatureEngineer base features
+    """Creates a LearnedWeights object with default values used for initialization by Zara"""
+    # CRITICAL FIX 1: Match FeatureEngineer.feature_names (27 features)
+    # Base features (18)
+    default_feature_names = [
         "temperature", "humidity", "cloudiness", "wind_speed",
         "hour_of_day", "seasonal_factor", "weather_trend",
-        "production_yesterday"
-        # 'production_last_hour' removed
+        "production_yesterday", "production_same_hour_yesterday",
+        # FIX 4: Enhanced cloudiness features
+        "cloudiness_primary", "cloud_impact", "sunshine_factor",
+        # BETA EXPANSION: Additional weather features (optional sensors)
+        "rain", "uv_index", "lux",
+        # IMPROVEMENT 7: Cloudiness trend features
+        "cloudiness_trend_1h", "cloudiness_trend_3h", "cloudiness_volatility"
     ]
-    # --- ENDE ANPASSUNG ---
-    
+
+    # Polynomial features (4)
+    default_feature_names.extend([
+        "temperature_sq", "cloudiness_sq", "hour_of_day_sq", "seasonal_factor_sq"
+    ])
+
+    # Interaction features (5)
+    default_feature_names.extend([
+        "cloudiness_x_hour", "temperature_x_seasonal", "humidity_x_cloudiness",
+        "wind_x_hour", "weather_trend_x_seasonal"
+    ])
+
+    _LOGGER.info(f"Creating default LearnedWeights with {len(default_feature_names)} features (triggers immediate training)")
+
     return LearnedWeights(
-        weights={}, # No specific weights initially
+        weights={}, # Empty weights trigger training
         bias=0.0,
         feature_names=default_feature_names,
         feature_means={}, # Scaler not fitted yet
         feature_stds={},  # Scaler not fitted yet
-        accuracy=0.0, # Start with zero accuracy
-        training_samples=0,
+        accuracy=0.0, # Start with zero accuracy (triggers training)
+        training_samples=0, # No samples yet (triggers training)
         last_trained=dt_util.now().isoformat(), # Timestamp of creation (LOCAL time)
         model_version=ML_MODEL_VERSION,
         correction_factor=1.0, # Default fallback factor
@@ -207,10 +216,7 @@ def create_default_learned_weights() -> LearnedWeights:
 
 
 def create_default_hourly_profile() -> HourlyProfile:
-    """
-    Creates a default HourlyProfile, typically with a simple sine curve approximation
-    for daylight hours, used when no profile file exists.
-    """
+    """Creates a default HourlyProfile typically with a simple sine curve approximation by Zara"""
     default_hourly_averages: Dict[str, float] = {}
     # Simple sine curve approximation for hours 6 AM to 6 PM (18:00)
     daylight_hours = 12
@@ -243,19 +249,7 @@ def create_default_hourly_profile() -> HourlyProfile:
 # --- Validation Function ---
 
 def validate_prediction_record(record: Dict[str, Any]) -> bool:
-    """
-    Validates a dictionary intended to be converted into a PredictionRecord.
-    Raises ValueError on validation failure.
-
-    Args:
-        record: The dictionary to validate.
-
-    Returns:
-        True if validation passes (though typically raises on failure).
-
-    Raises:
-        ValueError: If validation fails.
-    """
+    """Validates a dictionary intended to be converted into a PredictionRecord by Zara"""
     required_fields = [
         "timestamp", "predicted_value", "weather_data",
         "sensor_data", "accuracy", "model_version"

@@ -16,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
 import logging
 import asyncio
 from typing import Optional, List
@@ -43,22 +44,10 @@ NOTIFICATION_ID_LEARNING = "solar_forecast_ml_learning"
 
 
 class NotificationService:
-    """
-    Service for Persistent Notifications in Home Assistant.
-    All methods are non-blocking with proper error handling.
-    Centralized option checking before notifications.
-    """
+    """Service for Persistent Notifications in Home Assistant by Zara"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """
-        Initialize Notification Service.
-
-        WARNING: Do not call directly - use create_notification_service()
-
-        Args:
-            hass: HomeAssistant instance
-            entry: ConfigEntry for option access
-        """
+        """Initialize Notification Service by Zara"""
         self.hass = hass
         self.entry = entry
         self._initialized = False
@@ -66,12 +55,7 @@ class NotificationService:
         _LOGGER.debug("NotificationService instance created")
 
     async def initialize(self) -> bool:
-        """
-        Initialize the Notification Service.
-
-        Returns:
-            True if successfully initialized
-        """
+        """Initialize the Notification Service by Zara"""
         try:
             async with self._notification_lock:
                 if self._initialized:
@@ -99,15 +83,7 @@ class NotificationService:
             return False
 
     def _should_notify(self, notification_type: str) -> bool:
-        """
-        Centralized check if notification should be displayed.
-
-        Args:
-            notification_type: CONF_NOTIFY_* constant
-
-        Returns:
-            True if notification is allowed
-        """
+        """Centralized check if notification should be displayed by Zara"""
         if not self._initialized:
             return False
 
@@ -125,10 +101,7 @@ class NotificationService:
         title: str,
         notification_id: str
     ) -> bool:
-        """
-        Create notification with error handling.
-        Uses hass.services.async_call instead of direct import.
-        """
+        """Create notification with error handling by Zara"""
         if not self._initialized:
             _LOGGER.warning(
                 f"[!] NotificationService not initialized - "
@@ -158,9 +131,7 @@ class NotificationService:
             return False
 
     async def _safe_dismiss_notification(self, notification_id: str) -> bool:
-        """
-        Remove notification with error handling.
-        """
+        """Remove notification with error handling by Zara"""
         if not self._initialized:
             return False
 
@@ -188,17 +159,7 @@ class NotificationService:
         installed_packages: Optional[List[str]] = None,
         missing_packages: Optional[List[str]] = None
     ) -> bool:
-        """
-        Show startup notification with integration status.
-
-        Args:
-            ml_mode: True if ML features active, False on fallback
-            installed_packages: List of installed packages
-            missing_packages: List of missing packages on fallback
-
-        Returns:
-            True if successful
-        """
+        """Show startup notification with integration status by Zara"""
         if not self._should_notify(CONF_NOTIFY_STARTUP):
             return False
 
@@ -209,74 +170,14 @@ class NotificationService:
                 installed_list = f"\n**Installed Dependencies:**\n{installed_items}\n"
 
             if ml_mode:
-                message = f"""
-**Solar Forecast ML Started Successfully**
-
-**Status: Full ML Mode [OK]**
-
-Integration running with all features:
-{installed_list}
-[OK] **Machine Learning active**
-- Ridge Regression Model
-- 28 Features for predictions
-- Automatic model training
-- Pattern recognition
-
-[OK] **Forecast System**
-- Hourly forecasts
-- Weather integration
-- Production tracking
-
-[OK] **Smart Features**
-- Seasonal adjustments
-- Weather-based optimization
-- Continuous learning
-
-**Next Steps:**
-The ML model will automatically train with real data and continuously improve.
-You can manually trigger training via the button entity.
-
-Integration is ready!
-"""
+                message = f"""Solar Forecast ML Started Successfully by Zara"""
             else:
                 missing_list = ""
                 if missing_packages:
                     missing_items = "\n".join([f"- [X] {pkg}" for pkg in missing_packages])
                     missing_list = f"\n**Missing Packages:**\n{missing_items}\n"
 
-                message = f"""
-**[!] Solar Forecast ML Started in Fallback Mode**
-
-**Status: Rule-Based Mode (ML disabled)**
-{installed_list}{missing_list}
-**Why Fallback Mode?**
-Required ML dependencies (numpy, aiofiles) could not be installed automatically.
-
-**Available Features:**
-[OK] Basic forecasts (rule-based)
-[OK] Weather integration
-[OK] Production tracking
-
-**Missing Features:**
-[X] Machine Learning predictions
-[X] Pattern recognition
-[X] Automatic model improvement
-
-**Install ML Dependencies:**
-You can install dependencies manually:
-
-**Via SSH (Docker):**
-```bash
-docker exec homeassistant pip install numpy aiofiles scikit-learn
-```
-
-**Via Terminal Add-on:**
-```bash
-pip install numpy aiofiles scikit-learn
-```
-
-After installation, restart Home Assistant to enable ML mode.
-"""
+                message = f""" Solar Forecast ML Started in Fallback Mode by Zara"""
 
             await self._safe_create_notification(
                 message=message,
@@ -295,7 +196,7 @@ After installation, restart Home Assistant to enable ML mode.
         forecast_energy: float,
         confidence: Optional[float] = None
     ) -> bool:
-        """Show forecast update notification."""
+        """Show forecast update notification by Zara"""
         if not self._should_notify(CONF_NOTIFY_FORECAST):
             return False
 
@@ -304,13 +205,7 @@ After installation, restart Home Assistant to enable ML mode.
             if confidence is not None:
                 confidence_text = f"\n**Confidence:** {confidence:.1f}%"
 
-            message = f"""
-**Solar Forecast Updated**
-
-**Today's Forecast:** {forecast_energy:.2f} kWh{confidence_text}
-
-The forecast has been updated based on current weather conditions.
-"""
+            message = f"""Solar Forecast Updated by Zara"""
 
             await self._safe_create_notification(
                 message=message,
@@ -325,19 +220,12 @@ The forecast has been updated based on current weather conditions.
             return False
 
     async def show_training_start(self, sample_count: int) -> bool:
-        """Show notification when ML training starts."""
+        """Show notification when ML training starts by Zara"""
         if not self._should_notify(CONF_NOTIFY_LEARNING):
             return False
 
         try:
-            message = f"""
-**ML Training Started**
-
-**Samples:** {sample_count}
-
-The machine learning model is being trained with historical data.
-This may take a few moments.
-"""
+            message = f"""ML Training Started by Zara"""
 
             await self._safe_create_notification(
                 message=message,
@@ -357,7 +245,7 @@ This may take a few moments.
         accuracy: Optional[float] = None,
         sample_count: Optional[int] = None
     ) -> bool:
-        """Show notification when ML training completes."""
+        """Show notification when ML training completes by Zara"""
         if not self._should_notify(CONF_NOTIFY_SUCCESSFUL_LEARNING):
             return False
 
@@ -371,21 +259,9 @@ This may take a few moments.
                 if sample_count is not None:
                     sample_text = f"\n**Samples Used:** {sample_count}"
 
-                message = f"""
-**[OK] ML Training Complete**
-
-The machine learning model has been successfully trained and is now active.{accuracy_text}{sample_text}
-
-Future forecasts will use the trained model for improved accuracy.
-"""
+                message = f"""OK ML Training Complete by Zara"""
             else:
-                message = """
-**[!] ML Training Failed**
-
-The training process encountered an error. The system will continue using rule-based forecasts.
-
-Check the logs for more details.
-"""
+                message = """ ML Training Failed by Zara"""
 
             await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
@@ -402,15 +278,15 @@ Check the logs for more details.
             return False
 
     async def dismiss_startup_notification(self) -> bool:
-        """Remove startup notification."""
+        """Remove startup notification by Zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_STARTUP)
 
     async def dismiss_forecast_notification(self) -> bool:
-        """Remove forecast notification."""
+        """Remove forecast notification by Zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_FORECAST)
 
     async def dismiss_training_notification(self) -> bool:
-        """Remove training notification."""
+        """Remove training notification by Zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
 
@@ -418,16 +294,7 @@ async def create_notification_service(
     hass: HomeAssistant,
     entry: ConfigEntry
 ) -> Optional[NotificationService]:
-    """
-    Factory function to create and initialize NotificationService.
-
-    Args:
-        hass: HomeAssistant instance
-        entry: ConfigEntry for option access
-
-    Returns:
-        Initialized NotificationService or None on failure
-    """
+    """Factory function to create and initialize NotificationService by Zara"""
     try:
         service = NotificationService(hass, entry)
 

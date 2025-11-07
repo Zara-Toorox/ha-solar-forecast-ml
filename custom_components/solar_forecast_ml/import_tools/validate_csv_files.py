@@ -1,20 +1,24 @@
-#!/usr/bin/env python3
 """
-CSV Validation Tool for Solar Forecast ML Historical Import.
-
-Quick pre-flight check to validate CSV files before running the import.
-Helps users identify issues early and provides actionable feedback.
-
-Usage:
-    python3 validate_csv_files.py
+Solar Forecast ML Component
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 Copyright (C) 2025 Zara-Toorox
 """
+
+#!/usr/bin/env python3
+"""CSV Validation Tool for Solar Forecast ML Historical Import by Zara"""
 
 import sys
 import csv
@@ -32,7 +36,7 @@ RESET = '\033[0m'
 
 
 def check_file_exists(filepath: Path) -> Tuple[bool, str]:
-    """Check if a file exists and is readable."""
+    """Check if a file exists and is readable by Zara"""
     if not filepath.exists():
         return False, f"File not found: {filepath.name}"
     
@@ -43,12 +47,7 @@ def check_file_exists(filepath: Path) -> Tuple[bool, str]:
 
 
 def validate_csv_structure(filepath: Path) -> Tuple[bool, str, int, int]:
-    """
-    Validate CSV structure and count valid/invalid entries.
-    
-    Returns:
-        (is_valid, message, valid_count, invalid_count)
-    """
+    """Validate CSV structure and count validinvalid entries by Zara"""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
@@ -93,12 +92,7 @@ def validate_csv_structure(filepath: Path) -> Tuple[bool, str, int, int]:
 
 
 def analyze_date_range(filepath: Path) -> Tuple[str, str, int]:
-    """
-    Analyze date range in CSV file.
-    
-    Returns:
-        (first_date, last_date, days_covered)
-    """
+    """Analyze date range in CSV file by Zara"""
     try:
         timestamps = []
         
@@ -110,7 +104,8 @@ def analyze_date_range(filepath: Path) -> Tuple[str, str, int]:
                     timestamp_str = row['last_changed'].strip()
                     ts = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
                     timestamps.append(ts)
-                except:
+                except Exception as e:
+                    print(f"Skipping invalid timestamp in row: {e}")
                     continue
         
         if not timestamps:
@@ -128,7 +123,7 @@ def analyze_date_range(filepath: Path) -> Tuple[str, str, int]:
 
 
 def main():
-    """Main validation routine."""
+    """Main validation routine by Zara"""
     print(f"\n{BOLD}{BLUE}{'=' * 60}{RESET}")
     print(f"{BOLD}{BLUE}CSV File Validation for Solar Forecast ML Import{RESET}")
     print(f"{BOLD}{BLUE}{'=' * 60}{RESET}\n")

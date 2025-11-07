@@ -34,9 +34,13 @@ from .const import (
     SERVICE_MOVE_TO_HISTORY,
     SERVICE_CALCULATE_STATS,
     SERVICE_RUN_ALL_DAY_END_TASKS,
-    SERVICE_TRIGGER_6AM_FORECAST,
-    SERVICE_FORECAST_DAY_AFTER_TOMORROW,
+    SERVICE_DEBUGGING_6AM_FORECAST,
+    SERVICE_DEBUGGING_BEST_HOUR,
+    SERVICE_DEBUGGING_TOMORROW_12PM,
+    SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6AM,
+    SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM,
     SERVICE_COLLECT_HOURLY_SAMPLE,
+    SERVICE_NIGHT_CLEANUP,
 )
 
 from .core.core_helpers import SafeDateTimeUtil as dt_util
@@ -46,14 +50,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Solar Forecast ML integration (legacy)."""
+    """Set up the Solar Forecast ML integration legacy by Zara"""
     # Store empty dict for the domain
     hass.data.setdefault(DOMAIN, {})
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Solar Forecast ML from a config entry."""
+    """Set up Solar Forecast ML from a config entry by Zara"""
     # Deferring imports to avoid blocking the event loop during component loading
     from .coordinator import SolarForecastMLCoordinator
     from .core.core_dependency_handler import DependencyHandler
@@ -129,7 +133,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
+    """Unload a config entry by Zara"""
     _LOGGER.info("Unloading Solar Forecast ML integration...")
     
     # Unload platforms
@@ -156,10 +160,10 @@ async def _async_register_services(
     entry: ConfigEntry,
     coordinator: "SolarForecastMLCoordinator"
 ) -> None:
-    """Register integration services."""
+    """Register integration services by Zara"""
     
     async def handle_retrain_model(call: ServiceCall) -> None:
-        """Handle force_retrain service call."""
+        """Handle force_retrain service call by Zara"""
         _LOGGER.info("Service called: force_retrain")
         try:
             if coordinator.ml_predictor:
@@ -174,7 +178,7 @@ async def _async_register_services(
             _LOGGER.error(f"Error during force_retrain service: {e}", exc_info=True)
     
     async def handle_reset_model(call: ServiceCall) -> None:
-        """Handle reset_model service call."""
+        """Handle reset_model service call by Zara"""
         _LOGGER.info("Service called: reset_model")
         try:
             if coordinator.ml_predictor:
@@ -189,7 +193,7 @@ async def _async_register_services(
             _LOGGER.error(f"Error during reset_model service: {e}", exc_info=True)
     
     async def handle_finalize_day(call: ServiceCall) -> None:
-        """Handle finalize_day service call."""
+        """Handle finalize_day service call by Zara"""
         _LOGGER.info("Service called: finalize_day (EMERGENCY)")
         try:
             if hasattr(coordinator, 'scheduled_tasks'):
@@ -201,7 +205,7 @@ async def _async_register_services(
             _LOGGER.error(f"Error during finalize_day service: {e}", exc_info=True)
     
     async def handle_move_to_history(call: ServiceCall) -> None:
-        """Handle move_to_history service call."""
+        """Handle move_to_history service call by Zara"""
         _LOGGER.info("Service called: move_to_history (EMERGENCY)")
         try:
             if hasattr(coordinator, 'scheduled_tasks'):
@@ -213,11 +217,22 @@ async def _async_register_services(
             _LOGGER.error(f"Error during move_to_history service: {e}", exc_info=True)
     
     async def handle_calculate_stats(call: ServiceCall) -> None:
-        """Handle calculate_stats service call."""
-        _LOGGER.info("Service called: calculate_stats (EMERGENCY)")
+        """Handle calculate_stats service call by Zara"""
+        _LOGGER.info("Service called: calculate_stats (MANUAL)")
         try:
+            # Check if statistics were recently calculated
+            if coordinator._last_statistics_calculation:
+                time_since = (dt_util.now() - coordinator._last_statistics_calculation).total_seconds()
+                if time_since < 60:  # Less than 1 minute ago
+                    _LOGGER.warning(
+                        f"Statistics were calculated {time_since:.0f}s ago. "
+                        f"Skipping to avoid excessive I/O. Wait at least 1 minute between calls."
+                    )
+                    return
+
             success = await coordinator.data_manager.calculate_statistics()
             if success:
+                coordinator._last_statistics_calculation = dt_util.now()
                 _LOGGER.info("Statistics calculation completed via service")
             else:
                 _LOGGER.error("Statistics calculation failed")
@@ -225,7 +240,7 @@ async def _async_register_services(
             _LOGGER.error(f"Error during calculate_stats service: {e}", exc_info=True)
     
     async def handle_run_all_day_end_tasks(call: ServiceCall) -> None:
-        """Handle run_all_day_end_tasks service call."""
+        """Handle run_all_day_end_tasks service call by Zara"""
         _LOGGER.info("Service called: run_all_day_end_tasks (EMERGENCY)")
         try:
             # Execute complete day-end sequence
@@ -245,26 +260,246 @@ async def _async_register_services(
         except Exception as e:
             _LOGGER.error(f"Error during run_all_day_end_tasks service: {e}", exc_info=True)
     
-    async def handle_trigger_6am_forecast(call: ServiceCall) -> None:
-        """Handle trigger_6am_forecast service call (DEBUGGING)."""
-        _LOGGER.info("Service called: trigger_6am_forecast (DEBUGGING)")
+    async def handle_debugging_6am_forecast(call: ServiceCall) -> None:
+        """Handle debugging_6am_forecast service call by Zara"""
+        _LOGGER.info("Service called: debugging_6am_forecast (DEBUGGING)")
         try:
             await coordinator.set_expected_daily_production()
-            _LOGGER.info("6 AM forecast lock triggered successfully via service")
+            _LOGGER.info("✓ 6 AM forecast logic executed: TODAY locked via service")
         except Exception as e:
-            _LOGGER.error(f"Error during trigger_6am_forecast service: {e}", exc_info=True)
+            _LOGGER.error(f"✗ Error during debugging_6am_forecast service: {e}", exc_info=True)
 
-    async def handle_forecast_day_after_tomorrow(call: ServiceCall) -> None:
-        """Handle forecast_day_after_tomorrow service call."""
-        _LOGGER.info("Service called: forecast_day_after_tomorrow")
+    async def handle_debugging_best_hour(call: ServiceCall) -> None:
+        """Handle debugging_best_hour service call by Zara"""
+        _LOGGER.info("Service called: debugging_best_hour (DEBUGGING)")
         try:
-            await coordinator.forecast_day_after_tomorrow()
-            _LOGGER.info("Forecast for day after tomorrow triggered successfully via service")
+            # Get required inputs (same as coordinator update)
+            weather_service = coordinator.weather_service
+            if not weather_service:
+                _LOGGER.error("✗ Weather service not available - ABORTING")
+                return
+
+            # Fetch weather data
+            current_weather = await weather_service.get_current_weather()
+            hourly_forecast = await weather_service.get_processed_hourly_forecast()
+            external_sensors = coordinator.sensor_collector.collect_all_sensor_data_dict()
+
+            # Run forecast orchestrator (EXACT CODE from coordinator._async_update_data)
+            forecast = await coordinator.forecast_orchestrator.orchestrate_forecast(
+                current_weather=current_weather,
+                hourly_forecast=hourly_forecast,
+                external_sensors=external_sensors,
+                ml_prediction_today=None,
+                ml_prediction_tomorrow=None,
+                correction_factor=coordinator.learned_correction_factor
+            )
+
+            # Extract best_hour (EXACT CODE from coordinator._save_forecasts_to_storage:668-684)
+            best_hour = forecast.get("best_hour")
+            best_hour_kwh = forecast.get("best_hour_kwh")
+
+            if best_hour is not None and best_hour_kwh is not None:
+                source = (
+                    "ML"
+                    if coordinator.forecast_orchestrator.ml_strategy
+                    and coordinator.forecast_orchestrator.ml_strategy.is_available()
+                    else "Weather"
+                )
+
+                await coordinator.data_manager.save_forecast_best_hour(
+                    hour=best_hour,
+                    prediction_kwh=best_hour_kwh,
+                    source=source,
+                )
+                _LOGGER.info(f"✓ Best hour saved: {best_hour}:00 with {best_hour_kwh:.3f} kWh (source: {source})")
+                coordinator.async_update_listeners()
+            else:
+                _LOGGER.warning("✗ Best hour not calculated in forecast - strategy may not support it")
+
         except Exception as e:
-            _LOGGER.error(f"Error during forecast_day_after_tomorrow service: {e}", exc_info=True)
+            _LOGGER.error(f"✗ Error during debugging_best_hour service: {e}", exc_info=True)
+
+    async def handle_debugging_tomorrow_12pm(call: ServiceCall) -> None:
+        """Handle debugging_tomorrow_12pm service call by Zara"""
+        _LOGGER.info("Service called: debugging_tomorrow_12pm (DEBUGGING)")
+        try:
+            # Get current forecast data
+            weather_service = coordinator.weather_service
+            if not weather_service:
+                _LOGGER.error("✗ Weather service not available - ABORTING")
+                return
+
+            # Fetch weather data
+            current_weather = await weather_service.get_current_weather()
+            hourly_forecast = await weather_service.get_processed_hourly_forecast()
+            external_sensors = coordinator.sensor_collector.collect_all_sensor_data_dict()
+
+            # Run forecast orchestrator
+            forecast = await coordinator.forecast_orchestrator.orchestrate_forecast(
+                current_weather=current_weather,
+                hourly_forecast=hourly_forecast,
+                external_sensors=external_sensors,
+                ml_prediction_today=None,
+                ml_prediction_tomorrow=None,
+                correction_factor=coordinator.learned_correction_factor
+            )
+
+            tomorrow_kwh = forecast.get("tomorrow")
+            if tomorrow_kwh is None:
+                _LOGGER.error("✗ Tomorrow forecast not available - ABORTING")
+                return
+
+            # EXACT CODE from coordinator._save_forecasts_to_storage:686-696
+            now_local = dt_util.now()
+            tomorrow_date = now_local + timedelta(days=1)
+            source = (
+                "ML"
+                if coordinator.forecast_orchestrator.ml_strategy
+                and coordinator.forecast_orchestrator.ml_strategy.is_available()
+                else "Weather"
+            )
+
+            await coordinator.data_manager.save_forecast_tomorrow(
+                date=tomorrow_date,
+                prediction_kwh=tomorrow_kwh,
+                source=source,
+                lock=True,  # LOCK at 12 PM
+            )
+            _LOGGER.info(f"✓ Tomorrow forecast LOCKED: {tomorrow_kwh:.2f} kWh")
+            coordinator.async_update_listeners()
+
+        except Exception as e:
+            _LOGGER.error(f"✗ Error during debugging_tomorrow_12pm service: {e}", exc_info=True)
+
+    async def handle_debugging_day_after_tomorrow_6am(call: ServiceCall) -> None:
+        """Handle debugging_day_after_tomorrow_6am service call by Zara"""
+        _LOGGER.info("Service called: debugging_day_after_tomorrow_6am (DEBUGGING)")
+        try:
+            # Get current forecast data
+            weather_service = coordinator.weather_service
+            if not weather_service:
+                _LOGGER.error("✗ Weather service not available - ABORTING")
+                return
+
+            # Fetch weather data
+            current_weather = await weather_service.get_current_weather()
+            hourly_forecast = await weather_service.get_processed_hourly_forecast()
+            external_sensors = coordinator.sensor_collector.collect_all_sensor_data_dict()
+
+            # Run forecast orchestrator
+            forecast = await coordinator.forecast_orchestrator.orchestrate_forecast(
+                current_weather=current_weather,
+                hourly_forecast=hourly_forecast,
+                external_sensors=external_sensors,
+                ml_prediction_today=None,
+                ml_prediction_tomorrow=None,
+                correction_factor=coordinator.learned_correction_factor
+            )
+
+            day_after_kwh = forecast.get("day_after_tomorrow")
+
+            # ========== DEBUG RESULT ==========
+            _LOGGER.info(f"\nFinal Forecast Results:")
+            _LOGGER.info(f"  - Today: {forecast.get('today', 0):.2f} kWh")
+            _LOGGER.info(f"  - Tomorrow: {forecast.get('tomorrow', 0):.2f} kWh")
+            _LOGGER.info(f"  - Day After Tomorrow: {day_after_kwh if day_after_kwh else 0:.2f} kWh")
+            _LOGGER.info(f"  - Method: {forecast.get('method', 'N/A')}")
+            _LOGGER.info("=" * 80)
+            # ========== END DEBUG RESULT ==========
+
+            if day_after_kwh is None:
+                _LOGGER.error("✗ Day after tomorrow forecast not available - ABORTING")
+                return
+
+            # EXACT CODE from coordinator._save_forecasts_to_storage:649-657
+            # At 6 AM, day_after_tomorrow is saved UNLOCKED (lock=False by default)
+            now_local = dt_util.now()
+            day_after_date = now_local + timedelta(days=2)
+            source = (
+                "ML"
+                if coordinator.forecast_orchestrator.ml_strategy
+                and coordinator.forecast_orchestrator.ml_strategy.is_available()
+                else "Weather"
+            )
+
+            await coordinator.data_manager.save_forecast_day_after(
+                date=day_after_date,
+                prediction_kwh=day_after_kwh,
+                source=source,
+                lock=False,  # UNLOCKED at 6 AM (this is the key difference!)
+            )
+            _LOGGER.info(f"✓ Day after tomorrow forecast saved UNLOCKED: {day_after_kwh:.2f} kWh")
+            coordinator.async_update_listeners()
+
+        except Exception as e:
+            _LOGGER.error(f"✗ Error during debugging_day_after_tomorrow_6am service: {e}", exc_info=True)
+
+    async def handle_debugging_day_after_tomorrow_6pm(call: ServiceCall) -> None:
+        """Handle debugging_day_after_tomorrow_6pm service call by Zara"""
+        _LOGGER.info("Service called: debugging_day_after_tomorrow_6pm (DEBUGGING)")
+        try:
+            # Get current forecast data
+            weather_service = coordinator.weather_service
+            if not weather_service:
+                _LOGGER.error("✗ Weather service not available - ABORTING")
+                return
+
+            # Fetch weather data
+            current_weather = await weather_service.get_current_weather()
+            hourly_forecast = await weather_service.get_processed_hourly_forecast()
+            external_sensors = coordinator.sensor_collector.collect_all_sensor_data_dict()
+
+            # Run forecast orchestrator
+            forecast = await coordinator.forecast_orchestrator.orchestrate_forecast(
+                current_weather=current_weather,
+                hourly_forecast=hourly_forecast,
+                external_sensors=external_sensors,
+                ml_prediction_today=None,
+                ml_prediction_tomorrow=None,
+                correction_factor=coordinator.learned_correction_factor
+            )
+
+            day_after_kwh = forecast.get("day_after_tomorrow")
+            if day_after_kwh is None:
+                _LOGGER.error("✗ Day after tomorrow forecast not available - ABORTING")
+                return
+
+            # EXACT CODE from coordinator._save_forecasts_to_storage:698-708
+            now_local = dt_util.now()
+            day_after_date = now_local + timedelta(days=2)
+            source = (
+                "ML"
+                if coordinator.forecast_orchestrator.ml_strategy
+                and coordinator.forecast_orchestrator.ml_strategy.is_available()
+                else "Weather"
+            )
+
+            await coordinator.data_manager.save_forecast_day_after(
+                date=day_after_date,
+                prediction_kwh=day_after_kwh,
+                source=source,
+                lock=True,  # LOCK at 18 PM
+            )
+            _LOGGER.info(f"✓ Day after tomorrow forecast LOCKED: {day_after_kwh:.2f} kWh")
+            coordinator.async_update_listeners()
+
+        except Exception as e:
+            _LOGGER.error(f"✗ Error during debugging_day_after_tomorrow_6pm service: {e}", exc_info=True)
+
+    async def handle_night_cleanup(call: ServiceCall) -> None:
+        """Handle night_cleanup service call by Zara"""
+        _LOGGER.info("Service called: night_cleanup (MANUAL TEST)")
+        try:
+            if hasattr(coordinator, 'scheduled_tasks'):
+                await coordinator.scheduled_tasks.scheduled_night_cleanup(None)
+                _LOGGER.info("Night cleanup completed via service")
+            else:
+                _LOGGER.error("Scheduled tasks manager not available")
+        except Exception as e:
+            _LOGGER.error(f"Error during night_cleanup service: {e}", exc_info=True)
 
     async def handle_collect_hourly_sample(call: ServiceCall) -> None:
-        """Handle collect_hourly_sample service call."""
+        """Handle collect_hourly_sample service call by Zara"""
         _LOGGER.info("Service called: collect_hourly_sample")
         try:
             if not coordinator.ml_predictor:
@@ -301,15 +536,19 @@ async def _async_register_services(
     hass.services.async_register(DOMAIN, SERVICE_MOVE_TO_HISTORY, handle_move_to_history)
     hass.services.async_register(DOMAIN, SERVICE_CALCULATE_STATS, handle_calculate_stats)
     hass.services.async_register(DOMAIN, SERVICE_RUN_ALL_DAY_END_TASKS, handle_run_all_day_end_tasks)
-    hass.services.async_register(DOMAIN, SERVICE_TRIGGER_6AM_FORECAST, handle_trigger_6am_forecast)
-    hass.services.async_register(DOMAIN, SERVICE_FORECAST_DAY_AFTER_TOMORROW, handle_forecast_day_after_tomorrow)
+    hass.services.async_register(DOMAIN, SERVICE_DEBUGGING_6AM_FORECAST, handle_debugging_6am_forecast)
+    hass.services.async_register(DOMAIN, SERVICE_DEBUGGING_BEST_HOUR, handle_debugging_best_hour)
+    hass.services.async_register(DOMAIN, SERVICE_DEBUGGING_TOMORROW_12PM, handle_debugging_tomorrow_12pm)
+    hass.services.async_register(DOMAIN, SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6AM, handle_debugging_day_after_tomorrow_6am)
+    hass.services.async_register(DOMAIN, SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM, handle_debugging_day_after_tomorrow_6pm)
     hass.services.async_register(DOMAIN, SERVICE_COLLECT_HOURLY_SAMPLE, handle_collect_hourly_sample)
-    
+    hass.services.async_register(DOMAIN, SERVICE_NIGHT_CLEANUP, handle_night_cleanup)
+
     _LOGGER.info("All services registered successfully")
 
 
 def _async_unregister_services(hass: HomeAssistant) -> None:
-    """Unregister integration services."""
+    """Unregister integration services by Zara"""
     services = [
         SERVICE_RETRAIN_MODEL,
         SERVICE_RESET_LEARNING_DATA,
@@ -317,13 +556,17 @@ def _async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_MOVE_TO_HISTORY,
         SERVICE_CALCULATE_STATS,
         SERVICE_RUN_ALL_DAY_END_TASKS,
-        SERVICE_TRIGGER_6AM_FORECAST,
-        SERVICE_FORECAST_DAY_AFTER_TOMORROW,
+        SERVICE_DEBUGGING_6AM_FORECAST,
+        SERVICE_DEBUGGING_BEST_HOUR,
+        SERVICE_DEBUGGING_TOMORROW_12PM,
+        SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6AM,
+        SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM,
         SERVICE_COLLECT_HOURLY_SAMPLE,
+        SERVICE_NIGHT_CLEANUP,
     ]
-    
+
     for service in services:
         if hass.services.has_service(DOMAIN, service):
             hass.services.async_remove(DOMAIN, service)
-    
+
     _LOGGER.info("All services unregistered")

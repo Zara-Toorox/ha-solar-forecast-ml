@@ -39,10 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ForecastOrchestrator:
-    """
-    Selects and executes the most appropriate forecast strategy based on
-    availability (e.g., ML model health) and calculates next-hour predictions.
-    """
+    """Selects and executes the most appropriate forecast strategy based on by Zara"""
 
     FALLBACK_PRODUCTION_START_HOUR = 6
     FALLBACK_PRODUCTION_END_HOUR = 21
@@ -54,14 +51,7 @@ class ForecastOrchestrator:
         solar_capacity: float,
         weather_calculator: WeatherCalculator
     ):
-        """
-        Initialize the ForecastOrchestrator.
-
-        Args:
-            hass: HomeAssistant instance.
-            solar_capacity: Configured solar capacity (kWp).
-            weather_calculator: Instance of WeatherCalculator for rule-based factors.
-        """
+        """Initialize the ForecastOrchestrator by Zara"""
         self.hass = hass
         self.data_manager = data_manager
         self.solar_capacity = solar_capacity
@@ -78,16 +68,7 @@ class ForecastOrchestrator:
         _LOGGER.debug("ForecastOrchestrator initialized.")
 
     def is_production_hour(self, target_dt: datetime) -> bool:
-        """
-        Checks if a given datetime is within realistic solar production hours.
-        Uses sun.sun entity times with margins, falls back to seasonal times.
-        
-        Args:
-            target_dt: Timezone-aware datetime to check (can be in the future)
-            
-        Returns:
-            True if target_dt is within production hours, False otherwise
-        """
+        """Checks if a given datetime is within realistic solar production hours by Zara"""
         # Method 1: sun.sun with margins (most accurate)
         sun_state = self.hass.states.get("sun.sun")
         if sun_state and sun_state.attributes:
@@ -159,13 +140,7 @@ class ForecastOrchestrator:
         ml_predictor: Optional[MLPredictor] = None,
         error_handler: Optional[ErrorHandlingService] = None
     ) -> None:
-        """
-        Initializes the available forecast strategy instances.
-
-        Args:
-            ml_predictor: The initialized MLPredictor instance, if available.
-            error_handler: The initialized ErrorHandlingService instance, if available.
-        """
+        """Initializes the available forecast strategy instances by Zara"""
         _LOGGER.info("Initializing forecast strategies...")
         
         self._ml_predictor = ml_predictor
@@ -207,21 +182,7 @@ class ForecastOrchestrator:
         ml_prediction_tomorrow: Optional[float] = None,
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
-        """
-        Orchestrates forecast creation with all available data.
-
-        Args:
-            current_weather: Current weather data
-            hourly_forecast: Hourly weather forecast
-            external_sensors: External sensor data
-            historical_avg: Historical average (7-day)
-            ml_prediction_today: ML prediction for today
-            ml_prediction_tomorrow: ML prediction for tomorrow
-            correction_factor: Learned correction factor
-
-        Returns:
-            Dictionary with forecast results
-        """
+        """Orchestrates forecast creation with all available data by Zara"""
         hourly_weather_forecast = hourly_forecast if hourly_forecast else []
         sensor_data = external_sensors if external_sensors else {}
         
@@ -240,18 +201,7 @@ class ForecastOrchestrator:
         sensor_data: Dict[str, Any],
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
-        """
-        Creates daily solar forecast (today, tomorrow, day after tomorrow) through
-        iterative calculation and blending of available strategies.
-
-        Args:
-            hourly_weather_forecast: Processed hourly weather forecast from WeatherService.
-            sensor_data: Dictionary with 'current_yield'.
-            correction_factor: Learned factor for rule strategy.
-
-        Returns:
-            A dictionary with the final blended forecast results.
-        """
+        """Creates daily solar forecast today tomorrow day after tomorrow through by Zara"""
         _LOGGER.debug("Creating blended daily forecast (Iterative Pipeline)...")
 
         ml_result: Optional[ForecastResult] = None
@@ -371,11 +321,15 @@ class ForecastOrchestrator:
             )
         
         rule_weight = 1.0 - accuracy_weight
-        
+
+        # Blend today and tomorrow with ML + Rule-Based
         final_today = (today_ml * accuracy_weight) + (today_rule * rule_weight)
         final_tomorrow = (tomorrow_ml * accuracy_weight) + (tomorrow_rule * rule_weight)
-        final_day_after = (day_after_ml * accuracy_weight) + (day_after_rule * rule_weight)
-        
+
+        # STRATEGIC FIX: Day after tomorrow uses ONLY Rule-Based (no ML blending)
+        # ML model struggles with day+2 predictions due to lag feature limitations
+        final_day_after = day_after_rule
+
         method_str = f"blended (ML: {accuracy_weight*100:.0f}% | Rule: {rule_weight*100:.0f}%)"
         if accuracy_weight == 0.0:
             method_str = "rule_based_iterative"
@@ -391,12 +345,24 @@ class ForecastOrchestrator:
             f"Blending complete (Accuracy={accuracy_weight:.3f}): "
             f"ML=({today_ml:.2f}, {tomorrow_ml:.2f}, {day_after_ml:.2f}), "
             f"Rule=({today_rule:.2f}, {tomorrow_rule:.2f}, {day_after_rule:.2f}) -> "
-            f"Final=({final_today:.2f}, {final_tomorrow:.2f}, {final_day_after:.2f}) kWh"
+            f"Final=({final_today:.2f}, {final_tomorrow:.2f}, {final_day_after:.2f} [Rule-Only]) kWh"
         )
 
         _LOGGER.debug(
             f"Final values before returning - today: {final_today}, tomorrow: {final_tomorrow}, day_after: {final_day_after}"
         )
+
+        # Extract best hour from whichever strategy provided it (prefer ML if available)
+        best_hour = None
+        best_hour_kwh = None
+        if ml_result and ml_result.best_hour_today is not None:
+            best_hour = ml_result.best_hour_today
+            best_hour_kwh = ml_result.best_hour_production_kwh
+            _LOGGER.debug(f"Using ML best hour: {best_hour}:00 with {best_hour_kwh:.3f} kWh")
+        elif rule_result and rule_result.best_hour_today is not None:
+            best_hour = rule_result.best_hour_today
+            best_hour_kwh = rule_result.best_hour_production_kwh
+            _LOGGER.debug(f"Using Rule-based best hour: {best_hour}:00 with {best_hour_kwh:.3f} kWh")
 
         # Save prediction to history
         try:
@@ -424,7 +390,9 @@ class ForecastOrchestrator:
             "peak_time": "12:00",
             "confidence": round(final_confidence, 1),
             "method": method_str,
-            "model_accuracy": model_accuracy if self._ml_predictor else None
+            "model_accuracy": model_accuracy if self._ml_predictor else None,
+            "best_hour": best_hour,
+            "best_hour_kwh": round(best_hour_kwh, 3) if best_hour_kwh is not None else None
         }
 
     def calculate_next_hour_prediction(
@@ -433,19 +401,7 @@ class ForecastOrchestrator:
         weather_data: Optional[Dict[str, Any]] = None,
         sensor_data: Optional[Dict[str, Any]] = None
     ) -> float:
-        """
-        Estimates the solar production for the *next full hour*.
-        Uses the ML hourly profile if available, adjusted by current conditions,
-        otherwise falls back to simpler estimation.
-
-        Args:
-            forecast_today_kwh: The total predicted energy production for today (in kWh).
-            weather_data: Current weather conditions dictionary.
-            sensor_data: Current external sensor readings dictionary.
-
-        Returns:
-            Estimated production for the next hour (in kWh), rounded to 3 decimal places.
-        """
+        """Estimates the solar production for the next full hour by Zara"""
         _LOGGER.debug("Calculating next hour prediction...")
         try:
             now_local = dt_util.now()
@@ -501,10 +457,7 @@ class ForecastOrchestrator:
             return 0.0
 
     def _get_ml_hourly_profile_base(self, forecast_today_kwh: float, target_hour: int) -> Optional[float]:
-        """
-        Calculates the base production for a specific hour using the ML hourly profile,
-        scaled by the total forecast for today.
-        """
+        """Calculates the base production for a specific hour using the ML hourly profile by Zara"""
         if not self._ml_predictor or not self._ml_predictor.current_profile:
             _LOGGER.debug("ML Predictor or its current_profile not available for hourly base.")
             return None
@@ -543,9 +496,7 @@ class ForecastOrchestrator:
         current_weather_data: Optional[Dict[str, Any]],
         current_sensor_data: Optional[Dict[str, Any]]
     ) -> Dict[str, float]:
-        """
-        Calculates adjustment multipliers based on current weather and sensor readings.
-        """
+        """Calculates adjustment multipliers based on current weather and sensor readings by Zara"""
         factors = {
             'cloud/lux': 1.0,
             'temperature': 1.0,

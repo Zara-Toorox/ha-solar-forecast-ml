@@ -53,14 +53,25 @@ from .const import (
     CONF_NOTIFY_LEARNING,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
     # Defaults / Constants needed
-    DEFAULT_SOLAR_CAPACITY
+    DEFAULT_SOLAR_CAPACITY,
+    # Battery Management (v8.3.0)
+    CONF_BATTERY_ENABLED,
+    CONF_BATTERY_CAPACITY,
+    CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_POWER_ENTITY,
+    CONF_BATTERY_CHARGE_TODAY_ENTITY,
+    CONF_BATTERY_DISCHARGE_TODAY_ENTITY,
+    CONF_ELECTRICITY_ENABLED,
+    CONF_ELECTRICITY_COUNTRY,
+    DEFAULT_BATTERY_CAPACITY,
+    DEFAULT_ELECTRICITY_COUNTRY,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 # --- Helper function to safely get defaults ---
 def _get_default(data: dict | None, key: str, default: Any = vol.UNDEFINED):
-    """Safely get default value for schema."""
+    """Safely get default value for schema by Zara"""
     if data is None:
         return default
     value = data.get(key)
@@ -68,7 +79,7 @@ def _get_default(data: dict | None, key: str, default: Any = vol.UNDEFINED):
 
 # --- Schema Definition ---
 def _get_base_schema(defaults: dict | None) -> vol.Schema:
-    """Returns the base schema for user and reconfigure steps."""
+    """Returns the base schema for user and reconfigure steps by Zara"""
     if defaults is None:
         defaults = {}
 
@@ -122,22 +133,53 @@ def _get_base_schema(defaults: dict | None) -> vol.Schema:
             default=_get_default(defaults, CONF_HUMIDITY_SENSOR)
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
         # --- ENDE NEU ---
+
+        # --- Battery Management Sensors (v8.3.0) ---
+        vol.Optional(
+            CONF_BATTERY_CAPACITY,
+            default=_get_default(defaults, CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY)
+        ): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1000.0)),
+        vol.Optional(
+            CONF_BATTERY_SOC_ENTITY,
+            default=_get_default(defaults, CONF_BATTERY_SOC_ENTITY)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_BATTERY_POWER_ENTITY,
+            default=_get_default(defaults, CONF_BATTERY_POWER_ENTITY)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_BATTERY_CHARGE_TODAY_ENTITY,
+            default=_get_default(defaults, CONF_BATTERY_CHARGE_TODAY_ENTITY)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_BATTERY_DISCHARGE_TODAY_ENTITY,
+            default=_get_default(defaults, CONF_BATTERY_DISCHARGE_TODAY_ENTITY)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+
+        # --- Electricity Price Configuration ---
+        vol.Optional(
+            CONF_ELECTRICITY_COUNTRY,
+            default=_get_default(defaults, CONF_ELECTRICITY_COUNTRY, DEFAULT_ELECTRICITY_COUNTRY)
+        ): selector.SelectSelector(selector.SelectSelectorConfig(
+            options=["DE", "AT"],
+            mode=selector.SelectSelectorMode.DROPDOWN
+        )),
     })
 
 
 @config_entries.HANDLERS.register(DOMAIN)
 class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handles the configuration flow for Solar Forecast ML."""
+    """Handles the configuration flow for Solar Forecast ML by Zara"""
     VERSION = 1
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        """Redirect users to the options flow handler."""
-        return SolarForecastMLOptionsFlow(config_entry)
+        """Redirect users to the options flow handler by Zara"""
+        return SolarForecastMLOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial setup step."""
+        """Handle the initial setup step by Zara"""
         errors = {}
         prefill_data = user_input if user_input is not None else {}
 
@@ -188,7 +230,7 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the reconfiguration step."""
+        """Handle the reconfiguration step by Zara"""
         if self.source != SOURCE_RECONFIGURE: return self.async_abort(reason="not_reconfigure")
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if entry is None: return self.async_abort(reason="entry_not_found")
@@ -253,24 +295,10 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
-    """Handles the options flow with automatic reload after changes."""
-
-    # No __init__ needed, self.config_entry is provided by base class
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        # This init is deprecated, remove it.
-        # self.config_entry = config_entry
-        # Instead, access via self.config_entry directly in methods.
-        pass # Keep init empty or remove completely. Let's remove it.
-
-    # def __init__(self, config_entry: config_entries.ConfigEntry) -> None: <-- REMOVE THIS METHOD
-    #    """Initialize options flow."""
-    #    self.config_entry = config_entry
-
+    """Handles the options flow with automatic reload after changes by Zara"""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage the options."""
+        """Manage the options by Zara"""
         errors = {}
         if user_input is not None:
             # Validation
@@ -290,26 +318,47 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
                      errors=errors,
                  )
 
-            # Update options
+            # Update options (Boolean flags and settings go to options)
+            # Battery sensor entities, capacity, and country are now configured via reconfigure flow (in data)
             updated_options = {
                  **self.config_entry.options,
-                 **user_input,
+                 **{k: v for k, v in user_input.items() if k in [
+                     CONF_UPDATE_INTERVAL, CONF_DIAGNOSTIC, CONF_HOURLY,
+                     CONF_NOTIFY_STARTUP, CONF_NOTIFY_FORECAST, CONF_NOTIFY_LEARNING,
+                     CONF_NOTIFY_SUCCESSFUL_LEARNING,
+                     CONF_BATTERY_ENABLED,  # Only battery enable flag
+                     CONF_ELECTRICITY_ENABLED  # Only electricity enable flag
+                 ]},
                  CONF_DIAGNOSTIC: user_input.get(CONF_DIAGNOSTIC, True)
             }
+
+            # Update options only (no data changes needed here)
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                options=updated_options
+            )
+
             return self.async_create_entry(title="", data=updated_options)
 
-        # Show form
+        # Show form with suggested values from options or data (fallback)
         options_schema = self._get_options_schema()
+
+        # Merge options with data as fallback for suggested values
+        suggested_values = {
+            **self.config_entry.data,  # Fallback to data
+            **self.config_entry.options,  # Override with options if present
+        }
+
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
-                options_schema, self.config_entry.options
+                options_schema, suggested_values
             ),
             errors=errors,
         )
 
     def _get_options_schema(self) -> vol.Schema:
-         """Define the schema for the options form."""
+         """Define the schema for the options form by Zara"""
          current_options = self.config_entry.options
 
          return vol.Schema({
@@ -321,4 +370,8 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
              vol.Optional(CONF_NOTIFY_FORECAST, default=current_options.get(CONF_NOTIFY_FORECAST, False)): bool,
              vol.Optional(CONF_NOTIFY_LEARNING, default=current_options.get(CONF_NOTIFY_LEARNING, False)): bool,
              vol.Optional(CONF_NOTIFY_SUCCESSFUL_LEARNING, default=current_options.get(CONF_NOTIFY_SUCCESSFUL_LEARNING, True)): bool,
+             # Battery Management - Only enable flags, capacity and entities are in reconfigure
+             vol.Optional(CONF_BATTERY_ENABLED, default=current_options.get(CONF_BATTERY_ENABLED, False)): bool,
+             # Electricity Prices - Only enable flag, country is in reconfigure
+             vol.Optional(CONF_ELECTRICITY_ENABLED, default=current_options.get(CONF_ELECTRICITY_ENABLED, False)): bool,
          })

@@ -41,12 +41,12 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Base Class for Coordinator-based Sensors in this file ---
 class BaseSolarSensor(CoordinatorEntity, SensorEntity):
-    """Base class for core sensors updated by the coordinator."""
+    """Base class for core sensors updated by the coordinator by Zara"""
 
     _attr_has_entity_name = True
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the base sensor."""
+        """Initialize the base sensor by Zara"""
         super().__init__(coordinator)
         self.entry = entry
         self._attr_device_info = DeviceInfo(
@@ -60,7 +60,7 @@ class BaseSolarSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available based on coordinator."""
+        """Return if entity is available based on coordinator by Zara"""
         # Check if coordinator has successfully run at least once
         return self.coordinator.last_update_success and self.coordinator.data is not None
 
@@ -68,16 +68,13 @@ class BaseSolarSensor(CoordinatorEntity, SensorEntity):
 # --- Core Sensors ---
 
 class SolarForecastSensor(SensorEntity):
-    """
-    Sensor for today's or tomorrow's solar forecast.
-    "remaining" type reads from daily_forecasts.json and subtracts live yield.
-    """
+    """Sensor for todays or tomorrows solar forecast by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry, key: str):
-        """Initialize the forecast sensor."""
+        """Initialize the forecast sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._key = key
@@ -109,16 +106,12 @@ class SolarForecastSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
+        """Return if entity is available by Zara"""
         return True
 
     @property
     def native_value(self) -> float:
-        """
-        Return the forecast value.
-        'remaining': LOCKED forecast from daily_forecasts.json minus current yield
-        'tomorrow': From coordinator data
-        """
+        """Return the forecast value by Zara"""
         if self._key == "tomorrow":
             # Tomorrow: Just return coordinator data
             if not self._coordinator.data:
@@ -147,7 +140,7 @@ class SolarForecastSensor(SensorEntity):
         return round(remaining, 2)
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         
         # For "remaining": Load initial forecast from file
@@ -166,33 +159,33 @@ class SolarForecastSensor(SensorEntity):
                     self.hass, self._yield_entity, self._handle_yield_change
                 )
             )
-            _LOGGER.debug(f"Remaining forecast sensor listening to {self._yield_entity}")
+            # Listening to yield sensor for live updates (debug log removed)
         
         # Initial state
         self.async_write_ha_state()
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates - reload file for 'remaining'."""
+        """Handle coordinator updates - reload file for remaining by Zara"""
         if self._key == "remaining":
             self.hass.async_create_task(self._reload_forecast_and_update())
         else:
             self.async_write_ha_state()
 
     async def _reload_forecast_and_update(self) -> None:
-        """Reload forecast from file and update state."""
+        """Reload forecast from file and update state by Zara"""
         await self._load_forecast_from_file()
         self.async_write_ha_state()
 
     async def _load_forecast_from_file(self) -> None:
-        """Load today's LOCKED forecast from daily_forecasts.json."""
+        """Load todays LOCKED forecast from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 today = forecast_data.get("today", {})
                 forecast_day = today.get("forecast_day", {})
                 self._cached_total_forecast = forecast_day.get("prediction_kwh")
-                _LOGGER.debug(f"Loaded total forecast from file: {self._cached_total_forecast} kWh")
+                # Loaded total forecast from file (debug log removed)
             else:
                 self._cached_total_forecast = None
         except Exception as e:
@@ -201,18 +194,18 @@ class SolarForecastSensor(SensorEntity):
 
     @callback
     def _handle_yield_change(self, event) -> None:
-        """Handle yield sensor state changes (only for 'remaining')."""
+        """Handle yield sensor state changes only for remaining by Zara"""
         self.async_write_ha_state()
 
 
 class NextHourSensor(SensorEntity):
-    """Sensor for the next hour's solar forecast - reads from daily_forecasts.json."""
+    """Sensor for the next hours solar forecast - reads from daily_forecastsjson by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the next hour sensor."""
+        """Initialize the next hour sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -229,16 +222,16 @@ class NextHourSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a forecast set and it's active."""
+        """Sensor is available if we have a forecast set and its active by Zara"""
         return self._cached_value is not None
 
     @property
     def native_value(self) -> float | None:
-        """Return the next hour forecast value."""
+        """Return the next hour forecast value by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         
         # Load initial value from file
@@ -254,16 +247,16 @@ class NextHourSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates - reload from file."""
+        """Handle coordinator updates - reload from file by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load next hour forecast from daily_forecasts.json."""
+        """Load next hour forecast from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
@@ -272,8 +265,7 @@ class NextHourSensor(SensorEntity):
                 
                 # Get prediction value
                 self._cached_value = next_hour.get("prediction_kwh")
-                    
-                _LOGGER.debug(f"Loaded next hour forecast: {self._cached_value}")
+                # Loaded next hour forecast (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -281,28 +273,80 @@ class NextHourSensor(SensorEntity):
             self._cached_value = None
 
 
-class PeakProductionHourSensor(BaseSolarSensor):
-    """Sensor indicating the estimated peak production hour."""
+class PeakProductionHourSensor(SensorEntity):
+    """Sensor indicating the forecasted best production hour from morning forecast by Zara"""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the peak hour sensor."""
-        super().__init__(coordinator, entry)
+        """Initialize the peak hour sensor by Zara"""
+        self._coordinator = coordinator
+        self.entry = entry
+        self._cached_value: Optional[str] = None
+
         self._attr_unique_id = f"{entry.entry_id}_peak_production_hour"
         self._attr_translation_key = "peak_production_hour"
         self._attr_icon = "mdi:solar-power-variant-outline"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+        )
+
+    @property
+    def available(self) -> bool:
+        """Sensor is available if we have a value by Zara"""
+        return self._cached_value is not None
 
     @property
     def native_value(self) -> str | None:
-        """Return the estimated peak production hour."""
-        value = getattr(self.coordinator, 'peak_production_time_today', None)
-        return value if value != "Calculating..." else None
+        """Return the forecasted best production hour by Zara"""
+        return self._cached_value
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added to hass by Zara"""
+        await super().async_added_to_hass()
+        await self._load_from_file()
+        self.async_on_remove(
+            self._coordinator.async_add_listener(self._handle_coordinator_update)
+        )
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle coordinator updates by Zara"""
+        self.hass.async_create_task(self._reload_and_update())
+
+    async def _reload_and_update(self) -> None:
+        """Reload value from file and update state by Zara"""
+        await self._load_from_file()
+        self.async_write_ha_state()
+
+    async def _load_from_file(self) -> None:
+        """Load forecasted best hour from daily_forecastsjson by Zara"""
+        try:
+            forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
+            if forecast_data and isinstance(forecast_data, dict):
+                today = forecast_data.get("today", {})
+                forecast_best_hour = today.get("forecast_best_hour", {})
+                hour = forecast_best_hour.get("hour")
+
+                if hour is not None:
+                    self._cached_value = f"{hour:02d}:00"
+                    # Loaded forecast best hour (debug log removed)
+                else:
+                    self._cached_value = None
+            else:
+                self._cached_value = None
+        except Exception as e:
+            _LOGGER.warning(f"Failed to load forecast best hour: {e}")
+            self._cached_value = None
 
 
 class AverageYieldSensor(BaseSolarSensor):
-    """Sensor for the calculated average monthly yield."""
+    """Sensor for the calculated average monthly yield by Zara"""
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average yield sensor."""
+        """Initialize the average yield sensor by Zara"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_average_yield"
         self._attr_translation_key = "average_yield"
@@ -312,19 +356,19 @@ class AverageYieldSensor(BaseSolarSensor):
 
     @property
     def native_value(self) -> float | None:
-        """Return the average monthly yield."""
+        """Return the average monthly yield by Zara"""
         value = getattr(self.coordinator, 'avg_month_yield', None)
         return value if value is not None and value > 0 else None
 
 
 class AutarkySensor(SensorEntity):
-    """Sensor for the calculated self-sufficiency (Autarky) with live updates."""
+    """Sensor for the calculated self-sufficiency Autarky with live updates by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the autarky sensor."""
+        """Initialize the autarky sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._yield_entity = entry.data.get("solar_yield_today")
@@ -341,14 +385,14 @@ class AutarkySensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
+        """Return if entity is available by Zara"""
         return (self._coordinator.last_update_success and 
                 self._coordinator.data is not None and
                 self.native_value is not None)
 
     @property
     def native_value(self) -> float | None:
-        """Return the autarky percentage - LIVE calculation."""
+        """Return the autarky percentage - LIVE calculation by Zara"""
         # Try coordinator value first (updated during coordinator refresh)
         coord_value = getattr(self._coordinator, 'autarky_today', None)
         if coord_value is not None:
@@ -378,7 +422,7 @@ class AutarkySensor(SensorEntity):
         return None
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         
         # Listen to coordinator updates
@@ -405,26 +449,23 @@ class AutarkySensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.async_write_ha_state()
 
     @callback
     def _handle_sensor_change(self, event) -> None:
-        """Handle yield or consumption sensor state changes."""
+        """Handle yield or consumption sensor state changes by Zara"""
         self.async_write_ha_state()
 
 
 class ExpectedDailyProductionSensor(SensorEntity):
-    """
-    Sensor for expected daily production (morning snapshot).
-    Reads DIRECTLY from daily_forecasts.json current.prediction_kwh.
-    """
+    """Sensor for expected daily production morning snapshot by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the expected daily production sensor."""
+        """Initialize the expected daily production sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -441,16 +482,16 @@ class ExpectedDailyProductionSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a forecast set."""
+        """Sensor is available if we have a forecast set by Zara"""
         return self._cached_value is not None
 
     @property
     def native_value(self) -> float | None:
-        """Return the cached expected daily production value."""
+        """Return the cached expected daily production value by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         
         # Load initial value from file
@@ -466,23 +507,23 @@ class ExpectedDailyProductionSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates - reload from file."""
+        """Handle coordinator updates - reload from file by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load expected daily production from daily_forecasts.json."""
+        """Load expected daily production from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 today = forecast_data.get("today", {})
                 forecast_day = today.get("forecast_day", {})
                 self._cached_value = forecast_day.get("prediction_kwh")
-                _LOGGER.debug(f"Loaded expected daily production from file: {self._cached_value}")
+                # Loaded expected daily production (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -493,16 +534,13 @@ class ExpectedDailyProductionSensor(SensorEntity):
 # --- Production Time Sensor (Reads from daily_forecasts.json) ---
 
 class ProductionTimeSensor(SensorEntity):
-    """
-    Sensor for production time today - reads directly from daily_forecasts.json.
-    100% restart-safe as data is persisted in file.
-    """
+    """Sensor for production time today - reads directly from daily_forecastsjson by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the production time sensor."""
+        """Initialize the production time sensor by Zara"""
         self.entry = entry
         self._coordinator = coordinator
         self._cached_value: Optional[str] = None
@@ -516,16 +554,16 @@ class ProductionTimeSensor(SensorEntity):
 
     @property
     def native_value(self) -> str:
-        """Return current production time from file."""
+        """Return current production time from file by Zara"""
         return self._cached_value if self._cached_value else "00:00:00"
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have data."""
+        """Sensor is available if we have data by Zara"""
         return self._cached_value is not None
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         
         # Load initial value from file
@@ -541,16 +579,16 @@ class ProductionTimeSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates - trigger reload and state update."""
+        """Handle coordinator updates - trigger reload and state update by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load production time from daily_forecasts.json."""
+        """Load production time from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
@@ -563,8 +601,7 @@ class ProductionTimeSensor(SensorEntity):
                 hours, remainder = divmod(duration_seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
                 self._cached_value = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
-
-                _LOGGER.debug(f"Loaded production time: {self._cached_value}")
+                # Loaded production time (debug log removed)
             else:
                 self._cached_value = "00:00:00"
         except Exception as e:
@@ -575,13 +612,13 @@ class ProductionTimeSensor(SensorEntity):
 # --- New Statistical Sensors from daily_forecasts.json ---
 
 class MaxPeakTodaySensor(SensorEntity):
-    """Sensor for today's maximum power peak."""
+    """Sensor for todays maximum power peak by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the max peak today sensor."""
+        """Initialize the max peak today sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -598,16 +635,16 @@ class MaxPeakTodaySensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return self._cached_value is not None and self._cached_value > 0
 
     @property
     def native_value(self) -> float | None:
-        """Return today's max peak power."""
+        """Return todays max peak power by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -617,23 +654,23 @@ class MaxPeakTodaySensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load max peak today from daily_forecasts.json."""
+        """Load max peak today from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 today = forecast_data.get("today", {})
                 peak_today = today.get("peak_today", {})
                 self._cached_value = peak_today.get("power_w", 0.0)
-                _LOGGER.debug(f"Loaded max peak today: {self._cached_value}W")
+                # Loaded max peak today (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -642,13 +679,13 @@ class MaxPeakTodaySensor(SensorEntity):
 
 
 class MaxPeakAllTimeSensor(SensorEntity):
-    """Sensor for all-time maximum power peak."""
+    """Sensor for all-time maximum power peak by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the max peak all time sensor."""
+        """Initialize the max peak all time sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -666,23 +703,23 @@ class MaxPeakAllTimeSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return self._cached_value is not None and self._cached_value > 0
 
     @property
     def native_value(self) -> float | None:
-        """Return all-time max peak power."""
+        """Return all-time max peak power by Zara"""
         return self._cached_value
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Return additional attributes."""
+        """Return additional attributes by Zara"""
         if self._cached_date:
             return {"date": self._cached_date}
         return {}
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -692,16 +729,16 @@ class MaxPeakAllTimeSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load max peak all time from daily_forecasts.json."""
+        """Load max peak all time from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
@@ -709,7 +746,7 @@ class MaxPeakAllTimeSensor(SensorEntity):
                 all_time_peak = statistics.get("all_time_peak", {})
                 self._cached_value = all_time_peak.get("power_w", 0.0)
                 self._cached_date = all_time_peak.get("date")
-                _LOGGER.debug(f"Loaded max peak all time: {self._cached_value}W on {self._cached_date}")
+                # Loaded max peak all time (debug log removed)
             else:
                 self._cached_value = None
                 self._cached_date = None
@@ -720,13 +757,13 @@ class MaxPeakAllTimeSensor(SensorEntity):
 
 
 class ForecastDayAfterTomorrowSensor(SensorEntity):
-    """Sensor for day after tomorrow's solar forecast."""
+    """Sensor for day after tomorrows solar forecast by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the day after tomorrow sensor."""
+        """Initialize the day after tomorrow sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -743,16 +780,16 @@ class ForecastDayAfterTomorrowSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a forecast."""
+        """Sensor is available if we have a forecast by Zara"""
         return self._cached_value is not None
 
     @property
     def native_value(self) -> float | None:
-        """Return day after tomorrow forecast."""
+        """Return day after tomorrow forecast by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -762,23 +799,23 @@ class ForecastDayAfterTomorrowSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load day after tomorrow forecast from daily_forecasts.json."""
+        """Load day after tomorrow forecast from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 today = forecast_data.get("today", {})
                 day_after = today.get("forecast_day_after_tomorrow", {})
                 self._cached_value = day_after.get("prediction_kwh")
-                _LOGGER.debug(f"Loaded day after tomorrow forecast: {self._cached_value}")
+                # Loaded day after tomorrow forecast (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -787,13 +824,13 @@ class ForecastDayAfterTomorrowSensor(SensorEntity):
 
 
 class MonthlyYieldSensor(SensorEntity):
-    """Sensor for current month's total yield."""
+    """Sensor for current months total yield by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the monthly yield sensor."""
+        """Initialize the monthly yield sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -810,16 +847,16 @@ class MonthlyYieldSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return True  # Always available, will show 0.0 if no data
 
     @property
     def native_value(self) -> float | None:
-        """Return monthly yield."""
+        """Return monthly yield by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -829,23 +866,23 @@ class MonthlyYieldSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load monthly yield from daily_forecasts.json."""
+        """Load monthly yield from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 statistics = forecast_data.get("statistics", {})
                 current_month = statistics.get("current_month", {})
                 self._cached_value = current_month.get("yield_kwh", 0.0)
-                _LOGGER.debug(f"Loaded monthly yield: {self._cached_value}")
+                # Loaded monthly yield (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -854,13 +891,13 @@ class MonthlyYieldSensor(SensorEntity):
 
 
 class MonthlyConsumptionSensor(SensorEntity):
-    """Sensor for current month's total consumption."""
+    """Sensor for current months total consumption by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the monthly consumption sensor."""
+        """Initialize the monthly consumption sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -877,16 +914,16 @@ class MonthlyConsumptionSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return True  # Always available, will show 0.0 if no data
 
     @property
     def native_value(self) -> float | None:
-        """Return monthly consumption."""
+        """Return monthly consumption by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -896,23 +933,23 @@ class MonthlyConsumptionSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load monthly consumption from daily_forecasts.json."""
+        """Load monthly consumption from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 statistics = forecast_data.get("statistics", {})
                 current_month = statistics.get("current_month", {})
                 self._cached_value = current_month.get("consumption_kwh", 0.0)
-                _LOGGER.debug(f"Loaded monthly consumption: {self._cached_value}")
+                # Loaded monthly consumption (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -921,13 +958,13 @@ class MonthlyConsumptionSensor(SensorEntity):
 
 
 class WeeklyYieldSensor(SensorEntity):
-    """Sensor for current week's total yield."""
+    """Sensor for current weeks total yield by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the weekly yield sensor."""
+        """Initialize the weekly yield sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -944,16 +981,16 @@ class WeeklyYieldSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return True  # Always available, will show 0.0 if no data
 
     @property
     def native_value(self) -> float | None:
-        """Return weekly yield."""
+        """Return weekly yield by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -963,23 +1000,23 @@ class WeeklyYieldSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load weekly yield from daily_forecasts.json."""
+        """Load weekly yield from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 statistics = forecast_data.get("statistics", {})
                 current_week = statistics.get("current_week", {})
                 self._cached_value = current_week.get("yield_kwh", 0.0)
-                _LOGGER.debug(f"Loaded weekly yield: {self._cached_value}")
+                # Loaded weekly yield (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -988,13 +1025,13 @@ class WeeklyYieldSensor(SensorEntity):
 
 
 class WeeklyConsumptionSensor(SensorEntity):
-    """Sensor for current week's total consumption."""
+    """Sensor for current weeks total consumption by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the weekly consumption sensor."""
+        """Initialize the weekly consumption sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -1011,16 +1048,16 @@ class WeeklyConsumptionSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return True  # Always available, will show 0.0 if no data
 
     @property
     def native_value(self) -> float | None:
-        """Return weekly consumption."""
+        """Return weekly consumption by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -1030,23 +1067,23 @@ class WeeklyConsumptionSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load weekly consumption from daily_forecasts.json."""
+        """Load weekly consumption from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 statistics = forecast_data.get("statistics", {})
                 current_week = statistics.get("current_week", {})
                 self._cached_value = current_week.get("consumption_kwh", 0.0)
-                _LOGGER.debug(f"Loaded weekly consumption: {self._cached_value}")
+                # Loaded weekly consumption (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -1055,13 +1092,13 @@ class WeeklyConsumptionSensor(SensorEntity):
 
 
 class AverageYield7DaysSensor(SensorEntity):
-    """Sensor for average daily yield over last 7 days."""
+    """Sensor for average daily yield over last 7 days by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average yield 7 days sensor."""
+        """Initialize the average yield 7 days sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -1078,16 +1115,16 @@ class AverageYield7DaysSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return self._cached_value is not None
 
     @property
     def native_value(self) -> float | None:
-        """Return average daily yield for last 7 days."""
+        """Return average daily yield for last 7 days by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -1097,23 +1134,23 @@ class AverageYield7DaysSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load average yield 7 days from daily_forecasts.json."""
+        """Load average yield 7 days from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 statistics = forecast_data.get("statistics", {})
                 last_7d = statistics.get("last_7_days", {})
                 self._cached_value = last_7d.get("avg_yield_kwh")
-                _LOGGER.debug(f"Loaded avg yield 7d: {self._cached_value}")
+                # Loaded avg yield 7d (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -1122,13 +1159,13 @@ class AverageYield7DaysSensor(SensorEntity):
 
 
 class AverageYield30DaysSensor(SensorEntity):
-    """Sensor for average daily yield over last 30 days."""
+    """Sensor for average daily yield over last 30 days by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average yield 30 days sensor."""
+        """Initialize the average yield 30 days sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -1145,16 +1182,16 @@ class AverageYield30DaysSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return self._cached_value is not None
 
     @property
     def native_value(self) -> float | None:
-        """Return average daily yield for last 30 days."""
+        """Return average daily yield for last 30 days by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -1164,23 +1201,23 @@ class AverageYield30DaysSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load average yield 30 days from daily_forecasts.json."""
+        """Load average yield 30 days from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 statistics = forecast_data.get("statistics", {})
                 last_30d = statistics.get("last_30_days", {})
                 self._cached_value = last_30d.get("avg_yield_kwh")
-                _LOGGER.debug(f"Loaded avg yield 30d: {self._cached_value}")
+                # Loaded avg yield 30d (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -1189,13 +1226,13 @@ class AverageYield30DaysSensor(SensorEntity):
 
 
 class AverageAutarkyMonthSensor(SensorEntity):
-    """Sensor for average autarky for current month."""
+    """Sensor for average autarky for current month by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average autarky month sensor."""
+        """Initialize the average autarky month sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -1211,16 +1248,16 @@ class AverageAutarkyMonthSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return self._cached_value is not None
 
     @property
     def native_value(self) -> float | None:
-        """Return average autarky for current month."""
+        """Return average autarky for current month by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -1230,23 +1267,23 @@ class AverageAutarkyMonthSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load average autarky month from daily_forecasts.json."""
+        """Load average autarky month from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 statistics = forecast_data.get("statistics", {})
                 current_month = statistics.get("current_month", {})
                 self._cached_value = current_month.get("avg_autarky")
-                _LOGGER.debug(f"Loaded avg autarky month: {self._cached_value}")
+                # Loaded avg autarky month (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:
@@ -1255,13 +1292,13 @@ class AverageAutarkyMonthSensor(SensorEntity):
 
 
 class AverageAccuracy30DaysSensor(SensorEntity):
-    """Sensor for average accuracy over last 30 days."""
+    """Sensor for average accuracy over last 30 days by Zara"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average accuracy 30 days sensor."""
+        """Initialize the average accuracy 30 days sensor by Zara"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_value: Optional[float] = None
@@ -1277,16 +1314,16 @@ class AverageAccuracy30DaysSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if we have a value."""
+        """Sensor is available if we have a value by Zara"""
         return self._cached_value is not None
 
     @property
     def native_value(self) -> float | None:
-        """Return average accuracy for last 30 days."""
+        """Return average accuracy for last 30 days by Zara"""
         return self._cached_value
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
+        """Run when entity about to be added to hass by Zara"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -1296,23 +1333,23 @@ class AverageAccuracy30DaysSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates."""
+        """Handle coordinator updates by Zara"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value from file and update state."""
+        """Reload value from file and update state by Zara"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load average accuracy 30 days from daily_forecasts.json."""
+        """Load average accuracy 30 days from daily_forecastsjson by Zara"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
                 statistics = forecast_data.get("statistics", {})
                 last_30d = statistics.get("last_30_days", {})
                 self._cached_value = last_30d.get("avg_accuracy")
-                _LOGGER.debug(f"Loaded avg accuracy 30d: {self._cached_value}")
+                # Loaded avg accuracy 30d (debug log removed)
             else:
                 self._cached_value = None
         except Exception as e:

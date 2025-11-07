@@ -44,19 +44,90 @@ run_all_day_end_tasks:
     Use before midnight to save today's data!
   fields: {}
 
-# DEBUGGING SERVICE
-trigger_6am_forecast:
-  name: Trigger 6 AM Forecast Lock
+# ===========================================================================================
+# DEBUGGING SERVICES - Time-based Forecast Simulations (100% Code-Conformant)
+# ===========================================================================================
+# These services replicate EXACTLY what happens at specific times of day.
+# The code is the truth - these services follow the code 1:1 for debugging.
+# ===========================================================================================
+
+debugging_6am_forecast:
+  name: "DEBUG: 6 AM - Lock Today's Forecast"
   description: >
-    DEBUGGING: Manually trigger the 6 AM forecast lock mechanism outside scheduled time.
-    Executes set_expected_daily_production() to test morning forecast logic.
-    Useful for debugging forecast persistence and lock behavior.
+    DEBUGGING SERVICE: Simulates EXACTLY what happens at 6:00 AM for TODAY's forecast.
+
+    Code Reference: coordinator.py:829-910 (set_expected_daily_production)
+
+    What this service does:
+    - Gets fresh forecast data for TODAY
+    - LOCKS today's forecast (prevents further updates)
+    - Saves to daily_forecasts.json with source "auto_6am"
+    - This is the morning baseline forecast
+
+    Use this to test the 6 AM forecast lock behavior without waiting until 6 AM.
   fields: {}
 
-forecast_day_after_tomorrow:
-  name: Forecast Day After Tomorrow
+debugging_best_hour:
+  name: "DEBUG: 6 AM - Calculate Best Hour"
   description: >
-    Triggers the forecast for the day after tomorrow and updates the daily_forecasts attribute.
+    DEBUGGING SERVICE: Simulates EXACTLY what happens at 6:00 AM for BEST HOUR calculation.
+
+    Code Reference: coordinator.py:668-684 (best hour calculation in _save_forecasts_to_storage)
+
+    What this service does:
+    - Runs forecast orchestrator to get hourly predictions
+    - Extracts best_hour and best_hour_kwh from forecast
+    - SAVES best hour (not locked) to daily_forecasts.json
+
+    Use this to test the best hour calculation logic.
+  fields: {}
+
+debugging_tomorrow_12pm:
+  name: "DEBUG: 12 PM - Lock Tomorrow's Forecast"
+  description: >
+    DEBUGGING SERVICE: Simulates EXACTLY what happens at 12:00 PM for TOMORROW's forecast.
+
+    Code Reference: coordinator.py:686-696 (_save_forecasts_to_storage, 12 PM block)
+
+    What this service does:
+    - Gets fresh forecast data for TOMORROW
+    - LOCKS tomorrow's forecast (lock=True)
+    - Prevents further updates until midnight rotation
+
+    Use this to test the 12 PM forecast lock behavior.
+  fields: {}
+
+debugging_day_after_tomorrow_6am:
+  name: "DEBUG: 6 AM - Save Day After Tomorrow (Unlocked)"
+  description: >
+    DEBUGGING SERVICE: Simulates EXACTLY what happens at 6:00 AM for DAY AFTER TOMORROW's forecast.
+
+    Code Reference: coordinator.py:649-657 + 661-708 (day_after_tomorrow at 6 AM)
+
+    What this service does:
+    - Gets fresh forecast data for DAY AFTER TOMORROW
+    - SAVES forecast but does NOT lock it (lock=False)
+    - Allows updates throughout the day until 18:00
+
+    IMPORTANT: At 6 AM, day after tomorrow is UNLOCKED (not locked until 18:00).
+    This is the key difference from the old service which incorrectly locked it.
+
+    Use this to test the 6 AM day after tomorrow forecast behavior.
+  fields: {}
+
+debugging_day_after_tomorrow_6pm:
+  name: "DEBUG: 18 PM - Lock Day After Tomorrow's Forecast"
+  description: >
+    DEBUGGING SERVICE: Simulates EXACTLY what happens at 18:00 PM for DAY AFTER TOMORROW's forecast.
+
+    Code Reference: coordinator.py:698-708 (_save_forecasts_to_storage, 18 PM block)
+
+    What this service does:
+    - Gets fresh forecast data for DAY AFTER TOMORROW
+    - LOCKS day after tomorrow's forecast (lock=True)
+    - Prevents further updates until midnight rotation
+
+    Use this to test the 18 PM forecast lock behavior.
   fields: {}
 
 collect_hourly_sample:
@@ -64,4 +135,13 @@ collect_hourly_sample:
   description: >
     Manually triggers the collection of an hourly sample for ML training.
     This will collect data for the previous full hour and save it to hourly_samples.json.
+  fields: {}
+
+# MANUAL TEST SERVICES - Daily Tasks
+night_cleanup:
+  name: Night Cleanup
+  description: >
+    MANUAL TEST: Trigger night cleanup task (normally runs at 02:00).
+    Removes duplicate samples and zero-production samples from the database.
+    Useful for testing data cleanup logic.
   fields: {}

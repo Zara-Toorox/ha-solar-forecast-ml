@@ -58,10 +58,7 @@ class SampleCollector:
         self._weather_calculator = WeatherCalculator()
     
     def _check_critical_sensors_available(self) -> bool:
-        """
-        Check if critical sensors (especially power_entity) are available.
-        Returns True if power entity is available, False otherwise.
-        """
+        """Check if critical sensors especially power_entity are available by Zara"""
         if not self.power_entity:
             _LOGGER.debug("Power entity not configured")
             return False
@@ -77,11 +74,7 @@ class SampleCollector:
         return True
 
     async def collect_sample(self, target_datetime: datetime) -> None:
-        """
-        Collects data for the specified target hour (local time).
-        This function is called by MLPredictor, which passes the correct
-        target datetime for the hour that just ended.
-        """
+        """Collects data for the specified target hour local time by Zara"""
         target_local_hour = target_datetime.hour
         async with self._sample_lock:
             try:
@@ -122,10 +115,7 @@ class SampleCollector:
         end_time_utc: datetime,
         attribute: Optional[str] = None
     ) -> Optional[float]:
-        """
-        Calculates the time-weighted average of a sensor (or attribute) 
-        within a time window.
-        """
+        """Calculates the time-weighted average of a sensor or attribute by Zara"""
         
         # +++ IMPORT ADDED HERE +++
         try:
@@ -251,9 +241,7 @@ class SampleCollector:
         end_time_utc: datetime,
         entity_id: str
     ) -> str:
-        """
-        Determines the weather condition that lasted the longest in the time window.
-        """
+        """Determines the weather condition that lasted the longest in the time window by Zara"""
         
         # +++ IMPORT ADDED HERE +++
         try:
@@ -331,16 +319,7 @@ class SampleCollector:
         self,
         target_time_utc: datetime
     ) -> Optional[Dict[str, Any]]:
-        """
-        Fetches historical forecast data from the weather_forecast_cache.json
-        for the specified target time.
-        
-        Args:
-            target_time_utc: Target hour in UTC
-            
-        Returns:
-            Dict with forecast data or None if not found
-        """
+        """Fetches historical forecast data from the weather_forecast_cachejson by Zara"""
         try:
             # Load forecast cache
             cache = await self.data_manager.load_weather_cache()
@@ -397,13 +376,7 @@ class SampleCollector:
         start_time_utc: datetime, 
         end_time_utc: datetime
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """
-        Fetches historical weather data primarily from forecast cache,
-        fallback to recorder TWA for sensors and weather entity.
-        
-        Returns:
-            (weather_data, sensor_data)
-        """
+        """Fetches historical weather data primarily from forecast cache by Zara"""
         _LOGGER.debug(f"Fetching historical data for {start_time_utc} to {end_time_utc}")
         
         weather_data = self._get_default_weather()
@@ -519,12 +492,7 @@ class SampleCollector:
 
     # --- (IMPROVEMENT 1) REVISED METHOD ---
     async def _collect_hourly_sample(self, target_datetime: datetime) -> Optional[datetime]:
-        """Collects data for the specified target hour (local time)
-           using historical recorder data.
-           
-           Returns:
-               sample_time_local datetime object if successful, None otherwise
-        """
+        """Collects data for the specified target hour local time by Zara"""
         try:
             # 1. Define the UTC period for the target hour
             start_time_utc, end_time_utc, sample_time_local = self._get_utc_times_for_hour(target_datetime)
@@ -591,10 +559,7 @@ class SampleCollector:
 
     # --- (IMPROVEMENT 1) NEW HELPER METHOD ---
     def _get_utc_times_for_hour(self, target_datetime: datetime) -> Tuple[Optional[datetime], Optional[datetime], Optional[datetime]]:
-        """
-        Calculates the UTC start/end window and local sample timestamp 
-        for a given local target datetime.
-        """
+        """Calculates the UTC startend window and local sample timestamp by Zara"""
         try:
             now_local = SafeDateTimeUtil.now()
             
@@ -779,7 +744,7 @@ class SampleCollector:
     
     # (Unchanged)
     async def _get_daily_production_so_far(self, end_of_hour_utc: datetime) -> Optional[float]:
-        """Fetches the daily production (so far) via Riemann integration up to the end of the target hour (UTC)."""
+        """Fetches the daily production so far via Riemann integration up to the end of ... by Zara"""
         
         # Determine start of day (local time) based on the end time
         end_of_hour_local = SafeDateTimeUtil.as_local(end_of_hour_utc)
@@ -810,14 +775,14 @@ class SampleCollector:
 
     # --- (IMPROVEMENT 1) NEW HELPER METHODS ---
     def _get_default_weather(self) -> Dict[str, Any]:
-        """Returns default weather values."""
+        """Returns default weather values by Zara"""
         return {
             'temperature': 15.0, 'humidity': 60.0, 'cloud_cover': 50.0,
             'wind_speed': 5.0, 'pressure': 1013.0, 'condition': 'unknown'
         }
 
     def _get_default_sensor_data(self) -> Dict[str, Any]:
-        """Returns default sensor values."""
+        """Returns default sensor values by Zara"""
         return {
             'temperature': 0.0, 'wind_speed': 0.0, 'rain': 0.0,
             'uv_index': 0.0, 'lux': 0.0, 'humidity': 0.0
@@ -839,7 +804,7 @@ class SampleCollector:
         humidity_sensor: Optional[str] = None, 
         solar_yield_today: Optional[str] = None 
     ) -> None:
-        """Configures the entity IDs used by the collector."""
+        """Configures the entity IDs used by the collector by Zara"""
         _LOGGER.debug("Configuring entities in SampleCollector...")
         self.weather_entity = weather_entity
         self.power_entity = power_entity

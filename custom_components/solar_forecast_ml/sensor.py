@@ -22,7 +22,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, CONF_DIAGNOSTIC, CONF_HOURLY
+from .const import DOMAIN, CONF_DIAGNOSTIC, CONF_HOURLY, CONF_BATTERY_ENABLED, CONF_ELECTRICITY_ENABLED
 
 # Import core sensors from sensors module
 from .sensors.sensor_base import (
@@ -49,29 +49,32 @@ from .sensors.sensor_base import (
 # Import diagnostic sensors
 from .sensors.sensor_diagnostic import (
     DiagnosticStatusSensor,
-    SolarAccuracySensor,
     YesterdayDeviationSensor,
     LastCoordinatorUpdateSensor,
-    UpdateAgeSensor,
     LastMLTrainingSensor,
     NextScheduledUpdateSensor,
     MLServiceStatusSensor,
     MLMetricsSensor,
     CoordinatorHealthSensor,
     DataFilesStatusSensor,
+    CloudinessTrend1hSensor,
+    CloudinessTrend3hSensor,
+    CloudinessVolatilitySensor,
 )
 
 # Import state sensors
 from .sensors.sensor_states import (
-    ExternalTempSensor,
-    ExternalHumiditySensor,
-    ExternalWindSensor,
-    ExternalRainSensor,
-    ExternalUVSensor,
-    ExternalLuxSensor,
+    ExternalSensorsStatusSensor,
     PowerSensorStateSensor,
     YieldSensorStateSensor,
 )
+
+# ========================================================================
+# BATTERY MANAGEMENT SENSORS (v8.3.0) - Completely separate from Solar
+# ========================================================================
+from .sensors.sensor_battery import BATTERY_SENSORS
+from .sensors.sensor_electricity_price import ELECTRICITY_PRICE_SENSORS
+from .sensors.sensor_battery_forecast import BATTERY_FORECAST_SENSORS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,7 +84,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> bool:
-    """Set up Solar Forecast ML sensors from config entry."""
+    """Set up Solar Forecast ML sensors from config entry by Zara"""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
     # Determine which sensor sets to add based on options
@@ -121,23 +124,20 @@ async def async_setup_entry(
     if diagnostic_mode_enabled:
         diagnostic_entities = [
             DiagnosticStatusSensor(coordinator, entry),
-            SolarAccuracySensor(coordinator, entry),
             YesterdayDeviationSensor(coordinator, entry),
             LastCoordinatorUpdateSensor(coordinator, entry),
-            UpdateAgeSensor(coordinator, entry),
             LastMLTrainingSensor(coordinator, entry),
             NextScheduledUpdateSensor(coordinator, entry),
             MLServiceStatusSensor(coordinator, entry),
             MLMetricsSensor(coordinator, entry),
             CoordinatorHealthSensor(coordinator, entry),
             DataFilesStatusSensor(coordinator, entry),
+            # Cloudiness Trend Sensors
+            CloudinessTrend1hSensor(coordinator, entry),
+            CloudinessTrend3hSensor(coordinator, entry),
+            CloudinessVolatilitySensor(coordinator, entry),
             # State sensors use hass instead of coordinator
-            ExternalTempSensor(hass, entry),
-            ExternalHumiditySensor(hass, entry),
-            ExternalWindSensor(hass, entry),
-            ExternalRainSensor(hass, entry),
-            ExternalUVSensor(hass, entry),
-            ExternalLuxSensor(hass, entry),
+            ExternalSensorsStatusSensor(hass, entry),
             PowerSensorStateSensor(hass, entry),
             YieldSensorStateSensor(hass, entry),
         ]
@@ -156,9 +156,29 @@ async def async_setup_entry(
     if enable_hourly:
         entities_to_add.append(NextHourSensor(coordinator, entry))
         _LOGGER.debug("Adding Next Hour Forecast sensor.")
-    
+
+    # ========================================================================
+    # BATTERY MANAGEMENT SENSORS (v8.3.0)
+    # ========================================================================
+    battery_enabled = entry.options.get(CONF_BATTERY_ENABLED, False)
+    electricity_enabled = entry.options.get(CONF_ELECTRICITY_ENABLED, False)
+
+    if battery_enabled:
+        battery_entities = [sensor_class(coordinator, entry) for sensor_class in BATTERY_SENSORS]
+        battery_forecast_entities = [sensor_class(coordinator, entry) for sensor_class in BATTERY_FORECAST_SENSORS]
+        entities_to_add.extend(battery_entities)
+        entities_to_add.extend(battery_forecast_entities)
+        _LOGGER.info(f"Battery Management enabled - Adding {len(battery_entities) + len(battery_forecast_entities)} battery sensors")
+
+    if electricity_enabled:
+        electricity_entities = [sensor_class(coordinator, entry) for sensor_class in ELECTRICITY_PRICE_SENSORS]
+        entities_to_add.extend(electricity_entities)
+        _LOGGER.info(f"Electricity Prices enabled - Adding {len(electricity_entities)} electricity price sensors")
+
+    # ========================================================================
+
     # Register all selected entities
     async_add_entities(entities_to_add, True)
-    _LOGGER.info(f"Successfully added {len(entities_to_add)} Solar Forecast ML sensors.")
-    
+    _LOGGER.info(f"Successfully added {len(entities_to_add)} total sensors (Solar + Battery Management).")
+
     return True

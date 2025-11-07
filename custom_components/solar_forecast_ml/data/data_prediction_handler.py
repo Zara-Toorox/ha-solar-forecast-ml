@@ -1,12 +1,18 @@
 """
 Data Prediction Handler for Solar Forecast ML Integration
 
-Handles prediction history tracking and accuracy calculations.
-
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -26,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataPredictionHandler(DataManagerIO):
-    """Handles prediction history tracking and accuracy calculations."""
+    """Handles prediction history tracking and accuracy calculations by Zara"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
@@ -40,7 +46,7 @@ class DataPredictionHandler(DataManagerIO):
         }
 
     async def ensure_prediction_history_file(self) -> None:
-        """Ensure prediction history file exists."""
+        """Ensure prediction history file exists by Zara"""
         if not self.prediction_history_file.exists():
             await self._atomic_write_json(
                 self.prediction_history_file,
@@ -52,7 +58,7 @@ class DataPredictionHandler(DataManagerIO):
     # ═════════════════════════════════════════════════════════════
 
     async def save_prediction(self, prediction_data: Dict[str, Any]) -> bool:
-        """Save a single prediction to history."""
+        """Save a single prediction to history by Zara"""
         try:
             if not validate_prediction_record(prediction_data):
                 _LOGGER.error("Prediction data validation failed")
@@ -95,7 +101,7 @@ class DataPredictionHandler(DataManagerIO):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get prediction history with optional filtering."""
+        """Get prediction history with optional filtering by Zara"""
         try:
             history = await self._read_json_file(
                 self.prediction_history_file,
@@ -127,7 +133,7 @@ class DataPredictionHandler(DataManagerIO):
             return []
 
     async def get_latest_prediction(self) -> Optional[Dict[str, Any]]:
-        """Get most recent prediction."""
+        """Get most recent prediction by Zara"""
         try:
             predictions = await self.get_predictions(limit=1)
             return predictions[0] if predictions else None
@@ -135,7 +141,7 @@ class DataPredictionHandler(DataManagerIO):
             return None
 
     async def get_prediction_for_date(self, date: str) -> Optional[Dict[str, Any]]:
-        """Get prediction for specific date."""
+        """Get prediction for specific date by Zara"""
         try:
             predictions = await self.get_predictions()
             for pred in reversed(predictions):
@@ -146,7 +152,7 @@ class DataPredictionHandler(DataManagerIO):
             return None
 
     async def cleanup_old_predictions(self, days: int = 365) -> bool:
-        """Remove predictions older than specified days."""
+        """Remove predictions older than specified days by Zara"""
         try:
             # Get the lock specific to this file for read-modify-write operation
             file_lock = await self._get_file_lock(self.prediction_history_file)
@@ -187,7 +193,7 @@ class DataPredictionHandler(DataManagerIO):
         self,
         days: int = 30
     ) -> Dict[str, Any]:
-        """Calculate accuracy statistics for recent predictions."""
+        """Calculate accuracy statistics for recent predictions by Zara"""
         try:
             predictions = await self.get_predictions()
             
@@ -254,7 +260,7 @@ class DataPredictionHandler(DataManagerIO):
         self,
         days: int = 30
     ) -> List[Dict[str, Any]]:
-        """Get daily accuracy trend for recent period."""
+        """Get daily accuracy trend for recent period by Zara"""
         try:
             predictions = await self.get_predictions()
             
@@ -283,7 +289,7 @@ class DataPredictionHandler(DataManagerIO):
             return []
 
     async def get_predictions_count(self) -> int:
-        """Get total count of predictions."""
+        """Get total count of predictions by Zara"""
         try:
             history = await self._read_json_file(
                 self.prediction_history_file,
@@ -292,3 +298,44 @@ class DataPredictionHandler(DataManagerIO):
             return len(history.get("predictions", []))
         except Exception:
             return 0
+
+    async def update_today_predictions_actual(
+        self,
+        actual_value: float,
+        accuracy: Optional[float] = None
+    ) -> bool:
+        """Update todays prediction records with actual value and accuracy by Zara"""
+        try:
+            today_date = dt_util.now().date().isoformat()
+
+            file_lock = await self._get_file_lock(self.prediction_history_file)
+
+            async with file_lock:
+                history = await self._read_json_file(
+                    self.prediction_history_file,
+                    self._prediction_history_default
+                )
+
+                predictions = history.get("predictions", [])
+                updated_count = 0
+
+                # Update all predictions for today
+                for pred in predictions:
+                    if pred.get("date") == today_date:
+                        pred["actual_value"] = actual_value
+                        if accuracy is not None:
+                            pred["accuracy"] = accuracy
+                        updated_count += 1
+
+                if updated_count > 0:
+                    history["last_updated"] = dt_util.now().isoformat()
+                    await self._atomic_write_json_unlocked(self.prediction_history_file, history)
+                    _LOGGER.debug(f"Updated {updated_count} prediction(s) for {today_date} with actual value {actual_value:.2f} kWh")
+                    return True
+                else:
+                    _LOGGER.debug(f"No predictions found for {today_date} to update")
+                    return False
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to update today's predictions: {e}", exc_info=True)
+            return False

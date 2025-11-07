@@ -29,27 +29,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class FeatureEngineer:
-    """
-    Handles the creation and extraction of features used by the ML model.
-    Includes base weather features, lag features, polynomial features,
-    and interaction features.
-
-    FEATURE COUNT: 23 total features (14 base + 4 polynomial + 5 interaction)
-    - Base features: temperature, humidity, cloudiness, wind_speed, hour_of_day,
-      seasonal_factor, weather_trend, production_yesterday, cloudiness_primary,
-      cloud_impact, sunshine_factor, rain, uv_index, lux
-    - Polynomial features: temperature_sq, cloudiness_sq, hour_of_day_sq, seasonal_factor_sq
-    - Interaction features: cloudiness_x_hour, temperature_x_seasonal, humidity_x_cloudiness,
-      wind_x_hour, weather_trend_x_seasonal
-
-    BETA EXPANSION (Nov 2025): Added rain, uv_index, lux features
-    - This is a BREAKING CHANGE: Existing models must be retrained
-    - Optional sensors: If rain/uv/lux sensors unavailable, defaults to 0.0
-    - Expected accuracy improvement: 10-20% with proper sensor data
-    """
+    """Handles the creation and extraction of features used by the ML model by Zara"""
 
     def __init__(self):
-        """Initializes the FeatureEngineer and defines the feature sets."""
+        """Initializes the FeatureEngineer and defines the feature sets by Zara"""
         # Define the core input features expected
         self.base_features = [
             "temperature",          # Current temperature
@@ -60,9 +43,7 @@ class FeatureEngineer:
             "seasonal_factor",      # Cosine-based factor representing time of year
             "weather_trend",        # Combined score based on cloudiness and wind
             "production_yesterday", # Total production from the previous day (lag feature)
-            # --- (Verbesserung 2) ENTFERNT ---
-            # "production_last_hour", # Production from the previous hour (lag feature)
-            # --- ENDE ---
+            "production_same_hour_yesterday", # Production at same hour yesterday (lag feature)
             # FIX 4: Enhanced cloudiness features
             "cloudiness_primary",   # Sunshine percentage (100 - cloudiness)
             "cloud_impact",         # Non-linear cloud penalty (cloudiness^1.5)
@@ -71,6 +52,10 @@ class FeatureEngineer:
             "rain",                 # Rain intensity (mm/h or 0-100 scale)
             "uv_index",             # UV index (0-11+)
             "lux",                  # Light intensity (W/m² or lux)
+            # IMPROVEMENT 7: Cloudiness trend features (from hourly_samples)
+            "cloudiness_trend_1h",  # Cloudiness change in last 1 hour
+            "cloudiness_trend_3h",  # Cloudiness change in last 3 hours
+            "cloudiness_volatility", # Std dev of cloudiness in last 3 hours
         ]
 
         # Define derived polynomial features (e.g., squared terms)
@@ -109,46 +94,37 @@ class FeatureEngineer:
         prediction_date: datetime 
         # --- ENDE ---
     ) -> Dict[str, float]:
-        """
-        Asynchronously extracts and calculates all defined features for a given time context.
-
-        Args:
-            weather_data: Dictionary containing weather information (for the prediction_hour).
-            sensor_data: Dictionary containing sensor readings (e.g., lag features).
-            prediction_hour: The hour (0-23, local time) for which to calculate features.
-            prediction_date: The date (local time) for which to calculate features.
-
-        Returns:
-            A dictionary mapping feature names to their calculated float values.
-            Returns default features if extraction fails.
-        """
+        """Asynchronously extracts and calculates all defined features for a given time ... by Zara"""
         try:
             # --- (SOLUTION 1) Time logic updated ---
             target_hour = prediction_hour # Use directly
             # --- ENDE ---
 
-            # --- Extract Base Weather Features ---
-            # Use _safe_extract to handle missing keys and type conversions gracefully
-            temp = self._safe_extract(weather_data, 'temperature', default=15.0)
-            humidity = self._safe_extract(weather_data, 'humidity', default=60.0)
+            # --- Extract Base Weather Features with Range Validation ---
+            # MEDIUM PRIORITY FIX: Add plausible ranges to prevent unrealistic values
+            temp = self._safe_extract(weather_data, 'temperature', default=15.0, min_val=-50.0, max_val=60.0)
+            humidity = self._safe_extract(weather_data, 'humidity', default=60.0, min_val=0.0, max_val=100.0)
             # Allow 'cloud_cover' or 'cloudiness'
             cloudiness = self._safe_extract(weather_data, 'cloudiness',
-                                            weather_data.get('cloud_cover', 50.0))
-            wind_speed = self._safe_extract(weather_data, 'wind_speed', default=5.0)
+                                            weather_data.get('cloud_cover', 50.0), min_val=0.0, max_val=100.0)
+            wind_speed = self._safe_extract(weather_data, 'wind_speed', default=5.0, min_val=0.0, max_val=200.0)
             # pressure = self._safe_extract(weather_data, 'pressure', default=1013.0) # Not currently used as base feature
 
-            # --- Extract Additional Weather Features (Optional Sensors) ---
+            # --- Extract Additional Weather Features (Optional Sensors) with Validation ---
             # BETA EXPANSION: rain, uv_index, lux from sensor_data (collected by sample_collector)
-            rain = self._safe_extract(sensor_data, 'rain', default=0.0)
-            uv_index = self._safe_extract(sensor_data, 'uv_index', default=0.0)
-            lux = self._safe_extract(sensor_data, 'lux', default=0.0)
+            rain = self._safe_extract(sensor_data, 'rain', default=0.0, min_val=0.0, max_val=500.0)  # mm/h or 0-100 scale
+            uv_index = self._safe_extract(sensor_data, 'uv_index', default=0.0, min_val=0.0, max_val=20.0)  # UV index 0-20
+            lux = self._safe_extract(sensor_data, 'lux', default=0.0, min_val=0.0, max_val=150000.0)  # W/m² or lux
 
             # --- Extract Lag Features (Expected to be in sensor_data) ---
-            # 'production_yesterday' is provided by the caller (forecast_strategy)
+            # 'production_yesterday' and 'production_same_hour_yesterday' are provided by the caller
             prod_yesterday = self._safe_extract(sensor_data, 'production_yesterday', default=0.0)
-            # --- (Verbesserung 2) ENTFERNT ---
-            # prod_last_hour = self._safe_extract(sensor_data, 'production_last_hour', default=0.0)
-            # --- ENDE ---
+            prod_same_hour_yesterday = self._safe_extract(sensor_data, 'production_same_hour_yesterday', default=0.0)
+
+            # IMPROVEMENT 7: Extract cloudiness trend features
+            cloudiness_trend_1h = self._safe_extract(sensor_data, 'cloudiness_trend_1h', default=0.0)
+            cloudiness_trend_3h = self._safe_extract(sensor_data, 'cloudiness_trend_3h', default=0.0)
+            cloudiness_volatility = self._safe_extract(sensor_data, 'cloudiness_volatility', default=0.0)
 
 
             # --- Calculate Time-Based Features ---
@@ -173,9 +149,7 @@ class FeatureEngineer:
                 "seasonal_factor": seasonal_factor,
                 "weather_trend": weather_trend,
                 "production_yesterday": prod_yesterday,
-                # --- (Verbesserung 2) ENTFERNT ---
-                # "production_last_hour": prod_last_hour,
-                # --- ENDE ---
+                "production_same_hour_yesterday": prod_same_hour_yesterday,
             }
 
             # FIX 4: Enhanced cloudiness features with non-linear response
@@ -187,6 +161,15 @@ class FeatureEngineer:
             base_features_dict['rain'] = rain
             base_features_dict['uv_index'] = uv_index
             base_features_dict['lux'] = lux
+
+            # IMPROVEMENT 7: Cloudiness trend features
+            base_features_dict['cloudiness_trend_1h'] = cloudiness_trend_1h
+            base_features_dict['cloudiness_trend_3h'] = cloudiness_trend_3h
+            base_features_dict['cloudiness_volatility'] = cloudiness_volatility
+
+            # HIGH PRIORITY FIX: Validate base features BEFORE computing polynomial features
+            # This prevents NaN propagation from base -> polynomial -> all features
+            base_features_dict = self._validate_and_sanitize_features(base_features_dict)
 
             # --- Calculate Polynomial and Interaction Features ---
             # Use values from base_features_dict to ensure consistency
@@ -207,7 +190,10 @@ class FeatureEngineer:
             # --- Combine all features ---
             all_features = {**base_features_dict, **poly_interaction_features}
 
-            _LOGGER.debug(f"Features extracted for hour {target_hour}: { {k: round(v, 2) for k, v in all_features.items()} }") # Log rounded values
+            # CRITICAL FIX 3: Validate for NaN/Inf before returning
+            all_features = self._validate_and_sanitize_features(all_features)
+
+            # Features extracted (debug log removed to reduce noise)
             return all_features
 
         except Exception as e:
@@ -223,11 +209,7 @@ class FeatureEngineer:
         sensor_data: Dict[str, Any],
         record: Dict[str, Any] # Expecting a record containing 'timestamp'
     ) -> Dict[str, float]:
-        """
-        Synchronously extracts and calculates all defined features, typically used during training.
-        Derives time context from the provided record's timestamp.
-        (This method is not relevant for SOLUTION 1, but remains for training)
-        """
+        """Synchronously extracts and calculates all defined features typically used dur... by Zara"""
         try:
             # --- Determine Time Context ---
             timestamp_str = record.get('timestamp')
@@ -255,9 +237,12 @@ class FeatureEngineer:
 
             # Lag features expected in sensor_data (added by caller, e.g., train_model)
             prod_yesterday = self._safe_extract(sensor_data, 'production_yesterday', default=0.0)
-            # --- (Verbesserung 2) ENTFERNT ---
-            # prod_last_hour = self._safe_extract(sensor_data, 'production_last_hour', default=0.0)
-            # --- ENDE ---
+            prod_same_hour_yesterday = self._safe_extract(sensor_data, 'production_same_hour_yesterday', default=0.0)
+
+            # IMPROVEMENT 7: Cloudiness trend features (sync extraction)
+            cloudiness_trend_1h = self._safe_extract(sensor_data, 'cloudiness_trend_1h', default=0.0)
+            cloudiness_trend_3h = self._safe_extract(sensor_data, 'cloudiness_trend_3h', default=0.0)
+            cloudiness_volatility = self._safe_extract(sensor_data, 'cloudiness_volatility', default=0.0)
 
             seasonal_factor = 0.5 + 0.5 * math.cos((day_of_year - 172) * 2 * math.pi / 365.25)
             weather_trend = self._calculate_weather_trend(cloudiness, wind_speed)
@@ -267,9 +252,7 @@ class FeatureEngineer:
                 "temperature": temp, "humidity": humidity, "cloudiness": cloudiness,
                 "wind_speed": wind_speed, "hour_of_day": hour_float, "seasonal_factor": seasonal_factor,
                 "weather_trend": weather_trend, "production_yesterday": prod_yesterday,
-                # --- (Verbesserung 2) ENTFERNT ---
-                # "production_last_hour": prod_last_hour,
-                # --- ENDE ---
+                "production_same_hour_yesterday": prod_same_hour_yesterday,
             }
 
             # FIX 4: Enhanced cloudiness features with non-linear response
@@ -282,6 +265,11 @@ class FeatureEngineer:
             base_features_dict['uv_index'] = uv_index
             base_features_dict['lux'] = lux
 
+            # IMPROVEMENT 7: Cloudiness trend features (sync)
+            base_features_dict['cloudiness_trend_1h'] = cloudiness_trend_1h
+            base_features_dict['cloudiness_trend_3h'] = cloudiness_trend_3h
+            base_features_dict['cloudiness_volatility'] = cloudiness_volatility
+
             poly_interaction_features = {
                 "temperature_sq": temp ** 2, "cloudiness_sq": cloudiness ** 2,
                 "hour_of_day_sq": hour_float ** 2, "seasonal_factor_sq": seasonal_factor ** 2,
@@ -293,6 +281,9 @@ class FeatureEngineer:
             }
 
             all_features = {**base_features_dict, **poly_interaction_features}
+
+            # CRITICAL FIX 3: Validate for NaN/Inf before returning
+            all_features = self._validate_and_sanitize_features(all_features)
 
             return all_features
 
@@ -311,17 +302,7 @@ class FeatureEngineer:
 
 
     def get_default_features(self, hour: int, date: datetime) -> Dict[str, float]:
-        """
-        Provides a default set of feature values, used as a fallback if
-        real data extraction fails. Uses average/typical values.
-
-        Args:
-            hour: The hour (0-23) for which to generate default features.
-            date: The date for which to generate default features.
-
-        Returns:
-            A dictionary mapping all feature names to default float values.
-        """
+        """Provides a default set of feature values used as a fallback if by Zara"""
         _LOGGER.debug(f"Generating default features for hour {hour} on {date.date()}.")
         # Use typical mid-range values for weather
         temp = 15.0
@@ -347,9 +328,7 @@ class FeatureEngineer:
             "seasonal_factor": seasonal_factor,
             "weather_trend": weather_trend,
             "production_yesterday": 0.0, # Default lag features to 0
-            # --- (Verbesserung 2) ENTFERNT ---
-            # "production_last_hour": 0.0,
-            # --- ENDE ---
+            "production_same_hour_yesterday": 0.0,
             # FIX 4: Enhanced cloudiness features
             "cloudiness_primary": 100.0 - cloudiness,
             "cloud_impact": cloudiness ** 1.5,
@@ -358,6 +337,10 @@ class FeatureEngineer:
             "rain": 0.0,
             "uv_index": 0.0,
             "lux": 0.0,
+            # IMPROVEMENT 7: Cloudiness trend features (defaults)
+            "cloudiness_trend_1h": 0.0,
+            "cloudiness_trend_3h": 0.0,
+            "cloudiness_volatility": 0.0,
         }
 
         # Calculate derived defaults based on base values
@@ -380,12 +363,11 @@ class FeatureEngineer:
         self,
         data: Optional[Dict[str, Any]],
         key: str,
-        default: float = 0.0
+        default: float = 0.0,
+        min_val: Optional[float] = None,
+        max_val: Optional[float] = None
     ) -> float:
-        """
-        Safely extracts a value from a dictionary, attempts to convert it to float,
-        and returns a default value if the key is missing, value is None, or conversion fails.
-        """
+        """MEDIUM PRIORITY FIX Safely extracts a value from a dictionary with range vali... by Zara"""
         if data is None:
             return default
 
@@ -395,7 +377,17 @@ class FeatureEngineer:
 
         try:
             # Attempt conversion to float
-            return float(value)
+            float_value = float(value)
+
+            # Validate range if limits specified
+            if min_val is not None and float_value < min_val:
+                _LOGGER.debug(f"Value for '{key}' ({float_value}) below minimum ({min_val}), clamping.")
+                float_value = min_val
+            if max_val is not None and float_value > max_val:
+                _LOGGER.debug(f"Value for '{key}' ({float_value}) above maximum ({max_val}), clamping.")
+                float_value = max_val
+
+            return float_value
         except (ValueError, TypeError):
             # Log warning and return default if conversion fails
             _LOGGER.debug(f"Could not convert value for key '{key}' ('{value}') to float. Using default {default}.")
@@ -403,9 +395,7 @@ class FeatureEngineer:
 
 
     def _calculate_weather_trend(self, cloudiness: float, wind_speed: float) -> float:
-        """
-        Calculates a simple weather trend score (0-1), where higher is better (sunnier, calmer).
-        """
+        """Calculates a simple weather trend score 0-1 where higher is better sunnier ca... by Zara"""
         try:
             # Ensure inputs are floats and within reasonable ranges
             cloud = max(0.0, min(100.0, float(cloudiness)))
@@ -426,3 +416,50 @@ class FeatureEngineer:
         except (ValueError, TypeError) as e:
             _LOGGER.warning(f"Weather trend calculation failed (clouds='{cloudiness}', wind='{wind_speed}'): {e}. Using default 0.5.")
             return 0.5 # Return neutral default on error
+
+
+    def _validate_and_sanitize_features(self, features: Dict[str, float]) -> Dict[str, float]:
+        """CRITICAL FIX 3 Validates and sanitizes feature values to prevent NaNInf errors by Zara"""
+        import math
+        sanitized = {}
+        invalid_count = 0
+
+        for name, value in features.items():
+            # Check for NaN or Inf
+            if not isinstance(value, (int, float)) or math.isnan(value) or math.isinf(value):
+                invalid_count += 1
+                _LOGGER.warning(f"Invalid feature value detected: {name}={value}. Replacing with safe default.")
+
+                # Use safe defaults based on feature type
+                if name in ["temperature"]:
+                    sanitized[name] = 15.0  # Typical temperature
+                elif name in ["humidity"]:
+                    sanitized[name] = 60.0  # Typical humidity
+                elif name in ["cloudiness", "cloudiness_sq"]:
+                    sanitized[name] = 50.0 if name == "cloudiness" else 2500.0
+                elif name in ["wind_speed"]:
+                    sanitized[name] = 5.0
+                elif name in ["hour_of_day"]:
+                    sanitized[name] = 12.0  # Noon
+                elif name in ["seasonal_factor", "weather_trend", "sunshine_factor"]:
+                    sanitized[name] = 0.5  # Neutral value
+                elif name in ["production_yesterday", "production_same_hour_yesterday"]:
+                    sanitized[name] = 0.0  # No historical data
+                elif name in ["cloudiness_primary"]:
+                    sanitized[name] = 50.0
+                elif name in ["cloud_impact"]:
+                    sanitized[name] = 353.55  # 50^1.5
+                elif name in ["rain", "uv_index", "lux"]:
+                    sanitized[name] = 0.0  # Optional sensors default to 0
+                elif name in ["cloudiness_trend_1h", "cloudiness_trend_3h", "cloudiness_volatility"]:
+                    sanitized[name] = 0.0  # Trend features default to 0 (neutral)
+                else:
+                    # For polynomial/interaction features, use 0.0 as safe default
+                    sanitized[name] = 0.0
+            else:
+                sanitized[name] = float(value)
+
+        if invalid_count > 0:
+            _LOGGER.warning(f"Sanitized {invalid_count} invalid feature values (NaN/Inf)")
+
+        return sanitized

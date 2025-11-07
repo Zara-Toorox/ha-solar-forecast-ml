@@ -33,7 +33,45 @@
       },
       "reconfigure": {
         "title": "Reconfigure Solar Forecast ML",
-        "description": "Update configuration\nEmpty optional fields will clear their value"
+        "description": "Update configuration\nEmpty optional fields will clear their value",
+        "data": {
+          "weather_entity": "Weather Sensor",
+          "power_entity": "Power Sensor (W)",
+          "solar_yield_today": "Daily Yield (kWh)",
+          "total_consumption_today": "Daily Consumption (kWh)",
+          "solar_capacity": "System Capacity (kWp)",
+          "rain_sensor": "Rain Sensor",
+          "lux_sensor": "Illuminance Sensor (lx)",
+          "temp_sensor": "Temperature Sensor",
+          "wind_sensor": "Wind Sensor",
+          "uv_sensor": "UV Sensor",
+          "humidity_sensor": "Humidity Sensor",
+          "battery_capacity": "Battery Capacity (kWh)",
+          "battery_soc_entity": "Battery State of Charge Sensor",
+          "battery_power_entity": "Battery Power Sensor (W)",
+          "battery_charge_today_entity": "Battery Charge Today (kWh)",
+          "battery_discharge_today_entity": "Battery Discharge Today (kWh)",
+          "electricity_country": "Country (DE/AT)"
+        },
+        "data_description": {
+          "weather_entity": "Weather entity for forecast (Required)",
+          "power_entity": "Current power in Watts (Required)",
+          "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
+          "total_consumption_today": "Daily consumption in kWh (Optional)",
+          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, default: 5.0)",
+          "rain_sensor": "External rain sensor (Optional)",
+          "lux_sensor": "External illuminance in Lux (Optional)",
+          "temp_sensor": "External temperature (Optional)",
+          "wind_sensor": "External wind speed (Optional)",
+          "uv_sensor": "External UV index (Optional)",
+          "humidity_sensor": "External humidity (Optional)",
+          "battery_capacity": "Total battery capacity in kWh",
+          "battery_soc_entity": "Sensor showing battery state of charge (%)",
+          "battery_power_entity": "Sensor showing current battery power (W, positive=charging)",
+          "battery_charge_today_entity": "Sensor showing energy charged today (kWh)",
+          "battery_discharge_today_entity": "Sensor showing energy discharged today (kWh)",
+          "electricity_country": "Country for electricity prices - Germany or Austria"
+        }
       }
     },
     "error": {
@@ -58,7 +96,7 @@
     "step": {
       "init": {
         "title": "Advanced Options",
-        "description": "Configure update intervals and notifications",
+        "description": "Configure update intervals and notifications\nBattery sensors are configured via 'Reconfigure'",
         "data": {
           "update_interval": "Update Interval (s)",
           "diagnostic": "Diagnostic Mode",
@@ -66,7 +104,9 @@
           "notify_startup": "Startup Notification",
           "notify_forecast": "Forecast Notifications",
           "notify_learning": "Training Notifications",
-          "notify_successful_learning": "Success Notifications"
+          "notify_successful_learning": "Success Notifications",
+          "battery_enabled": "Enable Battery Management",
+          "electricity_enabled": "Enable Electricity Prices (aWATTar)"
         },
         "data_description": {
           "update_interval": "Forecast update interval (300-86400s, default: 1800)",
@@ -75,7 +115,9 @@
           "notify_startup": "Show notification on startup",
           "notify_forecast": "Notify on forecast updates",
           "notify_learning": "Notify on training start",
-          "notify_successful_learning": "Notify on training success"
+          "notify_successful_learning": "Notify on training success",
+          "battery_enabled": "Enable battery monitoring and forecasts (configure sensors via Reconfigure)",
+          "electricity_enabled": "Enable electricity spot prices from aWATTar (configure country via Reconfigure)"
         }
       }
     },

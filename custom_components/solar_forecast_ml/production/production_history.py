@@ -31,15 +31,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ProductionCalculator:
-    """
-    Historical Production Calculator - Simplified Version.
-    
-    REMOVED: Recorder-based peak time calculation (caused blocking).
-    USES: ML-based predictions and fallback values.
-    """
+    """Historical Production Calculator - Simplified Version by Zara"""
 
     def __init__(self, hass: HomeAssistant, data_manager):
-        """Initialize the Production Calculator."""
+        """Initialize the Production Calculator by Zara"""
         self.hass = hass
         self.data_manager = data_manager
         _LOGGER.info("ProductionCalculator initialized (Recorder-free mode)")
@@ -48,18 +43,7 @@ class ProductionCalculator:
         self,
         power_entity: Optional[str] = None
     ) -> str:
-        """
-        Calculate peak production time using ML data.
-        Returns default if no ML data available.
-        
-        RECORDER REMOVED: No longer queries Home Assistant database.
-        
-        Args:
-            power_entity: Not used anymore (kept for compatibility)
-            
-        Returns:
-            Peak hour as "HH:00" or "12:00" as fallback
-        """
+        """Calculate peak production time using ML data by Zara"""
         _LOGGER.debug("Peak time calculation: Using ML-based approach (no Recorder)")
         
         try:
@@ -93,15 +77,7 @@ class ProductionCalculator:
             return "12:00"
 
     async def calculate_yesterday_total_yield(self, yield_entity: str) -> float:
-        """
-        Calculate yesterday's total yield from prediction history.
-        
-        Args:
-            yield_entity: Not used.
-            
-        Returns:
-            Yesterday's actual kWh or 0.0 if not available.
-        """
+        """Calculate yesterdays total yield from prediction history by Zara"""
         try:
             yesterday_str = (dt_util.now() - timedelta(days=1)).date().isoformat()
             prediction = await self.data_manager.get_prediction_for_date(yesterday_str)
@@ -117,15 +93,7 @@ class ProductionCalculator:
             return 0.0
 
     async def get_last_7_days_average_yield(self, yield_entity: str) -> float:
-        """
-        Get average yield for the last 7 days from prediction history.
-
-        Args:
-            yield_entity: Not used.
-
-        Returns:
-            Average yield over the last 7 days or 0.0.
-        """
+        """Get average yield for the last 7 days from prediction history by Zara"""
         try:
             start_date = (dt_util.now() - timedelta(days=7)).date().isoformat()
             predictions = await self.data_manager.get_predictions(start_date=start_date)
@@ -148,15 +116,7 @@ class ProductionCalculator:
         self,
         yield_entity: str
     ) -> dict:
-        """
-        Get monthly production statistics from prediction history.
-
-        Args:
-            yield_entity: Not used.
-
-        Returns:
-            Dictionary with monthly statistics.
-        """
+        """Get monthly production statistics from prediction history by Zara"""
         try:
             start_of_month = dt_util.now().replace(day=1).date().isoformat()
             predictions = await self.data_manager.get_predictions(start_date=start_of_month)
@@ -197,15 +157,7 @@ class ProductionCalculator:
             }
 
     async def get_historical_average(self) -> Optional[float]:
-        """
-        Get historical average production.
-        
-        RECORDER REMOVED: Returns None (no historical data access).
-        Use ML prediction records or DataManager instead.
-        
-        Returns:
-            None (no historical access)
-        """
+        """Get historical average production by Zara"""
         _LOGGER.debug("Historical average: Not available without Recorder")
         return None
 

@@ -37,13 +37,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ScheduledTasksManager:
-    """
-    Manages scheduled tasks for the Solar Forecast ML integration:
-    - Morning forecast update trigger.
-    - Evening forecast verification against actual yield.
-    - Night cleanup of zero-production samples (2:00 AM).
-    - Calculation of yesterday's deviation on startup.
-    """
+    """Manages scheduled tasks for the Solar Forecast ML integration by Zara"""
 
     def __init__(
         self,
@@ -52,7 +46,7 @@ class ScheduledTasksManager:
         solar_yield_today_entity_id: Optional[str],
         data_manager: DataManager
     ):
-        """Initialize the ScheduledTasksManager."""
+        """Initialize the ScheduledTasksManager by Zara"""
         self.hass = hass
         self.coordinator = coordinator
         self.solar_yield_today_entity_id = solar_yield_today_entity_id
@@ -62,175 +56,122 @@ class ScheduledTasksManager:
         _LOGGER.debug("ScheduledTasksManager initialized.")
 
     def setup_listeners(self) -> None:
-        """Register the time-based listeners with Home Assistant."""
+        """Register the time-based listeners with Home Assistant by Zara"""
         self.cancel_listeners()
 
         # Calculate timezone offset (async_track_time_change uses UTC!)
         local_now = dt_util.now()
-        tz_offset_hours = int(local_now.utcoffset().total_seconds() / 3600)
-        _LOGGER.info(f"Timezone offset detected: UTC{tz_offset_hours:+d} - All tasks adjusted for local time")
+        _LOGGER.info(f"All scheduled tasks use LOCAL time (async_track_time_change behavior)")
 
         # Morning forecast update at 6 AM LOCAL
-        morning_hour_utc = (DAILY_UPDATE_HOUR - tz_offset_hours) % 24
+        # async_track_time_change uses LOCAL time, not UTC!
         remove_morning = async_track_time_change(
             self.hass,
             self.scheduled_morning_update,
-            hour=morning_hour_utc,
+            hour=DAILY_UPDATE_HOUR,
             minute=0,
             second=0
         )
         self._listeners.append(remove_morning)
-        _LOGGER.info(f"Scheduled morning forecast update for {morning_hour_utc:02d}:00:00 UTC ({DAILY_UPDATE_HOUR:02d}:00 Local)")
+        _LOGGER.info(f"Scheduled morning forecast update for {DAILY_UPDATE_HOUR:02d}:00:00 LOCAL")
 
         # Evening verification at 18:00 LOCAL
-        evening_hour_utc = (DAILY_VERIFICATION_HOUR - tz_offset_hours) % 24
         remove_evening = async_track_time_change(
             self.hass,
             self.scheduled_evening_verification,
-            hour=evening_hour_utc,
+            hour=DAILY_VERIFICATION_HOUR,
             minute=0,
             second=10
         )
         self._listeners.append(remove_evening)
-        _LOGGER.info(f"Scheduled evening verification for {evening_hour_utc:02d}:00:10 UTC ({DAILY_VERIFICATION_HOUR:02d}:00 Local)")
+        _LOGGER.info(f"Scheduled evening verification for {DAILY_VERIFICATION_HOUR:02d}:00:10 LOCAL")
 
         # Night cleanup at 2 AM LOCAL
-        cleanup_hour_utc = (2 - tz_offset_hours) % 24
         remove_cleanup = async_track_time_change(
             self.hass,
             self.scheduled_night_cleanup,
-            hour=cleanup_hour_utc,
+            hour=2,
             minute=0,
             second=15
         )
         self._listeners.append(remove_cleanup)
-        _LOGGER.info(f"Scheduled night cleanup for {cleanup_hour_utc:02d}:00:15 UTC (02:00 Local)")
+        _LOGGER.info(f"Scheduled night cleanup for 02:00:15 LOCAL")
 
         # Reset expected daily production at midnight LOCAL
-        reset_hour_utc = (0 - tz_offset_hours) % 24
         remove_reset_expected = async_track_time_change(
             self.hass,
             self.reset_expected_production,
-            hour=reset_hour_utc,
+            hour=0,
             minute=0,
             second=0
         )
         self._listeners.append(remove_reset_expected)
-        _LOGGER.info(f"Scheduled expected daily production reset for {reset_hour_utc:02d}:00:00 UTC (00:00 Local)")
-        
-        # Clear current day at 00:00:05 LOCAL
-        clear_hour_utc = (0 - tz_offset_hours) % 24
-        remove_clear_day = async_track_time_change(
-            self.hass,
-            self.clear_current_day_task,
-            hour=clear_hour_utc,
-            minute=0,
-            second=5
-        )
-        self._listeners.append(remove_clear_day)
-        _LOGGER.info(f"Scheduled clear current day for {clear_hour_utc:02d}:00:05 UTC (00:00 Local)")
+        _LOGGER.info(f"Scheduled expected daily production reset for 00:00:00 LOCAL")
 
         # Set expected daily production at 6 AM LOCAL
-        set_hour_utc = (6 - tz_offset_hours) % 24
         remove_set_expected = async_track_time_change(
             self.hass,
             self.set_expected_production,
-            hour=set_hour_utc,
+            hour=6,
             minute=0,
             second=10
         )
         self._listeners.append(remove_set_expected)
-        _LOGGER.info(f"Scheduled expected daily production set for {set_hour_utc:02d}:00:10 UTC (06:00 Local)")
+        _LOGGER.info(f"Scheduled expected daily production set for 06:00:10 LOCAL")
 
-        
-        # Reset daily tasks at 05:00 LOCAL
-        reset_tasks_hour_utc = (5 - tz_offset_hours) % 24
-        remove_reset_tasks = async_track_time_change(
-            self.hass,
-            self.reset_daily_tasks_task,
-            hour=reset_tasks_hour_utc,
-            minute=0,
-            second=0
-        )
-        self._listeners.append(remove_reset_tasks)
-        _LOGGER.info(f"Scheduled daily tasks reset for {reset_tasks_hour_utc:02d}:00:00 UTC (05:00 Local)")
-        
-        # TODO 1: Retry-Tasks f 06:15, 06:30, 06:45
-        # Retry #1 at 06:15 LOCAL
-        retry1_hour_utc = (6 - tz_offset_hours) % 24
-        remove_retry1 = async_track_time_change(
-            self.hass,
-            lambda now: self.retry_forecast_setting(now, attempt=1),
-            hour=retry1_hour_utc,
-            minute=15,
-            second=10
-        )
-        self._listeners.append(remove_retry1)
-        _LOGGER.info(f"Scheduled forecast retry #1 for {retry1_hour_utc:02d}:15:10 UTC (06:15 Local)")
-
-        # Retry #2 at 06:30 LOCAL
-        retry2_hour_utc = (6 - tz_offset_hours) % 24
-        remove_retry2 = async_track_time_change(
-            self.hass,
-            lambda now: self.retry_forecast_setting(now, attempt=2),
-            hour=retry2_hour_utc,
-            minute=30,
-            second=10
-        )
-        self._listeners.append(remove_retry2)
-        _LOGGER.info(f"Scheduled forecast retry #2 for {retry2_hour_utc:02d}:30:10 UTC (06:30 Local)")
-
-        # Retry #3 at 06:45 LOCAL
-        retry3_hour_utc = (6 - tz_offset_hours) % 24
-        remove_retry3 = async_track_time_change(
-            self.hass,
-            lambda now: self.retry_forecast_setting(now, attempt=3),
-            hour=retry3_hour_utc,
-            minute=45,
-            second=10
-        )
-        self._listeners.append(remove_retry3)
-        _LOGGER.info(f"Scheduled forecast retry #3 for {retry3_hour_utc:02d}:45:10 UTC (06:45 Local)")
+        # Forecast retry tasks at 06:15, 06:30, 06:45 LOCAL
+        retry_times = [15, 30, 45]  # Minutes after DAILY_UPDATE_HOUR
+        for attempt, retry_minute in enumerate(retry_times, start=1):
+            remove_retry = async_track_time_change(
+                self.hass,
+                lambda now, attempt=attempt: self.retry_forecast_setting(now, attempt=attempt),
+                hour=DAILY_UPDATE_HOUR,
+                minute=retry_minute,
+                second=10
+            )
+            self._listeners.append(remove_retry)
+            _LOGGER.info(
+                f"Scheduled forecast retry #{attempt} for {DAILY_UPDATE_HOUR:02d}:{retry_minute:02d}:10 LOCAL"
+            )
 
         # Daily forecasts system at 23:30-23:32 LOCAL
-        finalize_hour_utc = (23 - tz_offset_hours) % 24
-        
+
         # 23:30 LOCAL - Finalize current day
         remove_finalize = async_track_time_change(
             self.hass,
             self.finalize_day_task,
-            hour=finalize_hour_utc,
+            hour=23,
             minute=30,
             second=0
         )
         self._listeners.append(remove_finalize)
-        _LOGGER.info(f"Scheduled day finalization for {finalize_hour_utc:02d}:30:00 UTC (23:30 Local)")
+        _LOGGER.info(f"Scheduled day finalization for 23:30:00 LOCAL")
 
         # 23:31 LOCAL - Move current day to history
         remove_history = async_track_time_change(
             self.hass,
             self.move_to_history_task,
-            hour=finalize_hour_utc,
+            hour=23,
             minute=31,
             second=0
         )
         self._listeners.append(remove_history)
-        _LOGGER.info(f"Scheduled history update for {finalize_hour_utc:02d}:31:00 UTC (23:31 Local)")
+        _LOGGER.info(f"Scheduled history update for 23:31:00 LOCAL")
 
         # 23:32 LOCAL - Calculate statistics
         remove_stats = async_track_time_change(
             self.hass,
             self.calculate_stats_task,
-            hour=finalize_hour_utc,
+            hour=23,
             minute=32,
             second=0
         )
         self._listeners.append(remove_stats)
-        _LOGGER.info(f"Scheduled statistics calculation for {finalize_hour_utc:02d}:32:00 UTC (23:32 Local)")
+        _LOGGER.info(f"Scheduled statistics calculation for 23:32:00 LOCAL")
 
 
     def cancel_listeners(self) -> None:
-        """Remove any active time-based listeners."""
+        """Remove any active time-based listeners by Zara"""
         for remove_listener in self._listeners:
             try:
                 remove_listener()
@@ -241,11 +182,7 @@ class ScheduledTasksManager:
 
 
     async def calculate_yesterday_deviation_on_startup(self) -> None:
-        """
-        Calculates the forecast deviation from the previous day upon Home Assistant startup.
-        Reads the last prediction record from yesterday in the history to get
-        the final predicted and actual values. Updates coordinator state.
-        """
+        """Calculates the forecast deviation from the previous day upon Home Assistant s... by Zara"""
         _LOGGER.info("Calculating yesterday's forecast deviation at startup...")
         deviation: float = 0.0
 
@@ -333,13 +270,7 @@ class ScheduledTasksManager:
 
     @callback
     async def scheduled_morning_update(self, now: datetime) -> None:
-        """
-        Callback for the scheduled morning task. Triggers a full forecast update
-        and then sets expected daily production from the fresh forecast.
-
-        Args:
-            now: The datetime object when the trigger occurred (local time).
-        """
+        """Callback for the scheduled morning task Triggers a full forecast update by Zara"""
         _LOGGER.info(f"Triggering daily morning forecast update (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
 
         try:
@@ -375,14 +306,7 @@ class ScheduledTasksManager:
 
     @callback
     async def scheduled_evening_verification(self, now: datetime) -> None:
-        """
-        Callback for the scheduled evening task. Verifies today's forecast
-        against the actual yield sensor value, updates prediction records,
-        and recalculates the fallback correction factor.
-
-        Args:
-            now: The datetime object when the trigger occurred (local time).
-        """
+        """Callback for the scheduled evening task Verifies todays forecast by Zara"""
         _LOGGER.info(f"Starting daily evening verification (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
 
         if not self.solar_yield_today_entity_id:
@@ -497,14 +421,9 @@ class ScheduledTasksManager:
 
     @callback
     async def scheduled_night_cleanup(self, now: datetime) -> None:
-        """
-        Callback for the scheduled night cleanup task (2:00 AM).
-        Removes duplicates and zero-production samples from hourly samples database.
-
-        Args:
-            now: The datetime object when the trigger occurred (local time).
-        """
-        _LOGGER.info(f"Starting night cleanup (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
+        """Callback for the scheduled night cleanup task 200 AM by Zara"""
+        current_time = now if now is not None else dt_util.now()
+        _LOGGER.info(f"Starting night cleanup (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')})...")
 
         try:
             # Step 1: Remove duplicate samples
@@ -536,7 +455,7 @@ class ScheduledTasksManager:
 
     @callback
     async def reset_expected_production(self, now: datetime) -> None:
-        """Reset expected daily production at midnight."""
+        """Reset expected daily production at midnight by Zara"""
         _LOGGER.info(f"Resetting expected daily production (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
         try:
             await self.coordinator.reset_expected_daily_production()
@@ -546,7 +465,7 @@ class ScheduledTasksManager:
 
     @callback
     async def set_expected_production(self, now: datetime) -> None:
-        """Set expected daily production at 6 AM."""
+        """Set expected daily production at 6 AM by Zara"""
         _LOGGER.info(f"=== Setting expected daily production (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')}) ===")
         try:
             # Check coordinator availability
@@ -561,8 +480,8 @@ class ScheduledTasksManager:
             
             # Call coordinator method
             await self.coordinator.set_expected_daily_production()
-            
-            # TODO 5: Erweiterte Validierung nach Save
+
+            # Validate that forecast was successfully saved
             saved_forecast = await self.data_manager.get_current_day_forecast()
             if saved_forecast and saved_forecast.get("locked") and saved_forecast.get("prediction_kwh"):
                 _LOGGER.info(
@@ -580,14 +499,7 @@ class ScheduledTasksManager:
 
     @callback
     async def retry_forecast_setting(self, now: datetime, attempt: int) -> None:
-        """
-        TODO 1: Retry mechanism for setting forecast if 06:00 failed.
-        Checks if forecast is locked, if not initiates recovery.
-        
-        Args:
-            now: The datetime object when the trigger occurred (local time).
-            attempt: Retry attempt number (1, 2, or 3)
-        """
+        """Retry mechanism for setting forecast if 0600 failed by Zara"""
         _LOGGER.info(f"=== Forecast Retry Attempt #{attempt} (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')}) ===")
         
         try:
@@ -629,12 +541,10 @@ class ScheduledTasksManager:
 
     @callback
     async def finalize_day_task(self, now: datetime) -> None:
-        """
-        Finalize current day with actual values at 23:30.
-        Reads final yield BEFORE sensor resets at midnight.
-        """
-        _LOGGER.info(f"Finalizing day (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
-        
+        """Finalize current day with actual values at 2330 by Zara"""
+        current_time = now if now is not None else dt_util.now()
+        _LOGGER.info(f"Finalizing day (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')})...")
+
         try:
             # Get final yield value
             actual_yield = 0.0
@@ -668,13 +578,19 @@ class ScheduledTasksManager:
                 production_seconds = int(self.coordinator.production_time_calculator.get_production_hours() * 3600)
                 _LOGGER.debug(f"Production time: {production_seconds}s")
             
+            # Calculate and save actual best hour
+            try:
+                await self._save_actual_best_hour()
+            except Exception as e:
+                _LOGGER.warning(f"Failed to save actual best hour: {e}")
+
             # Finalize day in data_manager (NEW METHOD)
             success = await self.data_manager.finalize_today(
                 yield_kwh=actual_yield,
                 consumption_kwh=actual_consumption,
                 production_seconds=production_seconds
             )
-            
+
             if success:
                 _LOGGER.info(
                     f"Day finalized successfully: Yield={actual_yield:.2f} kWh, "
@@ -688,31 +604,27 @@ class ScheduledTasksManager:
 
     @callback
     async def move_to_history_task(self, now: datetime) -> None:
-        """
-        Move current day to history at 23:31.
-        Runs after finalization.
-        """
-        _LOGGER.info(f"Moving day to history (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
-        
+        """Move current day to history at 2331 by Zara"""
+        current_time = now if now is not None else dt_util.now()
+        _LOGGER.info(f"Moving day to history (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')})...")
+
         try:
             success = await self.data_manager.move_to_history()
-            
+
             if success:
                 _LOGGER.info("Current day moved to history successfully")
             else:
                 _LOGGER.error("Failed to move day to history")
-                
+
         except Exception as e:
             _LOGGER.error(f"Failed to move to history: {e}", exc_info=True)
 
     @callback
     async def calculate_stats_task(self, now: datetime) -> None:
-        """
-        Calculate statistics at 23:32.
-        Runs after history update.
-        """
-        _LOGGER.info(f"Calculating statistics (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
-        
+        """Calculate statistics at 2332 by Zara"""
+        current_time = now if now is not None else dt_util.now()
+        _LOGGER.info(f"Calculating statistics (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')})...")
+
         try:
             success = await self.data_manager.calculate_statistics()
             
@@ -736,41 +648,52 @@ class ScheduledTasksManager:
         except Exception as e:
             _LOGGER.error(f"Failed to calculate statistics: {e}", exc_info=True)
 
-    @callback
-    async def clear_current_day_task(self, now: datetime) -> None:
-        """
-        Reset today block at midnight (00:00:05).
-        Shifts forecasts and resets all live values for new day.
-        UPDATED: Uses new data_manager.reset_today_for_new_day() method.
-        """
-        _LOGGER.info(f"Resetting today block for new day (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
-        
+    async def _save_actual_best_hour(self) -> None:
+        """Calculate and save the actual best production hour from todays hourly samples by Zara"""
         try:
-            success = await self.data_manager.reset_today_for_new_day()
-            
-            if success:
-                _LOGGER.info("Ã¢Å“â€œ Today block reset successfully for new day")
-            else:
-                _LOGGER.error("Failed to reset today block")
-                
-        except Exception as e:
-            _LOGGER.error(f"Failed to reset today block: {e}", exc_info=True)
+            today = dt_util.now().date()
+            hourly_samples = await self.data_manager.get_hourly_samples()
 
-    @callback
-    async def reset_daily_tasks_task(self, now: datetime) -> None:
-        """
-        Reset daily_tasks completed flags at 05:00.
-        Prepares for new day's tasks.
-        """
-        _LOGGER.info(f"Resetting daily tasks (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
-        
-        try:
-            success = await self.data_manager.reset_daily_tasks()
-            
-            if success:
-                _LOGGER.info("Daily tasks reset successfully")
+            # Filter samples from today
+            today_samples = [
+                s for s in hourly_samples
+                if dt_util.parse_datetime(s.get("timestamp")).date() == today
+            ]
+
+            if not today_samples:
+                _LOGGER.debug("No hourly samples from today - skipping actual best hour calculation")
+                return
+
+            # Find the hour with maximum production
+            max_production = -1
+            best_hour = None
+            best_kwh = 0.0
+
+            for sample in today_samples:
+                production = sample.get("actual_kwh")
+                if production is not None and production > max_production:
+                    max_production = production
+                    best_kwh = production
+                    timestamp = dt_util.parse_datetime(sample.get("timestamp"))
+                    if timestamp:
+                        best_hour = timestamp.hour
+
+            if best_hour is not None and best_kwh > 0:
+                # Save to daily_forecasts.json
+                success = await self.data_manager.save_actual_best_hour(
+                    hour=best_hour,
+                    actual_kwh=best_kwh
+                )
+
+                if success:
+                    _LOGGER.info(
+                        f"✓ Actual best hour saved: {best_hour:02d}:00 with {best_kwh:.2f} kWh"
+                    )
+                else:
+                    _LOGGER.warning("Failed to save actual best hour")
             else:
-                _LOGGER.error("Failed to reset daily tasks")
-                
+                _LOGGER.debug("No significant production today - actual best hour not saved")
+
         except Exception as e:
-            _LOGGER.error(f"Failed to reset daily tasks: {e}", exc_info=True)
+            _LOGGER.error(f"Error calculating actual best hour: {e}", exc_info=True)
+

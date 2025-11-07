@@ -22,11 +22,11 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-# [Version Update] Set version numbers to 8.0.4
-VERSION = "8.0.4"
-RELEASE_VERSION = "8.0.4"
-SOFTWARE_VERSION = "8.0.0"
-INTEGRATION_MODEL = "v8.0.4" # Model string might differ based on ML changes
+# [Version Update] Set version numbers to 8.2.0
+VERSION = "8.2.0"
+RELEASE_VERSION = "8.2.0"
+SOFTWARE_VERSION = "8.2.0"
+INTEGRATION_MODEL = "v8.2.0" # Model string might differ based on ML changes
 ML_VERSION = "10.0.0" # Keep ML Model version unless model structure changed significantly
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
@@ -193,9 +193,16 @@ SERVICE_FINALIZE_DAY = "finalize_day" # Emergency day-end service
 SERVICE_MOVE_TO_HISTORY = "move_to_history" # Emergency history service
 SERVICE_CALCULATE_STATS = "calculate_stats" # Emergency statistics service
 SERVICE_RUN_ALL_DAY_END_TASKS = "run_all_day_end_tasks" # Emergency complete day-end
-SERVICE_TRIGGER_6AM_FORECAST = "trigger_6am_forecast" # Debugging: manual 6 AM forecast lock
-SERVICE_FORECAST_DAY_AFTER_TOMORROW = "forecast_day_after_tomorrow"
+
+# DEBUGGING SERVICES - Time-based forecast simulations (100% code-conformant)
+SERVICE_DEBUGGING_6AM_FORECAST = "debugging_6am_forecast" # Debugging: Simulates 6 AM TODAY forecast lock
+SERVICE_DEBUGGING_BEST_HOUR = "debugging_best_hour" # Debugging: Simulates 6 AM best hour calculation
+SERVICE_DEBUGGING_TOMORROW_12PM = "debugging_tomorrow_12pm" # Debugging: Simulates 12 PM TOMORROW forecast lock
+SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6AM = "debugging_day_after_tomorrow_6am" # Debugging: Simulates 6 AM DAY AFTER TOMORROW forecast (unlocked)
+SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM = "debugging_day_after_tomorrow_6pm" # Debugging: Simulates 18 PM DAY AFTER TOMORROW forecast lock
+
 SERVICE_COLLECT_HOURLY_SAMPLE = "collect_hourly_sample"
+SERVICE_NIGHT_CLEANUP = "night_cleanup" # Manual night cleanup (remove duplicates and zero-production samples)
 
 # --- Other Constants ---
 ICON_SOLAR = "mdi:solar-power"
@@ -248,3 +255,92 @@ DEVICE_MANUFACTURER = "Zara-Toorox"
 SUN_BUFFER_HOURS = 1.5  # Buffer hours for sun calculations
 FALLBACK_PRODUCTION_START_HOUR = 5
 FALLBACK_PRODUCTION_END_HOUR = 21
+
+# ============================================================================
+# BATTERY MANAGEMENT CONSTANTS (v8.3.0 Extension)
+# ============================================================================
+# Completely separate from Solar/ML - no interference with existing code
+
+# --- Battery Configuration Keys ---
+CONF_BATTERY_ENABLED = "battery_enabled"
+CONF_BATTERY_CAPACITY = "battery_capacity"  # Battery capacity in kWh
+CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"  # State of Charge sensor
+CONF_BATTERY_POWER_ENTITY = "battery_power_entity"  # Current charge/discharge power (W)
+CONF_BATTERY_CHARGE_TODAY_ENTITY = "battery_charge_today_entity"  # Daily charge (kWh)
+CONF_BATTERY_DISCHARGE_TODAY_ENTITY = "battery_discharge_today_entity"  # Daily discharge (kWh)
+CONF_BATTERY_TEMPERATURE_ENTITY = "battery_temperature_entity"  # Optional temperature sensor
+
+# --- Electricity Price Configuration ---
+CONF_ELECTRICITY_COUNTRY = "electricity_country"  # Country for electricity prices (DE/AT)
+CONF_ELECTRICITY_ENABLED = "electricity_enabled"  # Enable electricity price features
+
+# --- aWATTar API Configuration (Free, No Registration Required) ---
+# aWATTar provides free electricity spot prices for DE and AT
+# No API key needed - 100 requests per day under fair use
+# Data source: EPEX Spot, updated daily at 14:00
+
+# --- Battery Defaults ---
+DEFAULT_BATTERY_CAPACITY = 10.0  # kWh
+MIN_BATTERY_CAPACITY = 0.5
+MAX_BATTERY_CAPACITY = 1000.0
+DEFAULT_ELECTRICITY_COUNTRY = "DE"
+
+# --- Electricity Price Constants ---
+ELECTRICITY_PRICE_UPDATE_HOUR = 13  # ENTSO-E publishes day-ahead prices around 13:00
+ELECTRICITY_PRICE_CACHE_FILE = "electricity_prices.json"
+MAX_ELECTRICITY_PRICE_HISTORY = 90  # Days of price history to keep
+
+# --- Battery Sensor Icons ---
+ICON_BATTERY = "mdi:battery"
+ICON_BATTERY_CHARGING = "mdi:battery-charging"
+ICON_BATTERY_DISCHARGING = "mdi:battery-minus"
+ICON_ELECTRICITY_PRICE = "mdi:currency-eur"
+ICON_CHARGING_RECOMMENDATION = "mdi:lightbulb-on"
+
+# --- Battery Data Files ---
+BATTERY_STATE_FILE = "battery_state.json"
+BATTERY_STATISTICS_FILE = "battery_statistics.json"
+
+# --- Charging Strategy Constants ---
+CHARGING_PRICE_PERCENTILE_CHEAP = 25  # Below 25th percentile = cheap
+CHARGING_PRICE_PERCENTILE_EXPENSIVE = 75  # Above 75th percentile = expensive
+MIN_CHARGING_DURATION_HOURS = 2  # Minimum recommended charging duration
+
+# --- Battery Efficiency ---
+DEFAULT_BATTERY_EFFICIENCY = 0.9  # 90% round-trip efficiency
+BATTERY_SELF_DISCHARGE_RATE = 0.02  # 2% per day
+
+# --- Units ---
+UNIT_EURO_PER_KWH = "€/kWh"
+UNIT_CENT_PER_KWH = "ct/kWh"
+UNIT_WATT = "W"
+UNIT_HOURS = "h"
+
+# --- Battery Sensor Unique IDs ---
+BATTERY_SOC_SENSOR = "soc"
+BATTERY_POWER_SENSOR = "power"
+BATTERY_CHARGE_TODAY_SENSOR = "charge_today"
+BATTERY_DISCHARGE_TODAY_SENSOR = "discharge_today"
+BATTERY_EXPECTED_CHARGE_SOLAR_SENSOR = "expected_charge_solar"
+BATTERY_CHARGE_FROM_SOLAR_SENSOR = "charge_from_solar"
+BATTERY_CHARGE_FROM_GRID_SENSOR = "charge_from_grid"
+BATTERY_RUNTIME_REMAINING_SENSOR = "runtime_remaining"
+BATTERY_EFFICIENCY_SENSOR = "efficiency"
+
+ELECTRICITY_PRICE_CURRENT_SENSOR = "price_current"
+ELECTRICITY_PRICE_NEXT_HOUR_SENSOR = "price_next_hour"
+ELECTRICITY_PRICE_AVG_TODAY_SENSOR = "price_avg_today"
+ELECTRICITY_PRICE_AVG_WEEK_SENSOR = "price_avg_week"
+ELECTRICITY_PRICE_MIN_TODAY_SENSOR = "price_min_today"
+ELECTRICITY_PRICE_MAX_TODAY_SENSOR = "price_max_today"
+ELECTRICITY_CHEAPEST_HOUR_TODAY_SENSOR = "cheapest_hour_today"
+ELECTRICITY_MOST_EXPENSIVE_HOUR_TODAY_SENSOR = "most_expensive_hour_today"
+ELECTRICITY_CHARGING_RECOMMENDATION_SENSOR = "charging_recommendation"
+ELECTRICITY_SAVINGS_TODAY_SENSOR = "savings_today"
+
+# --- Autarky & Self-Consumption (with Battery) ---
+AUTARKY_WITH_BATTERY_SENSOR = "autarky_with_battery"
+SELF_CONSUMPTION_WITH_BATTERY_SENSOR = "self_consumption_with_battery"
+GRID_EXPORT_TODAY_SENSOR = "grid_export_today"
+GRID_IMPORT_TODAY_SENSOR = "grid_import_today"
+DIRECT_SOLAR_CONSUMPTION_SENSOR = "direct_solar_consumption"

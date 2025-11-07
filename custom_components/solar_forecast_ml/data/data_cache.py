@@ -28,26 +28,17 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataCache:
-    """Handles caching logic for weather and forecast data."""
+    """Handles caching logic for weather and forecast data by Zara"""
     
     def __init__(self, data_dir: Path):
-        """Initialize the data cache."""
+        """Initialize the data cache by Zara"""
         self.data_dir = data_dir
         self.weather_cache_file = data_dir / "data" / "weather_cache.json"
         self._cache: Dict[str, Any] = {}
         self._cache_timestamps: Dict[str, datetime] = {}
         
     async def get_cached_forecast(self, key: str, max_age_hours: int = 1) -> Optional[Dict[str, Any]]:
-        """
-        Get cached forecast data if not expired.
-        
-        Args:
-            key: Cache key
-            max_age_hours: Maximum age of cache in hours
-            
-        Returns:
-            Cached data or None if expired/not found
-        """
+        """Get cached forecast data if not expired by Zara"""
         if key not in self._cache:
             return None
             
@@ -64,24 +55,13 @@ class DataCache:
         return self._cache[key]
     
     async def set_cached_forecast(self, key: str, data: Dict[str, Any]) -> None:
-        """
-        Store forecast data in cache.
-        
-        Args:
-            key: Cache key
-            data: Data to cache
-        """
+        """Store forecast data in cache by Zara"""
         self._cache[key] = data
         self._cache_timestamps[key] = dt_util.now()
         _LOGGER.debug(f"Cached data for key: {key}")
     
     async def clear_cache(self, key: Optional[str] = None) -> None:
-        """
-        Clear cache data.
-        
-        Args:
-            key: Specific key to clear, or None to clear all
-        """
+        """Clear cache data by Zara"""
         if key:
             self._cache.pop(key, None)
             self._cache_timestamps.pop(key, None)
@@ -92,12 +72,7 @@ class DataCache:
             _LOGGER.debug("Cleared all cache data")
     
     async def get_cache_stats(self) -> Dict[str, Any]:
-        """
-        Get cache statistics.
-        
-        Returns:
-            Dictionary with cache stats
-        """
+        """Get cache statistics by Zara"""
         return {
             "total_entries": len(self._cache),
             "keys": list(self._cache.keys()),

@@ -33,30 +33,16 @@ REQUIRED_DEPENDENCIES = {
 
 
 class DependencyHandler:
-    """
-    Handler for dependency checks.
-    
-    Simplified: Only check, no installation.
-    Home Assistant installs automatically from manifest.json
-    """
+    """Handler for dependency checks by Zara"""
     
     def __init__(self) -> None:
-        """Initialize dependency handler"""
+        """Initialize dependency handler by Zara"""
         self._checked = False
         self._all_satisfied = False
         self._package_status = {}
     
     def _check_package_sync(self, package: str) -> bool:
-        """
-        Synchronous check if a package is installed and functional.
-        This is a BLOCKING function intended to be run in an executor.
-        
-        Args:
-            package: Package name (e.g., "numpy")
-            
-        Returns:
-            True if package works
-        """
+        """Synchronous check if a package is installed and functional by Zara"""
         try:
             if package == "numpy":
                 import numpy as np
@@ -80,15 +66,7 @@ class DependencyHandler:
             return False
     
     async def check_dependencies(self, hass=None) -> bool:
-        """
-        Check all dependencies asynchronously (if hass provided) or synchronously.
-        
-        Args:
-            hass: HomeAssistant instance for async_add_executor_job (optional)
-            
-        Returns:
-            True if all are present
-        """
+        """Check all dependencies asynchronously if hass provided or synchronously by Zara"""
         if self._checked:
             _LOGGER.debug(f"Dependencies already checked: {self._all_satisfied}")
             return self._all_satisfied
@@ -124,10 +102,7 @@ class DependencyHandler:
         return False
     
     def _get_package_version_sync(self, package: str) -> str:
-        """
-        Blocking function to get the package version.
-        Will be run in the executor
-        """
+        """Blocking function to get the package version by Zara"""
         
         # Import here - executed after HA has installed dependencies
         try:
@@ -148,21 +123,12 @@ class DependencyHandler:
                 try:
                     import numpy as np
                     return np.__version__
-                except:
-                    pass
+                except Exception as e:
+                    _LOGGER.debug(f"Could not get numpy version: {e}")
             return "unknown"
     
     async def get_dependency_status(self, hass=None) -> dict[str, Any]:
-        """
-        Get the status of all dependencies.
-        Async version with executor for blocking I/O
-
-        Args:
-            hass: HomeAssistant instance for async_add_executor_job (optional)
-
-        Returns:
-            Dict with package status
-        """
+        """Get the status of all dependencies by Zara"""
         status = {}
 
         for package, min_version in REQUIRED_DEPENDENCIES.items():
@@ -198,12 +164,7 @@ class DependencyHandler:
         return status
 
     def get_installed_packages(self) -> list[str]:
-        """
-        Get list of installed package names.
-
-        Returns:
-            List of installed package names
-        """
+        """Get list of installed package names by Zara"""
         if not self._checked:
             _LOGGER.warning("Dependencies not checked yet, returning empty list")
             return []
@@ -211,12 +172,7 @@ class DependencyHandler:
         return [pkg for pkg, status in self._package_status.items() if status]
 
     def get_missing_packages(self) -> list[str]:
-        """
-        Get list of missing package names.
-
-        Returns:
-            List of missing package names
-        """
+        """Get list of missing package names by Zara"""
         if not self._checked:
             _LOGGER.warning("Dependencies not checked yet, returning empty list")
             return []

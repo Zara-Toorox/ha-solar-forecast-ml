@@ -33,26 +33,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class RuleBasedForecastStrategy(ForecastStrategy):
-    """
-    A fallback forecast strategy that uses simple, rule-based heuristics
-    derived from weather factors (temperature, clouds, condition) and a
-    learned correction factor.
-    
-    Calculates an iterative hourly forecast for all 24 hours.
-    """
+    """A fallback forecast strategy that uses simple rule-based heuristics by Zara"""
 
     def __init__(
         self, 
         weather_calculator: WeatherCalculator, 
         solar_capacity: float
     ):
-        """
-        Initialize the Rule-Based Forecast Strategy.
-
-        Args:
-            weather_calculator: An instance of WeatherCalculator to get rule-based factors.
-            solar_capacity: The configured solar capacity (kWp) of the system.
-        """
+        """Initialize the Rule-Based Forecast Strategy by Zara"""
         super().__init__("rule_based")
         self.weather_calculator = weather_calculator
         self.solar_capacity = solar_capacity
@@ -65,13 +53,11 @@ class RuleBasedForecastStrategy(ForecastStrategy):
 
 
     def is_available(self) -> bool:
-        """This strategy is always available as a fallback."""
+        """This strategy is always available as a fallback by Zara"""
         return True
 
     def get_priority(self) -> int:
-        """
-        Returns the priority of this strategy. Lower than ML strategy.
-        """
+        """Returns the priority of this strategy Lower than ML strategy by Zara"""
         return 50
 
     async def calculate_forecast(
@@ -81,19 +67,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         correction_factor: float,
         **kwargs
     ) -> ForecastResult:
-        """
-        Calculates a forecast using simple weather rules combined with a learned
-        correction factor, iterating over the hourly weather forecast.
-
-        Args:
-            hourly_weather_forecast: List of processed hourly weather forecasts.
-            sensor_data: Dictionary containing other relevant data (e.g., 'solar_capacity').
-            correction_factor: A learned multiplier to adjust the rule-based estimate.
-            **kwargs: Ignores 'lag_features'.
-
-        Returns:
-            A ForecastResult object.
-        """
+        """Calculates a forecast using simple weather rules combined with a learned by Zara"""
         _LOGGER.debug("Calculating forecast using Rule-based (Iterative) strategy...")
 
         try:
@@ -242,10 +216,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             )
 
     def _get_hour_factor(self, hour: int) -> float:
-        """
-        Calculates a factor (0.0 to 1.0) based on the solar curve (sine function)
-        for a given hour. Night hours (22-5) receive factor 0.
-        """
+        """Calculates a factor 00 to 10 based on the solar curve sine function by Zara"""
         try:
             if hour >= 22 or hour <= 5:
                 return 0.0

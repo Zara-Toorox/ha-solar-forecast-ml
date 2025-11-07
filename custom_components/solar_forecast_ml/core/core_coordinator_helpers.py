@@ -27,23 +27,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class CoordinatorHelpers:
-    """Helper functions for the data update coordinator."""
+    """Helper functions for the data update coordinator by Zara"""
     
     @staticmethod
     def calculate_next_update_time(
         last_update: Optional[datetime],
         interval_minutes: int = 15
     ) -> datetime:
-        """
-        Calculate the next scheduled update time.
-        
-        Args:
-            last_update: Last update timestamp
-            interval_minutes: Update interval in minutes
-            
-        Returns:
-            Next update time
-        """
+        """Calculate the next scheduled update time by Zara"""
         if last_update is None:
             return dt_util.now()
         
@@ -60,16 +51,7 @@ class CoordinatorHelpers:
         last_update: Optional[datetime],
         max_age_hours: int = 24
     ) -> bool:
-        """
-        Check if data should be force-updated due to age.
-        
-        Args:
-            last_update: Last update timestamp
-            max_age_hours: Maximum age in hours
-            
-        Returns:
-            True if force update needed
-        """
+        """Check if data should be force-updated due to age by Zara"""
         if last_update is None:
             return True
         
@@ -78,15 +60,7 @@ class CoordinatorHelpers:
     
     @staticmethod
     def validate_coordinator_data(data: Dict[str, Any]) -> bool:
-        """
-        Validate coordinator data structure.
-        
-        Args:
-            data: Coordinator data dictionary
-            
-        Returns:
-            True if valid
-        """
+        """Validate coordinator data structure by Zara"""
         required_keys = ["last_update", "forecasts"]
         
         for key in required_keys:
@@ -101,16 +75,7 @@ class CoordinatorHelpers:
         old_data: Dict[str, Any],
         new_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Merge new forecast data with existing data.
-        
-        Args:
-            old_data: Existing data
-            new_data: New data to merge
-            
-        Returns:
-            Merged data dictionary
-        """
+        """Merge new forecast data with existing data by Zara"""
         merged = old_data.copy()
         
         # Update with new data
@@ -128,15 +93,7 @@ class CoordinatorHelpers:
     
     @staticmethod
     def calculate_data_staleness(last_update: Optional[datetime]) -> Dict[str, Any]:
-        """
-        Calculate data staleness metrics.
-        
-        Args:
-            last_update: Last update timestamp
-            
-        Returns:
-            Dictionary with staleness metrics
-        """
+        """Calculate data staleness metrics by Zara"""
         if last_update is None:
             return {
                 "stale": True,
@@ -181,15 +138,7 @@ class CoordinatorHelpers:
     
     @staticmethod
     def format_update_summary(update_results: Dict[str, bool]) -> str:
-        """
-        Format update results into a readable summary.
-        
-        Args:
-            update_results: Dictionary of component -> success status
-            
-        Returns:
-            Formatted summary string
-        """
+        """Format update results into a readable summary by Zara"""
         total = len(update_results)
         successful = sum(1 for v in update_results.values() if v)
         failed = total - successful

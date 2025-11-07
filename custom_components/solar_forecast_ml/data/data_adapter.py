@@ -35,27 +35,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class TypedDataAdapter:
-    """
-    Adapter class responsible for converting data between unstructured dictionaries
-    (typically from JSON) and the strongly-typed dataclasses used internally.
-    Provides robustness against missing keys and handles defaults.
-    """
+    """Adapter class responsible for converting data between unstructured dictionaries by Zara"""
 
     @staticmethod
     def dict_to_prediction_record(data: Dict[str, Any]) -> PredictionRecord:
-        """
-        Converts a dictionary to a PredictionRecord dataclass instance.
-
-        Args:
-            data: The input dictionary.
-
-        Returns:
-            A PredictionRecord instance.
-
-        Raises:
-            ValueError: If conversion fails due to invalid data types or missing required keys
-                       (after attempting defaults). Catches specific errors and re-raises.
-        """
+        """Converts a dictionary to a PredictionRecord dataclass instance by Zara"""
         if isinstance(data, PredictionRecord):
             return data # Return if already the correct type
 
@@ -89,17 +73,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def dict_to_learned_weights(data: Dict[str, Any]) -> LearnedWeights:
-        """
-        Converts a dictionary to a LearnedWeights dataclass instance.
-        Handles missing keys gracefully for backward compatibility with older formats.
-        Applies defaults and clamps values where necessary.
-
-        Args:
-            data: The input dictionary (likely loaded from learned_weights.json).
-
-        Returns:
-            A LearnedWeights instance. Returns default weights if conversion fails significantly.
-        """
+        """Converts a dictionary to a LearnedWeights dataclass instance by Zara"""
         if isinstance(data, LearnedWeights):
             return data # Return if already the correct type
 
@@ -179,16 +153,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def learned_weights_to_dict(weights: LearnedWeights) -> Dict[str, Any]:
-        """
-        Converts a LearnedWeights dataclass instance back into a dictionary
-        suitable for JSON serialization. Includes all current fields.
-
-        Args:
-            weights: The LearnedWeights instance.
-
-        Returns:
-            A dictionary representation.
-        """
+        """Converts a LearnedWeights dataclass instance back into a dictionary by Zara"""
         if not isinstance(weights, LearnedWeights):
             _LOGGER.error("Invalid input: learned_weights_to_dict expects a LearnedWeights instance.")
             # Return dict from default? Or raise error? Return default dict for now.
@@ -220,16 +185,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def dict_to_hourly_profile(data: Dict[str, Any]) -> HourlyProfile:
-        """
-        Converts a dictionary to an HourlyProfile dataclass instance.
-        Handles missing keys and ensures the structure is valid.
-
-        Args:
-            data: The input dictionary (likely loaded from hourly_profile.json).
-
-        Returns:
-            An HourlyProfile instance. Returns default profile if conversion fails.
-        """
+        """Converts a dictionary to an HourlyProfile dataclass instance by Zara"""
         if isinstance(data, HourlyProfile):
             return data # Return if already the correct type
 
@@ -272,16 +228,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def hourly_profile_to_dict(profile: HourlyProfile) -> Dict[str, Any]:
-        """
-        Converts an HourlyProfile dataclass instance back into a dictionary
-        suitable for JSON serialization.
-
-        Args:
-            profile: The HourlyProfile instance.
-
-        Returns:
-            A dictionary representation.
-        """
+        """Converts an HourlyProfile dataclass instance back into a dictionary by Zara"""
         if not isinstance(profile, HourlyProfile):
              _LOGGER.error("Invalid input: hourly_profile_to_dict expects an HourlyProfile instance.")
              return TypedDataAdapter.hourly_profile_to_dict(create_default_hourly_profile())
@@ -304,16 +251,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def prediction_record_to_dict(record: PredictionRecord) -> Dict[str, Any]:
-        """
-        Converts a PredictionRecord dataclass instance into a dictionary
-        suitable for JSON serialization.
-
-        Args:
-            record: The PredictionRecord instance.
-
-        Returns:
-            A dictionary representation.
-        """
+        """Converts a PredictionRecord dataclass instance into a dictionary by Zara"""
         if not isinstance(record, PredictionRecord):
              _LOGGER.error("Invalid input: prediction_record_to_dict expects a PredictionRecord instance.")
              # Cannot easily create a default record, return empty dict or raise? Empty dict safer.

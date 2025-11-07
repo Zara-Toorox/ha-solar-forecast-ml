@@ -31,21 +31,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MLForecastStrategy(ForecastStrategy):
-    """
-    Implements the forecast strategy using a trained Machine Learning model
-    provided by an MLPredictor instance.
-    
-    Berechnet eine iterative stuendliche Prognose.
-    """
+    """Implements the forecast strategy using a trained Machine Learning model by Zara"""
 
     def __init__(self, ml_predictor: Any, error_handler: Optional[ErrorHandlingService] = None):
-        """
-        Initialize the ML Forecast Strategy.
-
-        Args:
-            ml_predictor: An instance of the MLPredictor class (or compatible).
-            error_handler: Optional ErrorHandlingService instance for logging errors.
-        """
+        """Initialize the ML Forecast Strategy by Zara"""
         super().__init__("ml_forecast")
         self.ml_predictor = ml_predictor
         self.error_handler = error_handler
@@ -72,9 +61,7 @@ class MLForecastStrategy(ForecastStrategy):
         self.TOMORROW_DISCOUNT_FACTOR = 0.92
 
     def is_available(self) -> bool:
-        """
-        Checks if the ML Predictor instance is available and reports itself as healthy.
-        """
+        """Checks if the ML Predictor instance is available and reports itself as healthy by Zara"""
         if not self.ml_predictor:
             _LOGGER.debug("ML strategy unavailable: MLPredictor instance is missing.")
             return False
@@ -93,9 +80,7 @@ class MLForecastStrategy(ForecastStrategy):
             return False
 
     def get_priority(self) -> int:
-        """
-        Returns the priority of this strategy. ML has the highest priority.
-        """
+        """Returns the priority of this strategy ML has the highest priority by Zara"""
         return 100
 
     async def calculate_forecast(
@@ -105,23 +90,7 @@ class MLForecastStrategy(ForecastStrategy):
         lag_features: Dict[str, Any],
         correction_factor: float
     ) -> ForecastResult:
-        """
-        Calculates the solar forecast using the ML model via the MLPredictor instance,
-        iterates through hourly weather forecast.
-
-        Args:
-            hourly_weather_forecast: List of processed hourly weather forecasts.
-            sensor_data: Dictionary (needed for 'current_yield' minimum check).
-            lag_features: Dictionary with lag features (e.g. 'production_yesterday').
-            correction_factor: Ignored by this strategy.
-
-        Returns:
-            A ForecastResult object containing the prediction details.
-
-        Raises:
-            MLModelException: If the ML prediction fails or the predictor is unavailable/unhealthy.
-            Exception: For other unexpected errors.
-        """
+        """Calculates the solar forecast using the ML model via the MLPredictor instance by Zara"""
         _LOGGER.debug("Attempting forecast calculation using ML (Iterative) strategy...")
 
         if not self.is_available():
@@ -132,7 +101,11 @@ class MLForecastStrategy(ForecastStrategy):
             total_today_kwh = 0.0
             total_tomorrow_kwh = 0.0
             total_day_after_kwh = 0.0
-            
+
+            # Track best production hour for today
+            best_hour_today = None
+            best_hour_production = 0.0
+
             now_local = dt_util.now() # now() already returns LOCAL time
             today_date = now_local.date()
             tomorrow_date = today_date + timedelta(days=1)
@@ -168,7 +141,7 @@ class MLForecastStrategy(ForecastStrategy):
                         is_production_hour = 6 <= hour_local <= 18
                     
                     if not is_production_hour:
-                        _LOGGER.debug(f"Skipping hour {hour_local} (outside production time)")
+                        # Skip hours outside production time (no log to reduce noise)
                         continue
                         
                     hour_date = hour_dt_local.date()
@@ -192,14 +165,18 @@ class MLForecastStrategy(ForecastStrategy):
 
                     hourly_kwh = prediction_result.prediction
                     hourly_kwh = max(self.PREDICTION_MIN_VALUE, min(hourly_kwh, self.HOURLY_PREDICTION_MAX_VALUE))
-                    
+
                     if hour_date == today_date:
                         total_today_kwh += hourly_kwh
+                        # Track best production hour for today
+                        if hourly_kwh > best_hour_production:
+                            best_hour_today = hour_local
+                            best_hour_production = hourly_kwh
                     elif hour_date == tomorrow_date:
                         total_tomorrow_kwh += hourly_kwh
                     elif hour_date == day_after_tomorrow_date:
                         total_day_after_kwh += hourly_kwh
-                        
+
                 except Exception as e_inner:
                     _LOGGER.warning(f"ML strategy failed to process hour {hour_data.get('local_hour')}: {e_inner}")
                     continue
@@ -263,7 +240,9 @@ class MLForecastStrategy(ForecastStrategy):
                 method="ml_iterative",
                 calibrated=True,
                 features_used=feature_count,
-                model_accuracy=model_accuracy
+                model_accuracy=model_accuracy,
+                best_hour_today=best_hour_today,
+                best_hour_production_kwh=best_hour_production if best_hour_today is not None else None,
             )
 
             accuracy_str = f", model_acc={result.model_accuracy:.3f}" if result.model_accuracy is not None else ""

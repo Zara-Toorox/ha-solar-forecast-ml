@@ -32,16 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def format_time_ago(last_changed: datetime) -> str:
-    """
-    Formats timestamp as 'X min/h ago' - by Zara
-    Space-saving: <1min = '< 1 min ago' - by Zara
-    
-    Args:
-        last_changed: Timestamp of the last change (LOCAL timezone)
-        
-    Returns:
-        Formatted string like "5 min ago" or "2 h ago"
-    """
+    """Formats timestamp as X minh ago - by Zara by Zara"""
     now = dt_util.now() # Use LOCAL time - last_changed is also LOCAL
     delta = now - last_changed
     
@@ -58,35 +49,13 @@ def format_time_ago(last_changed: datetime) -> str:
 
 
 class BaseExternalSensor:
-    """
-    Common base for external sensor displays with LIVE updates - by Zara
-    
-    This class implements:
-    - LIVE State Change Tracking
-    - Uniform error handling
-    - Timestamp formatting
-    - Availability check
-    """
+    """Common base for external sensor displays with LIVE updates - by Zara by Zara"""
     
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     hass: HomeAssistant  # Make hass available to the class
 
     def __init__(self, coordinator, entry: ConfigEntry, sensor_config: Dict[str, Any]):
-        """
-        Initializes the external sensor - by Zara
-        
-        Args:
-            coordinator: DataUpdateCoordinator
-            entry: ConfigEntry
-            sensor_config: Dict with configuration:
-                - key: Suffix for unique_id (e.g., 'temp_sensor')
-                - config_key: Key for Config (e.g., CONF_TEMP_SENSOR)
-                - name: Display name
-                - icon: MDI Icon
-                - unit: Default unit (optional)
-                - device_class: Device class (optional)
-                - format_string: Format string for display (optional)
-        """
+        """Initializes the external sensor - by Zara by Zara"""
         self._sensor_config = sensor_config
         self.entry = entry
         self.coordinator = coordinator
@@ -100,17 +69,14 @@ class BaseExternalSensor:
 
     @staticmethod
     def strip_entity_id(entity_id_raw: Any) -> Optional[str]:
-        """Safely strips an entity ID string, returns None if invalid."""
+        """Safely strips an entity ID string returns None if invalid by Zara"""
         if isinstance(entity_id_raw, str) and entity_id_raw:
             return entity_id_raw.strip()
         return None
 
     @property
     def _sensor_entity_id(self) -> Optional[str]:
-        """
-        Gets the entity ID of the sensor to track from the ConfigEntry.
-        This is the correct, centralized logic.
-        """
+        """Gets the entity ID of the sensor to track from the ConfigEntry by Zara"""
         config_key = self._sensor_config.get('config_key')
         if not config_key:
             _LOGGER.error(f"Missing 'config_key' for sensor {self._attr_name}")
@@ -150,13 +116,7 @@ class BaseExternalSensor:
     
     @property
     def native_value(self) -> str:
-        """
-        Gets value from the configured sensor with timestamp - by Zara
-        
-        Returns:
-            Formatted string with value, unit, and timestamp
-            or an error message
-        """
+        """Gets value from the configured sensor with timestamp - by Zara by Zara"""
         sensor_entity_id = self._sensor_entity_id
         
         if not sensor_entity_id:
@@ -185,33 +145,14 @@ class BaseExternalSensor:
             return "Error"
     
     def _get_unit(self, state: State) -> Optional[str]:
-        """
-        Determines the unit of the sensor - by Zara
-        (This is redundant as of v1.1, native_value handles it)
-        
-        Args:
-            state: State object of the sensor
-            
-        Returns:
-            Unit or None
-        """
+        """Determines the unit of the sensor - by Zara by Zara"""
         unit_key = self._sensor_config.get('unit_key', 'unit_of_measurement')
         default_unit = self._sensor_config.get('unit')
         
         return state.attributes.get(unit_key, default_unit)
     
     def _format_value(self, value: str, unit: Optional[str], time_ago: str) -> str:
-        """
-        Formats sensor value for display - by Zara
-        
-        Args:
-            value: Sensor value
-            unit: Unit (optional)
-            time_ago: Timestamp string
-            
-        Returns:
-            Formatted string
-        """
+        """Formats sensor value for display - by Zara by Zara"""
         format_string = self._sensor_config.get('format_string', '{value} {unit} ({time})')
         
         # If a specific format is defined

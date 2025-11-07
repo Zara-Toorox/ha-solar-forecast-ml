@@ -45,7 +45,13 @@
           "temp_sensor": "Temperatur-Sensor",
           "wind_sensor": "Wind-Sensor",
           "uv_sensor": "UV-Sensor",
-          "humidity_sensor": "Luftfeuchtigkeits-Sensor"
+          "humidity_sensor": "Luftfeuchtigkeits-Sensor",
+          "battery_capacity": "Batterie-Kapazität (kWh)",
+          "battery_soc_entity": "Batterie Ladezustand Sensor",
+          "battery_power_entity": "Batterie Leistungs-Sensor (W)",
+          "battery_charge_today_entity": "Batterie Ladung Heute (kWh)",
+          "battery_discharge_today_entity": "Batterie Entladung Heute (kWh)",
+          "electricity_country": "Land (DE/AT)"
         },
         "data_description": {
           "weather_entity": "Wetter-Entität für Prognose (Pflicht)",
@@ -58,7 +64,13 @@
           "temp_sensor": "Externe Temperatur (Optional)",
           "wind_sensor": "Externe Windgeschwindigkeit (Optional)",
           "uv_sensor": "Externer UV-Index (Optional)",
-          "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)"
+          "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)",
+          "battery_capacity": "Gesamt-Batteriekapazität in kWh",
+          "battery_soc_entity": "Sensor für Batterie-Ladezustand in %",
+          "battery_power_entity": "Sensor für aktuelle Batterieleistung in W (positiv=Laden)",
+          "battery_charge_today_entity": "Sensor für heute geladene Energie in kWh",
+          "battery_discharge_today_entity": "Sensor für heute entladene Energie in kWh",
+          "electricity_country": "Land für Strompreise - Deutschland oder Österreich"
         }
       }
     },
@@ -84,7 +96,7 @@
     "step": {
       "init": {
         "title": "Erweiterte Optionen",
-        "description": "Update-Intervalle und Benachrichtigungen konfigurieren",
+        "description": "Update-Intervalle und Benachrichtigungen konfigurieren\nBatterie-Sensoren werden über 'Neu konfigurieren' eingestellt",
         "data": {
           "update_interval": "Update-Intervall (s)",
           "diagnostic": "Diagnose-Modus",
@@ -92,7 +104,9 @@
           "notify_startup": "Start-Benachrichtigung",
           "notify_forecast": "Prognose-Benachrichtigungen",
           "notify_learning": "Trainings-Benachrichtigungen",
-          "notify_successful_learning": "Erfolgs-Benachrichtigungen"
+          "notify_successful_learning": "Erfolgs-Benachrichtigungen",
+          "battery_enabled": "Batterie-Management aktivieren",
+          "electricity_enabled": "Strompreise aktivieren (aWATTar)"
         },
         "data_description": {
           "update_interval": "Prognose-Update-Intervall (300-86400s, Standard: 1800)",
@@ -101,7 +115,9 @@
           "notify_startup": "Benachrichtigung beim Start anzeigen",
           "notify_forecast": "Bei Prognose-Updates benachrichtigen",
           "notify_learning": "Bei Trainingsstart benachrichtigen",
-          "notify_successful_learning": "Bei erfolgreichem Training benachrichtigen"
+          "notify_successful_learning": "Bei erfolgreichem Training benachrichtigen",
+          "battery_enabled": "Batterie-Überwachung und -Prognosen aktivieren (Sensoren über Neu konfigurieren)",
+          "electricity_enabled": "Strompreise von aWATTar aktivieren (Land über Neu konfigurieren)"
         }
       }
     },
@@ -249,6 +265,189 @@
       },
       "avg_accuracy_30d": {
         "name": "Ø Genauigkeit 30 Tage"
+      },
+      "cloudiness_trend_1h": {
+        "name": "Bewölkungstrend 1h"
+      },
+      "cloudiness_trend_3h": {
+        "name": "Bewölkungstrend 3h"
+      },
+      "cloudiness_volatility": {
+        "name": "Bewölkungsvolatilität"
+      },
+      "battery_soc": {
+        "name": "Batterie Ladezustand",
+        "state_attributes": {
+          "capacity_kwh": {
+            "name": "Kapazität"
+          },
+          "remaining_kwh": {
+            "name": "Verbleibend"
+          },
+          "empty_kwh": {
+            "name": "Leer"
+          },
+          "is_charging": {
+            "name": "Lädt"
+          },
+          "is_discharging": {
+            "name": "Entlädt"
+          }
+        }
+      },
+      "battery_power": {
+        "name": "Batterie Leistung"
+      },
+      "battery_charge_today": {
+        "name": "Batterie Ladung Heute"
+      },
+      "battery_discharge_today": {
+        "name": "Batterie Entladung Heute"
+      },
+      "battery_runtime_remaining": {
+        "name": "Batterie Restlaufzeit",
+        "state_attributes": {
+          "remaining_capacity_kwh": {
+            "name": "Verbleibende Kapazität"
+          },
+          "current_consumption_w": {
+            "name": "Aktueller Verbrauch"
+          }
+        }
+      },
+      "battery_efficiency": {
+        "name": "Batterie Effizienz",
+        "state_attributes": {
+          "charge_today": {
+            "name": "Geladen Heute"
+          },
+          "discharge_today": {
+            "name": "Entladen Heute"
+          }
+        }
+      },
+      "battery_forecast_expected_charge_solar": {
+        "name": "Erwartete Ladung aus Solar",
+        "state_attributes": {
+          "remaining_solar_forecast": {
+            "name": "Verbleibende Solar-Prognose"
+          },
+          "empty_capacity": {
+            "name": "Leere Kapazität"
+          },
+          "current_soc": {
+            "name": "Aktueller Ladezustand"
+          }
+        }
+      },
+      "battery_forecast_charge_from_solar": {
+        "name": "Ladung aus Solar"
+      },
+      "battery_forecast_charge_from_grid": {
+        "name": "Ladung aus Netz"
+      },
+      "battery_forecast_grid_export_today": {
+        "name": "Netz Export Heute"
+      },
+      "battery_forecast_grid_import_today": {
+        "name": "Netz Import Heute"
+      },
+      "battery_forecast_direct_solar_consumption": {
+        "name": "Direkter Solar-Verbrauch"
+      },
+      "battery_forecast_autarky_with_battery": {
+        "name": "Autarkie mit Batterie"
+      },
+      "battery_forecast_self_consumption_with_battery": {
+        "name": "Eigenverbrauch mit Batterie"
+      },
+      "electricity_price_current": {
+        "name": "Strompreis Aktuell",
+        "state_attributes": {
+          "currency": {
+            "name": "Währung"
+          },
+          "country": {
+            "name": "Land"
+          },
+          "difference_from_average": {
+            "name": "Abweichung vom Durchschnitt"
+          },
+          "is_below_average": {
+            "name": "Unter Durchschnitt"
+          }
+        }
+      },
+      "electricity_price_next_hour": {
+        "name": "Strompreis Nächste Stunde"
+      },
+      "electricity_price_avg_today": {
+        "name": "Ø Strompreis Heute"
+      },
+      "electricity_price_avg_week": {
+        "name": "Ø Strompreis Woche"
+      },
+      "electricity_price_min_today": {
+        "name": "Min. Strompreis Heute"
+      },
+      "electricity_price_max_today": {
+        "name": "Max. Strompreis Heute"
+      },
+      "electricity_cheapest_hour_today": {
+        "name": "Günstigste Stunde Heute",
+        "state_attributes": {
+          "hour": {
+            "name": "Stunde"
+          },
+          "price": {
+            "name": "Preis"
+          },
+          "price_unit": {
+            "name": "Einheit"
+          }
+        }
+      },
+      "electricity_most_expensive_hour_today": {
+        "name": "Teuerste Stunde Heute",
+        "state_attributes": {
+          "hour": {
+            "name": "Stunde"
+          },
+          "price": {
+            "name": "Preis"
+          },
+          "price_unit": {
+            "name": "Einheit"
+          }
+        }
+      },
+      "electricity_charging_recommendation": {
+        "name": "Lade-Empfehlung",
+        "state_attributes": {
+          "current_price": {
+            "name": "Aktueller Preis"
+          },
+          "average_price": {
+            "name": "Durchschnittspreis"
+          },
+          "should_charge": {
+            "name": "Jetzt laden"
+          },
+          "cheapest_hours": {
+            "name": "Günstigste Stunden"
+          }
+        }
+      },
+      "electricity_savings_today": {
+        "name": "Ersparnis Heute",
+        "state_attributes": {
+          "charge_from_grid_today": {
+            "name": "Ladung aus Netz Heute"
+          },
+          "avg_price_today": {
+            "name": "Ø Preis Heute"
+          }
+        }
       }
     },
     "button": {

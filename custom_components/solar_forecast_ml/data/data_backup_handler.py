@@ -1,12 +1,18 @@
 """
 Data Backup Handler for Solar Forecast ML Integration
 
-Handles backup creation and cleanup.
-
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -27,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataBackupHandler(DataManagerIO):
-    """Handles backup creation and cleanup."""
+    """Handles backup creation and cleanup by Zara"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
@@ -41,16 +47,7 @@ class DataBackupHandler(DataManagerIO):
         backup_name: Optional[str] = None,
         backup_type: str = "manual"
     ) -> bool:
-        """
-        Create backup of all data files.
-        
-        Args:
-            backup_name: Custom backup name, auto-generated if None
-            backup_type: "manual" or "auto"
-        
-        Returns:
-            True if backup created successfully
-        """
+        """Create backup of all data files by Zara"""
         try:
             if not backup_name:
                 timestamp = dt_util.now().strftime("%Y%m%d_%H%M%S")
@@ -79,16 +76,7 @@ class DataBackupHandler(DataManagerIO):
         backup_type: str = "auto",
         retention_days: Optional[int] = None
     ) -> int:
-        """
-        Remove backups older than retention period.
-        
-        Args:
-            backup_type: "auto" or "manual"
-            retention_days: Days to retain, uses BACKUP_RETENTION_DAYS if None
-        
-        Returns:
-            Number of backups removed
-        """
+        """Remove backups older than retention period by Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type
             if not backup_dir.exists():
@@ -128,16 +116,7 @@ class DataBackupHandler(DataManagerIO):
         backup_type: str = "auto",
         max_backups: Optional[int] = None
     ) -> int:
-        """
-        Remove oldest backups if count exceeds maximum.
-        
-        Args:
-            backup_type: "auto" or "manual"
-            max_backups: Maximum number of backups to keep, uses MAX_BACKUP_FILES if None
-        
-        Returns:
-            Number of backups removed
-        """
+        """Remove oldest backups if count exceeds maximum by Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type
             if not backup_dir.exists():
@@ -179,15 +158,7 @@ class DataBackupHandler(DataManagerIO):
         self,
         backup_type: Optional[str] = None
     ) -> list:
-        """
-        List all available backups.
-        
-        Args:
-            backup_type: "auto", "manual", or None for all types
-        
-        Returns:
-            List of backup info dicts with name, type, date, size
-        """
+        """List all available backups by Zara"""
         try:
             backups = []
             
@@ -232,16 +203,7 @@ class DataBackupHandler(DataManagerIO):
         backup_name: str,
         backup_type: str = "manual"
     ) -> bool:
-        """
-        Restore data from backup.
-        
-        Args:
-            backup_name: Name of backup to restore
-            backup_type: "auto" or "manual"
-        
-        Returns:
-            True if restore successful
-        """
+        """Restore data from backup by Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
             
@@ -282,16 +244,7 @@ class DataBackupHandler(DataManagerIO):
         backup_name: str,
         backup_type: str = "manual"
     ) -> bool:
-        """
-        Delete specific backup.
-        
-        Args:
-            backup_name: Name of backup to delete
-            backup_type: "auto" or "manual"
-        
-        Returns:
-            True if deletion successful
-        """
+        """Delete specific backup by Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
             
@@ -312,16 +265,7 @@ class DataBackupHandler(DataManagerIO):
         backup_name: str,
         backup_type: str = "manual"
     ) -> Optional[dict]:
-        """
-        Get detailed info about specific backup.
-        
-        Args:
-            backup_name: Name of backup
-            backup_type: "auto" or "manual"
-        
-        Returns:
-            Backup info dict or None if not found
-        """
+        """Get detailed info about specific backup by Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
             

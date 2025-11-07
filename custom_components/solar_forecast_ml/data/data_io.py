@@ -1,5 +1,5 @@
 """
-Low-Level Data I/O Operations
+Low-Level Data IO Operations
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -40,11 +40,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DateTimeEncoder(json.JSONEncoder):
-    """
-    Custom JSON Encoder that converts datetime and date objects to ISO format strings.
-    CRITICAL: All datetime objects are converted to LOCAL timezone before serialization.
-    This ensures consistent timezone handling throughout the integration.
-    """
+    """Custom JSON Encoder that converts datetime and date objects to ISO format str... by Zara"""
     def default(self, obj):
         if isinstance(obj, (datetime, date)):
             if isinstance(obj, datetime):
@@ -52,7 +48,7 @@ class DateTimeEncoder(json.JSONEncoder):
                 try:
                     from ..core.core_helpers import SafeDateTimeUtil as dt_util
                     obj = dt_util.ensure_local(obj)
-                    _LOGGER.debug(f"DateTimeEncoder: Converting datetime to local timezone: {obj.isoformat()}")
+                    # Converting datetime to local timezone (debug log removed)
                 except Exception as e:
                     _LOGGER.warning(f"Failed to convert datetime to local timezone: {e}, using original")
             return obj.isoformat()
@@ -60,53 +56,30 @@ class DateTimeEncoder(json.JSONEncoder):
 
 
 class DataManagerIO:
-    """
-    Base class providing asynchronous, thread-safe file I/O operations
-    for JSON data using atomic writes and an asyncio Lock.
-    Blocking file operations are executed in a ThreadPoolExecutor.
-    """
+    """Base class providing asynchronous thread-safe file IO operations by Zara"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
-        """
-        Initialize the I/O manager.
-
-        Args:
-            hass: HomeAssistant instance.
-            data_dir: The base directory for data storage.
-        """
+        """Initialize the IO manager by Zara"""
         self.hass = hass
         self.data_dir = Path(data_dir) # Ensure it's a Path object
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="DataManagerIO")
         # Per-file locks: Each file gets its own lock to prevent unnecessary blocking
         self._file_locks: Dict[str, asyncio.Lock] = {}
         self._locks_lock = asyncio.Lock()  # Lock for accessing the locks dictionary
-
-        _LOGGER.debug("DataManagerIO initialized for directory: %s", self.data_dir)
+        # DataManagerIO initialized (debug log removed)
 
     async def _get_file_lock(self, file_path: Path) -> asyncio.Lock:
-        """
-        Get or create a lock for a specific file.
-        Thread-safe access to the locks dictionary.
-
-        Args:
-            file_path: Path to the file
-
-        Returns:
-            asyncio.Lock for the specific file
-        """
+        """Get or create a lock for a specific file by Zara"""
         file_key = str(file_path)  # Use full path as key
 
         async with self._locks_lock:
             if file_key not in self._file_locks:
                 self._file_locks[file_key] = asyncio.Lock()
-                _LOGGER.debug(f"Created new file lock for: {file_path.name}")
+                # Created new file lock (debug log removed)
             return self._file_locks[file_key]
 
     async def _ensure_directory_exists(self, directory: Path) -> None:
-        """
-        Ensure a directory exists, creating it if necessary. (Non-blocking)
-        Uses executor for the blocking mkdir operation.
-        """
+        """Ensure a directory exists creating it if necessary Non-blocking by Zara"""
         try:
             # Check existence first (often faster if dir exists)
             exists = await self.hass.async_add_executor_job(directory.is_dir)
@@ -122,11 +95,7 @@ class DataManagerIO:
             )
 
     async def _get_file_size(self, file_path: Path) -> int:
-        """
-        Get the size of a file in bytes. (Non-blocking)
-        Returns 0 if the file doesn't exist or an error occurs.
-        Uses executor for the blocking stat operation.
-        """
+        """Get the size of a file in bytes Non-blocking by Zara"""
         try:
             if await self._file_exists(file_path):
                 stat_result = await self.hass.async_add_executor_job(file_path.stat)
@@ -137,10 +106,7 @@ class DataManagerIO:
             return 0
 
     async def _file_exists(self, file_path: Path) -> bool:
-        """
-        Check if a file exists. (Non-blocking)
-        Uses executor for the blocking exists check.
-        """
+        """Check if a file exists Non-blocking by Zara"""
         try:
             return await self.hass.async_add_executor_job(file_path.exists)
         except Exception as e:
@@ -148,11 +114,7 @@ class DataManagerIO:
             return False
 
     async def _atomic_write_json_unlocked(self, file_path: Path, data: Dict[str, Any]) -> None:
-        """
-        Internal function for atomic JSON writing. Assumes the caller holds `_file_lock`.
-        Uses a temporary file and `shutil.move` for atomicity.
-        Blocking file operations (move, unlink) are run in the executor.
-        """
+        """Internal function for atomic JSON writing Assumes the caller holds _file_lock by Zara"""
 
         # +++ IMPORT HIER EINGEF +++
         # Wird erst importiert, wenn die Funktion aufgerufen wird
@@ -181,13 +143,13 @@ class DataManagerIO:
             await self.hass.async_add_executor_job(
                 shutil.move, str(temp_file), str(file_path)
             )
-            _LOGGER.debug("Atomic write (unlocked) successful for: %s", file_path.name)
+            # Atomic write successful (debug log removed)
 
         except Exception as e:
             _LOGGER.error("Atomic write failed for %s: %s", file_path.name, e)
             # Clean up the temporary file if it exists (blocking operation)
             if await self._file_exists(temp_file):
-                _LOGGER.debug("Attempting to clean up temporary file: %s", temp_file)
+                # Attempting to clean up temporary file (debug log removed)
                 try:
                     await self.hass.async_add_executor_job(temp_file.unlink)
                 except Exception as unlink_e:
@@ -202,26 +164,24 @@ class DataManagerIO:
             if await self._file_exists(temp_file):
                 try:
                     await self.hass.async_add_executor_job(temp_file.unlink)
-                except:
+                except Exception as e:
+                    # Could not remove temp file (debug log removed)
                     pass
 
 
     async def _atomic_write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
-        """
-        Public, thread-safe method for atomically writing JSON data to a file.
-        Uses per-file locks to prevent unnecessary blocking between different files.
-        """
+        """Public thread-safe method for atomically writing JSON data to a file by Zara"""
         try:
             # Get the lock specific to this file
             file_lock = await self._get_file_lock(file_path)
 
             # Try to acquire lock with timeout to prevent infinite blocking
-            _LOGGER.debug(f"Waiting for file lock to write {file_path.name}...")
+            # Waiting for file lock (debug log removed)
             async with asyncio.timeout(15.0):  # Increased from 5s to 15s
                 async with file_lock:
-                    _LOGGER.debug(f"File lock acquired for {file_path.name}, writing...")
+                    # File lock acquired, writing (debug log removed)
                     await self._atomic_write_json_unlocked(file_path, data)
-                    _LOGGER.debug(f"File lock released for {file_path.name}")
+                    # File lock released (debug log removed)
         except asyncio.TimeoutError:
             _LOGGER.error(
                 f"Timeout acquiring file lock for {file_path.name} after 15 seconds. "
@@ -233,12 +193,7 @@ class DataManagerIO:
             )
 
     async def _read_json_file(self, file_path: Path, default_structure: Dict | None = None) -> Dict[str, Any]:
-        """
-        Reads JSON data from a file asynchronously. (Non-blocking file read)
-        Handles file not found, empty file, and JSON decode errors gracefully.
-        Returns a default structure in case of errors or if the file is missing/empty.
-        Does NOT attempt to write or create files.
-        """
+        """Reads JSON data from a file asynchronously Non-blocking file read by Zara"""
         
         # +++ IMPORT HIER EINGEF +++
         try:
@@ -255,7 +210,7 @@ class DataManagerIO:
         try:
             # Check existence using non-blocking helper
             if not await self._file_exists(file_path):
-                _LOGGER.debug("File %s not found, returning default structure.", file_path.name)
+                # File not found, returning default (debug log removed)
                 return default_structure # Return default if file doesn't exist
 
             # Read file content asynchronously
@@ -292,10 +247,7 @@ class DataManagerIO:
 
 
     async def cleanup(self) -> None:
-        """
-        Cleans up resources, specifically shutting down the ThreadPoolExecutor.
-        Should be called during integration unload. (Non-blocking shutdown trigger)
-        """
+        """Cleans up resources specifically shutting down the ThreadPoolExecutor by Zara"""
         try:
             _LOGGER.info("Shutting down DataManagerIO Executor...")
             # Use executor job to run the blocking shutdown method

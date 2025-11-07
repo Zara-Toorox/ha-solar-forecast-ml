@@ -27,10 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class ForecastResult:
-    """
-    Standardized result object returned by all forecast strategies.
-    Contains core forecast values and optional metadata.
-    """
+    """Standardized result object returned by all forecast strategies by Zara"""
     # Core forecast values
     forecast_today: float        # Predicted energy for today (e.g., kWh)
     forecast_tomorrow: float     # Predicted energy for tomorrow (e.g., kWh)
@@ -49,8 +46,12 @@ class ForecastResult:
     features_used: Optional[int] = None       # Number of features used by the model (if ML)
     model_accuracy: Optional[float] = None    # Accuracy score of the ML model used (0.0-1.0)
 
+    # Best production hour for today (0-23)
+    best_hour_today: Optional[int] = None          # Hour with highest predicted production (0-23)
+    best_hour_production_kwh: Optional[float] = None  # Predicted production in that hour (kWh)
+
     def __post_init__(self):
-         """Validate values after initialization."""
+         """Validate values after initialization by Zara"""
          # Ensure forecasts are non-negative
          self.forecast_today = max(0.0, self.forecast_today)
          self.forecast_tomorrow = max(0.0, self.forecast_tomorrow)
@@ -61,11 +62,7 @@ class ForecastResult:
          self.confidence_day_after = max(0.0, min(100.0, self.confidence_day_after))
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Converts the ForecastResult into a dictionary format suitable for
-        the DataUpdateCoordinator's data payload. Rounds values for presentation.
-        Internal metadata keys start with an underscore.
-        """
+        """Converts the ForecastResult into a dictionary format suitable for by Zara"""
         result = {
             "forecast_today": round(self.forecast_today, 2),
             "forecast_tomorrow": round(self.forecast_tomorrow, 2),
@@ -92,18 +89,10 @@ class ForecastResult:
 
 
 class ForecastStrategy(ABC):
-    """
-    Abstract Base Class for all forecast calculation strategies.
-    Defines the required methods and provides common utility functions.
-    """
+    """Abstract Base Class for all forecast calculation strategies by Zara"""
 
     def __init__(self, name: str):
-        """
-        Initialize the forecast strategy.
-
-        Args:
-            name: A unique identifier for the strategy (e.g., "ml_forecast", "rule_based").
-        """
+        """Initialize the forecast strategy by Zara"""
         self.name = name
         # Create a specific logger for this strategy instance
         self._logger = logging.getLogger(f"{__name__}.{self.name}")
@@ -116,58 +105,21 @@ class ForecastStrategy(ABC):
         sensor_data: Dict[str, Any],
         correction_factor: float
     ) -> ForecastResult:
-        """
-        Abstract method to calculate the solar forecast.
-        Must be implemented by concrete strategy classes.
-
-        Args:
-            weather_data: Dictionary containing current weather information.
-            sensor_data: Dictionary containing other relevant sensor/config data (e.g., solar_capacity).
-            correction_factor: The learned fallback correction factor (may or may not be used by the strategy).
-
-        Returns:
-            A ForecastResult object containing the calculated forecast values and metadata.
-
-        Raises:
-            Exception: Concrete implementations should handle their specific errors,
-                       potentially raising custom exceptions or standard ones.
-        """
+        """Abstract method to calculate the solar forecast by Zara"""
         pass
 
     @abstractmethod
     def is_available(self) -> bool:
-        """
-        Abstract method to check if the strategy is currently usable.
-        For example, the ML strategy might check if a model is loaded and healthy.
-
-        Returns:
-            True if the strategy can be executed, False otherwise.
-        """
+        """Abstract method to check if the strategy is currently usable by Zara"""
         pass
 
     @abstractmethod
     def get_priority(self) -> int:
-        """
-        Abstract method to return the execution priority of the strategy.
-        Higher numbers indicate higher priority (will be tried first).
-
-        Returns:
-            An integer representing the priority (e.g., 100 for ML, 50 for Rule-based).
-        """
+        """Abstract method to return the execution priority of the strategy by Zara"""
         pass
 
     def _apply_bounds(self, value: float, min_val: float, max_val: float) -> float:
-        """
-        Utility method to clamp a float value between a minimum and maximum.
-
-        Args:
-            value: The value to clamp.
-            min_val: The minimum allowed value.
-            max_val: The maximum allowed value.
-
-        Returns:
-            The clamped value.
-        """
+        """Utility method to clamp a float value between a minimum and maximum by Zara"""
         if max_val < min_val:
              self._logger.warning(f"Invalid bounds provided: min_val ({min_val}) > max_val ({max_val}).")
              # Handle invalid bounds gracefully, e.g., return min_val or original value
@@ -177,13 +129,7 @@ class ForecastStrategy(ABC):
 
 
     def _log_calculation(self, result: ForecastResult, details: str = "") -> None:
-        """
-        Helper method for consistent logging of forecast calculation results.
-
-        Args:
-            result: The ForecastResult object.
-            details: Optional additional string with context-specific details.
-        """
+        """Helper method for consistent logging of forecast calculation results by Zara"""
         # Log essential info at INFO level, details at DEBUG level
         self._logger.info(
             f"Forecast calculated using '{self.name}': "

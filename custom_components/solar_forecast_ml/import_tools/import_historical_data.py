@@ -1,34 +1,24 @@
-#!/usr/bin/env python3
 """
-Standalone Historical Data Import Script for Solar Forecast ML Integration.
-
-This script imports historical sensor data from Home Assistant CSV exports
-into the hourly_samples.json file required by the ML integration.
-
-CRITICAL: This script is ISOLATED from the main integration to prevent
-any import errors from affecting the running integration.
-
-File Requirements (place in same directory as this script):
-- power_production.csv (REQUIRED) - Solar power sensor in Watts
-- temperature.csv (REQUIRED) - Temperature sensor
-- humidity.csv (REQUIRED) - Humidity sensor  
-- wind_speed.csv (optional) - Wind speed sensor
-- rain.csv (optional) - Rain rate sensor
-- uv_index.csv (optional) - UV index sensor
-- lux.csv (optional) - Solar radiation sensor in LUX
-- irradiance.csv (optional) - Solar radiation sensor in W/m² (PREFERRED over lux)
-
-CSV Format (Home Assistant native export):
-entity_id,state,last_changed
-sensor.name,value,2025-09-30T12:34:56.789Z
+Solar Forecast ML Component
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 Copyright (C) 2025 Zara-Toorox
 """
+
+#!/usr/bin/env python3
+"""Standalone Historical Data Import Script for Solar Forecast ML Integration by Zara"""
 
 import sys
 import json
@@ -53,16 +43,10 @@ MAX_RETENTION_DAYS = 90  # Maximum days to keep in hourly_samples.json (60-365 r
 
 
 class HistoricalDataImporter:
-    """Imports historical sensor data into hourly_samples.json format."""
+    """Imports historical sensor data into hourly_samplesjson format by Zara"""
     
     def __init__(self, import_dir: Path, output_file: Path):
-        """
-        Initialize the importer.
-        
-        Args:
-            import_dir: Directory containing CSV files
-            output_file: Path to hourly_samples.json
-        """
+        """Initialize the importer by Zara"""
         self.import_dir = import_dir
         self.output_file = output_file
         
@@ -83,12 +67,7 @@ class HistoricalDataImporter:
         }
         
     def parse_csv_file(self, filepath: Path) -> Dict[str, List[tuple]]:
-        """
-        Parse a Home Assistant CSV export file.
-        
-        Returns:
-            Dict mapping hour_key (YYYY-MM-DD-HH) to list of (timestamp, value) tuples
-        """
+        """Parse a Home Assistant CSV export file by Zara"""
         hourly_data = defaultdict(list)
         skipped = 0
         
@@ -131,21 +110,13 @@ class HistoricalDataImporter:
             return {}
     
     def calculate_hourly_average(self, values: List[tuple]) -> float:
-        """Calculate average from list of (timestamp, value) tuples."""
+        """Calculate average from list of timestamp value tuples by Zara"""
         if not values:
             return 0.0
         return sum(v[1] for v in values) / len(values)
     
     def calculate_hourly_kwh_riemann(self, values: List[tuple]) -> float:
-        """
-        Calculate kWh using Riemann sum integration from power values (Watts).
-        
-        Args:
-            values: List of (timestamp, watts) tuples sorted by timestamp
-            
-        Returns:
-            Energy in kWh
-        """
+        """Calculate kWh using Riemann sum integration from power values Watts by Zara"""
         if not values:
             return 0.0
             
@@ -177,12 +148,7 @@ class HistoricalDataImporter:
         humidity_data: Dict[str, List[tuple]],
         optional_data: Dict[str, Dict[str, List[tuple]]]
     ) -> List[Dict[str, Any]]:
-        """
-        Merge all sensor data into hourly samples.
-        
-        Returns:
-            List of hourly sample dictionaries
-        """
+        """Merge all sensor data into hourly samples by Zara"""
         samples = []
         
         # Get all unique hour keys from power data (required)
@@ -333,15 +299,7 @@ class HistoricalDataImporter:
         return samples
     
     def calculate_daily_totals(self, samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Calculate daily_total and percentage_of_day for each sample.
-        
-        Args:
-            samples: List of samples sorted by timestamp
-            
-        Returns:
-            Updated samples with daily_total and percentage_of_day
-        """
+        """Calculate daily_total and percentage_of_day for each sample by Zara"""
         # Group samples by date
         daily_groups = defaultdict(list)
         
@@ -383,7 +341,7 @@ class HistoricalDataImporter:
         return updated_samples
     
     def validate_samples(self, samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Validate and filter samples."""
+        """Validate and filter samples by Zara"""
         valid_samples = []
         
         for sample in samples:
@@ -414,7 +372,7 @@ class HistoricalDataImporter:
         return valid_samples
     
     def load_existing_samples(self) -> Dict[str, Any]:
-        """Load existing hourly_samples.json if it exists."""
+        """Load existing hourly_samplesjson if it exists by Zara"""
         try:
             if self.output_file.exists():
                 with open(self.output_file, 'r', encoding='utf-8') as f:
@@ -437,16 +395,7 @@ class HistoricalDataImporter:
         new_samples: List[Dict[str, Any]],
         existing_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Merge new samples with existing, avoiding duplicates.
-        
-        Args:
-            new_samples: New samples to add
-            existing_data: Existing hourly_samples.json structure
-            
-        Returns:
-            Merged data structure
-        """
+        """Merge new samples with existing avoiding duplicates by Zara"""
         existing_samples = existing_data.get('samples', [])
         
         # Create set of existing timestamps
@@ -485,7 +434,7 @@ class HistoricalDataImporter:
         }
     
     def write_output(self, data: Dict[str, Any]) -> bool:
-        """Write data to hourly_samples.json atomically."""
+        """Write data to hourly_samplesjson atomically by Zara"""
         try:
             # Write to temp file first
             temp_file = self.output_file.with_suffix('.tmp')
@@ -504,7 +453,7 @@ class HistoricalDataImporter:
             return False
     
     def run(self) -> bool:
-        """Execute the import process."""
+        """Execute the import process by Zara"""
         _LOGGER.info("=" * 60)
         _LOGGER.info("Solar Forecast ML - Historical Data Import")
         _LOGGER.info("=" * 60)
@@ -584,7 +533,7 @@ class HistoricalDataImporter:
 
 
 def main():
-    """Main entry point."""
+    """Main entry point by Zara"""
     # Determine paths
     script_dir = Path(__file__).parent.resolve()
     

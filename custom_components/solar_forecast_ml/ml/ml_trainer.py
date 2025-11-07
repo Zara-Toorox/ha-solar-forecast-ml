@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Helper for Lazy NumPy Import ---
 def _ensure_numpy() -> Any:
-    """Lazily imports and returns the NumPy module, raising ImportError if unavailable."""
+    """Lazily imports and returns the NumPy module raising ImportError if unavailable by Zara"""
     global _np
     if _np is None:
         try:
@@ -48,18 +48,10 @@ def _ensure_numpy() -> Any:
 
 # --- Ridge Trainer Class ---
 class RidgeTrainer:
-    """
-    Handles the training of a Ridge Regression model (Linear Regression with L2 Regularization).
-    Includes simple hyperparameter (lambda/alpha) tuning using a train/validation split.
-    """
+    """Handles the training of a Ridge Regression model Linear Regression with L2 Re... by Zara"""
 
     def __init__(self, default_lambda: float = 0.1):
-        """
-        Initializes the RidgeTrainer.
-
-        Args:
-            default_lambda: The default regularization strength (alpha) to use if tuning fails or is skipped.
-        """
+        """Initializes the RidgeTrainer by Zara"""
         self.best_lambda: float = default_lambda # Stores the lambda found during tuning
 
     def train(
@@ -67,25 +59,7 @@ class RidgeTrainer:
         X_train: List[List[float]],
         y_train: List[float]
     ) -> Tuple[Dict[str, float], float, float, float]:
-        """
-        Trains the Ridge Regression model using the provided training data.
-        Performs lambda tuning using an 80/20 validation split.
-
-        Args:
-            X_train: List of feature vectors (samples x features).
-            y_train: List of corresponding target values (samples).
-
-        Returns:
-            A tuple containing:
-            - Dict[str, float]: Learned feature weights mapped to generic names (e.g., {"feature_0": 0.5}).
-            - float: Learned bias (intercept) term.
-            - float: R-squared score calculated on the *entire* training set (clamped between 0.0 and 1.0).
-            - float: The best lambda (regularization strength) found during validation.
-
-        Raises:
-            MLModelException: If training fails (e.g., due to linear algebra errors, invalid data).
-            ImportError: If NumPy is not available.
-        """
+        """Trains the Ridge Regression model using the provided training data by Zara"""
         _LOGGER.info(f"Starting Ridge Regression training with {len(y_train)} samples.")
         training_start_time = dt_util.now() # Use LOCAL time for consistency
 
@@ -107,9 +81,10 @@ class RidgeTrainer:
             num_features_incl_bias = X_with_bias.shape[1]
 
             # --- Hyperparameter Tuning (Lambda Selection) ---
-            # FIX 5: Adaptive alpha - Lower for more samples (less regularization)
-            # More samples = more confident in features = less penalty needed
-            adaptive_alpha = max(0.01, min(1.0, 1.0 / (len(y_train) / 100.0)))
+            # CRITICAL FIX: Adaptive alpha - More samples = Less regularization needed
+            # Formula: alpha inversely proportional to sample count
+            # Examples: 50 samples -> alpha=1.0 (high reg), 500 samples -> alpha=0.1 (low reg)
+            adaptive_alpha = max(0.01, min(1.0, 100.0 / len(y_train)))
             _LOGGER.info(f"Using adaptive Ridge alpha={adaptive_alpha:.4f} for {len(y_train)} samples")
             
             # Define candidate values for the regularization strength (lambda or alpha)
@@ -138,14 +113,16 @@ class RidgeTrainer:
             min_validation_samples = max(5, num_features_incl_bias) # Need at least as many samples as features
             if len(X_val_internal) >= min_validation_samples:
                 _LOGGER.debug(f"Performing lambda tuning with candidates: {lambda_candidates}")
+
+                # HIGH PRIORITY FIX: Compute common matrices once outside loop (performance optimization)
+                XtX = X_train_internal.T @ X_train_internal
+                Xty = X_train_internal.T @ y_train_internal
+                identity_matrix = np.eye(num_features_incl_bias)
+
                 for lambda_val in lambda_candidates:
                     try:
                         # --- Solve Ridge Equation: (X_T * X + lambda * I) * w = X_T * y ---
-                        XtX = X_train_internal.T @ X_train_internal # More efficient dot product
-                        Xty = X_train_internal.T @ y_train_internal
-
                         # Regularization term (Identity matrix scaled by lambda)
-                        identity_matrix = np.eye(num_features_incl_bias)
                         regularization_term = lambda_val * identity_matrix
 
                         # Add regularization to the covariance matrix
@@ -267,16 +244,7 @@ class RidgeTrainer:
         weights_dict_generic: Dict[str, float],
         feature_names: List[str]
     ) -> Dict[str, float]:
-        """
-        Maps the generic 'feature_i' weights (from training) to actual feature names.
-
-        Args:
-            weights_dict_generic: Dictionary from 'train' (e.g., {"feature_0": 0.5}).
-            feature_names: List of actual feature names in the correct order used during training.
-
-        Returns:
-            Dictionary mapping actual feature names to their learned weights.
-        """
+        """Maps the generic feature_i weights from training to actual feature names by Zara"""
         if not weights_dict_generic or not feature_names:
             _LOGGER.warning("Cannot map weights: input dict or feature names list is empty.")
             return {}

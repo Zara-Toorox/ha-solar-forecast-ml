@@ -1,12 +1,18 @@
 """
 Data State Handler for Solar Forecast ML Integration
 
-Handles coordinator state and weather cache.
-
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -27,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataStateHandler(DataManagerIO):
-    """Handles coordinator state and weather cache."""
+    """Handles coordinator state and weather cache by Zara"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
@@ -45,7 +51,7 @@ class DataStateHandler(DataManagerIO):
         }
 
     async def ensure_state_files(self) -> None:
-        """Ensure state files exist."""
+        """Ensure state files exist by Zara"""
         if not self.coordinator_state_file.exists():
             await self._atomic_write_json(
                 self.coordinator_state_file,
@@ -57,10 +63,7 @@ class DataStateHandler(DataManagerIO):
     # =============================================================
 
     async def save_expected_daily_production(self, value: float) -> bool:
-        """
-        Save expected daily production value persistently.
-        This value survives HA restarts until midnight reset.
-        """
+        """Save expected daily production value persistently by Zara"""
         try:
             now_local = dt_util.now()
             state = {
@@ -83,16 +86,7 @@ class DataStateHandler(DataManagerIO):
         check_daily_forecasts: bool = True,
         daily_forecasts_data: Optional[dict[str, Any]] = None
     ) -> Optional[float]:
-        """
-        Load expected daily production from persistent storage.
-        
-        Checks NEW daily_forecasts.json first (today.forecast_day) if check_daily_forecasts=True,
-        then falls back to OLD coordinator_state.json
-        
-        Args:
-            check_daily_forecasts: Whether to check daily_forecasts.json first
-            daily_forecasts_data: Pre-loaded daily forecasts data (optimization)
-        """
+        """Load expected daily production from persistent storage by Zara"""
         try:
             # TRY NEW SYSTEM FIRST (daily_forecasts.json)
             if check_daily_forecasts and daily_forecasts_data:
@@ -143,9 +137,7 @@ class DataStateHandler(DataManagerIO):
             return False
 
     async def get_last_collected_hour(self) -> Optional[datetime]:
-        """
-        Get the timestamp of the last collected hourly sample.
-        """
+        """Get the timestamp of the last collected hourly sample by Zara"""
         try:
             state = await self._read_json_file(
                 self.coordinator_state_file,
@@ -160,9 +152,7 @@ class DataStateHandler(DataManagerIO):
             return None
 
     async def set_last_collected_hour(self, timestamp: datetime) -> bool:
-        """
-        Set the timestamp of the last collected hourly sample.
-        """
+        """Set the timestamp of the last collected hourly sample by Zara"""
         try:
             state = await self._read_json_file(
                 self.coordinator_state_file,
@@ -180,12 +170,7 @@ class DataStateHandler(DataManagerIO):
     # =============================================================
 
     async def save_weather_cache(self, weather_data: dict[str, Any]) -> bool:
-        """
-        Save weather forecast data to cache.
-        
-        Args:
-            weather_data: Weather forecast data (new format with metadata)
-        """
+        """Save weather forecast data to cache by Zara"""
         try:
             now_local = dt_util.now()
             
@@ -217,12 +202,7 @@ class DataStateHandler(DataManagerIO):
             return False
 
     async def load_weather_cache(self) -> Optional[dict[str, Any]]:
-        """
-        Load weather forecast data from cache.
-        
-        Returns:
-            Weather data in new format with metadata, or None if not available
-        """
+        """Load weather forecast data from cache by Zara"""
         try:
             if self.weather_cache_file.exists():
                 data = await self._read_json_file(self.weather_cache_file, None)
@@ -252,7 +232,7 @@ class DataStateHandler(DataManagerIO):
             return None
 
     async def clear_weather_cache(self) -> bool:
-        """Clear weather cache."""
+        """Clear weather cache by Zara"""
         try:
             if self.weather_cache_file.exists():
                 self.weather_cache_file.unlink()
@@ -263,12 +243,7 @@ class DataStateHandler(DataManagerIO):
             return False
 
     async def get_weather_cache_age(self) -> Optional[int]:
-        """
-        Get age of weather cache in minutes.
-        
-        Returns:
-            Age in minutes, or None if no cache exists
-        """
+        """Get age of weather cache in minutes by Zara"""
         try:
             data = await self.load_weather_cache()
             if not data or "cached_at" not in data:
@@ -287,15 +262,7 @@ class DataStateHandler(DataManagerIO):
             return None
 
     async def is_weather_cache_valid(self, max_age_minutes: int = 60) -> bool:
-        """
-        Check if weather cache is still valid (not too old).
-        
-        Args:
-            max_age_minutes: Maximum age in minutes before cache is considered stale
-        
-        Returns:
-            True if cache exists and is not too old
-        """
+        """Check if weather cache is still valid not too old by Zara"""
         try:
             age = await self.get_weather_cache_age()
             if age is None:

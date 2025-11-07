@@ -32,17 +32,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ProductionTimeCalculator:
-    """
-    Live tracks production time based on power entity state changes.
-    Uses a state machine to handle start, stop, and low-power/unavailable timeouts.
-    CRITICAL FIX: All internal timestamps now use LOCAL time for consistency.
-    """
+    """Live tracks production time based on power entity state changes by Zara"""
 
-    def __init__(self, hass: HomeAssistant, power_entity: Optional[str] = None, data_manager=None):
-        """Initialize the live production time tracker with persistent state."""
+    def __init__(self, hass: HomeAssistant, power_entity: Optional[str] = None, data_manager=None, coordinator=None):
+        """Initialize the live production time tracker with persistent state by Zara"""
         self.hass = hass
         self.power_entity = power_entity
         self.data_manager = data_manager
+        self.coordinator = coordinator  # Optional coordinator for triggering sensor updates
 
         # State machine variables - CRITICAL: Now using LOCAL time
         self._is_active = False  # Is production currently considered active?
@@ -73,20 +70,14 @@ class ProductionTimeCalculator:
         _LOGGER.info("ProductionTimeCalculator (Live Tracking) initialized with LOCAL time and persistence")
 
     async def _load_persistent_state(self) -> bool:
-        """
-        Load production time state from persistent storage.
-        Called at startup to restore state after restart.
-        
-        Returns:
-            True if state was loaded and restored, False otherwise
-        """
+        """Load production time state from persistent storage by Zara"""
         if not self.data_manager:
             return False
         
         try:
             state_file = self.data_manager.production_time_state_file
             if not state_file.exists():
-                _LOGGER.debug("No persistent production time state file found")
+                # No persistent state file found (debug log removed)
                 return False
             
             state_data = await self.data_manager._read_json_file(state_file, {})
@@ -132,15 +123,7 @@ class ProductionTimeCalculator:
             return False
 
     async def _save_persistent_state(self, force: bool = False) -> bool:
-        """
-        Save current production time state to persistent storage.
-        
-        Args:
-            force: Force save regardless of time since last save
-            
-        Returns:
-            True if saved successfully, False otherwise
-        """
+        """Save current production time state to persistent storage by Zara"""
         if not self.data_manager:
             return False
         
@@ -175,12 +158,8 @@ class ProductionTimeCalculator:
             
             if success:
                 self._last_save_time = now_local
-                _LOGGER.debug(
-                    f"Saved production time state: "
-                    f"accumulated={self._accumulated_hours:.2f}h, active={self._is_active}, "
-                    f"time={production_time_str}"
-                )
-            
+                # Saved production time state (debug log removed)
+
             return success
             
         except Exception as e:
@@ -188,10 +167,7 @@ class ProductionTimeCalculator:
             return False
 
     async def start_tracking(self) -> None:
-        """
-        TODO 11: NOW ASYNC - Starts the live tracking listeners and initializes state.
-        Loads persistent state FIRST before initializing from sensor.
-        """
+        """Starts the live tracking listeners and initializes state by Zara"""
         _LOGGER.info(f"[PRODUCTION_TRACKER] start_tracking called with power_entity={self.power_entity}")
         
         if not self.power_entity:
@@ -227,7 +203,7 @@ class ProductionTimeCalculator:
                     return
 
         try:
-            # TODO 11: Lade State ZUERST (synchron, da Methode jetzt async)
+            # Load persistent state first (async method)
             state_loaded = await self._load_persistent_state()
             
             if state_loaded:
@@ -263,7 +239,7 @@ class ProductionTimeCalculator:
                 self._handle_periodic_save, # Callback function
                 second=[0, 30]  # At 0 and 30 seconds of every minute
             )
-            _LOGGER.debug("Production time periodic save scheduled every 30 seconds")
+            # Periodic save scheduled (debug log removed)
 
             # Init NUR wenn kein State geladen wurde
             if not state_loaded:
@@ -313,10 +289,7 @@ class ProductionTimeCalculator:
                         # FALL 1: Wir sind aktiv aber Sensor zeigt 0 - starte Timeout
                         if self._is_active and current_power_w <= self.ZERO_POWER_THRESHOLD_W:
                             self._zero_power_start = dt_util.now()
-                            _LOGGER.debug(
-                                f"Restored active state but sensor shows zero power - "
-                                f"starting timeout timer"
-                            )
+                            # Restored active state but sensor shows zero - starting timeout (debug log removed)
                         # FALL 2: Wir sind NICHT aktiv aber Sensor zeigt Produktion - STARTE TRACKING
                         elif not self._is_active and current_power_w >= self.MIN_POWER_THRESHOLD_W:
                             _LOGGER.info(
@@ -335,33 +308,23 @@ class ProductionTimeCalculator:
 
     @callback
     def _handle_power_change(self, event) -> None:
-        """
-        Callback triggered by state changes of the power entity.
-        Handles the state machine logic for tracking production time.
-        Treats 'unavailable' like '0 Watts' using the timeout mechanism.
-        CRITICAL FIX: Now using LOCAL time for all timestamps.
-        """
+        """Callback triggered by state changes of the power entity by Zara"""
         try:
             new_state = event.data.get("new_state")
             old_state = event.data.get("old_state")
             now_local = dt_util.now() # Use LOCAL time for internal logic
             power_w: Optional[float] = None
-            
-            _LOGGER.info(f"[PRODUCTION_TRACKER] Power change event received!")
-            _LOGGER.info(f"[PRODUCTION_TRACKER] Old state: {old_state.state if old_state else 'None'}")
-            _LOGGER.info(f"[PRODUCTION_TRACKER] New state: {new_state.state if new_state else 'None'}")
-            _LOGGER.info(f"[PRODUCTION_TRACKER] Entity: {self.power_entity}")
-            
-            _LOGGER.debug(f"[PRODUCTION_TRACKER] Power change detected: entity={self.power_entity}, state={new_state.state if new_state else 'None'}")
+
+            # Power change event received (debug logs removed)
 
             # Check if state is valid and parse power value
             if new_state and new_state.state not in ["unavailable", "unknown"]:
                 try:
                     power_w = float(new_state.state)
-                    _LOGGER.debug(f"[PRODUCTION_TRACKER] Parsed power: {power_w}W, is_active={self._is_active}, MIN_THRESHOLD={self.MIN_POWER_THRESHOLD_W}W")
+                    # Parsed power value (debug log removed)
                 except (ValueError, TypeError):
                     power_w = None
-                    _LOGGER.debug(f"Could not parse power value: {new_state.state}. Treating as unavailable.")
+                    # Could not parse power value (debug log removed)
 
             # ** STATE MACHINE LOGIC **
 
@@ -372,7 +335,7 @@ class ProductionTimeCalculator:
                     if self._zero_power_start is None:
                         # Start timeout countdown
                         self._zero_power_start = now_local
-                        _LOGGER.debug("Sensor unavailable while active. Starting timeout countdown.")
+                        # Sensor unavailable - starting timeout (debug log removed)
                     else:
                         # Timeout already in progress
                         elapsed = now_local - self._zero_power_start
@@ -381,14 +344,37 @@ class ProductionTimeCalculator:
                             _LOGGER.info("Timeout exceeded for sensor unavailable. Stopping production tracking.")
                             self._stop_production_tracking(now_local)
                 else:
-                    # Not active, sensor unavailable - nothing to do
-                    _LOGGER.debug("Sensor unavailable while not active. No action needed.")
+                    # Not active, sensor unavailable - nothing to do (debug log removed)
+                    pass
 
                 return # Exit early if sensor unavailable
 
+            # ** PEAK TRACKING: Update peak_today if we have a valid power value **
+            if power_w is not None and power_w > 0 and self.data_manager:
+                try:
+                    # Update peak in database and trigger coordinator update if new peak
+                    peak_updated = asyncio.create_task(self.data_manager.update_peak_today(power_w, now_local))
+
+                    # If coordinator is available, schedule sensor update when peak is updated
+                    if self.coordinator and peak_updated:
+                        async def notify_on_peak_update():
+                            try:
+                                was_updated = await peak_updated
+                                if was_updated:
+                                    # New peak detected - triggering sensor update (debug log removed)
+                                    self.coordinator.async_update_listeners()
+                            except Exception as e:
+                                # Error in peak update callback (debug log removed)
+                                pass
+
+                        asyncio.create_task(notify_on_peak_update())
+                except Exception as e:
+                    # Failed to update peak (debug log removed)
+                    pass
+
             # ** Case 2: Power >= MIN_POWER_THRESHOLD_W -> Production Active **
             if power_w >= self.MIN_POWER_THRESHOLD_W:
-                _LOGGER.debug(f"[PRODUCTION_TRACKER] Case 2: Power {power_w}W >= {self.MIN_POWER_THRESHOLD_W}W threshold")
+                # Power above threshold (debug log removed)
                 if not self._is_active:
                     # Start production tracking
                     _LOGGER.info(f"[PRODUCTION_TRACKER] [OK] Starting production tracking at {now_local.strftime('%H:%M:%S')} (Power: {power_w}W)")
@@ -396,7 +382,7 @@ class ProductionTimeCalculator:
                 else:
                     # Already active - cancel any zero-power timeout if present
                     if self._zero_power_start is not None:
-                        _LOGGER.debug(f"Power restored to {power_w}W - cancelling zero-power timeout.")
+                        # Power restored - cancelling timeout (debug log removed)
                         self._zero_power_start = None
                     # Continue tracking (ongoing production)
 
@@ -407,7 +393,7 @@ class ProductionTimeCalculator:
                     if self._zero_power_start is None:
                         # Start the timeout countdown
                         self._zero_power_start = now_local
-                        _LOGGER.debug(f"Low power detected ({power_w}W). Starting timeout countdown.")
+                        # Low power detected - starting timeout (debug log removed)
                     else:
                         # Timeout already in progress, check if expired
                         elapsed = now_local - self._zero_power_start
@@ -418,10 +404,10 @@ class ProductionTimeCalculator:
                         else:
                              # Timeout not yet expired - keep waiting
                              self._zero_power_streak_minutes = int(elapsed.total_seconds() / 60)
-                             _LOGGER.debug(f"Zero-power timeout in progress. Elapsed: {elapsed.total_seconds():.0f}s, Threshold: {self.ZERO_POWER_TIMEOUT.total_seconds():.0f}s")
+                             # Zero-power timeout in progress (debug log removed)
                 else:
-                    # Not active and below threshold - nothing to do
-                    _LOGGER.debug(f"Not active and power below threshold ({power_w}W). No action needed.")
+                    # Not active and below threshold - nothing to do (debug log removed)
+                    pass
 
             # Track last time we saw power > 10W
             if power_w is not None and power_w > self.ZERO_POWER_THRESHOLD_W:
@@ -436,32 +422,22 @@ class ProductionTimeCalculator:
 
 
     def _start_production_tracking(self, start_time_local: datetime) -> None:
-        """
-        Starts a new production phase. Sets the active flag and records the start time (LOCAL).
-        
-        Args:
-            start_time_local: The LOCAL time when production started.
-        """
+        """Starts a new production phase Sets the active flag and records the start time... by Zara"""
         self._is_active = True
         self._start_time = start_time_local
         self._last_power_above_10w = start_time_local
         self._zero_power_streak_minutes = 0
         self._zero_power_start = None # Reset any pending timeout
-        _LOGGER.debug(f"Production phase started. Start time (LOCAL): {start_time_local.strftime('%H:%M:%S')}")
-        
+        # Production phase started (debug log removed)
+
         # Flag for periodic save
         self._needs_save = True
 
 
     def _stop_production_tracking(self, stop_time_local: datetime) -> None:
-        """
-        Stops the current production phase. Accumulates the time from this phase (LOCAL).
-        
-        Args:
-            stop_time_local: The LOCAL time when production stopped.
-        """
+        """Stops the current production phase Accumulates the time from this phase LOCAL by Zara"""
         if not self._is_active:
-            _LOGGER.debug("Stop called but tracking was not active. Ignoring.")
+            # Stop called but tracking not active (debug log removed)
             return
 
         if self._start_time:
@@ -469,13 +445,7 @@ class ProductionTimeCalculator:
             production_duration = stop_time_local - self._start_time
             hours_in_phase = production_duration.total_seconds() / 3600.0
             self._accumulated_hours += hours_in_phase
-
-            _LOGGER.debug(
-                f"Production phase ended. Start: {self._start_time.strftime('%H:%M:%S')}, "
-                f"Stop: {stop_time_local.strftime('%H:%M:%S')}, "
-                f"Duration: {hours_in_phase:.2f}h, "
-                f"Total Today: {self._accumulated_hours:.2f}h"
-            )
+            # Production phase ended (debug log removed)
         else:
             _LOGGER.warning("Stop called but no start time recorded. Cannot calculate duration.")
 
@@ -491,11 +461,7 @@ class ProductionTimeCalculator:
 
     @callback
     def _handle_midnight_reset(self, now: datetime) -> None:
-        """
-        Callback for midnight reset of daily counters.
-        Stores the final value for the previous day and resets for the new day.
-        CRITICAL FIX: Using LOCAL time for consistency.
-        """
+        """Callback for midnight reset of daily counters by Zara"""
         try:
             # Save the total hours for the previous day
             self._today_total_hours = self.get_production_hours()
@@ -521,20 +487,14 @@ class ProductionTimeCalculator:
             
             # Mark that we need to save the state
             self._needs_save = True
-
-            _LOGGER.debug("Daily production time counters reset for new day (LOCAL time)")
+            # Daily counters reset (debug log removed)
 
         except Exception as e:
             _LOGGER.error(f"Error during midnight reset: {e}", exc_info=True)
 
 
     def get_production_hours(self) -> float:
-        """
-        Get total production hours for today.
-        If currently active, includes time up to now.
-        Returns value in hours (float).
-        CRITICAL FIX: Using LOCAL time for consistency.
-        """
+        """Get total production hours for today by Zara"""
         total = self._accumulated_hours
 
         if self._is_active and self._start_time:
@@ -547,11 +507,7 @@ class ProductionTimeCalculator:
 
 
     def get_production_time(self) -> str:
-        """
-        Get formatted production time string (HH:MM:SS).
-        If currently active, includes time up to now.
-        CRITICAL FIX: Using LOCAL time for consistency.
-        """
+        """Get formatted production time string HHMMSS by Zara"""
         total_hours = self.get_production_hours()
 
         # Convert to HH:MM:SS format
@@ -563,18 +519,12 @@ class ProductionTimeCalculator:
 
 
     def is_currently_producing(self) -> bool:
-        """Check if production is currently active."""
+        """Check if production is currently active by Zara"""
         return self._is_active
     
     @callback
     def _handle_periodic_save(self, now: datetime) -> None:
-        """
-        Callback for periodic save of production time state.
-        Runs every 30 seconds and saves if _needs_save flag is set.
-        
-        CRITICAL FIX: Also checks timeout even without power events.
-        This ensures production stops after 5 min at 0W even if no new events arrive.
-        """
+        """Callback for periodic save of production time state by Zara"""
         try:
             now_local = dt_util.now()
             
@@ -595,7 +545,7 @@ class ProductionTimeCalculator:
             
             # Save if needed
             if self._needs_save and self.data_manager:
-                _LOGGER.debug("Periodic save triggered - saving production state")
+                # Periodic save triggered (debug log removed)
                 # Create async task for saving (allowed in time_change callbacks)
                 self.hass.async_create_task(self._save_state_async())
                 self._needs_save = False
@@ -603,11 +553,7 @@ class ProductionTimeCalculator:
             _LOGGER.error(f"Error during periodic save/timeout check: {e}")
     
     async def _save_state_async(self) -> None:
-        """
-        Async wrapper for saving both persistent state and production tracking.
-        Called from periodic save handler.
-        UPDATED: Uses new data_manager.update_production_time() method.
-        """
+        """Async wrapper for saving both persistent state and production tracking by Zara"""
         try:
             # Save to production_time_state.json
             await self._save_persistent_state(force=True)
@@ -628,26 +574,18 @@ class ProductionTimeCalculator:
                 last_power_above_10w=self._last_power_above_10w,
                 zero_power_since=self._zero_power_start  # NEW: Pass timeout indicator
             )
-            
-            _LOGGER.debug(
-                f"Production state saved: active={self._is_active}, "
-                f"duration={duration_seconds}s, "
-                f"zero_power_since={self._zero_power_start.isoformat() if self._zero_power_start else 'None'}"
-            )
-            
+            # Production state saved (debug log removed)
+
         except Exception as e:
             _LOGGER.error(f"Failed to save production state: {e}")
     
     async def stop_tracking(self) -> None:
-        """
-        Stops all tracking listeners and saves final state.
-        Called when the integration is unloaded.
-        """
+        """Stops all tracking listeners and saves final state by Zara"""
         try:
             # Save final state before stopping
             if self.data_manager and self._needs_save:
                 await self._save_state_async()
-                
+
             # Remove listeners
             if self._state_listener_remove:
                 self._state_listener_remove()
@@ -655,7 +593,7 @@ class ProductionTimeCalculator:
                 self._midnight_listener_remove()
             if self._periodic_save_listener_remove:
                 self._periodic_save_listener_remove()
-                
+
             # Final save if currently producing
             if self._is_active:
                 now_local = dt_util.now()
@@ -667,9 +605,29 @@ class ProductionTimeCalculator:
         except Exception as e:
             _LOGGER.error(f"Error stopping production time tracking: {e}", exc_info=True)
 
+    # --- Public Properties for Coordinator Access ---
+
+    @property
+    def is_active(self) -> bool:
+        """Returns True if production is currently active by Zara"""
+        return self._is_active
+
+    @property
+    def total_seconds(self) -> int:
+        """Returns total production time in seconds for today by Zara"""
+        total_hours = self.get_production_hours()
+        return int(total_hours * 3600)
+
+    @property
+    def start_time(self) -> Optional[datetime]:
+        """Returns the start time of currentlast production phase LOCAL by Zara"""
+        return self._start_time
+
+    @property
+    def end_time(self) -> Optional[datetime]:
+        """Returns the end time of last production phase LOCAL by Zara"""
+        return self._end_time
+
     def get_today_total_hours(self) -> float:
-        """
-        Get the final production hours from the previous day.
-        Only available after midnight reset, otherwise returns current day's value.
-        """
+        """Get the final production hours from the previous day by Zara"""
         return self._today_total_hours if self._today_total_hours > 0 else self.get_production_hours()

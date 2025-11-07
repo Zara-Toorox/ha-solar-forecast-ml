@@ -27,20 +27,15 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MLModelLoader:
-    """Handles loading and initialization of ML models."""
+    """Handles loading and initialization of ML models by Zara"""
     
     def __init__(self, data_manager):
-        """Initialize model loader."""
+        """Initialize model loader by Zara"""
         self.data_manager = data_manager
         self._loaded_weights: Optional[LearnedWeights] = None
     
     async def load_weights(self) -> Optional[LearnedWeights]:
-        """
-        Load learned weights from storage.
-        
-        Returns:
-            LearnedWeights object or None if not found
-        """
+        """Load learned weights from storage by Zara"""
         try:
             weights_data = await self.data_manager.load_learned_weights()
             
@@ -58,15 +53,7 @@ class MLModelLoader:
             return create_default_learned_weights()
     
     async def save_weights(self, weights: LearnedWeights) -> bool:
-        """
-        Save learned weights to storage.
-        
-        Args:
-            weights: LearnedWeights object to save
-            
-        Returns:
-            True if successful
-        """
+        """Save learned weights to storage by Zara"""
         try:
             weights_dict = {
                 "coefficients": weights.coefficients,
@@ -90,12 +77,7 @@ class MLModelLoader:
             return False
     
     async def load_model_state(self) -> Dict[str, Any]:
-        """
-        Load model state information.
-        
-        Returns:
-            Dictionary with model state
-        """
+        """Load model state information by Zara"""
         try:
             state = await self.data_manager.load_model_state()
             return state if state else {}
@@ -104,15 +86,7 @@ class MLModelLoader:
             return {}
     
     async def save_model_state(self, state: Dict[str, Any]) -> bool:
-        """
-        Save model state information.
-        
-        Args:
-            state: State dictionary to save
-            
-        Returns:
-            True if successful
-        """
+        """Save model state information by Zara"""
         try:
             return await self.data_manager.save_model_state(state)
         except Exception as e:
@@ -120,9 +94,9 @@ class MLModelLoader:
             return False
     
     def get_loaded_weights(self) -> Optional[LearnedWeights]:
-        """Get currently loaded weights."""
+        """Get currently loaded weights by Zara"""
         return self._loaded_weights
     
     def is_model_loaded(self) -> bool:
-        """Check if model is currently loaded."""
+        """Check if model is currently loaded by Zara"""
         return self._loaded_weights is not None and len(self._loaded_weights.coefficients) > 0
