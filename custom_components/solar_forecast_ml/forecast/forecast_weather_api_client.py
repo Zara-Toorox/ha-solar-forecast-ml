@@ -27,20 +27,20 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class WeatherAPIClient:
-    """Handles communication with weather entities and services by Zara"""
+    """Handles communication with weather entities and services by @Zara"""
     
     def __init__(self, hass: HomeAssistant):
-        """Initialize weather API client by Zara"""
+        """Initialize weather API client by @Zara"""
         self.hass = hass
         self._weather_entity: Optional[str] = None
     
     def set_weather_entity(self, entity_id: str) -> None:
-        """Set the weather entity to use by Zara"""
+        """Set the weather entity to use by @Zara"""
         self._weather_entity = entity_id
         _LOGGER.debug(f"Weather entity set to: {entity_id}")
     
     async def get_current_weather(self) -> Optional[Dict[str, Any]]:
-        """Get current weather data from configured entity by Zara"""
+        """Get current weather data from configured entity by @Zara"""
         if not self._weather_entity:
             _LOGGER.error("Weather entity not configured")
             return None
@@ -53,7 +53,7 @@ class WeatherAPIClient:
         return self._extract_weather_data(state)
     
     async def get_hourly_forecast(self) -> Optional[List[Dict[str, Any]]]:
-        """Get hourly weather forecast from configured entity by Zara"""
+        """Get hourly weather forecast from configured entity by @Zara"""
         if not self._weather_entity:
             _LOGGER.error("Weather entity not configured")
             return None
@@ -85,7 +85,7 @@ class WeatherAPIClient:
             return None
     
     async def get_daily_forecast(self) -> Optional[List[Dict[str, Any]]]:
-        """Get daily weather forecast from configured entity by Zara"""
+        """Get daily weather forecast from configured entity by @Zara"""
         if not self._weather_entity:
             _LOGGER.error("Weather entity not configured")
             return None
@@ -117,7 +117,7 @@ class WeatherAPIClient:
             return None
     
     def _extract_weather_data(self, state: State) -> Dict[str, Any]:
-        """Extract weather data from state object by Zara"""
+        """Extract weather data from state object by @Zara"""
         attributes = state.attributes
         
         return {
@@ -134,5 +134,5 @@ class WeatherAPIClient:
         }
     
     def is_configured(self) -> bool:
-        """Check if weather entity is configured by Zara"""
+        """Check if weather entity is configured by @Zara"""
         return self._weather_entity is not None

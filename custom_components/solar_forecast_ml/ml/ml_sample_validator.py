@@ -25,11 +25,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MLSampleValidator:
-    """Validates ML training samples for quality and completeness by Zara"""
+    """Validates ML training samples for quality and completeness by @Zara"""
     
     @staticmethod
     def validate_sample(sample: Dict[str, Any]) -> bool:
-        """Validate a single training sample by Zara"""
+        """Validate a single training sample by @Zara"""
         # Check required fields
         required_fields = ["timestamp", "features", "target"]
         for field in required_fields:
@@ -71,7 +71,7 @@ class MLSampleValidator:
         sample: Dict[str, Any],
         required_features: List[str]
     ) -> Dict[str, Any]:
-        """Check if sample has all required features by Zara"""
+        """Check if sample has all required features by @Zara"""
         features = sample.get("features", {})
         
         missing_features = []
@@ -87,7 +87,7 @@ class MLSampleValidator:
     
     @staticmethod
     def check_sample_quality(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Analyze quality metrics for a set of samples by Zara"""
+        """Analyze quality metrics for a set of samples by @Zara"""
         if not samples:
             return {
                 "total_samples": 0,
@@ -132,7 +132,7 @@ class MLSampleValidator:
     
     @staticmethod
     def filter_valid_samples(samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Filter out invalid samples from a list by Zara"""
+        """Filter out invalid samples from a list by @Zara"""
         valid_samples = []
         invalid_count = 0
         

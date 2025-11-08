@@ -32,14 +32,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def format_time_ago(last_changed: datetime) -> str:
-    """Formats timestamp as X minh ago - by Zara by Zara"""
+    """Formats timestamp as X minh ago - by @Zara by @Zara"""
     now = dt_util.now() # Use LOCAL time - last_changed is also LOCAL
     delta = now - last_changed
     
     seconds = delta.total_seconds()
     
     if seconds < 60:
-        return "< 1 min ago"  # Space-saving for < 1 minute - by Zara
+        return "< 1 min ago"  # Space-saving for < 1 minute - by @Zara
     elif seconds < 3600:
         minutes = int(seconds / 60)
         return f"{minutes} min ago"
@@ -49,13 +49,13 @@ def format_time_ago(last_changed: datetime) -> str:
 
 
 class BaseExternalSensor:
-    """Common base for external sensor displays with LIVE updates - by Zara by Zara"""
+    """Common base for external sensor displays with LIVE updates - by @Zara by @Zara"""
     
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     hass: HomeAssistant  # Make hass available to the class
 
     def __init__(self, coordinator, entry: ConfigEntry, sensor_config: Dict[str, Any]):
-        """Initializes the external sensor - by Zara by Zara"""
+        """Initializes the external sensor - by @Zara by @Zara"""
         self._sensor_config = sensor_config
         self.entry = entry
         self.coordinator = coordinator
@@ -69,14 +69,14 @@ class BaseExternalSensor:
 
     @staticmethod
     def strip_entity_id(entity_id_raw: Any) -> Optional[str]:
-        """Safely strips an entity ID string returns None if invalid by Zara"""
+        """Safely strips an entity ID string returns None if invalid by @Zara"""
         if isinstance(entity_id_raw, str) and entity_id_raw:
             return entity_id_raw.strip()
         return None
 
     @property
     def _sensor_entity_id(self) -> Optional[str]:
-        """Gets the entity ID of the sensor to track from the ConfigEntry by Zara"""
+        """Gets the entity ID of the sensor to track from the ConfigEntry by @Zara"""
         config_key = self._sensor_config.get('config_key')
         if not config_key:
             _LOGGER.error(f"Missing 'config_key' for sensor {self._attr_name}")
@@ -87,11 +87,11 @@ class BaseExternalSensor:
 
     @property
     def available(self) -> bool:
-        """External sensors are always available (they show their own status messages) - by Zara"""
+        """External sensors are always available (they show their own status messages) - by @Zara"""
         return True
     
     async def async_added_to_hass(self) -> None:
-        """Registers LIVE update listener - by Zara"""
+        """Registers LIVE update listener - by @Zara"""
         await super().async_added_to_hass()
         
         sensor_entity_id = self._sensor_entity_id
@@ -110,13 +110,13 @@ class BaseExternalSensor:
     
     @callback
     def _handle_external_sensor_update(self, event) -> None:
-        """Triggers update on external sensor change - by Zara"""
+        """Triggers update on external sensor change - by @Zara"""
         _LOGGER.debug(f"External sensor {event.data.get('entity_id')} updated, refreshing {self._attr_name}")
         self.async_write_ha_state()
     
     @property
     def native_value(self) -> str:
-        """Gets value from the configured sensor with timestamp - by Zara by Zara"""
+        """Gets value from the configured sensor with timestamp - by @Zara by @Zara"""
         sensor_entity_id = self._sensor_entity_id
         
         if not sensor_entity_id:
@@ -145,14 +145,14 @@ class BaseExternalSensor:
             return "Error"
     
     def _get_unit(self, state: State) -> Optional[str]:
-        """Determines the unit of the sensor - by Zara by Zara"""
+        """Determines the unit of the sensor - by @Zara by @Zara"""
         unit_key = self._sensor_config.get('unit_key', 'unit_of_measurement')
         default_unit = self._sensor_config.get('unit')
         
         return state.attributes.get(unit_key, default_unit)
     
     def _format_value(self, value: str, unit: Optional[str], time_ago: str) -> str:
-        """Formats sensor value for display - by Zara by Zara"""
+        """Formats sensor value for display - by @Zara by @Zara"""
         format_string = self._sensor_config.get('format_string', '{value} {unit} ({time})')
         
         # If a specific format is defined

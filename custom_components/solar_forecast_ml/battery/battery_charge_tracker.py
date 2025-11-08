@@ -61,26 +61,10 @@ class ChargeEvent:
 
 
 class BatteryChargeTracker:
-    """
-    Tracks battery charging sources using real-time power flow analysis
-
-    Logic:
-    - Positive battery_power = Charging
-    - Negative battery_power = Discharging
-
-    Charging source detection:
-    - If solar_power >= (output_power + battery_power) → Solar charging
-    - Otherwise → Grid charging
-    """
+    """Tracks battery charging sources using real-time power flow analysis Logic: - Positive battery_power = Charging - Negative battery_power = Discharging Charging source detection: - If solar_power >= (output_power + battery_power) → Solar charging - Otherwise → Grid charging"""
 
     def __init__(self, hass: HomeAssistant, battery_capacity: float = 10.0):
-        """
-        Initialize charge tracker
-
-        Args:
-            hass: Home Assistant instance
-            battery_capacity: Battery capacity in kWh
-        """
+        """Initialize charge tracker Args: hass: Home Assistant instance battery_capacity: Battery capacity in kWh"""
         self.hass = hass
         self.battery_capacity = battery_capacity
 
@@ -109,17 +93,7 @@ class BatteryChargeTracker:
         solar_power: float,
         output_power: float,
     ) -> Dict[str, Any]:
-        """
-        Update tracker with current power values
-
-        Args:
-            battery_power: Battery charge/discharge power in W (+charge/-discharge)
-            solar_power: Solar production in W
-            output_power: Output to house/grid in W
-
-        Returns:
-            Dictionary with current status and accumulated values
-        """
+        """Update tracker with current power values Args: battery_power: Battery charge/discharge power in W (+charge/-discharge) solar_power: Solar production in W output_power: Output to house/grid in W Returns: Dictionary with current status and accumulated values"""
         now = datetime.now()  # Local time
 
         # Reset daily values at midnight
@@ -198,17 +172,7 @@ class BatteryChargeTracker:
         solar_power: float,
         output_power: float,
     ) -> Dict[str, Any]:
-        """
-        Analyze power flow to determine charging source
-
-        Args:
-            battery_power: Battery power in W (+charge/-discharge)
-            solar_power: Solar production in W
-            output_power: Output power in W
-
-        Returns:
-            Dictionary with status and power breakdown
-        """
+        """Analyze power flow to determine charging source Args: battery_power: Battery power in W (+charge/-discharge) solar_power: Solar production in W output_power: Output power in W Returns: Dictionary with status and power breakdown"""
         # Discharging
         if battery_power < -POWER_TOLERANCE:
             return {
@@ -286,12 +250,7 @@ class BatteryChargeTracker:
         return round(self._discharge_today_kwh, 3)
 
     def get_grid_charge_events(self) -> List[Dict[str, Any]]:
-        """
-        Get all grid charging events today
-
-        Returns:
-            List of charge event dictionaries with hour and energy
-        """
+        """Get all grid charging events today Returns: List of charge event dictionaries with hour and energy"""
         return [
             event.to_dict()
             for event in self._charge_events
@@ -299,12 +258,7 @@ class BatteryChargeTracker:
         ]
 
     def get_solar_charge_events(self) -> List[Dict[str, Any]]:
-        """
-        Get all solar charging events today
-
-        Returns:
-            List of charge event dictionaries with hour and energy
-        """
+        """Get all solar charging events today Returns: List of charge event dictionaries with hour and energy"""
         return [
             event.to_dict()
             for event in self._charge_events
@@ -312,12 +266,7 @@ class BatteryChargeTracker:
         ]
 
     def get_summary(self) -> Dict[str, Any]:
-        """
-        Get complete tracking summary
-
-        Returns:
-            Dictionary with all current values
-        """
+        """Get complete tracking summary Returns: Dictionary with all current values"""
         return {
             'grid_charge_today_kwh': self.get_grid_charge_today(),
             'solar_charge_today_kwh': self.get_solar_charge_today(),
@@ -332,12 +281,7 @@ class BatteryChargeTracker:
         }
 
     def get_state_dict(self) -> Dict[str, Any]:
-        """
-        Get complete state for persistence
-
-        Returns:
-            Dictionary with all state data
-        """
+        """Get complete state for persistence Returns: Dictionary with all state data"""
         return {
             'grid_charge_today_kwh': self._grid_charge_today_kwh,
             'solar_charge_today_kwh': self._solar_charge_today_kwh,
@@ -349,12 +293,7 @@ class BatteryChargeTracker:
         }
 
     def restore_state(self, state: Dict[str, Any]):
-        """
-        Restore state from persistence
-
-        Args:
-            state: State dictionary from get_state_dict()
-        """
+        """Restore state from persistence Args: state: State dictionary from get_state_dict()"""
         try:
             self._grid_charge_today_kwh = state.get('grid_charge_today_kwh', 0.0)
             self._solar_charge_today_kwh = state.get('solar_charge_today_kwh', 0.0)

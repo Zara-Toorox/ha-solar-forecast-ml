@@ -14,11 +14,11 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-Copyright (C) 2025 Zara-Toorox
+Copyright (C) 2025 Zara-Toorox and Basti
 """
 
 #!/usr/bin/env python3
-"""Standalone Historical Data Import Script for Solar Forecast ML Integration by Zara"""
+"""Standalone Historical Data Import Script for Solar Forecast ML Integration by @Zara"""
 
 import sys
 import json
@@ -43,10 +43,10 @@ MAX_RETENTION_DAYS = 90  # Maximum days to keep in hourly_samples.json (60-365 r
 
 
 class HistoricalDataImporter:
-    """Imports historical sensor data into hourly_samplesjson format by Zara"""
+    """Imports historical sensor data into hourly_samplesjson format by @Zara"""
     
     def __init__(self, import_dir: Path, output_file: Path):
-        """Initialize the importer by Zara"""
+        """Initialize the importer by @Zara"""
         self.import_dir = import_dir
         self.output_file = output_file
         
@@ -67,7 +67,7 @@ class HistoricalDataImporter:
         }
         
     def parse_csv_file(self, filepath: Path) -> Dict[str, List[tuple]]:
-        """Parse a Home Assistant CSV export file by Zara"""
+        """Parse a Home Assistant CSV export file by @Zara"""
         hourly_data = defaultdict(list)
         skipped = 0
         
@@ -110,13 +110,13 @@ class HistoricalDataImporter:
             return {}
     
     def calculate_hourly_average(self, values: List[tuple]) -> float:
-        """Calculate average from list of timestamp value tuples by Zara"""
+        """Calculate average from list of timestamp value tuples by @Zara"""
         if not values:
             return 0.0
         return sum(v[1] for v in values) / len(values)
     
     def calculate_hourly_kwh_riemann(self, values: List[tuple]) -> float:
-        """Calculate kWh using Riemann sum integration from power values Watts by Zara"""
+        """Calculate kWh using Riemann sum integration from power values Watts by @Zara"""
         if not values:
             return 0.0
             
@@ -148,7 +148,7 @@ class HistoricalDataImporter:
         humidity_data: Dict[str, List[tuple]],
         optional_data: Dict[str, Dict[str, List[tuple]]]
     ) -> List[Dict[str, Any]]:
-        """Merge all sensor data into hourly samples by Zara"""
+        """Merge all sensor data into hourly samples by @Zara"""
         samples = []
         
         # Get all unique hour keys from power data (required)
@@ -299,7 +299,7 @@ class HistoricalDataImporter:
         return samples
     
     def calculate_daily_totals(self, samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Calculate daily_total and percentage_of_day for each sample by Zara"""
+        """Calculate daily_total and percentage_of_day for each sample by @Zara"""
         # Group samples by date
         daily_groups = defaultdict(list)
         
@@ -341,7 +341,7 @@ class HistoricalDataImporter:
         return updated_samples
     
     def validate_samples(self, samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Validate and filter samples by Zara"""
+        """Validate and filter samples by @Zara"""
         valid_samples = []
         
         for sample in samples:
@@ -372,7 +372,7 @@ class HistoricalDataImporter:
         return valid_samples
     
     def load_existing_samples(self) -> Dict[str, Any]:
-        """Load existing hourly_samplesjson if it exists by Zara"""
+        """Load existing hourly_samplesjson if it exists by @Zara"""
         try:
             if self.output_file.exists():
                 with open(self.output_file, 'r', encoding='utf-8') as f:
@@ -395,7 +395,7 @@ class HistoricalDataImporter:
         new_samples: List[Dict[str, Any]],
         existing_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Merge new samples with existing avoiding duplicates by Zara"""
+        """Merge new samples with existing avoiding duplicates by @Zara"""
         existing_samples = existing_data.get('samples', [])
         
         # Create set of existing timestamps
@@ -434,7 +434,7 @@ class HistoricalDataImporter:
         }
     
     def write_output(self, data: Dict[str, Any]) -> bool:
-        """Write data to hourly_samplesjson atomically by Zara"""
+        """Write data to hourly_samplesjson atomically by @Zara"""
         try:
             # Write to temp file first
             temp_file = self.output_file.with_suffix('.tmp')
@@ -453,7 +453,7 @@ class HistoricalDataImporter:
             return False
     
     def run(self) -> bool:
-        """Execute the import process by Zara"""
+        """Execute the import process by @Zara"""
         _LOGGER.info("=" * 60)
         _LOGGER.info("Solar Forecast ML - Historical Data Import")
         _LOGGER.info("=" * 60)
@@ -533,26 +533,29 @@ class HistoricalDataImporter:
 
 
 def main():
-    """Main entry point by Zara"""
-    # Determine paths
+    """Main entry point by @Zara"""
+    # Determine paths - UPDATED for new structure (2025-11-08)
     script_dir = Path(__file__).parent.resolve()
-    
-    # Check if running from import directory
-    if script_dir.name == 'import':
-        import_dir = script_dir
-        output_file = script_dir.parent / 'hourly_samples.json'
-    else:
-        # Assume script was copied elsewhere, look for import folder
-        import_dir = script_dir / 'import'
-        output_file = script_dir / 'hourly_samples.json'
-    
+
+    # Script is in custom_components/solar_forecast_ml/import_tools/
+    # Data should be in /config/solar_forecast_ml/ml/hourly_samples.json
+    config_dir = Path('/config')
+
+    # Import directory (where CSV files are placed)
+    import_dir = config_dir / 'solar_forecast_ml' / 'imports'
+
+    # Output file (where samples are stored)
+    output_file = config_dir / 'solar_forecast_ml' / 'ml' / 'hourly_samples.json'
+
     _LOGGER.info(f"Import directory: {import_dir}")
     _LOGGER.info(f"Output file: {output_file}")
     
     # Verify import directory exists
     if not import_dir.exists():
         _LOGGER.error(f"Import directory not found: {import_dir}")
-        _LOGGER.error("Please create the 'import' directory and place CSV files there.")
+        _LOGGER.error("Please create the '/config/solar_forecast_ml/imports' directory and place CSV files there.")
+        _LOGGER.error("Required files: power_production.csv, temperature.csv, humidity.csv")
+        _LOGGER.error("Optional files: wind_speed.csv, rain.csv, uv_index.csv, lux.csv, irradiance.csv")
         return 1
     
     # Create importer and run

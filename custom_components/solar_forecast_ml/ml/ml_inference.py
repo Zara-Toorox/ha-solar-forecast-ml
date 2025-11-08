@@ -31,7 +31,7 @@ _LOGGER = logging.getLogger(__name__)
 _np = None
 
 def _ensure_numpy():
-    """Lazily import NumPy by Zara"""
+    """Lazily import NumPy by @Zara"""
     global _np
     if _np is None:
         try:
@@ -44,19 +44,19 @@ def _ensure_numpy():
 
 
 class MLInferenceEngine:
-    """Handles ML model inference and predictions by Zara"""
+    """Handles ML model inference and predictions by @Zara"""
     
     def __init__(self, weights: Optional[LearnedWeights] = None):
-        """Initialize inference engine by Zara"""
+        """Initialize inference engine by @Zara"""
         self.weights = weights
     
     def set_weights(self, weights: LearnedWeights) -> None:
-        """Set model weights for inference by Zara"""
+        """Set model weights for inference by @Zara"""
         self.weights = weights
         _LOGGER.debug(f"Weights set with {len(weights.coefficients)} features")
     
     def predict(self, features: Dict[str, float]) -> Optional[float]:
-        """Make prediction using loaded weights by Zara"""
+        """Make prediction using loaded weights by @Zara"""
         if not self.weights:
             _LOGGER.error("No weights loaded for inference")
             return None
@@ -90,7 +90,7 @@ class MLInferenceEngine:
             return None
     
     def predict_batch(self, feature_list: List[Dict[str, float]]) -> List[Optional[float]]:
-        """Make predictions for multiple feature sets by Zara"""
+        """Make predictions for multiple feature sets by @Zara"""
         return [self.predict(features) for features in feature_list]
     
     def calculate_confidence(
@@ -98,7 +98,7 @@ class MLInferenceEngine:
         features: Dict[str, float],
         historical_data: Optional[Dict[str, Any]] = None
     ) -> float:
-        """Calculate confidence score for prediction by Zara"""
+        """Calculate confidence score for prediction by @Zara"""
         if not self.weights or not self.weights.accuracy:
             return 0.5
         
@@ -115,7 +115,7 @@ class MLInferenceEngine:
         return max(0.0, min(1.0, confidence))
     
     def is_ready(self) -> bool:
-        """Check if inference engine is ready to make predictions by Zara"""
+        """Check if inference engine is ready to make predictions by @Zara"""
         return (
             self.weights is not None and
             len(self.weights.coefficients) > 0 and

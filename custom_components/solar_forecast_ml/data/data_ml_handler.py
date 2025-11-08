@@ -36,7 +36,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataMLHandler(DataManagerIO):
-    """Handles ML-specific data weights profiles model state samples by Zara"""
+    """Handles ML-specific data weights profiles model state samples by @Zara"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
@@ -67,7 +67,7 @@ class DataMLHandler(DataManagerIO):
         }
 
     async def ensure_ml_files(self) -> None:
-        """Ensure ML files exist with defaults by Zara"""
+        """Ensure ML files exist with defaults by @Zara"""
         if not self.learned_weights_file.exists():
             default_weights = create_default_learned_weights()
             await self.save_learned_weights(default_weights)
@@ -87,7 +87,7 @@ class DataMLHandler(DataManagerIO):
     # =============================================================
 
     async def backup_learned_weights(self) -> bool:
-        """Create a timestamped backup of current learned weights before saving new ones by Zara"""
+        """Create a timestamped backup of current learned weights before saving new ones by @Zara"""
         try:
             if not self.learned_weights_file.exists():
                 return True  # Nothing to backup
@@ -119,7 +119,7 @@ class DataMLHandler(DataManagerIO):
             return False
 
     async def save_learned_weights(self, weights: LearnedWeights) -> bool:
-        """Save learned weights to file with automatic backup by Zara"""
+        """Save learned weights to file with automatic backup by @Zara"""
         try:
             # Create backup before overwriting
             await self.backup_learned_weights()
@@ -136,7 +136,7 @@ class DataMLHandler(DataManagerIO):
             return False
 
     async def load_learned_weights(self) -> Optional[LearnedWeights]:
-        """Load learned weights from file by Zara"""
+        """Load learned weights from file by @Zara"""
         try:
             data = await self._read_json_file(
                 self.learned_weights_file,
@@ -150,11 +150,11 @@ class DataMLHandler(DataManagerIO):
             return None
 
     async def get_learned_weights(self) -> Optional[LearnedWeights]:
-        """Get learned weights Alias for load_learned_weights by Zara"""
+        """Get learned weights Alias for load_learned_weights by @Zara"""
         return await self.load_learned_weights()
 
     async def delete_learned_weights(self) -> bool:
-        """Delete learned weights file by Zara"""
+        """Delete learned weights file by @Zara"""
         try:
             if self.learned_weights_file.exists():
                 await self.hass.async_add_executor_job(self.learned_weights_file.unlink)
@@ -172,7 +172,7 @@ class DataMLHandler(DataManagerIO):
     # =============================================================
 
     async def save_hourly_profile(self, profile: HourlyProfile) -> bool:
-        """Save hourly profile to file by Zara"""
+        """Save hourly profile to file by @Zara"""
         try:
             profile_dict = self.data_adapter.hourly_profile_to_dict(profile)
             await self._ensure_directory_exists(self.hourly_profile_file.parent)
@@ -184,7 +184,7 @@ class DataMLHandler(DataManagerIO):
             return False
 
     async def load_hourly_profile(self) -> Optional[HourlyProfile]:
-        """Load hourly profile from file by Zara"""
+        """Load hourly profile from file by @Zara"""
         try:
             data = await self._read_json_file(
                 self.hourly_profile_file,
@@ -198,7 +198,7 @@ class DataMLHandler(DataManagerIO):
             return None
 
     async def get_hourly_profile(self) -> Optional[HourlyProfile]:
-        """Get hourly profile Alias for load_hourly_profile by Zara"""
+        """Get hourly profile Alias for load_hourly_profile by @Zara"""
         return await self.load_hourly_profile()
 
     # =============================================================
@@ -206,7 +206,7 @@ class DataMLHandler(DataManagerIO):
     # =============================================================
 
     async def save_model_state(self, state: Dict[str, Any]) -> bool:
-        """Save model state to file by Zara"""
+        """Save model state to file by @Zara"""
         try:
             await self._ensure_directory_exists(self.model_state_file.parent)
             await self._atomic_write_json(self.model_state_file, state)
@@ -216,7 +216,7 @@ class DataMLHandler(DataManagerIO):
             return False
 
     async def load_model_state(self) -> Dict[str, Any]:
-        """Load model state from file by Zara"""
+        """Load model state from file by @Zara"""
         try:
             return await self._read_json_file(
                 self.model_state_file,
@@ -227,7 +227,7 @@ class DataMLHandler(DataManagerIO):
             return self._model_state_default
 
     async def get_model_state(self) -> Dict[str, Any]:
-        """Get model state Alias for load_model_state by Zara"""
+        """Get model state Alias for load_model_state by @Zara"""
         return await self.load_model_state()
 
     async def update_model_state(
@@ -238,7 +238,7 @@ class DataMLHandler(DataManagerIO):
         current_accuracy: Optional[float] = None,
         status: Optional[str] = None
     ) -> bool:
-        """Update model state partially by Zara"""
+        """Update model state partially by @Zara"""
         try:
             state = await self.load_model_state()
             
@@ -264,7 +264,7 @@ class DataMLHandler(DataManagerIO):
     # =============================================================
 
     async def add_hourly_sample(self, sample: Dict[str, Any]) -> bool:
-        """Add hourly sample for ML training by Zara"""
+        """Add hourly sample for ML training by @Zara"""
         try:
             # Get the lock specific to this file for read-modify-write operation
             file_lock = await self._get_file_lock(self.hourly_samples_file)
@@ -307,7 +307,7 @@ class DataMLHandler(DataManagerIO):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get hourly samples with optional filtering by Zara"""
+        """Get hourly samples with optional filtering by @Zara"""
         try:
             data = await self._read_json_file(
                 self.hourly_samples_file,
@@ -339,7 +339,7 @@ class DataMLHandler(DataManagerIO):
             return []
 
     async def clear_hourly_samples(self) -> bool:
-        """Clear all hourly samples by Zara"""
+        """Clear all hourly samples by @Zara"""
         try:
             data = self._hourly_samples_default.copy()
             data["last_updated"] = dt_util.now().isoformat()
@@ -353,7 +353,7 @@ class DataMLHandler(DataManagerIO):
             return False
 
     async def get_hourly_samples_count(self) -> int:
-        """Get count of hourly samples by Zara"""
+        """Get count of hourly samples by @Zara"""
         try:
             data = await self._read_json_file(
                 self.hourly_samples_file,
@@ -364,7 +364,7 @@ class DataMLHandler(DataManagerIO):
             return 0
 
     async def cleanup_duplicate_samples(self) -> Dict[str, int]:
-        """Remove duplicate samples based on timestamp by Zara"""
+        """Remove duplicate samples based on timestamp by @Zara"""
         try:
             # Get the lock specific to this file for read-modify-write operation
             file_lock = await self._get_file_lock(self.hourly_samples_file)
@@ -408,7 +408,7 @@ class DataMLHandler(DataManagerIO):
             return {"removed": 0, "remaining": 0}
 
     async def cleanup_zero_production_samples(self) -> Dict[str, int]:
-        """Remove samples with zero or None production by Zara"""
+        """Remove samples with zero or None production by @Zara"""
         try:
             # Get the lock specific to this file for read-modify-write operation
             file_lock = await self._get_file_lock(self.hourly_samples_file)

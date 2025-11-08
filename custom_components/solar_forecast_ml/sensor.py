@@ -60,6 +60,7 @@ from .sensors.sensor_diagnostic import (
     CloudinessTrend1hSensor,
     CloudinessTrend3hSensor,
     CloudinessVolatilitySensor,
+    NextProductionStartSensor,
 )
 
 # Import state sensors
@@ -85,7 +86,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> bool:
-    """Set up Solar Forecast ML sensors from config entry by Zara"""
+    """Set up Solar Forecast ML sensors from config entry by @Zara"""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
     # Determine which sensor sets to add based on options
@@ -137,6 +138,8 @@ async def async_setup_entry(
             CloudinessTrend1hSensor(coordinator, entry),
             CloudinessTrend3hSensor(coordinator, entry),
             CloudinessVolatilitySensor(coordinator, entry),
+            # Production Start Sensor
+            NextProductionStartSensor(coordinator, entry),
             # State sensors use hass instead of coordinator
             ExternalSensorsStatusSensor(hass, entry),
             PowerSensorStateSensor(hass, entry),

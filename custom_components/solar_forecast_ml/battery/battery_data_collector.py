@@ -35,13 +35,7 @@ class BatteryDataCollector:
     """Collects battery data from Home Assistant entities"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """
-        Initialize battery data collector
-
-        Args:
-            hass: Home Assistant instance
-            entry: Config entry with battery configuration
-        """
+        """Initialize battery data collector Args: hass: Home Assistant instance entry: Config entry with battery configuration"""
         self.hass = hass
         self.entry = entry
 
@@ -63,15 +57,7 @@ class BatteryDataCollector:
         )
 
     def _get_entity_state(self, entity_id: Optional[str]) -> Optional[State]:
-        """
-        Get state of an entity
-
-        Args:
-            entity_id: Entity ID to query
-
-        Returns:
-            State object or None
-        """
+        """Get state of an entity Args: entity_id: Entity ID to query Returns: State object or None"""
         if not entity_id:
             return None
 
@@ -82,16 +68,7 @@ class BatteryDataCollector:
         return state
 
     def _get_numeric_state(self, entity_id: Optional[str], default: float = 0.0) -> float:
-        """
-        Get numeric state value from entity
-
-        Args:
-            entity_id: Entity ID to query
-            default: Default value if entity not found or invalid
-
-        Returns:
-            Numeric state value or default
-        """
+        """Get numeric state value from entity Args: entity_id: Entity ID to query default: Default value if entity not found or invalid Returns: Numeric state value or default"""
         state = self._get_entity_state(entity_id)
 
         if state is None:
@@ -104,12 +81,7 @@ class BatteryDataCollector:
             return default
 
     def get_state_of_charge(self) -> Optional[float]:
-        """
-        Get current battery State of Charge (%)
-
-        Returns:
-            SOC percentage (0-100) or None
-        """
+        """Get current battery State of Charge (%) Returns: SOC percentage (0-100) or None"""
         soc = self._get_numeric_state(self.soc_entity)
 
         if soc < 0 or soc > 100:
@@ -119,13 +91,7 @@ class BatteryDataCollector:
         return round(soc, 1)
 
     def get_battery_power(self) -> Optional[float]:
-        """
-        Get current battery charge/discharge power (W)
-        Positive = charging, Negative = discharging
-
-        Returns:
-            Power in Watts or None
-        """
+        """Get current battery charge/discharge power (W) Positive = charging, Negative = discharging Returns: Power in Watts or None"""
         if not self.power_entity:
             _LOGGER.debug("Battery power entity not configured")
             return None
@@ -148,42 +114,22 @@ class BatteryDataCollector:
             return None
 
     def get_charge_today(self) -> float:
-        """
-        Get total energy charged today (kWh)
-
-        Returns:
-            Energy in kWh
-        """
+        """Get total energy charged today (kWh) Returns: Energy in kWh"""
         return self._get_numeric_state(self.charge_today_entity, 0.0)
 
     def get_discharge_today(self) -> float:
-        """
-        Get total energy discharged today (kWh)
-
-        Returns:
-            Energy in kWh
-        """
+        """Get total energy discharged today (kWh) Returns: Energy in kWh"""
         return self._get_numeric_state(self.discharge_today_entity, 0.0)
 
     def get_battery_temperature(self) -> Optional[float]:
-        """
-        Get battery temperature (°C)
-
-        Returns:
-            Temperature in °C or None
-        """
+        """Get battery temperature (°C) Returns: Temperature in °C or None"""
         if not self.temperature_entity:
             return None
 
         return self._get_numeric_state(self.temperature_entity)
 
     def get_remaining_capacity(self) -> float:
-        """
-        Calculate remaining battery capacity (kWh)
-
-        Returns:
-            Remaining capacity in kWh
-        """
+        """Calculate remaining battery capacity (kWh) Returns: Remaining capacity in kWh"""
         soc = self.get_state_of_charge()
         if soc is None:
             return 0.0
@@ -191,12 +137,7 @@ class BatteryDataCollector:
         return round((soc / 100) * self.battery_capacity, 2)
 
     def get_empty_capacity(self) -> float:
-        """
-        Calculate empty battery capacity (kWh)
-
-        Returns:
-            Empty capacity in kWh
-        """
+        """Calculate empty battery capacity (kWh) Returns: Empty capacity in kWh"""
         soc = self.get_state_of_charge()
         if soc is None:
             return self.battery_capacity
@@ -204,35 +145,17 @@ class BatteryDataCollector:
         return round(((100 - soc) / 100) * self.battery_capacity, 2)
 
     def is_charging(self) -> bool:
-        """
-        Check if battery is currently charging
-
-        Returns:
-            True if charging (power > 0)
-        """
+        """Check if battery is currently charging Returns: True if charging (power > 0)"""
         power = self.get_battery_power()
         return power is not None and power > 50  # > 50W threshold to avoid noise
 
     def is_discharging(self) -> bool:
-        """
-        Check if battery is currently discharging
-
-        Returns:
-            True if discharging (power < 0)
-        """
+        """Check if battery is currently discharging Returns: True if discharging (power < 0)"""
         power = self.get_battery_power()
         return power is not None and power < -50  # < -50W threshold to avoid noise
 
     def get_runtime_remaining(self, consumption_watts: float) -> Optional[float]:
-        """
-        Calculate remaining runtime based on current consumption
-
-        Args:
-            consumption_watts: Current consumption in Watts
-
-        Returns:
-            Remaining runtime in hours or None
-        """
+        """Calculate remaining runtime based on current consumption Args: consumption_watts: Current consumption in Watts Returns: Remaining runtime in hours or None"""
         if consumption_watts <= 0:
             return None
 
@@ -246,12 +169,7 @@ class BatteryDataCollector:
         return round(runtime_hours, 1)
 
     def get_full_charge_time(self) -> Optional[float]:
-        """
-        Calculate time until battery is fully charged
-
-        Returns:
-            Time in hours or None if not charging
-        """
+        """Calculate time until battery is fully charged Returns: Time in hours or None if not charging"""
         if not self.is_charging():
             return None
 
@@ -269,12 +187,7 @@ class BatteryDataCollector:
         return round(charge_time_hours, 1)
 
     def get_battery_data(self) -> Dict[str, Any]:
-        """
-        Get all battery data as dictionary
-
-        Returns:
-            Dictionary with all battery data
-        """
+        """Get all battery data as dictionary Returns: Dictionary with all battery data"""
         soc = self.get_state_of_charge()
         power = self.get_battery_power()
 
@@ -295,21 +208,11 @@ class BatteryDataCollector:
         }
 
     def is_configured(self) -> bool:
-        """
-        Check if battery is properly configured
-
-        Returns:
-            True if at least SOC entity is configured
-        """
+        """Check if battery is properly configured Returns: True if at least SOC entity is configured"""
         return self.soc_entity is not None
 
     def validate_entities(self) -> Dict[str, bool]:
-        """
-        Validate all configured entities exist
-
-        Returns:
-            Dictionary with entity validation results
-        """
+        """Validate all configured entities exist Returns: Dictionary with entity validation results"""
         return {
             'soc': self._get_entity_state(self.soc_entity) is not None,
             'power': self._get_entity_state(self.power_entity) is not None,
@@ -319,12 +222,7 @@ class BatteryDataCollector:
         }
 
     def get_diagnostic_info(self) -> Dict[str, Any]:
-        """
-        Get diagnostic information for troubleshooting
-
-        Returns:
-            Dictionary with diagnostic data
-        """
+        """Get diagnostic information for troubleshooting Returns: Dictionary with diagnostic data"""
         info = {
             'configured_entities': {
                 'soc_entity': self.soc_entity,

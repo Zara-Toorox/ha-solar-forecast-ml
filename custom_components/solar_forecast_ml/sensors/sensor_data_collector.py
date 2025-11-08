@@ -31,10 +31,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SensorDataCollector:
-    """Central class for collecting and accessing configured external sensor data by Zara"""
+    """Central class for collecting and accessing configured external sensor data by @Zara"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """Initialize the SensorDataCollector by Zara"""
+        """Initialize the SensorDataCollector by @Zara"""
         self.hass = hass
         self.entry = entry
 
@@ -45,13 +45,13 @@ class SensorDataCollector:
 
     @staticmethod
     def strip_entity_id(entity_id_raw: Any) -> Optional[str]:
-        """Safely strips whitespace from a potential entity ID string by Zara"""
+        """Safely strips whitespace from a potential entity ID string by @Zara"""
         if isinstance(entity_id_raw, str) and entity_id_raw.strip():
             return entity_id_raw.strip()
         return None # Return None for invalid input like None, empty string, or non-string types
 
     def get_sensor_entity_id(self, internal_key: str) -> Optional[str]:
-        """Gets the configured entity ID for a specific internal sensor key eg temperature by Zara"""
+        """Gets the configured entity ID for a specific internal sensor key eg temperature by @Zara"""
         config_key = self._sensor_configs.get(internal_key)
         if not config_key:
             # This indicates a programming error (mismatch between internal keys and _sensor_configs)
@@ -62,7 +62,7 @@ class SensorDataCollector:
         return self.strip_entity_id(entity_id_raw) # Use stripping helper
 
     def get_sensor_value(self, entity_id: str | None) -> Optional[float]:
-        """Gets the current state of the specified entity ID and attempts to convert it ... by Zara"""
+        """Gets the current state of the specified entity ID and attempts to convert it ... by @Zara"""
         if not entity_id:
             # Don't log here, expected if sensor is optional and not configured
             # _LOGGER.debug("No entity ID provided for get_sensor_value.")
@@ -90,7 +90,7 @@ class SensorDataCollector:
             return None
 
     def collect_all_sensor_data_dict(self) -> Dict[str, Optional[float]]:
-        """Collects the current values of all configured external sensors into a dictionary by Zara"""
+        """Collects the current values of all configured external sensors into a dictionary by @Zara"""
         sensor_data_dict: Dict[str, Optional[float]] = {}
 
         # Iterate through the configured external sensors
@@ -108,7 +108,7 @@ class SensorDataCollector:
     # for getting just the *external sensor readings*.
 
     async def wait_for_external_sensors(self, max_wait: int = 25) -> int:
-        """Waits during startup for at least one configured external sensor to become av... by Zara"""
+        """Waits during startup for at least one configured external sensor to become av... by @Zara"""
         _LOGGER.info("Waiting for external sensors to become available (max %ds)...", max_wait)
 
         wait_interval = 2 # Check every 2 seconds

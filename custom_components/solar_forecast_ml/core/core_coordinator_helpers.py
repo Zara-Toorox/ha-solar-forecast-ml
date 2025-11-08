@@ -27,14 +27,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class CoordinatorHelpers:
-    """Helper functions for the data update coordinator by Zara"""
+    """Helper functions for the data update coordinator by @Zara"""
     
     @staticmethod
     def calculate_next_update_time(
         last_update: Optional[datetime],
         interval_minutes: int = 15
     ) -> datetime:
-        """Calculate the next scheduled update time by Zara"""
+        """Calculate the next scheduled update time by @Zara"""
         if last_update is None:
             return dt_util.now()
         
@@ -51,7 +51,7 @@ class CoordinatorHelpers:
         last_update: Optional[datetime],
         max_age_hours: int = 24
     ) -> bool:
-        """Check if data should be force-updated due to age by Zara"""
+        """Check if data should be force-updated due to age by @Zara"""
         if last_update is None:
             return True
         
@@ -60,7 +60,7 @@ class CoordinatorHelpers:
     
     @staticmethod
     def validate_coordinator_data(data: Dict[str, Any]) -> bool:
-        """Validate coordinator data structure by Zara"""
+        """Validate coordinator data structure by @Zara"""
         required_keys = ["last_update", "forecasts"]
         
         for key in required_keys:
@@ -75,7 +75,7 @@ class CoordinatorHelpers:
         old_data: Dict[str, Any],
         new_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Merge new forecast data with existing data by Zara"""
+        """Merge new forecast data with existing data by @Zara"""
         merged = old_data.copy()
         
         # Update with new data
@@ -93,7 +93,7 @@ class CoordinatorHelpers:
     
     @staticmethod
     def calculate_data_staleness(last_update: Optional[datetime]) -> Dict[str, Any]:
-        """Calculate data staleness metrics by Zara"""
+        """Calculate data staleness metrics by @Zara"""
         if last_update is None:
             return {
                 "stale": True,
@@ -138,7 +138,7 @@ class CoordinatorHelpers:
     
     @staticmethod
     def format_update_summary(update_results: Dict[str, bool]) -> str:
-        """Format update results into a readable summary by Zara"""
+        """Format update results into a readable summary by @Zara"""
         total = len(update_results)
         successful = sum(1 for v in update_results.values() if v)
         failed = total - successful

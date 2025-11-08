@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Helper for Lazy NumPy Import ---
 def _ensure_numpy() -> Any:
-    """Lazily imports and returns the NumPy module raising ImportError if unavailable by Zara"""
+    """Lazily imports and returns the NumPy module raising ImportError if unavailable by @Zara"""
     global _np
     if _np is None:
         try:
@@ -48,10 +48,10 @@ def _ensure_numpy() -> Any:
 
 # --- Ridge Trainer Class ---
 class RidgeTrainer:
-    """Handles the training of a Ridge Regression model Linear Regression with L2 Re... by Zara"""
+    """Handles the training of a Ridge Regression model Linear Regression with L2 Re... by @Zara"""
 
     def __init__(self, default_lambda: float = 0.1):
-        """Initializes the RidgeTrainer by Zara"""
+        """Initializes the RidgeTrainer by @Zara"""
         self.best_lambda: float = default_lambda # Stores the lambda found during tuning
 
     def train(
@@ -59,7 +59,7 @@ class RidgeTrainer:
         X_train: List[List[float]],
         y_train: List[float]
     ) -> Tuple[Dict[str, float], float, float, float]:
-        """Trains the Ridge Regression model using the provided training data by Zara"""
+        """Trains the Ridge Regression model using the provided training data by @Zara"""
         _LOGGER.info(f"Starting Ridge Regression training with {len(y_train)} samples.")
         training_start_time = dt_util.now() # Use LOCAL time for consistency
 
@@ -244,7 +244,7 @@ class RidgeTrainer:
         weights_dict_generic: Dict[str, float],
         feature_names: List[str]
     ) -> Dict[str, float]:
-        """Maps the generic feature_i weights from training to actual feature names by Zara"""
+        """Maps the generic feature_i weights from training to actual feature names by @Zara"""
         if not weights_dict_generic or not feature_names:
             _LOGGER.warning("Cannot map weights: input dict or feature names list is empty.")
             return {}

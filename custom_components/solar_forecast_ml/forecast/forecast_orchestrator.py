@@ -39,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ForecastOrchestrator:
-    """Selects and executes the most appropriate forecast strategy based on by Zara"""
+    """Selects and executes the most appropriate forecast strategy based on by @Zara"""
 
     FALLBACK_PRODUCTION_START_HOUR = 6
     FALLBACK_PRODUCTION_END_HOUR = 21
@@ -51,7 +51,7 @@ class ForecastOrchestrator:
         solar_capacity: float,
         weather_calculator: WeatherCalculator
     ):
-        """Initialize the ForecastOrchestrator by Zara"""
+        """Initialize the ForecastOrchestrator by @Zara"""
         self.hass = hass
         self.data_manager = data_manager
         self.solar_capacity = solar_capacity
@@ -68,7 +68,7 @@ class ForecastOrchestrator:
         _LOGGER.debug("ForecastOrchestrator initialized.")
 
     def is_production_hour(self, target_dt: datetime) -> bool:
-        """Checks if a given datetime is within realistic solar production hours by Zara"""
+        """Checks if a given datetime is within realistic solar production hours by @Zara"""
         # Method 1: sun.sun with margins (most accurate)
         sun_state = self.hass.states.get("sun.sun")
         if sun_state and sun_state.attributes:
@@ -140,7 +140,7 @@ class ForecastOrchestrator:
         ml_predictor: Optional[MLPredictor] = None,
         error_handler: Optional[ErrorHandlingService] = None
     ) -> None:
-        """Initializes the available forecast strategy instances by Zara"""
+        """Initializes the available forecast strategy instances by @Zara"""
         _LOGGER.info("Initializing forecast strategies...")
         
         self._ml_predictor = ml_predictor
@@ -182,7 +182,7 @@ class ForecastOrchestrator:
         ml_prediction_tomorrow: Optional[float] = None,
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
-        """Orchestrates forecast creation with all available data by Zara"""
+        """Orchestrates forecast creation with all available data by @Zara"""
         hourly_weather_forecast = hourly_forecast if hourly_forecast else []
         sensor_data = external_sensors if external_sensors else {}
         
@@ -201,7 +201,7 @@ class ForecastOrchestrator:
         sensor_data: Dict[str, Any],
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
-        """Creates daily solar forecast today tomorrow day after tomorrow through by Zara"""
+        """Creates daily solar forecast today tomorrow day after tomorrow through by @Zara"""
         _LOGGER.debug("Creating blended daily forecast (Iterative Pipeline)...")
 
         ml_result: Optional[ForecastResult] = None
@@ -290,7 +290,6 @@ class ForecastOrchestrator:
             model_accuracy = 0.0
             _LOGGER.debug("Blending: ML failed, using 100% Rule-Based result.")
         
-        # FIX 2: Sanity check - Reject unrealistic ML predictions
         if ml_result:
             max_realistic_daily = self.solar_capacity * 6.0  # 6 hours full capacity max
             if today_ml > max_realistic_daily:
@@ -306,7 +305,6 @@ class ForecastOrchestrator:
         
         accuracy_weight = max(0.0, min(1.0, model_accuracy))
         
-        # FIX 3: Aggressive blending - Only trust high-accuracy models
         ACCURACY_THRESHOLD = 0.75
         MIN_ML_WEIGHT = 0.15
         
@@ -401,7 +399,7 @@ class ForecastOrchestrator:
         weather_data: Optional[Dict[str, Any]] = None,
         sensor_data: Optional[Dict[str, Any]] = None
     ) -> float:
-        """Estimates the solar production for the next full hour by Zara"""
+        """Estimates the solar production for the next full hour by @Zara"""
         _LOGGER.debug("Calculating next hour prediction...")
         try:
             now_local = dt_util.now()
@@ -410,7 +408,6 @@ class ForecastOrchestrator:
 
             # Use new production hour check (sun.sun + safety margins)
             if not self.is_production_hour(target_dt_local):
-                # FIX 6a: Additional darkness check via lux sensor
                 if sensor_data and sensor_data.get('lux') is not None:
                     if sensor_data['lux'] < 500:  # Too dark for meaningful production
                         _LOGGER.debug(
@@ -439,7 +436,6 @@ class ForecastOrchestrator:
                 adjusted_kwh *= factor_value
                 factors_log.append(f"{factor_name}={factor_value:.2f}")
 
-            # FIX 6b: Apply physical clipping - Cannot exceed installed capacity per hour
             max_hourly_kwh = self.solar_capacity * 1.2  # 20% safety margin
             adjusted_kwh = min(adjusted_kwh, max_hourly_kwh)
 
@@ -457,7 +453,7 @@ class ForecastOrchestrator:
             return 0.0
 
     def _get_ml_hourly_profile_base(self, forecast_today_kwh: float, target_hour: int) -> Optional[float]:
-        """Calculates the base production for a specific hour using the ML hourly profile by Zara"""
+        """Calculates the base production for a specific hour using the ML hourly profile by @Zara"""
         if not self._ml_predictor or not self._ml_predictor.current_profile:
             _LOGGER.debug("ML Predictor or its current_profile not available for hourly base.")
             return None
@@ -496,7 +492,7 @@ class ForecastOrchestrator:
         current_weather_data: Optional[Dict[str, Any]],
         current_sensor_data: Optional[Dict[str, Any]]
     ) -> Dict[str, float]:
-        """Calculates adjustment multipliers based on current weather and sensor readings by Zara"""
+        """Calculates adjustment multipliers based on current weather and sensor readings by @Zara"""
         factors = {
             'cloud/lux': 1.0,
             'temperature': 1.0,

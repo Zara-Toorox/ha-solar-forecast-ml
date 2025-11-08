@@ -29,10 +29,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class FeatureEngineer:
-    """Handles the creation and extraction of features used by the ML model by Zara"""
+    """Handles the creation and extraction of features used by the ML model by @Zara"""
 
     def __init__(self):
-        """Initializes the FeatureEngineer and defines the feature sets by Zara"""
+        """Initializes the FeatureEngineer and defines the feature sets by @Zara"""
         # Define the core input features expected
         self.base_features = [
             "temperature",          # Current temperature
@@ -44,7 +44,6 @@ class FeatureEngineer:
             "weather_trend",        # Combined score based on cloudiness and wind
             "production_yesterday", # Total production from the previous day (lag feature)
             "production_same_hour_yesterday", # Production at same hour yesterday (lag feature)
-            # FIX 4: Enhanced cloudiness features
             "cloudiness_primary",   # Sunshine percentage (100 - cloudiness)
             "cloud_impact",         # Non-linear cloud penalty (cloudiness^1.5)
             "sunshine_factor",      # Normalized sunshine (0-1)
@@ -94,7 +93,7 @@ class FeatureEngineer:
         prediction_date: datetime 
         # --- ENDE ---
     ) -> Dict[str, float]:
-        """Asynchronously extracts and calculates all defined features for a given time ... by Zara"""
+        """Asynchronously extracts and calculates all defined features for a given time ... by @Zara"""
         try:
             # --- (SOLUTION 1) Time logic updated ---
             target_hour = prediction_hour # Use directly
@@ -152,7 +151,6 @@ class FeatureEngineer:
                 "production_same_hour_yesterday": prod_same_hour_yesterday,
             }
 
-            # FIX 4: Enhanced cloudiness features with non-linear response
             base_features_dict['cloudiness_primary'] = 100.0 - cloudiness  # Sunshine percentage
             base_features_dict['cloud_impact'] = cloudiness ** 1.5  # Non-linear cloud penalty
             base_features_dict['sunshine_factor'] = (100.0 - cloudiness) / 100.0  # Normalized 0-1
@@ -209,7 +207,7 @@ class FeatureEngineer:
         sensor_data: Dict[str, Any],
         record: Dict[str, Any] # Expecting a record containing 'timestamp'
     ) -> Dict[str, float]:
-        """Synchronously extracts and calculates all defined features typically used dur... by Zara"""
+        """Synchronously extracts and calculates all defined features typically used dur... by @Zara"""
         try:
             # --- Determine Time Context ---
             timestamp_str = record.get('timestamp')
@@ -255,7 +253,6 @@ class FeatureEngineer:
                 "production_same_hour_yesterday": prod_same_hour_yesterday,
             }
 
-            # FIX 4: Enhanced cloudiness features with non-linear response
             base_features_dict['cloudiness_primary'] = 100.0 - cloudiness
             base_features_dict['cloud_impact'] = cloudiness ** 1.5
             base_features_dict['sunshine_factor'] = (100.0 - cloudiness) / 100.0
@@ -302,7 +299,7 @@ class FeatureEngineer:
 
 
     def get_default_features(self, hour: int, date: datetime) -> Dict[str, float]:
-        """Provides a default set of feature values used as a fallback if by Zara"""
+        """Provides a default set of feature values used as a fallback if by @Zara"""
         _LOGGER.debug(f"Generating default features for hour {hour} on {date.date()}.")
         # Use typical mid-range values for weather
         temp = 15.0
@@ -329,7 +326,6 @@ class FeatureEngineer:
             "weather_trend": weather_trend,
             "production_yesterday": 0.0, # Default lag features to 0
             "production_same_hour_yesterday": 0.0,
-            # FIX 4: Enhanced cloudiness features
             "cloudiness_primary": 100.0 - cloudiness,
             "cloud_impact": cloudiness ** 1.5,
             "sunshine_factor": (100.0 - cloudiness) / 100.0,
@@ -367,7 +363,7 @@ class FeatureEngineer:
         min_val: Optional[float] = None,
         max_val: Optional[float] = None
     ) -> float:
-        """MEDIUM PRIORITY FIX Safely extracts a value from a dictionary with range vali... by Zara"""
+        """MEDIUM PRIORITY FIX Safely extracts a value from a dictionary with range vali... by @Zara"""
         if data is None:
             return default
 
@@ -395,7 +391,7 @@ class FeatureEngineer:
 
 
     def _calculate_weather_trend(self, cloudiness: float, wind_speed: float) -> float:
-        """Calculates a simple weather trend score 0-1 where higher is better sunnier ca... by Zara"""
+        """Calculates a simple weather trend score 0-1 where higher is better sunnier ca... by @Zara"""
         try:
             # Ensure inputs are floats and within reasonable ranges
             cloud = max(0.0, min(100.0, float(cloudiness)))
@@ -419,7 +415,7 @@ class FeatureEngineer:
 
 
     def _validate_and_sanitize_features(self, features: Dict[str, float]) -> Dict[str, float]:
-        """CRITICAL FIX 3 Validates and sanitizes feature values to prevent NaNInf errors by Zara"""
+        """CRITICAL FIX 3 Validates and sanitizes feature values to prevent NaNInf errors by @Zara"""
         import math
         sanitized = {}
         invalid_count = 0

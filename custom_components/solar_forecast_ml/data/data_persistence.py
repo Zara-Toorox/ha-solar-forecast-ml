@@ -31,16 +31,16 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataPersistence:
-    """Handles data backup restoration and migration by Zara"""
+    """Handles data backup restoration and migration by @Zara"""
     
     def __init__(self, data_dir: Path):
-        """Initialize data persistence handler by Zara"""
+        """Initialize data persistence handler by @Zara"""
         self.data_dir = data_dir
         self.backup_dir = data_dir / "backups" / "auto"
         self.manual_backup_dir = data_dir / "backups" / "manual"
         
     async def create_backup(self, name: Optional[str] = None, manual: bool = False) -> Optional[Path]:
-        """Create a backup of all data files by Zara"""
+        """Create a backup of all data files by @Zara"""
         try:
             # Determine backup directory
             backup_base = self.manual_backup_dir if manual else self.backup_dir
@@ -79,7 +79,7 @@ class DataPersistence:
             return None
     
     async def restore_backup(self, backup_file: Path) -> bool:
-        """Restore data from a backup file by Zara"""
+        """Restore data from a backup file by @Zara"""
         try:
             if not backup_file.exists():
                 _LOGGER.error(f"Backup file not found: {backup_file}")
@@ -118,7 +118,7 @@ class DataPersistence:
             return False
     
     async def _cleanup_old_backups(self) -> None:
-        """Remove old automatic backups based on retention policy by Zara"""
+        """Remove old automatic backups based on retention policy by @Zara"""
         try:
             if not self.backup_dir.exists():
                 return
@@ -143,7 +143,7 @@ class DataPersistence:
             _LOGGER.error(f"Failed to cleanup old backups: {e}")
     
     async def list_backups(self, manual: bool = False) -> List[Dict[str, Any]]:
-        """List available backups by Zara"""
+        """List available backups by @Zara"""
         try:
             backup_base = self.manual_backup_dir if manual else self.backup_dir
             
@@ -168,7 +168,7 @@ class DataPersistence:
             return []
     
     async def delete_backup(self, backup_name: str, manual: bool = False) -> bool:
-        """Delete a specific backup by Zara"""
+        """Delete a specific backup by @Zara"""
         try:
             backup_base = self.manual_backup_dir if manual else self.backup_dir
             backup_file = backup_base / f"{backup_name}.tar.gz"

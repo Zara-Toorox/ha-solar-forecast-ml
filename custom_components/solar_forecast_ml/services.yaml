@@ -68,18 +68,22 @@ debugging_6am_forecast:
   fields: {}
 
 debugging_best_hour:
-  name: "DEBUG: 6 AM - Calculate Best Hour"
+  name: "DEBUG: Calculate Best Hour (Today Forecast)"
   description: >
-    DEBUGGING SERVICE: Simulates EXACTLY what happens at 6:00 AM for BEST HOUR calculation.
+    DEBUGGING SERVICE: Predicts which hour TODAY will have the highest production.
 
-    Code Reference: coordinator.py:668-684 (best hour calculation in _save_forecasts_to_storage)
+    Code Reference: ml/ml_best_hour_calculator.py + coordinator.py:738-753
 
     What this service does:
-    - Runs forecast orchestrator to get hourly predictions
-    - Extracts best_hour and best_hour_kwh from forecast
-    - SAVES best hour (not locked) to daily_forecasts.json
+    - PAST hours today: Uses actual measured values
+    - FUTURE hours today: Uses weather forecast + historical profile
+    - Finds the hour with maximum expected production TODAY
+    - SAVES best hour to daily_forecasts.json
 
-    Use this to test the best hour calculation logic.
+    This is a FORECAST for planning (e.g., when to run appliances):
+    "At which hour should I expect peak production today?"
+
+    Use this to test the best hour forecast logic.
   fields: {}
 
 debugging_tomorrow_12pm:

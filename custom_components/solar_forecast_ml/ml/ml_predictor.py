@@ -65,7 +65,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Helper for Lazy NumPy Import ---
 def _ensure_numpy():
-    """Lazily imports and returns the NumPy module raising ImportError if unavailable by Zara"""
+    """Lazily imports and returns the NumPy module raising ImportError if unavailable by @Zara"""
     global _np
     if _np is None:
         try:
@@ -81,7 +81,7 @@ def _ensure_numpy():
 
 # --- Enums and Dataclasses ---
 class ModelState(Enum):
-    """Represents the operational state of the ML model by Zara"""
+    """Represents the operational state of the ML model by @Zara"""
     UNINITIALIZED = "uninitialized"
     TRAINING = "training"
     READY = "ready"
@@ -91,7 +91,7 @@ class ModelState(Enum):
 
 @dataclass
 class TrainingResult:
-    """Stores the outcome of a model training attempt by Zara"""
+    """Stores the outcome of a model training attempt by @Zara"""
     success: bool
     accuracy: float | None = None # Accuracy might be None if training failed early
     samples_used: int = 0
@@ -103,7 +103,7 @@ class TrainingResult:
 
 @dataclass
 class ModelHealth:
-    """Represents the health status of the ML model by Zara"""
+    """Represents the health status of the ML model by @Zara"""
     state: ModelState
     model_loaded: bool
     last_training: Optional[datetime]
@@ -115,7 +115,7 @@ class ModelHealth:
 
 # --- Main MLPredictor Class ---
 class MLPredictor:
-    """Manages the machine learning model lifecycle including training by Zara"""
+    """Manages the machine learning model lifecycle including training by @Zara"""
 
     def __init__(
         self,
@@ -124,7 +124,7 @@ class MLPredictor:
         error_handler: ErrorHandlingService,
         notification_service = None  # NEW: Optional for backward compatibility
     ):
-        """Initialize the MLPredictor by Zara"""
+        """Initialize the MLPredictor by @Zara"""
         self.hass = hass
         self.data_manager = data_manager
         self.error_handler = error_handler
@@ -137,6 +137,7 @@ class MLPredictor:
             'hourly_productions': {},
         }
         self._recent_weather_samples: List[Dict[str, Any]] = []  # Last 24h weather samples for trend
+        self._weather_samples_last_loaded: Optional[datetime] = None  # Cache timestamp
 
         # ML Components
         self.scaler = StandardScaler()
@@ -178,7 +179,7 @@ class MLPredictor:
         _LOGGER.info("MLPredictor initialized.")
 
     async def initialize(self) -> bool:
-        """Initializes the ML Predictor by loading existing model data by Zara"""
+        """Initializes the ML Predictor by loading existing model data by @Zara"""
         _LOGGER.info("Initializing ML Predictor...")
         init_success = False
         try:
@@ -367,13 +368,12 @@ class MLPredictor:
 
 
     async def _load_historical_cache(self) -> None:
-        """Loads historical production data into memory for lag feature calculation by Zara"""
+        """Loads historical production data into memory for lag feature calculation by @Zara"""
         _LOGGER.debug("Loading historical production cache...")
         try:
             # Load hourly samples from last 60 days, as these contain the most accurate data
             start_date = (dt_util.now() - timedelta(days=60)).date().isoformat()
             samples_data = await self.data_manager.get_hourly_samples(start_date=start_date)
-            # FIX: get_hourly_samples returns List[Dict], not Dict. Also handle None case.
             records = samples_data if (samples_data and isinstance(samples_data, list)) else []
 
             daily_productions_cache: Dict[str, float] = {}
@@ -434,11 +434,20 @@ class MLPredictor:
             _LOGGER.error("Failed to load historical cache: %s", e, exc_info=True)
             self._historical_cache = {'daily_productions': {}, 'hourly_productions': {}}
 
-    async def _load_recent_weather_samples(self, hours_back: int = 24) -> None:
-        """IMPROVEMENT 7 Load recent weather samples for cloudiness trend calculation by Zara"""
+    async def _load_recent_weather_samples(self, hours_back: int = 24, force_reload: bool = False) -> None:
+        """IMPROVEMENT 7 Load recent weather samples for cloudiness trend calculation by @Zara PERFORMANCE FIX: Only reload if cache is stale (>15 minutes old) or force_reload=True"""
         try:
-            # Get samples from the last N hours
-            cutoff_time = dt_util.now() - timedelta(hours=hours_back)
+            now = dt_util.now()
+
+            # Check if cache is still fresh (< 15 minutes old)
+            if not force_reload and self._weather_samples_last_loaded:
+                cache_age = (now - self._weather_samples_last_loaded).total_seconds() / 60.0
+                if cache_age < 15 and len(self._recent_weather_samples) > 0:
+                    _LOGGER.debug(f"Using cached weather samples (age: {cache_age:.1f} min)")
+                    return
+
+            # Cache stale or empty - reload samples
+            cutoff_time = now - timedelta(hours=hours_back)
             cutoff_str = cutoff_time.isoformat()
 
             samples = await self.data_manager.get_hourly_samples(
@@ -454,15 +463,17 @@ class MLPredictor:
                 reverse=True
             )
             self._recent_weather_samples = sorted_samples[:100]  # Keep only 100 most recent
+            self._weather_samples_last_loaded = now
 
             _LOGGER.debug(f"Loaded {len(self._recent_weather_samples)} recent weather samples for trend calculation (limited to 100)")
 
         except Exception as e:
             _LOGGER.warning(f"Failed to load recent weather samples: {e}")
             self._recent_weather_samples = []
+            self._weather_samples_last_loaded = None
 
     def _calculate_cloudiness_trends(self) -> Dict[str, float]:
-        """IMPROVEMENT 7 Calculate cloudiness trends from recent weather samples by Zara"""
+        """IMPROVEMENT 7 Calculate cloudiness trends from recent weather samples by @Zara"""
         trends = {
             'cloudiness_trend_1h': 0.0,
             'cloudiness_trend_3h': 0.0,
@@ -538,7 +549,7 @@ class MLPredictor:
         sensor_data: Optional[Dict[str, Any]] = None
     ) -> PredictionResult:
     # --- END CORRECTION ---
-        """Generates a solar production prediction for a specific hour by Zara"""
+        """Generates a solar production prediction for a specific hour by @Zara"""
         prediction_start_time = dt_util.now()
         result: PredictionResult | None = None
 
@@ -569,7 +580,8 @@ class MLPredictor:
 
             # IMPROVEMENT 7: Calculate cloudiness trends from recent samples
             try:
-                await self._load_recent_weather_samples(hours_back=6)  # Load last 6 hours
+                # Force reload for prediction to get freshest data
+                await self._load_recent_weather_samples(hours_back=6, force_reload=True)
                 trend_features = self._calculate_cloudiness_trends()
                 sensor_data.update(trend_features)  # Add trend features to sensor_data
             except Exception as e:
@@ -631,7 +643,7 @@ class MLPredictor:
             return fallback_result
 
     async def _get_fallback_prediction(self, hour: int, date: datetime) -> PredictionResult:
-         """Generates a prediction using the fallback strategy by Zara"""
+         """Generates a prediction using the fallback strategy by @Zara"""
          _LOGGER.warning("Using fallback prediction strategy.")
          # WARNING FIX 5: Pass peak_power_kw to FallbackStrategy
          fallback_strategy = FallbackStrategy(self.peak_power_kw)
@@ -640,210 +652,90 @@ class MLPredictor:
 
 
     async def train_model(self) -> TrainingResult:
-        """Trains the Ridge Regression model using historical hourly data by Zara"""
-        # CRITICAL FIX: Prevent race condition with try-acquire pattern
-        # Use timeout=0 for non-blocking lock acquisition
+        """Trains the Ridge Regression model using historical hourly data - refactored by @Zara"""
+        from .ml_training_helpers import MLTrainingHelpers
+        helpers = MLTrainingHelpers(self)
+
+        # Prevent race condition with non-blocking lock
         try:
-            # Try to acquire lock with immediate timeout (non-blocking)
-            async with asyncio.timeout(0.001):  # 1ms timeout for immediate check
+            async with asyncio.timeout(5.0):
                 async with self._training_lock:
                     training_start_time = dt_util.now()
                     _LOGGER.info(f"Starting ML model training at {training_start_time}...")
                     self.model_state = ModelState.TRAINING
                     await self._update_model_state_file(status_override=ModelState.TRAINING)
 
-                # NEW: Notification on training start
-                if self.notification_service:
-                    try:
-                        # Fetch number of available samples
-                        try:
-                            records = await self.data_manager.get_all_training_records(days=60)
-                            samples_count = len(records)
-                        except Exception:
-                            samples_count = 0
-
-                        await self.notification_service.show_training_start(
-                            samples_count=samples_count
-                        )
-                    except Exception as notify_err:
-                        _LOGGER.debug(f"Training start notification failed: {notify_err}")
-
                 training_records = []
                 result: TrainingResult | None = None
 
                 try:
-                    np = _ensure_numpy()
-                    await self._load_historical_cache() # Load the cache to create lag features
+                    _ensure_numpy()
+                    await self._load_historical_cache()
                     if not self._historical_cache['daily_productions']:
-                         _LOGGER.warning("Historical cache for daily productions is empty. 'production_yesterday' feature will be 0.")
+                        _LOGGER.warning("Historical cache empty. 'production_yesterday' will be 0.")
 
+                    # Load and validate training data
                     training_records = await self.data_manager.get_all_training_records(days=60)
-                    valid_records_count = len(training_records)
+                    valid, error_msg, count = await helpers.validate_training_data(training_records)
 
-                    # IMPROVEMENT 8: Dynamic minimum samples based on data availability
-                    # Absolute minimum: 20 samples (bare minimum for Ridge regression)
-                    # Recommended: 50+ samples for stable model
-                    absolute_min_samples = 20
-                    recommended_min_samples = MIN_TRAINING_DATA_POINTS
-
-                    if valid_records_count < absolute_min_samples:
-                        error_msg = (
-                            f"Insufficient training data: {valid_records_count} valid hourly samples found "
-                            f"(absolute minimum: {absolute_min_samples}). Training aborted."
-                        )
-                        _LOGGER.warning(error_msg)
+                    if not valid:
                         self.model_state = ModelState.UNINITIALIZED if not self.model_loaded else ModelState.READY
-                        result = TrainingResult(success=False, samples_used=valid_records_count, error_message=error_msg)
-                        return result
+                        return TrainingResult(success=False, samples_used=count, error_message=error_msg)
 
-                    if valid_records_count < recommended_min_samples:
-                        _LOGGER.warning(
-                            f"Training with {valid_records_count} samples (below recommended {recommended_min_samples}). "
-                            f"Model accuracy may be lower than optimal."
-                        )
+                    _LOGGER.info(f"Preparing {count} records for training...")
 
-                    _LOGGER.info(f"Preparing {valid_records_count} records for training...")
-
-                    # CRITICAL FIX 4: Remove outliers before training using IQR method
+                    # Remove outliers
                     training_records = await self._remove_outliers(training_records)
                     _LOGGER.info(f"After outlier removal: {len(training_records)} records remaining")
 
-                    X_train_raw = []
-                    y_train = []
-                    for record in training_records:
-                        weather_data = record.get('weather_data', {})
-                        sensor_data = record.get('sensor_data', {})
-                        # FIX: Handle both 'actual_kwh' (hourly samples) and 'actual_value' (predictions)
-                        # IMPORTANT: Use explicit None check, not 'or', to handle 0.0 correctly (night hours)
-                        actual_kwh = record.get('actual_kwh')
-                        if actual_kwh is None:
-                            actual_kwh = record.get('actual_value')
-                        if actual_kwh is None:
-                            _LOGGER.debug(f"Skipping record without actual value: {record.get('timestamp')}")
-                            continue
-                        try:
-                            # CRITICAL FIX: Parse timestamp and normalize timezone
-                            # Handle naive timestamps (assume UTC) and convert to local
-                            record_time_dt = dt_util.parse_datetime(record['timestamp'])
-                            if not record_time_dt:
-                                _LOGGER.warning(f"Skipping training record, invalid timestamp: {record.get('timestamp')}")
-                                continue
+                    # Prepare features
+                    X_train_raw, y_train = await helpers.prepare_training_features(training_records)
+                    _LOGGER.debug("Starting scaling and training...")
 
-                            # Normalize naive timestamps to UTC first
-                            if record_time_dt.tzinfo is None:
-                                record_time_dt = record_time_dt.replace(tzinfo=timezone.utc)
-
-                            # FORCE conversion to local timezone (handles UTC records from old data)
-                            record_time_local = dt_util.as_local(record_time_dt)
-
-                            # Fetch yesterday (local)
-                            yesterday_dt = record_time_local - timedelta(days=1)
-                            yesterday_key = yesterday_dt.date().isoformat()
-                            yesterday_total = self._historical_cache['daily_productions'].get(yesterday_key, 0.0)
-                            sensor_data['production_yesterday'] = float(yesterday_total)
-
-                            # Fetch same hour yesterday (local)
-                            same_hour_yesterday_key = f"{yesterday_key}_{record_time_local.hour:02d}"
-                            same_hour_yesterday = self._historical_cache['hourly_productions'].get(same_hour_yesterday_key, 0.0)
-                            sensor_data['production_same_hour_yesterday'] = float(same_hour_yesterday)
-
-                        except Exception as e:
-                            _LOGGER.debug(f"Could not find lag features for record {record['timestamp']}: {e}")
-                            sensor_data['production_yesterday'] = 0.0
-                            sensor_data['production_same_hour_yesterday'] = 0.0
-
-                        features_dict = self.feature_engineer.extract_features_sync(weather_data, sensor_data, record)
-                        feature_vector = [features_dict.get(name, 0.0) for name in self.feature_engineer.feature_names]
-                        X_train_raw.append(feature_vector)
-                        y_train.append(actual_kwh)
-
-                    _LOGGER.debug("Feature extraction complete. Starting scaling and training...")
-
-                    X_train_scaled_list = await self.hass.async_add_executor_job(
-                         self.scaler.fit_transform, X_train_raw, self.feature_engineer.feature_names
-                    )
-                    _LOGGER.info("Scaler fitted and training data transformed (%d features).", len(self.feature_engineer.feature_names))
-
-                    weights_dict_raw, bias, accuracy, best_lambda = await self.hass.async_add_executor_job(
-                        self.trainer.train, X_train_scaled_list, y_train
-                    )
-                    _LOGGER.info(f"Ridge training complete. Accuracy (R-squared): {accuracy:.4f}, Best Lambda: {best_lambda:.4f}")
-
-                    mapped_weights = self.trainer.map_weights_to_features(weights_dict_raw, self.feature_engineer.feature_names)
-
-                    old_weights = await self.data_manager.get_learned_weights()
-                    current_correction_factor = getattr(old_weights, 'correction_factor', 1.0)
-                    current_correction_factor = max(CORRECTION_FACTOR_MIN, min(CORRECTION_FACTOR_MAX, current_correction_factor))
-                    _LOGGER.debug(f"Preserving fallback correction factor: {current_correction_factor:.3f}")
-
-                    # IMPROVEMENT 6: Check if new model is better than old model (automatic rollback)
-                    old_accuracy = getattr(old_weights, 'accuracy', 0.0) if old_weights else 0.0
-                    accuracy_improvement = accuracy - old_accuracy
-
-                    # If new accuracy is significantly worse (>10% drop), warn but still save
-                    # (Rollback can be done manually by restoring from backup)
-                    if old_accuracy > 0.1 and accuracy_improvement < -0.10:
-                        _LOGGER.warning(
-                            f"New model accuracy ({accuracy:.1%}) is significantly worse than "
-                            f"previous model ({old_accuracy:.1%}). Consider manual rollback from backup."
-                        )
-
-                    new_learned_weights = LearnedWeights(
-                        weights=mapped_weights, bias=bias, accuracy=accuracy,
-                        training_samples=valid_records_count, last_trained=training_start_time.isoformat(),
-                        model_version=ML_MODEL_VERSION, feature_names=self.feature_engineer.feature_names,
-                        feature_means=self.scaler.means, feature_stds=self.scaler.stds,
-                        correction_factor=current_correction_factor
+                    # Scale and train
+                    weights_dict_raw, bias, accuracy, best_lambda = await helpers.scale_and_train(
+                        X_train_raw, y_train
                     )
 
-                    await self.data_manager.save_learned_weights(new_learned_weights)
-                    if accuracy_improvement > 0:
-                        _LOGGER.info(f"Model improved! Accuracy: {old_accuracy:.1%} → {accuracy:.1%} (+{accuracy_improvement:.1%})")
-                    else:
-                        _LOGGER.info(f"Model updated. Accuracy: {old_accuracy:.1%} → {accuracy:.1%} ({accuracy_improvement:+.1%})")
-
-                    await self._update_hourly_profile(training_records)
-
-                    self.current_weights = new_learned_weights
-                    self.current_accuracy = accuracy
-                    self.training_samples = valid_records_count
-                    self.last_training_time = training_start_time
-                    self.model_loaded = True
-                    self.model_state = ModelState.READY
-
-                    self.prediction_orchestrator.update_strategies(
-                        weights=self.current_weights, profile=self.current_profile, accuracy=self.current_accuracy,
-                        peak_power_kw=self.peak_power_kw
+                    # Create learned weights
+                    new_learned_weights = await helpers.create_learned_weights(
+                        weights_dict_raw, bias, accuracy, len(training_records), training_start_time
                     )
-                    _LOGGER.debug("Prediction orchestrator updated.")
+
+                    # Finalize training
+                    await helpers.finalize_training(
+                        new_learned_weights, accuracy, len(training_records),
+                        training_records, training_start_time
+                    )
 
                     training_end_time = dt_util.now()
                     duration_seconds = (training_end_time - training_start_time).total_seconds()
 
                     result = TrainingResult(
-                        success=True, accuracy=accuracy, samples_used=valid_records_count,
-                        weights=new_learned_weights, training_time_seconds=duration_seconds,
+                        success=True,
+                        accuracy=accuracy,
+                        samples_used=len(training_records),
+                        weights=new_learned_weights,
+                        training_time_seconds=duration_seconds,
                         feature_count=len(self.feature_engineer.feature_names)
                     )
 
-                    _LOGGER.info(f"ML Training successful in {duration_seconds:.2f}s. Accuracy={accuracy*100:.1f}%, Samples={valid_records_count}.")
+                    _LOGGER.info(
+                        f"ML Training successful in {duration_seconds:.2f}s. "
+                        f"Accuracy={accuracy*100:.1f}%, Samples={len(training_records)}."
+                    )
                     self.error_handler.log_ml_operation(
-                        operation="model_training", success=True,
-                        metrics={"accuracy": accuracy, "samples": valid_records_count, "features": result.feature_count},
+                        operation="model_training",
+                        success=True,
+                        metrics={
+                            "accuracy": accuracy,
+                            "samples": len(training_records),
+                            "features": result.feature_count
+                        },
                         duration_seconds=duration_seconds
                     )
 
-                    # NEW: Notification on successful training
-                    if self.notification_service:
-                        try:
-                            await self.notification_service.show_training_complete(
-                                success=True,
-                                accuracy=accuracy * 100,  # Convert to percentage
-                                sample_count=valid_records_count
-                            )
-                        except Exception as notify_err:
-                            _LOGGER.debug(f"Training notification failed: {notify_err}")
-
+                    await helpers.send_training_notifications(True, accuracy, len(training_records))
                     return result
 
                 except ImportError:
@@ -886,7 +778,6 @@ class MLPredictor:
                          training_time_override=result.training_time_seconds if result else None
                     )
 
-                    # NEW: Notification on failure
                     if self.notification_service and result and not result.success:
                         try:
                             await self.notification_service.show_training_complete(
@@ -907,7 +798,7 @@ class MLPredictor:
 
 
     async def _update_hourly_profile(self, training_records: List[Dict[str, Any]]) -> None:
-        """Updates the hourly production profile based on provided training records by Zara"""
+        """Updates the hourly production profile based on provided training records by @Zara"""
         _LOGGER.debug(f"Updating hourly profile using {len(training_records)} records...")
         if not training_records:
             _LOGGER.warning("No records provided for hourly profile update.")
@@ -968,7 +859,7 @@ class MLPredictor:
 
 
     async def _remove_outliers(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """CRITICAL FIX 4 Removes outliers from training data using IQR method by Zara"""
+        """CRITICAL FIX 4 Removes outliers from training data using IQR method by @Zara"""
         if not records:
             return records
 
@@ -1066,7 +957,7 @@ class MLPredictor:
         samples_override: Optional[int] = None,
         training_time_override: Optional[float] = None
     ) -> None:
-        """Safely updates the model_statejson file with current predictor status by Zara"""
+        """Safely updates the model_statejson file with current predictor status by @Zara"""
         _LOGGER.debug("Updating model_state.json...")
         try:
             status_to_save = status_override if status_override else self.model_state
@@ -1098,7 +989,7 @@ class MLPredictor:
 
 
     async def _check_training_data_availability(self) -> int:
-        """Checks how many valid hourly samples are available for training by Zara"""
+        """Checks how many valid hourly samples are available for training by @Zara"""
         try:
             # Load samples from last 60 days
             from ..core.core_helpers import SafeDateTimeUtil as dt_util
@@ -1116,7 +1007,7 @@ class MLPredictor:
 
 
     def _schedule_hourly_sampling(self) -> None:
-        """Schedules the hourly callback for data sampling by Zara"""
+        """Schedules the hourly callback for data sampling by @Zara"""
         if self._hourly_sample_listener_remove: self._hourly_sample_listener_remove()
         self._hourly_sample_listener_remove = async_track_time_change(
             self.hass, self._hourly_learning_callback, minute=2, second=0
@@ -1125,7 +1016,7 @@ class MLPredictor:
 
     @callback 
     async def _hourly_learning_callback(self, now_local: datetime) -> None:
-        """Callback triggered every hour to collect the sample for the previous hour by Zara"""
+        """Callback triggered every hour to collect the sample for the previous hour by @Zara"""
         hour_to_collect_dt = now_local - timedelta(hours=1)
         
         _LOGGER.info(
@@ -1155,7 +1046,7 @@ class MLPredictor:
 
 
     def _schedule_daily_training_check(self, reschedule_delay_sec: Optional[float] = None) -> None:
-        """Schedules the next daily check to see if model retraining is needed by Zara"""
+        """Schedules the next daily check to see if model retraining is needed by @Zara"""
         if self._daily_training_task:
             self._daily_training_task.cancel()
             self._daily_training_task = None
@@ -1173,7 +1064,7 @@ class MLPredictor:
 
         # Create a proper wrapper function that handles the async task correctly
         def _trigger_training_check():
-            """Wrapper function to properly create and handle the async task by Zara"""
+            """Wrapper function to properly create and handle the async task by @Zara"""
             try:
                 task = self.hass.async_create_task(self._daily_training_check_callback())
                 # Add error callback to catch any exceptions
@@ -1184,7 +1075,7 @@ class MLPredictor:
         self._daily_training_task = self.hass.loop.call_later(delay, _trigger_training_check)
 
     async def _daily_training_check_callback(self) -> None:
-        """Callback executed daily to check if retraining is needed and trigger it by Zara"""
+        """Callback executed daily to check if retraining is needed and trigger it by @Zara"""
         _LOGGER.info("Performing daily check: Should ML model be retrained?")
         try:
             if await self._should_retrain():
@@ -1201,7 +1092,7 @@ class MLPredictor:
 
 
     async def _should_retrain(self) -> bool:
-        """Determines if the model should be automatically retrained based on criteria by Zara"""
+        """Determines if the model should be automatically retrained based on criteria by @Zara"""
         _LOGGER.debug("Checking retraining criteria...")
         try:
             available_samples = await self._check_training_data_availability()
@@ -1236,7 +1127,7 @@ class MLPredictor:
             return False
 
     def _handle_training_task_error(self, task: asyncio.Task) -> None:
-        """Handle errors from the daily training check task by Zara"""
+        """Handle errors from the daily training check task by @Zara"""
         try:
             # This will raise if the task had an exception
             task.result()
@@ -1246,7 +1137,7 @@ class MLPredictor:
             _LOGGER.error(f"Daily training check task failed with error: {e}", exc_info=True)
 
     def _update_performance_metrics(self, prediction_time_ms: float, success: bool) -> None:
-        """Updates rolling average prediction time and error rate by Zara"""
+        """Updates rolling average prediction time and error rate by @Zara"""
         try:
             self.performance_metrics["total_predictions"] += 1
             if success:
@@ -1273,7 +1164,7 @@ class MLPredictor:
         uv_sensor: Optional[str]=None, lux_sensor: Optional[str]=None, 
         humidity_sensor: Optional[str]=None
     ) -> None:
-        """Configures the entity IDs used by the ML predictor and its components by Zara"""
+        """Configures the entity IDs used by the ML predictor and its components by @Zara"""
         _LOGGER.info("Configuring entities for MLPredictor and SampleCollector...")
         _LOGGER.debug(f"set_entities called with solar_capacity={solar_capacity}")
         
@@ -1297,7 +1188,7 @@ class MLPredictor:
 
 
     def is_healthy(self) -> bool:
-        """Performs a health check on the ML predictor state by Zara"""
+        """Performs a health check on the ML predictor state by @Zara"""
         _LOGGER.debug("Performing ML predictor health check...")
         try:
             _ensure_numpy() 
@@ -1333,17 +1224,17 @@ class MLPredictor:
             return False
 
     async def get_today_prediction(self) -> Optional[float]:
-        """Get total daily prediction for today by Zara"""
+        """Get total daily prediction for today by @Zara"""
         _LOGGER.debug("get_today_prediction stub called, returning None (use orchestrator)")
         return None
 
     async def get_tomorrow_prediction(self) -> Optional[float]:
-        """Get total daily prediction for tomorrow by Zara"""
+        """Get total daily prediction for tomorrow by @Zara"""
         _LOGGER.debug("get_tomorrow_prediction stub called, returning None (use orchestrator)")
         return None
 
     async def force_training(self) -> bool:
-        """Force model training regardless of conditions by Zara"""
+        """Force model training regardless of conditions by @Zara"""
         _LOGGER.info("Force training requested via service...")
         try:
             result = await self.train_model()
@@ -1353,7 +1244,7 @@ class MLPredictor:
             return False
 
     async def reset_model(self) -> bool:
-        """Reset the ML model by clearing learned weights and reverting to rule-based pr... by Zara"""
+        """Reset the ML model by clearing learned weights and reverting to rule-based pr... by @Zara"""
         _LOGGER.info("Resetting ML model...")
         try:
             # Clear current weights and model state
@@ -1402,7 +1293,7 @@ class MLPredictor:
             return False
 
     async def async_will_remove_from_hass(self) -> None:
-        """Clean up resources when the integration is unloaded or HA stops by Zara"""
+        """Clean up resources when the integration is unloaded or HA stops by @Zara"""
         _LOGGER.info("Cleaning up MLPredictor background tasks and listeners...")
         self._stop_event.set() # Signal background tasks to stop first
 

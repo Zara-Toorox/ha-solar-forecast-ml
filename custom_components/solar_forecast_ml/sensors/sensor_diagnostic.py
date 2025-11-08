@@ -1,5 +1,5 @@
 """
-Diagnostic Sensors
+Diagnostic Sensors - MIGRATED VERSION
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -18,7 +18,7 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from datetime import datetime, timedelta # Import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
@@ -32,13 +32,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-# Import BaseSolarSensor from the base sensor module
 from .sensor_base import BaseSolarSensor
+from .sensor_mixins import CoordinatorPropertySensorMixin
 from ..coordinator import SolarForecastMLCoordinator
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..ml.ml_external_helpers import format_time_ago
 from ..const import UPDATE_INTERVAL, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR
-from ..ml.ml_predictor import ModelState # Import Enum for state mapping
+from ..ml.ml_predictor import ModelState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,112 +49,424 @@ ML_STATE_TRANSLATIONS = {
     ModelState.READY.value: "Ready",
     ModelState.DEGRADED.value: "Degraded",
     ModelState.ERROR.value: "Error",
-    "unavailable": "Unavailable", # Add state for when predictor is None
-    "unknown": "Unknown" # Fallback
+    "unavailable": "Unavailable",
+    "unknown": "Unknown"
 }
 
 
-# --- Diagnostic Sensors ---
+# =============================================================================
+# MIGRATED COORDINATOR-PROPERTY SENSORS (Using Mixin)
+# =============================================================================
 
-class DiagnosticStatusSensor(BaseSolarSensor):
-    """Sensor showing the overall diagnostic status of the coordinator by Zara"""
+class DiagnosticStatusSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
+    """Sensor showing the overall diagnostic status of the coordinator by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:stethoscope"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the diagnostic status sensor by Zara"""
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_diagnostic_status" # Changed from _status to avoid clash
+        """Initialize by @Zara"""
+        BaseSolarSensor.__init__(self, coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_diagnostic_status"
         self._attr_translation_key = "diagnostic_status"
-        self._attr_icon = "mdi:stethoscope" # More diagnostic icon
         self._attr_name = "Diagnostic Status"
 
-    @property
-    def native_value(self) -> str | None:
-        """Return the diagnostic status string by Zara"""
-        # Value is directly on the coordinator instance
+    def get_coordinator_value(self) -> str | None:
+        """Get value from coordinator by @Zara"""
         return getattr(self.coordinator, 'diagnostic_status', None)
 
 
-class YesterdayDeviationSensor(BaseSolarSensor):
-    """Sensor showing the absolute forecast deviation error from the previous day by Zara"""
+class YesterdayDeviationSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
+    """Sensor showing the absolute forecast deviation error by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = None
+    _attr_icon = "mdi:delta"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the deviation sensor by Zara"""
-        super().__init__(coordinator, entry)
+        """Initialize by @Zara"""
+        BaseSolarSensor.__init__(self, coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_yesterday_deviation"
         self._attr_translation_key = "yesterday_deviation"
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_device_class = None # Avoid conflict with state_class
-        self._attr_icon = "mdi:delta"
         self._attr_name = "Yesterday Deviation"
 
-    @property
-    def native_value(self) -> float | None:
-        """Return the deviation in kWh by Zara"""
-        # Get value from coordinator, default to None if not set
-        deviation = getattr(self.coordinator, 'last_day_error_kwh', None) # Use the correct attribute name
-        return max(0.0, deviation) if deviation is not None else None # Ensure non-negative
+    def get_coordinator_value(self) -> float | None:
+        """Get value from coordinator by @Zara"""
+        deviation = getattr(self.coordinator, 'last_day_error_kwh', None)
+        return max(0.0, deviation) if deviation is not None else None
 
+
+class CloudinessTrend1hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
+    """Sensor showing cloudiness change in the last 1 hour by @Zara"""
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = None  # Text interpretation, no unit
+    _attr_state_class = None  # Not a measurement anymore
+    _attr_icon = "mdi:weather-partly-cloudy"
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        """Initialize by @Zara"""
+        BaseSolarSensor.__init__(self, coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_cloudiness_trend_1h"
+        self._attr_translation_key = "cloudiness_trend_1h"
+        self._attr_name = "Cloudiness Trend 1h"
+
+    def get_coordinator_value(self) -> str | None:
+        """Get text interpretation from coordinator cache by @Zara"""
+        try:
+            value = self.coordinator.cloudiness_trend_1h
+
+            if value > 10:
+                return "Increasingly cloudy"
+            elif value > 5:
+                return "Slightly increasing"
+            elif value < -10:
+                return "Increasingly sunny"
+            elif value < -5:
+                return "Slightly clearing"
+            else:
+                return "Stable"
+        except Exception as e:
+            _LOGGER.debug(f"Failed to get cloudiness_trend_1h: {e}")
+            return None
+
+    @property
+    def icon(self) -> str:
+        """Dynamic icon based on trend by @Zara"""
+        try:
+            value = self.coordinator.cloudiness_trend_1h
+            if value > 10:
+                return "mdi:weather-cloudy-arrow-right"
+            elif value > 5:
+                return "mdi:weather-partly-cloudy"
+            elif value < -10:
+                return "mdi:weather-sunny-alert"
+            elif value < -5:
+                return "mdi:weather-sunny"
+            else:
+                return "mdi:minus-circle-outline"
+        except Exception:
+            return "mdi:weather-partly-cloudy"
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Provide numeric details by @Zara"""
+        try:
+            value = self.coordinator.cloudiness_trend_1h
+            return {
+                "change_percent": round(value, 1),
+                "description": "Cloud change in last hour (positive = more clouds)"
+            }
+        except Exception:
+            return {"status": "unavailable"}
+
+
+class CloudinessTrend3hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
+    """Sensor showing cloudiness change in the last 3 hours by @Zara"""
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = None  # Text interpretation, no unit
+    _attr_state_class = None  # Not a measurement anymore
+    _attr_icon = "mdi:weather-partly-cloudy"
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        """Initialize by @Zara"""
+        BaseSolarSensor.__init__(self, coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_cloudiness_trend_3h"
+        self._attr_translation_key = "cloudiness_trend_3h"
+        self._attr_name = "Cloudiness Trend 3h"
+
+    def get_coordinator_value(self) -> str | None:
+        """Get text interpretation from coordinator cache by @Zara"""
+        try:
+            value = self.coordinator.cloudiness_trend_3h
+
+            if value > 20:
+                return "Strongly increasing clouds"
+            elif value > 10:
+                return "Increasingly cloudy"
+            elif value < -20:
+                return "Strongly clearing"
+            elif value < -10:
+                return "Increasingly sunny"
+            else:
+                return "Relatively stable"
+        except Exception as e:
+            _LOGGER.debug(f"Failed to get cloudiness_trend_3h: {e}")
+            return None
+
+    @property
+    def icon(self) -> str:
+        """Dynamic icon based on trend by @Zara"""
+        try:
+            value = self.coordinator.cloudiness_trend_3h
+            if value > 20:
+                return "mdi:weather-pouring"
+            elif value > 10:
+                return "mdi:weather-cloudy-arrow-right"
+            elif value < -20:
+                return "mdi:weather-sunny-alert"
+            elif value < -10:
+                return "mdi:weather-sunny"
+            else:
+                return "mdi:minus-circle-outline"
+        except Exception:
+            return "mdi:weather-partly-cloudy"
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Provide numeric details by @Zara"""
+        try:
+            value = self.coordinator.cloudiness_trend_3h
+            return {
+                "change_percent": round(value, 1),
+                "description": "Cloud change in last 3 hours"
+            }
+        except Exception:
+            return {"status": "unavailable"}
+
+
+class CloudinessVolatilitySensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
+    """Sensor showing cloudiness volatility by @Zara"""
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = "%"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:waves"
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        """Initialize by @Zara"""
+        BaseSolarSensor.__init__(self, coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_cloudiness_volatility"
+        self._attr_translation_key = "cloudiness_volatility"
+        self._attr_name = "Cloudiness Volatility"
+
+    def get_coordinator_value(self) -> float | None:
+        """Get value from coordinator cache by @Zara"""
+        # Cache is updated every coordinator update (every 15 min)
+        try:
+            return round(self.coordinator.cloudiness_volatility, 1)
+        except Exception as e:
+            _LOGGER.debug(f"Failed to get cloudiness_volatility: {e}")
+            return None
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Provide additional context by @Zara"""
+        value = self.native_value
+        if value is None:
+            return {"status": "unavailable"}
+
+        if value > 30:
+            interpretation = "Very volatile"
+        elif value > 15:
+            interpretation = "Volatile"
+        elif value < 5:
+            interpretation = "Very stable"
+        else:
+            interpretation = "Stable"
+
+        return {
+            "interpretation": interpretation,
+            "description": "Cloud volatility (std dev over 3h)"
+        }
+
+
+class NextProductionStartSensor(BaseSolarSensor):
+    """Sensor showing when next solar production starts by @Zara"""
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = None
+    _attr_state_class = None
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:weather-sunset-up"
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        """Initialize by @Zara"""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_next_production_start"
+        self._attr_translation_key = "next_production_start"
+        self._attr_name = "Next Production Start"
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return next production start time in LOCAL timezone by @Zara"""
+        try:
+            # Get sun.sun entity
+            sun_entity = self.hass.states.get('sun.sun')
+            if not sun_entity:
+                _LOGGER.debug("sun.sun entity not available")
+                return None
+
+            # Get next sunrise (UTC)
+            next_rising_str = sun_entity.attributes.get('next_rising')
+            if not next_rising_str:
+                _LOGGER.debug("next_rising attribute not found in sun.sun")
+                return None
+
+            # Parse to datetime (UTC)
+            next_rising_utc = dt_util.parse_datetime(next_rising_str)
+            if not next_rising_utc:
+                _LOGGER.debug(f"Could not parse next_rising: {next_rising_str}")
+                return None
+
+            # Convert to LOCAL timezone
+            next_rising_local = dt_util.as_local(next_rising_utc)
+
+            # Production starts 60 minutes before sunrise
+            production_start = next_rising_local - timedelta(minutes=60)
+
+            # Check if production has already started today
+            now_local = dt_util.now()
+            if production_start.date() < now_local.date():
+                # Production start was in the past (yesterday or earlier)
+                # Get tomorrow's sunrise
+                # sun.sun only provides next_rising, so we need to add a day
+                production_start = production_start + timedelta(days=1)
+
+            return production_start
+
+        except Exception as e:
+            _LOGGER.debug(f"Failed to calculate next production start: {e}")
+            return None
+
+    @property
+    def icon(self) -> str:
+        """Dynamic icon based on time until production by @Zara"""
+        try:
+            start_time = self.native_value
+            if not start_time:
+                return "mdi:weather-sunset-up"
+
+            now = dt_util.now()
+            time_until = start_time - now
+
+            if time_until.total_seconds() < 3600:  # < 1 hour
+                return "mdi:weather-sunny-alert"
+            elif time_until.total_seconds() < 7200:  # < 2 hours
+                return "mdi:weather-sunset-up"
+            else:
+                return "mdi:sleep"
+
+        except Exception:
+            return "mdi:weather-sunset-up"
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Provide additional context by @Zara"""
+        try:
+            start_time = self.native_value
+            if not start_time:
+                return {"status": "unavailable"}
+
+            now = dt_util.now()
+            time_until = start_time - now
+
+            # Get sun.sun for sunset info
+            sun_entity = self.hass.states.get('sun.sun')
+            next_setting_str = sun_entity.attributes.get('next_setting') if sun_entity else None
+
+            end_time = None
+            duration = None
+            if next_setting_str:
+                next_setting_utc = dt_util.parse_datetime(next_setting_str)
+                if next_setting_utc:
+                    next_setting_local = dt_util.as_local(next_setting_utc)
+                    # Production ends 60 minutes after sunset
+                    end_time = next_setting_local + timedelta(minutes=60)
+
+                    # Calculate duration
+                    if end_time and start_time:
+                        duration_td = end_time - start_time
+                        hours = int(duration_td.total_seconds() // 3600)
+                        minutes = int((duration_td.total_seconds() % 3600) // 60)
+                        duration = f"{hours}h {minutes}m"
+
+            # Format starts_in countdown
+            total_seconds = int(time_until.total_seconds())
+            if total_seconds < 0:
+                starts_in = "Production active"
+            else:
+                hours = total_seconds // 3600
+                minutes = (total_seconds % 3600) // 60
+                starts_in = f"{hours}h {minutes}m"
+
+            # Determine day
+            if start_time.date() == now.date():
+                day = "Heute"
+            elif start_time.date() == (now + timedelta(days=1)).date():
+                day = "Morgen"
+            else:
+                day = start_time.strftime("%d.%m.%Y")
+
+            return {
+                "start_time": start_time.strftime("%H:%M"),
+                "end_time": end_time.strftime("%H:%M") if end_time else "Unknown",
+                "duration": duration if duration else "Unknown",
+                "starts_in": starts_in,
+                "day": day,
+                "production_window": f"{start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')}" if end_time else "Unknown"
+            }
+
+        except Exception as e:
+            _LOGGER.debug(f"Failed to get extra attributes: {e}")
+            return {"status": "error"}
+
+
+# =============================================================================
+# COMPLEX SENSORS (Keep original implementation)
+# =============================================================================
 
 class LastCoordinatorUpdateSensor(BaseSolarSensor):
-    """Sensor showing the timestamp of the last successful coordinator update by Zara"""
+    """Sensor showing the timestamp of the last successful coordinator update by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the last update sensor by Zara"""
+        """Initialize by @Zara"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_last_coordinator_update"
         self._attr_translation_key = "last_update_timestamp"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
-        self._attr_icon = "mdi:clock-check-outline" # Changed icon slightly
+        self._attr_icon = "mdi:clock-check-outline"
         self._attr_name = "Last Update"
 
     @property
-    def native_value(self) -> datetime | None: # Use standard datetime hint
-        """Return the timestamp of the last successful update by Zara"""
-        # Use last_update_success_time for accuracy
+    def native_value(self) -> datetime | None:
+        """Return the timestamp by @Zara"""
         return getattr(self.coordinator, 'last_update_success_time', None)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide additional context like time ago by Zara"""
+        """Provide additional context by @Zara"""
         last_update = getattr(self.coordinator, 'last_update_success_time', None)
-        # Use coordinator.last_update from base class for last attempt time
-        last_attempt = getattr(self.coordinator, 'last_update', None) # Base coordinator attribute
+        last_attempt = getattr(self.coordinator, 'last_update', None)
         return {
             "last_update_iso": last_update.isoformat() if last_update else None,
             "time_ago": format_time_ago(last_update) if last_update else "Never",
-            "last_attempt_iso": last_attempt.isoformat() if last_attempt else None, # Use base attribute
+            "last_attempt_iso": last_attempt.isoformat() if last_attempt else None,
         }
 
 
 class LastMLTrainingSensor(BaseSolarSensor):
-    """Sensor showing the timestamp of the last ML model training by Zara"""
+    """Sensor showing the timestamp of the last ML model training by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the last ML training sensor by Zara"""
+        """Initialize by @Zara"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_last_ml_training"
         self._attr_translation_key = "last_ml_training"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
-        self._attr_icon = "mdi:school-outline" # Training icon
+        self._attr_icon = "mdi:school-outline"
         self._attr_name = "Last ML Training"
 
     @property
     def native_value(self) -> datetime | None:
-        """Return the timestamp of the last ML training by Zara"""
-        # FIXED: Direct access to ml_predictor instead of service_manager
+        """Return the timestamp by @Zara"""
         ml_predictor = self.coordinator.ml_predictor
-        if not ml_predictor: return None
+        if not ml_predictor:
+            return None
         return getattr(ml_predictor, 'last_training_time', None)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide additional context like time ago by Zara"""
-        # FIXED: Direct access to ml_predictor instead of service_manager
+        """Provide additional context by @Zara"""
         ml_predictor = self.coordinator.ml_predictor
         last_training = getattr(ml_predictor, 'last_training_time', None) if ml_predictor else None
         return {
@@ -164,71 +476,98 @@ class LastMLTrainingSensor(BaseSolarSensor):
 
 
 class NextScheduledUpdateSensor(BaseSolarSensor):
-    """Sensor showing the time of the next scheduled update evening verify by Zara"""
+    """Sensor showing the time of the next scheduled update by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the next scheduled update sensor by Zara"""
+        """Initialize by @Zara"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_next_scheduled_update"
         self._attr_translation_key = "next_scheduled_update"
         self._attr_icon = "mdi:calendar-clock"
         self._attr_name = "Next Scheduled Update"
-        # No device class for now, it's a formatted string
 
     @property
     def native_value(self) -> str:
-        """Return the time of the next scheduled update in a readable format by Zara"""
+        """Return the time of next scheduled task by @Zara Actual active tasks: - 00:00 Reset Expected Production - 03:00 Weekly ML Training (Sunday only) - 06:00 Morning Forecast - 06:15/30/45 Forecast Retries - 23:05 Intelligent ML Training Check - 23:30 End of Day Workflow"""
         now = dt_util.now()
-        today_update = dt_util.now().replace(hour=DAILY_UPDATE_HOUR, minute=0, second=0, microsecond=0)
-        evening_verify = dt_util.now().replace(hour=DAILY_VERIFICATION_HOUR, minute=0, second=0, microsecond=0)
 
-        # If before today's update, next update is today_update
-        if now < today_update:
-            next_time = today_update
-            event_type = "Morning Forecast"
-        # If before today's verification, next update is evening_verify
-        elif now < evening_verify:
-            next_time = evening_verify
-            event_type = "Evening Verify"
-        # Otherwise, next update is tomorrow's morning update
-        else:
-            next_time = (dt_util.now() + timedelta(days=1)).replace(hour=DAILY_UPDATE_HOUR, minute=0, second=0, microsecond=0)
-            event_type = "Morning Forecast"
+        # Define all actual scheduled tasks for today
+        tasks = [
+            (0, 0, "Reset Expected"),
+            (3, 0, "Weekly ML Training" if now.weekday() == 6 else None),  # Sunday only
+            (DAILY_UPDATE_HOUR, 0, "Morning Forecast"),
+            (DAILY_UPDATE_HOUR, 15, "Forecast Retry #1"),
+            (DAILY_UPDATE_HOUR, 30, "Forecast Retry #2"),
+            (DAILY_UPDATE_HOUR, 45, "Forecast Retry #3"),
+            (23, 5, "ML Training Check"),
+            (23, 30, "End of Day"),
+        ]
 
-        return f"{next_time.strftime('%H:%M')} ({event_type})"
+        # Filter out None tasks (e.g., Sunday-only on other days)
+        tasks = [(h, m, t) for h, m, t in tasks if t is not None]
+
+        # Find next task today
+        for hour, minute, task_name in tasks:
+            task_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if now < task_time:
+                return f"{task_time.strftime('%H:%M')} ({task_name})"
+
+        # No more tasks today, show first task tomorrow
+        next_time = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        return f"{next_time.strftime('%H:%M')} (Reset Expected)"
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide more details about the schedule by Zara"""
+        """Provide more details about scheduled tasks by @Zara"""
         now = dt_util.now()
-        today_update = dt_util.now().replace(hour=DAILY_UPDATE_HOUR, minute=0, second=0, microsecond=0)
-        evening_verify = dt_util.now().replace(hour=DAILY_VERIFICATION_HOUR, minute=0, second=0, microsecond=0)
 
-        if now < today_update:
-            next_time = today_update
-            event_type = "Morning Forecast"
-        elif now < evening_verify:
-            next_time = evening_verify
-            event_type = "Evening Verify"
-        else:
-            next_time = (dt_util.now() + timedelta(days=1)).replace(hour=DAILY_UPDATE_HOUR, minute=0, second=0, microsecond=0)
-            event_type = "Morning Forecast"
+        # Define all actual scheduled tasks for today
+        tasks = [
+            (0, 0, "Reset Expected"),
+            (3, 0, "Weekly ML Training" if now.weekday() == 6 else None),  # Sunday only
+            (DAILY_UPDATE_HOUR, 0, "Morning Forecast"),
+            (DAILY_UPDATE_HOUR, 15, "Forecast Retry #1"),
+            (DAILY_UPDATE_HOUR, 30, "Forecast Retry #2"),
+            (DAILY_UPDATE_HOUR, 45, "Forecast Retry #3"),
+            (23, 5, "ML Training Check"),
+            (23, 30, "End of Day"),
+        ]
+
+        # Filter out None tasks
+        tasks = [(h, m, t) for h, m, t in tasks if t is not None]
+
+        # Find next task
+        next_time = None
+        event_type = None
+        for hour, minute, task_name in tasks:
+            task_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if now < task_time:
+                next_time = task_time
+                event_type = task_name
+                break
+
+        # No more tasks today, show first task tomorrow
+        if next_time is None:
+            next_time = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            event_type = "Reset Expected"
 
         return {
             "next_update_time_iso": next_time.isoformat(),
             "event_type": event_type,
+            "is_sunday": now.weekday() == 6,
             "morning_forecast_time": f"{DAILY_UPDATE_HOUR}:00",
-            "evening_verify_time": f"{DAILY_VERIFICATION_HOUR}:00",
+            "end_of_day_time": "23:30",
+            "ml_training_check_time": "23:05",
         }
 
 
 class MLServiceStatusSensor(BaseSolarSensor):
-    """Sensor showing the status of the ML prediction service by Zara"""
+    """Sensor showing the status of the ML prediction service by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the ML service status sensor by Zara"""
+        """Initialize by @Zara"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_ml_service_status"
         self._attr_translation_key = "ml_service_status"
@@ -237,10 +576,10 @@ class MLServiceStatusSensor(BaseSolarSensor):
 
     @property
     def native_value(self) -> str:
-        """Return the ML service status as a translated string by Zara"""
-        # FIXED: Direct access to ml_predictor instead of service_manager
+        """Return the ML service status by @Zara"""
         ml_predictor = self.coordinator.ml_predictor
-        if not ml_predictor: return ML_STATE_TRANSLATIONS["unavailable"]
+        if not ml_predictor:
+            return ML_STATE_TRANSLATIONS["unavailable"]
         state_enum = getattr(ml_predictor, 'model_state', None)
         if state_enum is None:
             return ML_STATE_TRANSLATIONS["unknown"]
@@ -249,8 +588,7 @@ class MLServiceStatusSensor(BaseSolarSensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide detailed service status by Zara"""
-        # FIXED: Direct access to ml_predictor instead of service_manager
+        """Provide detailed service status by @Zara"""
         ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor:
             return {"status": "unavailable"}
@@ -270,20 +608,24 @@ class MLServiceStatusSensor(BaseSolarSensor):
 
     @property
     def icon(self) -> str:
-        """Dynamically change icon based on ML status by Zara"""
-        state_val = self.native_value # Get the translated state string
-        if state_val == ML_STATE_TRANSLATIONS[ModelState.READY.value]: return "mdi:robot-happy-outline"
-        elif state_val == ML_STATE_TRANSLATIONS[ModelState.TRAINING.value]: return "mdi:robot-confused-outline"
-        elif state_val == ML_STATE_TRANSLATIONS[ModelState.ERROR.value]: return "mdi:robot-dead-outline"
-        else: return "mdi:robot-off-outline"
+        """Dynamically change icon by @Zara"""
+        state_val = self.native_value
+        if state_val == ML_STATE_TRANSLATIONS[ModelState.READY.value]:
+            return "mdi:robot-happy-outline"
+        elif state_val == ML_STATE_TRANSLATIONS[ModelState.TRAINING.value]:
+            return "mdi:robot-confused-outline"
+        elif state_val == ML_STATE_TRANSLATIONS[ModelState.ERROR.value]:
+            return "mdi:robot-dead-outline"
+        else:
+            return "mdi:robot-off-outline"
 
 
 class MLMetricsSensor(BaseSolarSensor):
-    """Sensor providing key metrics about the ML models data and features by Zara"""
+    """Sensor providing key metrics about the ML model by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the ML metrics sensor by Zara"""
+        """Initialize by @Zara"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_ml_metrics"
         self._attr_translation_key = "ml_metrics"
@@ -292,10 +634,10 @@ class MLMetricsSensor(BaseSolarSensor):
 
     @property
     def native_value(self) -> str:
-        """Return the number of training samples used and accuracy by Zara"""
-        # FIXED: Direct access to ml_predictor instead of service_manager
+        """Return the metrics by @Zara"""
         ml_predictor = self.coordinator.ml_predictor
-        if not ml_predictor: return "ML Unavailable"
+        if not ml_predictor:
+            return "ML Unavailable"
         samples = getattr(ml_predictor, 'training_samples', 0)
         accuracy = getattr(ml_predictor, 'current_accuracy', None)
         acc_str = f"{accuracy*100:.1f}%" if accuracy is not None else "N/A"
@@ -303,10 +645,10 @@ class MLMetricsSensor(BaseSolarSensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide detailed metrics by Zara"""
-        # FIXED: Direct access to ml_predictor instead of service_manager
+        """Provide detailed metrics by @Zara"""
         ml_predictor = self.coordinator.ml_predictor
-        if not ml_predictor: return {"status": "unavailable"}
+        if not ml_predictor:
+            return {"status": "unavailable"}
 
         feature_engineer = getattr(ml_predictor, 'feature_engineer', None)
         feature_count = len(feature_engineer.feature_names) if feature_engineer else 0
@@ -326,11 +668,11 @@ class MLMetricsSensor(BaseSolarSensor):
 
 
 class CoordinatorHealthSensor(BaseSolarSensor):
-    """Sensor reflecting the health and performance of the DataUpdateCoordinator by Zara"""
+    """Sensor reflecting the health of the DataUpdateCoordinator by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the coordinator health sensor by Zara"""
+        """Initialize by @Zara"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_coordinator_health"
         self._attr_translation_key = "coordinator_health"
@@ -339,26 +681,32 @@ class CoordinatorHealthSensor(BaseSolarSensor):
 
     @property
     def native_value(self) -> str:
-        """Return a simple health status string by Zara"""
+        """Return health status by @Zara"""
         last_success_time = getattr(self.coordinator, 'last_update_success_time', None)
         last_update_success_flag = getattr(self.coordinator, 'last_update_success', True)
 
-        if not last_update_success_flag and last_success_time is None: return "Failed Initializing"
-        elif not last_update_success_flag: return "Update Failed"
-        if not last_success_time: return "Initializing"
+        if not last_update_success_flag and last_success_time is None:
+            return "Failed Initializing"
+        elif not last_update_success_flag:
+            return "Update Failed"
+        if not last_success_time:
+            return "Initializing"
 
-        age_seconds = (dt_util.now() - last_success_time).total_seconds() # LOCAL time - last_success_time is LOCAL
+        age_seconds = (dt_util.now() - last_success_time).total_seconds()
         interval_seconds = self.coordinator.update_interval.total_seconds() if self.coordinator.update_interval else UPDATE_INTERVAL.total_seconds()
 
-        if age_seconds < (interval_seconds * 1.5): return "Healthy"
-        elif age_seconds < (interval_seconds * 3): return "Delayed"
-        else: return "Stale"
+        if age_seconds < (interval_seconds * 1.5):
+            return "Healthy"
+        elif age_seconds < (interval_seconds * 3):
+            return "Delayed"
+        else:
+            return "Stale"
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide detailed coordinator performance metrics by Zara"""
+        """Provide detailed metrics by @Zara"""
         last_success_time = getattr(self.coordinator, 'last_update_success_time', None)
-        last_attempt_time = getattr(self.coordinator, 'last_update', None) # Base class attribute
+        last_attempt_time = getattr(self.coordinator, 'last_update', None)
 
         return {
             "last_update_successful": getattr(self.coordinator, 'last_update_success', False),
@@ -370,11 +718,11 @@ class CoordinatorHealthSensor(BaseSolarSensor):
 
 
 class DataFilesStatusSensor(BaseSolarSensor):
-    """Sensor showing count of available data files by Zara"""
+    """Sensor showing count of available data files by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the data files status sensor by Zara"""
+        """Initialize by @Zara"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_data_files_status"
         self._attr_translation_key = "data_files_status"
@@ -383,7 +731,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
         self._data_manager = getattr(coordinator, 'data_manager', None)
 
     def _check_file_exists(self, file_path) -> bool:
-        """Check if a file exists by Zara"""
+        """Check if a file exists by @Zara"""
         try:
             from pathlib import Path
             return Path(file_path).exists()
@@ -392,7 +740,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
 
     @property
     def native_value(self) -> str:
-        """Return count of available vs required files by Zara"""
+        """Return count of files by @Zara"""
         if not self._data_manager:
             return "0/0"
 
@@ -428,7 +776,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return detailed file status by Zara"""
+        """Return detailed file status by @Zara"""
         if not self._data_manager:
             return {"status": "unavailable"}
 
@@ -454,164 +802,4 @@ class DataFilesStatusSensor(BaseSolarSensor):
             "total_available": sum(1 for exists in files_status.values() if exists),
             "total_required": len(files_status),
             "data_directory": str(self._data_manager.data_dir)
-        }
-
-
-# --- Cloudiness Trend Sensors (IMPROVEMENT 7) ---
-
-class CloudinessTrend1hSensor(BaseSolarSensor):
-    """Sensor showing cloudiness change in the last 1 hour by Zara"""
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the cloudiness trend 1h sensor by Zara"""
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_cloudiness_trend_1h"
-        self._attr_translation_key = "cloudiness_trend_1h"
-        self._attr_native_unit_of_measurement = "%"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:trending-up"
-        self._attr_name = "Cloudiness Trend 1h"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the 1-hour cloudiness trend by Zara"""
-        ml_predictor = self.coordinator.ml_predictor
-        if not ml_predictor:
-            return None
-
-        # Calculate trends on demand
-        try:
-            trends = ml_predictor._calculate_cloudiness_trends()
-            return round(trends.get('cloudiness_trend_1h', 0.0), 1)
-        except Exception as e:
-            _LOGGER.debug(f"Failed to get cloudiness_trend_1h: {e}")
-            return None
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide additional context by Zara"""
-        value = self.native_value
-        if value is None:
-            return {"status": "unavailable"}
-
-        # Interpret trend
-        if value > 10:
-            interpretation = "Increasingly cloudy"
-        elif value > 5:
-            interpretation = "Slightly increasing"
-        elif value < -10:
-            interpretation = "Increasingly sunny"
-        elif value < -5:
-            interpretation = "Slightly clearing"
-        else:
-            interpretation = "Stabil"
-
-        return {
-            "interpretation": interpretation,
-            "description": "Cloud change in last hour (positive = more clouds)"
-        }
-
-
-class CloudinessTrend3hSensor(BaseSolarSensor):
-    """Sensor showing cloudiness change in the last 3 hours by Zara"""
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the cloudiness trend 3h sensor by Zara"""
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_cloudiness_trend_3h"
-        self._attr_translation_key = "cloudiness_trend_3h"
-        self._attr_native_unit_of_measurement = "%"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:chart-line"
-        self._attr_name = "Cloudiness Trend 3h"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the 3-hour cloudiness trend by Zara"""
-        ml_predictor = self.coordinator.ml_predictor
-        if not ml_predictor:
-            return None
-
-        try:
-            trends = ml_predictor._calculate_cloudiness_trends()
-            return round(trends.get('cloudiness_trend_3h', 0.0), 1)
-        except Exception as e:
-            _LOGGER.debug(f"Failed to get cloudiness_trend_3h: {e}")
-            return None
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide additional context by Zara"""
-        value = self.native_value
-        if value is None:
-            return {"status": "unavailable"}
-
-        # Interpret trend
-        if value > 20:
-            interpretation = "Strongly increasing clouds"
-        elif value > 10:
-            interpretation = "Increasingly cloudy"
-        elif value < -20:
-            interpretation = "Strongly clearing"
-        elif value < -10:
-            interpretation = "Increasingly sunny"
-        else:
-            interpretation = "Relatively stable"
-
-        return {
-            "interpretation": interpretation,
-            "description": "Cloud change in last 3 hours"
-        }
-
-
-class CloudinessVolatilitySensor(BaseSolarSensor):
-    """Sensor showing cloudiness volatility standard deviation by Zara"""
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the cloudiness volatility sensor by Zara"""
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_cloudiness_volatility"
-        self._attr_translation_key = "cloudiness_volatility"
-        self._attr_native_unit_of_measurement = "%"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:waves"
-        self._attr_name = "Cloudiness Volatility"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the cloudiness volatility std dev by Zara"""
-        ml_predictor = self.coordinator.ml_predictor
-        if not ml_predictor:
-            return None
-
-        try:
-            trends = ml_predictor._calculate_cloudiness_trends()
-            return round(trends.get('cloudiness_volatility', 0.0), 1)
-        except Exception as e:
-            _LOGGER.debug(f"Failed to get cloudiness_volatility: {e}")
-            return None
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide additional context by Zara"""
-        value = self.native_value
-        if value is None:
-            return {"status": "unavailable"}
-
-        # Interpret volatility
-        if value > 30:
-            interpretation = "Very volatile"
-        elif value > 15:
-            interpretation = "Volatile"
-        elif value < 5:
-            interpretation = "Very stable"
-        else:
-            interpretation = "Stabil"
-
-        return {
-            "interpretation": interpretation,
-            "description": "Cloud volatility (std dev over 3h)"
         }

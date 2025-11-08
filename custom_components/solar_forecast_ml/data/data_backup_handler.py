@@ -33,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataBackupHandler(DataManagerIO):
-    """Handles backup creation and cleanup by Zara"""
+    """Handles backup creation and cleanup by @Zara"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
@@ -47,7 +47,7 @@ class DataBackupHandler(DataManagerIO):
         backup_name: Optional[str] = None,
         backup_type: str = "manual"
     ) -> bool:
-        """Create backup of all data files by Zara"""
+        """Create backup of all data files by @Zara"""
         try:
             if not backup_name:
                 timestamp = dt_util.now().strftime("%Y%m%d_%H%M%S")
@@ -76,7 +76,7 @@ class DataBackupHandler(DataManagerIO):
         backup_type: str = "auto",
         retention_days: Optional[int] = None
     ) -> int:
-        """Remove backups older than retention period by Zara"""
+        """Remove backups older than retention period by @Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type
             if not backup_dir.exists():
@@ -116,7 +116,7 @@ class DataBackupHandler(DataManagerIO):
         backup_type: str = "auto",
         max_backups: Optional[int] = None
     ) -> int:
-        """Remove oldest backups if count exceeds maximum by Zara"""
+        """Remove oldest backups if count exceeds maximum by @Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type
             if not backup_dir.exists():
@@ -158,7 +158,7 @@ class DataBackupHandler(DataManagerIO):
         self,
         backup_type: Optional[str] = None
     ) -> list:
-        """List all available backups by Zara"""
+        """List all available backups by @Zara"""
         try:
             backups = []
             
@@ -203,7 +203,7 @@ class DataBackupHandler(DataManagerIO):
         backup_name: str,
         backup_type: str = "manual"
     ) -> bool:
-        """Restore data from backup by Zara"""
+        """Restore data from backup by @Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
             
@@ -244,7 +244,7 @@ class DataBackupHandler(DataManagerIO):
         backup_name: str,
         backup_type: str = "manual"
     ) -> bool:
-        """Delete specific backup by Zara"""
+        """Delete specific backup by @Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
             
@@ -265,7 +265,7 @@ class DataBackupHandler(DataManagerIO):
         backup_name: str,
         backup_type: str = "manual"
     ) -> Optional[dict]:
-        """Get detailed info about specific backup by Zara"""
+        """Get detailed info about specific backup by @Zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
             

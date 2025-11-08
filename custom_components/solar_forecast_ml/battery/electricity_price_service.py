@@ -31,13 +31,7 @@ class ElectricityPriceService:
     """Fetch electricity prices from aWATTar API (free, no registration)"""
 
     def __init__(self, api_key: Optional[str] = None, country: str = "DE"):
-        """
-        Initialize the electricity price service
-
-        Args:
-            api_key: Not needed for aWATTar (kept for compatibility)
-            country: Country code (DE or AT)
-        """
+        """Initialize the electricity price service Args: api_key: Not needed for aWATTar (kept for compatibility) country: Country code (DE or AT)"""
         self.country = country.upper()
         self.api_url = AWATTAR_API_URL.get(self.country)
 
@@ -56,25 +50,7 @@ class ElectricityPriceService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> Optional[Dict[str, List[Dict]]]:
-        """
-        Fetch day-ahead prices from aWATTar API
-
-        Args:
-            start_date: Start date (defaults to today 00:00 UTC)
-            end_date: End date (defaults to tomorrow 23:59 UTC)
-
-        Returns:
-            Dictionary with price data or None on error
-            Format: {
-                'prices': [
-                    {'timestamp': datetime, 'price': float, 'hour': int},
-                    ...
-                ],
-                'currency': 'EUR',
-                'unit': 'Cent/kWh',
-                'country': 'DE'
-            }
-        """
+        """Fetch day-ahead prices from aWATTar API Args: start_date: Start date (defaults to today 00:00 UTC) end_date: End date (defaults to tomorrow 23:59 UTC) Returns: Dictionary with price data or None on error Format: { 'prices': [ {'timestamp': datetime, 'price': float, 'hour': int}, ... ], 'currency': 'EUR', 'unit': 'Cent/kWh', 'country': 'DE' }"""
         try:
             # Default to today and tomorrow
             if start_date is None:
@@ -128,15 +104,7 @@ class ElectricityPriceService:
             return None
 
     def _parse_awattar_response(self, data: Dict) -> List[Dict]:
-        """
-        Parse aWATTar JSON response
-
-        Args:
-            data: JSON response from aWATTar API
-
-        Returns:
-            List of price dictionaries with timestamp, price, and hour
-        """
+        """Parse aWATTar JSON response Args: data: JSON response from aWATTar API Returns: List of price dictionaries with timestamp, price, and hour"""
         prices = []
 
         try:
@@ -171,12 +139,7 @@ class ElectricityPriceService:
         return prices
 
     def get_current_price(self) -> Optional[float]:
-        """
-        Get current electricity price (Cent/kWh)
-
-        Returns:
-            Current price in Cent/kWh or None
-        """
+        """Get current electricity price (Cent/kWh) Returns: Current price in Cent/kWh or None"""
         if not self._price_cache or self.country not in self._price_cache:
             return None
 
@@ -194,15 +157,7 @@ class ElectricityPriceService:
         return None
 
     def get_price_at_hour(self, hour: int) -> Optional[float]:
-        """
-        Get price at specific hour today (in local time)
-
-        Args:
-            hour: Hour of day in local time (0-23)
-
-        Returns:
-            Price at specified hour or None
-        """
+        """Get price at specific hour today (in local time) Args: hour: Hour of day in local time (0-23) Returns: Price at specified hour or None"""
         if not self._price_cache or self.country not in self._price_cache:
             return None
 
@@ -227,12 +182,7 @@ class ElectricityPriceService:
         return None
 
     def get_average_price_today(self) -> Optional[float]:
-        """
-        Calculate average price for today (in local time)
-
-        Returns:
-            Average price in Cent/kWh or None
-        """
+        """Calculate average price for today (in local time) Returns: Average price in Cent/kWh or None"""
         if not self._price_cache or self.country not in self._price_cache:
             return None
 
@@ -256,12 +206,7 @@ class ElectricityPriceService:
         return round(sum(today_prices) / len(today_prices), 2)
 
     def get_average_price_week(self) -> Optional[float]:
-        """
-        Calculate average price for this week
-
-        Returns:
-            Average price in Cent/kWh or None
-        """
+        """Calculate average price for this week Returns: Average price in Cent/kWh or None"""
         if not self._price_cache or self.country not in self._price_cache:
             return None
 
@@ -282,15 +227,7 @@ class ElectricityPriceService:
         return round(sum(week_prices) / len(week_prices), 2)
 
     def get_cheapest_hours(self, count: int = 3) -> List[Tuple[int, float]]:
-        """
-        Get cheapest hours today (in local time)
-
-        Args:
-            count: Number of cheapest hours to return
-
-        Returns:
-            List of (hour, price) tuples sorted by price (hour in local time)
-        """
+        """Get cheapest hours today (in local time) Args: count: Number of cheapest hours to return Returns: List of (hour, price) tuples sorted by price (hour in local time)"""
         if not self._price_cache or self.country not in self._price_cache:
             return []
 
@@ -320,15 +257,7 @@ class ElectricityPriceService:
         return today_prices[:count]
 
     def get_most_expensive_hours(self, count: int = 3) -> List[Tuple[int, float]]:
-        """
-        Get most expensive hours today (in local time)
-
-        Args:
-            count: Number of most expensive hours to return
-
-        Returns:
-            List of (hour, price) tuples sorted by price descending (hour in local time)
-        """
+        """Get most expensive hours today (in local time) Args: count: Number of most expensive hours to return Returns: List of (hour, price) tuples sorted by price descending (hour in local time)"""
         if not self._price_cache or self.country not in self._price_cache:
             return []
 
@@ -358,15 +287,7 @@ class ElectricityPriceService:
         return today_prices[:count]
 
     def should_charge_now(self, threshold_percentile: float = 25.0) -> bool:
-        """
-        Determine if current price is good for charging
-
-        Args:
-            threshold_percentile: Consider prices below this percentile as good (default 25%)
-
-        Returns:
-            True if current price is below threshold
-        """
+        """Determine if current price is good for charging Args: threshold_percentile: Consider prices below this percentile as good (default 25%) Returns: True if current price is below threshold"""
         current_price = self.get_current_price()
         avg_price = self.get_average_price_today()
 
@@ -379,10 +300,5 @@ class ElectricityPriceService:
         return current_price <= threshold
 
     def get_last_update(self) -> Optional[datetime]:
-        """
-        Get timestamp of last price update
-
-        Returns:
-            Datetime of last update or None
-        """
+        """Get timestamp of last price update Returns: Datetime of last update or None"""
         return self._last_update

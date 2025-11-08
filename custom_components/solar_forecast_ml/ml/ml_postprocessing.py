@@ -26,14 +26,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MLPostprocessor:
-    """Postprocesses ML predictions with validation and correction by Zara"""
+    """Postprocesses ML predictions with validation and correction by @Zara"""
     
     def __init__(self, peak_power_kw: float = 0.0):
-        """Initialize postprocessor by Zara"""
+        """Initialize postprocessor by @Zara"""
         self.peak_power_kw = peak_power_kw
     
     def clip_to_physical_limits(self, prediction: float) -> float:
-        """Clip prediction to physical system limits by Zara"""
+        """Clip prediction to physical system limits by @Zara"""
         # Ensure non-negative
         prediction = max(0.0, prediction)
         
@@ -48,7 +48,7 @@ class MLPostprocessor:
         prediction: float,
         correction_factor: float
     ) -> float:
-        """Apply correction factor to prediction by Zara"""
+        """Apply correction factor to prediction by @Zara"""
         # Validate correction factor range
         correction_factor = max(CORRECTION_FACTOR_MIN, min(CORRECTION_FACTOR_MAX, correction_factor))
         
@@ -61,7 +61,7 @@ class MLPostprocessor:
         predictions: List[float],
         window_size: int = 3
     ) -> List[float]:
-        """Apply moving average smoothing to predictions by Zara"""
+        """Apply moving average smoothing to predictions by @Zara"""
         if not predictions or window_size < 2:
             return predictions
         
@@ -84,7 +84,7 @@ class MLPostprocessor:
         hour: int,
         historical_avg: Optional[float] = None
     ) -> Dict[str, Any]:
-        """Validate prediction and return diagnostics by Zara"""
+        """Validate prediction and return diagnostics by @Zara"""
         issues = []
         valid = True
         
@@ -121,7 +121,7 @@ class MLPostprocessor:
         prediction: float,
         hour: int
     ) -> float:
-        """Adjust prediction based on time of day by Zara"""
+        """Adjust prediction based on time of day by @Zara"""
         # Zero out night hours
         if hour < 6 or hour > 20:
             return 0.0

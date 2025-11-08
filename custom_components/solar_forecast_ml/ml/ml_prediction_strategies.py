@@ -49,7 +49,7 @@ class PredictionStrategy(ABC):
 
 
 class MLModelStrategy(PredictionStrategy):
-    """ML Model-based prediction strategy using learned weights by Zara"""
+    """ML Model-based prediction strategy using learned weights by @Zara"""
     
     def __init__(self, weights: LearnedWeights, current_accuracy: float, peak_power_kw: float = 0.0):
         self.weights = weights
@@ -112,7 +112,7 @@ class MLModelStrategy(PredictionStrategy):
 
 
 class ProfileStrategy(PredictionStrategy):
-    """Profile-based prediction strategy using historical hourly averages by Zara"""
+    """Profile-based prediction strategy using historical hourly averages by @Zara"""
 
     def __init__(self, profile: HourlyProfile, peak_power_kw: float = 0.0):
         self.profile = profile
@@ -159,10 +159,10 @@ class ProfileStrategy(PredictionStrategy):
 
 
 class FallbackStrategy(PredictionStrategy):
-    """WARNING FIX 5 Simple fallback strategy using solar capacity by Zara"""
+    """WARNING FIX 5 Simple fallback strategy using solar capacity by @Zara"""
 
     def __init__(self, peak_power_kw: float = 0.0):
-        """Initialize fallback strategy with system capacity by Zara"""
+        """Initialize fallback strategy with system capacity by @Zara"""
         from ..const import HOURLY_PRODUCTION_SAFETY_MARGIN, DEFAULT_MAX_HOURLY_KWH
         if peak_power_kw > 0:
             # Use configured capacity with safety margin
@@ -228,7 +228,7 @@ class PredictionOrchestrator:
         accuracy: float = 0.0,
         peak_power_kw: float = 0.0  # Peak power in kW
     ) -> None:
-        """Update available prediction strategies with new data by Zara"""
+        """Update available prediction strategies with new data by @Zara"""
         self.strategies.clear()
         self.peak_power_kw = peak_power_kw  # Store for emergency fallback
 

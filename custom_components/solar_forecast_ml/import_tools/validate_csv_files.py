@@ -18,7 +18,7 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 #!/usr/bin/env python3
-"""CSV Validation Tool for Solar Forecast ML Historical Import by Zara"""
+"""CSV Validation Tool for Solar Forecast ML Historical Import by @Zara"""
 
 import sys
 import csv
@@ -36,7 +36,7 @@ RESET = '\033[0m'
 
 
 def check_file_exists(filepath: Path) -> Tuple[bool, str]:
-    """Check if a file exists and is readable by Zara"""
+    """Check if a file exists and is readable by @Zara"""
     if not filepath.exists():
         return False, f"File not found: {filepath.name}"
     
@@ -47,7 +47,7 @@ def check_file_exists(filepath: Path) -> Tuple[bool, str]:
 
 
 def validate_csv_structure(filepath: Path) -> Tuple[bool, str, int, int]:
-    """Validate CSV structure and count validinvalid entries by Zara"""
+    """Validate CSV structure and count validinvalid entries by @Zara"""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
@@ -92,7 +92,7 @@ def validate_csv_structure(filepath: Path) -> Tuple[bool, str, int, int]:
 
 
 def analyze_date_range(filepath: Path) -> Tuple[str, str, int]:
-    """Analyze date range in CSV file by Zara"""
+    """Analyze date range in CSV file by @Zara"""
     try:
         timestamps = []
         
@@ -123,7 +123,7 @@ def analyze_date_range(filepath: Path) -> Tuple[str, str, int]:
 
 
 def main():
-    """Main validation routine by Zara"""
+    """Main validation routine by @Zara"""
     print(f"\n{BOLD}{BLUE}{'=' * 60}{RESET}")
     print(f"{BOLD}{BLUE}CSV File Validation for Solar Forecast ML Import{RESET}")
     print(f"{BOLD}{BLUE}{'=' * 60}{RESET}\n")

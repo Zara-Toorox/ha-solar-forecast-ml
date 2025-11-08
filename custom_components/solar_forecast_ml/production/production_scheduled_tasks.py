@@ -37,7 +37,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ScheduledTasksManager:
-    """Manages scheduled tasks for the Solar Forecast ML integration by Zara"""
+    """Manages scheduled tasks for the Solar Forecast ML integration by @Zara"""
 
     def __init__(
         self,
@@ -46,7 +46,7 @@ class ScheduledTasksManager:
         solar_yield_today_entity_id: Optional[str],
         data_manager: DataManager
     ):
-        """Initialize the ScheduledTasksManager by Zara"""
+        """Initialize the ScheduledTasksManager by @Zara"""
         self.hass = hass
         self.coordinator = coordinator
         self.solar_yield_today_entity_id = solar_yield_today_entity_id
@@ -56,7 +56,7 @@ class ScheduledTasksManager:
         _LOGGER.debug("ScheduledTasksManager initialized.")
 
     def setup_listeners(self) -> None:
-        """Register the time-based listeners with Home Assistant by Zara"""
+        """Register the time-based listeners with Home Assistant by @Zara"""
         self.cancel_listeners()
 
         # Calculate timezone offset (async_track_time_change uses UTC!)
@@ -75,27 +75,9 @@ class ScheduledTasksManager:
         self._listeners.append(remove_morning)
         _LOGGER.info(f"Scheduled morning forecast update for {DAILY_UPDATE_HOUR:02d}:00:00 LOCAL")
 
-        # Evening verification at 18:00 LOCAL
-        remove_evening = async_track_time_change(
-            self.hass,
-            self.scheduled_evening_verification,
-            hour=DAILY_VERIFICATION_HOUR,
-            minute=0,
-            second=10
-        )
-        self._listeners.append(remove_evening)
-        _LOGGER.info(f"Scheduled evening verification for {DAILY_VERIFICATION_HOUR:02d}:00:10 LOCAL")
-
-        # Night cleanup at 2 AM LOCAL
-        remove_cleanup = async_track_time_change(
-            self.hass,
-            self.scheduled_night_cleanup,
-            hour=2,
-            minute=0,
-            second=15
-        )
-        self._listeners.append(remove_cleanup)
-        _LOGGER.info(f"Scheduled night cleanup for 02:00:15 LOCAL")
+        # Evening verification at 18:00 LOCAL - DEPRECATED (optional, can be removed)
+        # Removed in consolidation - finalize_day at 23:30 handles everything
+        # remove_evening = async_track_time_change(...)
 
         # Reset expected daily production at midnight LOCAL
         remove_reset_expected = async_track_time_change(
@@ -108,23 +90,25 @@ class ScheduledTasksManager:
         self._listeners.append(remove_reset_expected)
         _LOGGER.info(f"Scheduled expected daily production reset for 00:00:00 LOCAL")
 
-        # Set expected daily production at 6 AM LOCAL
-        remove_set_expected = async_track_time_change(
-            self.hass,
-            self.set_expected_production,
-            hour=6,
-            minute=0,
-            second=10
-        )
-        self._listeners.append(remove_set_expected)
-        _LOGGER.info(f"Scheduled expected daily production set for 06:00:10 LOCAL")
+        # 06:00:00 is already registered for morning_update above
+        # set_expected_production is now integrated into scheduled_morning_update
+        # No separate listener needed
 
         # Forecast retry tasks at 06:15, 06:30, 06:45 LOCAL
         retry_times = [15, 30, 45]  # Minutes after DAILY_UPDATE_HOUR
         for attempt, retry_minute in enumerate(retry_times, start=1):
+            # Create a wrapper callback that properly awaits the async method
+            @callback
+            def make_retry_callback(retry_attempt: int):
+                """Factory function to create retry callback with correct attempt number"""
+                async def retry_callback(now: datetime) -> None:
+                    """Wrapper that awaits the async retry method"""
+                    await self.retry_forecast_setting(now, retry_attempt)
+                return retry_callback
+
             remove_retry = async_track_time_change(
                 self.hass,
-                lambda now, attempt=attempt: self.retry_forecast_setting(now, attempt=attempt),
+                make_retry_callback(attempt),
                 hour=DAILY_UPDATE_HOUR,
                 minute=retry_minute,
                 second=10
@@ -134,44 +118,20 @@ class ScheduledTasksManager:
                 f"Scheduled forecast retry #{attempt} for {DAILY_UPDATE_HOUR:02d}:{retry_minute:02d}:10 LOCAL"
             )
 
-        # Daily forecasts system at 23:30-23:32 LOCAL
-
-        # 23:30 LOCAL - Finalize current day
-        remove_finalize = async_track_time_change(
+        # 23:30 LOCAL - END_OF_DAY_WORKFLOW (Consolidated: Finalize + History + Stats + Cleanup)
+        remove_end_of_day = async_track_time_change(
             self.hass,
-            self.finalize_day_task,
+            self.end_of_day_workflow,
             hour=23,
             minute=30,
             second=0
         )
-        self._listeners.append(remove_finalize)
-        _LOGGER.info(f"Scheduled day finalization for 23:30:00 LOCAL")
-
-        # 23:31 LOCAL - Move current day to history
-        remove_history = async_track_time_change(
-            self.hass,
-            self.move_to_history_task,
-            hour=23,
-            minute=31,
-            second=0
-        )
-        self._listeners.append(remove_history)
-        _LOGGER.info(f"Scheduled history update for 23:31:00 LOCAL")
-
-        # 23:32 LOCAL - Calculate statistics
-        remove_stats = async_track_time_change(
-            self.hass,
-            self.calculate_stats_task,
-            hour=23,
-            minute=32,
-            second=0
-        )
-        self._listeners.append(remove_stats)
-        _LOGGER.info(f"Scheduled statistics calculation for 23:32:00 LOCAL")
+        self._listeners.append(remove_end_of_day)
+        _LOGGER.info(f"Scheduled END_OF_DAY_WORKFLOW for 23:30:00 LOCAL (Finalize+History+Stats+Cleanup)")
 
 
     def cancel_listeners(self) -> None:
-        """Remove any active time-based listeners by Zara"""
+        """Remove any active time-based listeners by @Zara"""
         for remove_listener in self._listeners:
             try:
                 remove_listener()
@@ -182,12 +142,11 @@ class ScheduledTasksManager:
 
 
     async def calculate_yesterday_deviation_on_startup(self) -> None:
-        """Calculates the forecast deviation from the previous day upon Home Assistant s... by Zara"""
+        """Calculates the forecast deviation from the previous day upon Home Assistant s... by @Zara"""
         _LOGGER.info("Calculating yesterday's forecast deviation at startup...")
         deviation: float = 0.0
 
         try:
-            # FIX: Use get_predictions() instead of get_prediction_history()
             # get_predictions() returns List[Dict] directly, not Dict with 'predictions' key
             predictions: List[Dict[str, Any]] = await self.data_manager.get_predictions()
 
@@ -209,11 +168,11 @@ class ScheduledTasksManager:
                     pred_date_local = dt_util.as_local(timestamp_utc).date()
 
                     if pred_date_local == yesterday_local_date:
-                         if pred.get('predicted_value') is not None and pred.get('actual_value') is not None:
+                         if pred.get('forecast_kwh') is not None and pred.get('actual_kwh') is not None:
                               last_yesterday_record = pred
                               break
                          else:
-                              _LOGGER.debug(f"Record found for {yesterday_local_date} but missing predicted/actual value.")
+                              _LOGGER.debug(f"Record found for {yesterday_local_date} but missing forecast_kwh/actual_kwh value.")
                               break
 
                     elif pred_date_local < yesterday_local_date:
@@ -228,10 +187,10 @@ class ScheduledTasksManager:
             actual_kwh: Optional[float] = None
             if last_yesterday_record:
                 try:
-                    predicted_kwh = float(last_yesterday_record.get('predicted_value', 0.0))
-                    actual_kwh = float(last_yesterday_record.get('actual_value', 0.0))
+                    predicted_kwh = float(last_yesterday_record.get('forecast_kwh', 0.0))
+                    actual_kwh = float(last_yesterday_record.get('actual_kwh', 0.0))
                 except (ValueError, TypeError):
-                    _LOGGER.warning("Last yesterday record has invalid predicted/actual values.")
+                    _LOGGER.warning("Last yesterday record has invalid forecast_kwh/actual_kwh values.")
                     predicted_kwh = None
                     actual_kwh = None
 
@@ -270,7 +229,7 @@ class ScheduledTasksManager:
 
     @callback
     async def scheduled_morning_update(self, now: datetime) -> None:
-        """Callback for the scheduled morning task Triggers a full forecast update by Zara"""
+        """Callback for the scheduled morning task Triggers a full forecast update by @Zara"""
         _LOGGER.info(f"Triggering daily morning forecast update (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
 
         try:
@@ -304,158 +263,21 @@ class ScheduledTasksManager:
             _LOGGER.error(f"Failed to complete morning forecast update: {e}", exc_info=True)
 
 
-    @callback
-    async def scheduled_evening_verification(self, now: datetime) -> None:
-        """Callback for the scheduled evening task Verifies todays forecast by Zara"""
-        _LOGGER.info(f"Starting daily evening verification (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
-
-        if not self.solar_yield_today_entity_id:
-            _LOGGER.warning("Cannot perform evening verification: Solar Yield Today sensor not configured.")
-            return
-
-        actual_kwh: Optional[float] = None
-        try:
-            state = self.hass.states.get(self.solar_yield_today_entity_id)
-
-            if not state or state.state in ['unavailable', 'unknown', 'none', None, '']:
-                _LOGGER.error(f"Evening verification failed: Yield sensor '{self.solar_yield_today_entity_id}' is unavailable or state is invalid ('{state.state if state else 'None'}').")
-                return
-
-            try:
-                cleaned_state = str(state.state).split(" ")[0].replace(",", ".")
-                actual_kwh = float(cleaned_state)
-                if actual_kwh < 0:
-                     _LOGGER.warning(f"Actual yield from '{self.solar_yield_today_entity_id}' is negative ({actual_kwh} kWh). Treating as 0 kWh.")
-                     actual_kwh = 0.0
-
-            except (ValueError, TypeError):
-                _LOGGER.error(f"Evening verification failed: Invalid non-numeric value from yield sensor '{self.solar_yield_today_entity_id}': '{state.state}'.")
-                return
-
-        except Exception as e:
-             _LOGGER.error(f"Error accessing yield sensor '{self.solar_yield_today_entity_id}': {e}", exc_info=True)
-             return
-
-        predicted_kwh: Optional[float] = None
-        if self.coordinator.data:
-            predicted_kwh = self.coordinator.data.get("forecast_today")
-
-        if predicted_kwh is None:
-            _LOGGER.warning("Evening verification skipped: No 'forecast_today' value available in coordinator data.")
-            return
-
-        try:
-            predicted_kwh = float(predicted_kwh)
-            if predicted_kwh < 0: predicted_kwh = 0.0
-        except (ValueError, TypeError):
-             _LOGGER.error(f"Invalid predicted_kwh value from coordinator: {predicted_kwh}. Cannot verify.")
-             return
-
-        deviation_kwh: float = 0.0
-        accuracy_pct: float = 0.0
-
-        if actual_kwh is not None:
-            deviation_kwh = abs(predicted_kwh - actual_kwh)
-
-            if actual_kwh > 0.1:
-                error_fraction = deviation_kwh / actual_kwh
-                accuracy = max(0.0, 1.0 - error_fraction)
-                accuracy_pct = accuracy * 100.0
-            elif predicted_kwh < 0.1 and actual_kwh < 0.1:
-                 accuracy = 1.0
-                 accuracy_pct = 100.0
-            else:
-                 accuracy = 0.0
-                 accuracy_pct = 0.0
-
-            _LOGGER.info(
-                f"Evening Verification Results:\n"
-                f"  Predicted Today: {predicted_kwh:.2f} kWh\n"
-                f"  Actual Today:    {actual_kwh:.2f} kWh\n"
-                f"  Deviation:       {deviation_kwh:.2f} kWh\n"
-                f"  Accuracy:        {accuracy_pct:.1f}%"
-            )
-
-            try:
-                await self.data_manager.update_today_predictions_actual(actual_kwh, accuracy=accuracy)
-                _LOGGER.debug("Updated today's prediction records in history with actual value and accuracy.")
-            except Exception as e:
-                _LOGGER.warning(f"Could not update today's prediction records in history: {e}")
-
-            if predicted_kwh > 0.1 and actual_kwh >= 0.0:
-                try:
-                    ideal_factor = actual_kwh / predicted_kwh
-                    new_correction_factor = max(CORRECTION_FACTOR_MIN, min(CORRECTION_FACTOR_MAX, ideal_factor))
-
-                    _LOGGER.debug(f"Calculated new fallback correction factor based on today's ratio: "
-                                  f"{actual_kwh:.2f} / {predicted_kwh:.2f} = {ideal_factor:.3f} -> Clamped: {new_correction_factor:.3f}")
-
-                    current_weights = await self.data_manager.get_learned_weights()
-                    if current_weights is None:
-                         _LOGGER.info("No learned weights file found. Creating default weights to save correction factor.")
-                         current_weights = create_default_learned_weights()
-
-                    smoothed_factor = new_correction_factor
-
-                    if abs(smoothed_factor - current_weights.correction_factor) > 0.01:
-                        current_weights.correction_factor = smoothed_factor
-                        await self.data_manager.save_learned_weights(current_weights)
-                        _LOGGER.info(f"Updated and saved fallback correction factor: {smoothed_factor:.3f}")
-                        self.coordinator.learned_correction_factor = smoothed_factor
-                    else:
-                         _LOGGER.debug("Correction factor change is minimal, not saving.")
-
-
-                except ZeroDivisionError:
-                     _LOGGER.warning("Predicted value was near zero, cannot update correction factor based on ratio.")
-                except Exception as e:
-                    _LOGGER.error(f"Failed to update fallback correction factor: {e}", exc_info=True)
-
-            self.coordinator.last_day_error_kwh = round(deviation_kwh, 2)
-            self.coordinator.yesterday_accuracy = round(accuracy_pct, 1)
-            self.coordinator.async_update_listeners()
-
-        else:
-             _LOGGER.error("Evening verification failed: Actual kWh value was None unexpectedly.")
-
+    # REMOVED: scheduled_evening_verification() - Deprecated and replaced by end_of_day_workflow
+    # The evening verification functionality is now handled in:
+    # - _finalize_day_internal() at 23:30 (reads today's yield)
+    # - _update_yesterday_deviation_internal() at 23:30 (updates deviation after move_to_history)
+    # No longer needed as standalone function.
 
     @callback
     async def scheduled_night_cleanup(self, now: datetime) -> None:
-        """Callback for the scheduled night cleanup task 200 AM by Zara"""
-        current_time = now if now is not None else dt_util.now()
-        _LOGGER.info(f"Starting night cleanup (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')})...")
-
-        try:
-            # Step 1: Remove duplicate samples
-            _LOGGER.info("Step 1/2: Removing duplicate samples...")
-            duplicate_result = await self.data_manager.cleanup_duplicate_samples()
-            _LOGGER.info(
-                f"Duplicate cleanup completed: {duplicate_result['removed']} duplicates removed, "
-                f"{duplicate_result['remaining']} samples remaining."
-            )
-            
-            # Step 2: Remove zero-production samples
-            _LOGGER.info("Step 2/2: Removing zero-production samples...")
-            zero_result = await self.data_manager.cleanup_zero_production_samples()
-            _LOGGER.info(
-                f"Zero-production cleanup completed: {zero_result['removed']} samples removed, "
-                f"{zero_result['remaining']} samples remaining."
-            )
-            
-            # Summary
-            total_removed = duplicate_result['removed'] + zero_result['removed']
-            _LOGGER.info(
-                f"Night cleanup finished: {total_removed} total samples removed "
-                f"({duplicate_result['removed']} duplicates + {zero_result['removed']} zero-production), "
-                f"{zero_result['remaining']} samples remaining."
-            )
-
-        except Exception as e:
-            _LOGGER.error(f"Failed to execute night cleanup: {e}", exc_info=True)
+        """DEPRECATED: Callback for the scheduled night cleanup task - now part of end_of_day_workflow"""
+        _LOGGER.warning("scheduled_night_cleanup called directly (deprecated, now part of end_of_day_workflow)")
+        await self._night_cleanup_internal(now)
 
     @callback
     async def reset_expected_production(self, now: datetime) -> None:
-        """Reset expected daily production at midnight by Zara"""
+        """Reset expected daily production at midnight by @Zara"""
         _LOGGER.info(f"Resetting expected daily production (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')})...")
         try:
             await self.coordinator.reset_expected_daily_production()
@@ -465,7 +287,7 @@ class ScheduledTasksManager:
 
     @callback
     async def set_expected_production(self, now: datetime) -> None:
-        """Set expected daily production at 6 AM by Zara"""
+        """Set expected daily production at 6 AM by @Zara"""
         _LOGGER.info(f"=== Setting expected daily production (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')}) ===")
         try:
             # Check coordinator availability
@@ -480,6 +302,9 @@ class ScheduledTasksManager:
             
             # Call coordinator method
             await self.coordinator.set_expected_daily_production()
+
+            # Wait for async file write to complete
+            await asyncio.sleep(0.1)
 
             # Validate that forecast was successfully saved
             saved_forecast = await self.data_manager.get_current_day_forecast()
@@ -499,16 +324,17 @@ class ScheduledTasksManager:
 
     @callback
     async def retry_forecast_setting(self, now: datetime, attempt: int) -> None:
-        """Retry mechanism for setting forecast if 0600 failed by Zara"""
+        """Retry mechanism for setting forecast if 0600 failed by @Zara"""
         _LOGGER.info(f"=== Forecast Retry Attempt #{attempt} (Local Time: {now.strftime('%Y-%m-%d %H:%M:%S')}) ===")
         
         try:
             # Check if forecast is already locked
             current_forecast = await self.data_manager.get_current_day_forecast()
-            
-            if current_forecast and current_forecast.get("locked"):
+
+            forecast_day = current_forecast.get("forecast_day", {}) if current_forecast else {}
+            if forecast_day.get("locked"):
                 _LOGGER.info(
-                    f"Forecast already locked with {current_forecast.get('prediction_kwh')} kWh - "
+                    f"Forecast already locked with {forecast_day.get('prediction_kwh')} kWh - "
                     f"retry not needed"
                 )
                 return
@@ -536,14 +362,50 @@ class ScheduledTasksManager:
             _LOGGER.error(f"Error during retry attempt #{attempt}: {e}", exc_info=True)
 
     # ==================================================================================
-    # NEW: Daily Forecasts System Tasks (23:30-23:32)
     # ==================================================================================
 
     @callback
-    async def finalize_day_task(self, now: datetime) -> None:
-        """Finalize current day with actual values at 2330 by Zara"""
+    async def end_of_day_workflow(self, now: datetime) -> None:
+        """Consolidated End-of-Day Workflow at 23:30 - All tasks in sequence by @Zara"""
         current_time = now if now is not None else dt_util.now()
-        _LOGGER.info(f"Finalizing day (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')})...")
+        _LOGGER.info(f"=== END_OF_DAY_WORKFLOW Started (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}) ===")
+
+        workflow_start = asyncio.get_event_loop().time()
+
+        try:
+            # STEP 1: Finalize Day (read solar_yield_today BEFORE midnight reset!)
+            _LOGGER.info("Step 1/4: Finalizing day...")
+            await self._finalize_day_internal(now)
+            await asyncio.sleep(1)  # 1s buffer
+
+            # STEP 2: Move to History
+            _LOGGER.info("Step 2/4: Moving to history...")
+            await self._move_to_history_internal(now)
+            await asyncio.sleep(1)  # 1s buffer
+
+            # STEP 2.5: Update Yesterday Deviation (after history is moved)
+            _LOGGER.info("Step 2.5/4: Updating yesterday deviation...")
+            await self._update_yesterday_deviation_internal(now)
+            await asyncio.sleep(1)  # 1s buffer
+
+            # STEP 3: Calculate Statistics
+            _LOGGER.info("Step 3/4: Calculating statistics...")
+            await self._calculate_stats_internal(now)
+            await asyncio.sleep(1)  # 1s buffer
+
+            # STEP 4: Night Cleanup
+            _LOGGER.info("Step 4/4: Running night cleanup...")
+            await self._night_cleanup_internal(now)
+
+            workflow_duration = asyncio.get_event_loop().time() - workflow_start
+            _LOGGER.info(f"=== END_OF_DAY_WORKFLOW Completed (Duration: {workflow_duration:.1f}s) ===")
+
+        except Exception as e:
+            _LOGGER.error(f"END_OF_DAY_WORKFLOW failed: {e}", exc_info=True)
+
+    async def _finalize_day_internal(self, now: datetime) -> None:
+        """Internal: Finalize current day with actual values by @Zara"""
+        current_time = now if now is not None else dt_util.now()
 
         try:
             # Get final yield value
@@ -560,7 +422,7 @@ class ScheduledTasksManager:
                     _LOGGER.warning(f"Yield sensor unavailable: {self.solar_yield_today_entity_id}")
             else:
                 _LOGGER.warning("No solar_yield_today sensor configured")
-            
+
             # Get final consumption value (optional)
             actual_consumption = None
             if self.coordinator.total_consumption_today:
@@ -571,13 +433,13 @@ class ScheduledTasksManager:
                         _LOGGER.debug(f"Final consumption: {actual_consumption:.2f} kWh")
                     except (ValueError, TypeError) as e:
                         _LOGGER.warning(f"Invalid consumption state: {consumption_state.state} - {e}")
-            
+
             # Get production time in seconds
             production_seconds = 0
             if hasattr(self.coordinator, 'production_time_calculator') and self.coordinator.production_time_calculator:
                 production_seconds = int(self.coordinator.production_time_calculator.get_production_hours() * 3600)
                 _LOGGER.debug(f"Production time: {production_seconds}s")
-            
+
             # Calculate and save actual best hour
             try:
                 await self._save_actual_best_hour()
@@ -593,50 +455,98 @@ class ScheduledTasksManager:
 
             if success:
                 _LOGGER.info(
-                    f"Day finalized successfully: Yield={actual_yield:.2f} kWh, "
+                    f"✓ Day finalized: Yield={actual_yield:.2f} kWh, "
                     f"Consumption={f'{actual_consumption:.2f}' if actual_consumption else 'N/A'} kWh"
                 )
             else:
                 _LOGGER.error("Failed to finalize day")
-                
+
         except Exception as e:
             _LOGGER.error(f"Failed to finalize day: {e}", exc_info=True)
 
-    @callback
-    async def move_to_history_task(self, now: datetime) -> None:
-        """Move current day to history at 2331 by Zara"""
-        current_time = now if now is not None else dt_util.now()
-        _LOGGER.info(f"Moving day to history (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')})...")
-
+    async def _move_to_history_internal(self, now: datetime) -> None:
+        """Internal: Move current day to history by @Zara"""
         try:
             success = await self.data_manager.move_to_history()
 
             if success:
-                _LOGGER.info("Current day moved to history successfully")
+                _LOGGER.info("✓ Moved to history")
             else:
                 _LOGGER.error("Failed to move day to history")
 
         except Exception as e:
             _LOGGER.error(f"Failed to move to history: {e}", exc_info=True)
 
-    @callback
-    async def calculate_stats_task(self, now: datetime) -> None:
-        """Calculate statistics at 2332 by Zara"""
-        current_time = now if now is not None else dt_util.now()
-        _LOGGER.info(f"Calculating statistics (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')})...")
+    async def _update_yesterday_deviation_internal(self, now: datetime) -> None:
+        """Internal: Update yesterday deviation after moving to history by @Zara"""
+        try:
+            # Get history (most recent entry should be today which just moved)
+            history = await self.data_manager.get_history(days=1)
+
+            if not history or len(history) == 0:
+                _LOGGER.warning("No history available to calculate yesterday deviation")
+                self.coordinator.last_day_error_kwh = 0.0
+                self.coordinator.yesterday_accuracy = 0.0
+                return
+
+            # Most recent entry is what we just finalized (today moved to history)
+            today_entry = history[0]
+
+            forecast_kwh = today_entry.get('forecast_kwh', 0.0)
+            actual_kwh = today_entry.get('actual_kwh', 0.0)
+
+            if forecast_kwh is None or actual_kwh is None:
+                _LOGGER.warning("History entry missing forecast_kwh or actual_kwh")
+                self.coordinator.last_day_error_kwh = 0.0
+                self.coordinator.yesterday_accuracy = 0.0
+                return
+
+            # Calculate deviation and accuracy
+            deviation = abs(forecast_kwh - actual_kwh)
+
+            accuracy = 0.0
+            if actual_kwh > 0.1:
+                error_fraction = deviation / actual_kwh
+                accuracy = max(0.0, 1.0 - error_fraction)
+            elif forecast_kwh < 0.1 and actual_kwh < 0.1:
+                accuracy = 1.0
+
+            accuracy_pct = accuracy * 100.0
+
+            # Update coordinator
+            self.coordinator.last_day_error_kwh = round(deviation, 2)
+            self.coordinator.yesterday_accuracy = round(accuracy_pct, 1)
+            self.coordinator.async_update_listeners()
+
+            _LOGGER.info(
+                f"✓ Yesterday Deviation updated:\n"
+                f"  Date:       {today_entry.get('date', 'unknown')}\n"
+                f"  Forecast:   {forecast_kwh:.2f} kWh\n"
+                f"  Actual:     {actual_kwh:.2f} kWh\n"
+                f"  Deviation:  {deviation:.2f} kWh\n"
+                f"  Accuracy:   {accuracy_pct:.1f}%"
+            )
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to update yesterday deviation: {e}", exc_info=True)
+            self.coordinator.last_day_error_kwh = 0.0
+            self.coordinator.yesterday_accuracy = 0.0
+
+    async def _calculate_stats_internal(self, now: datetime) -> None:
+        """Internal: Calculate statistics by @Zara"""
 
         try:
             success = await self.data_manager.calculate_statistics()
-            
+
             if success:
-                _LOGGER.info("Statistics calculated successfully")
-                
+                _LOGGER.info("✓ Statistics calculated")
+
                 # Log some key stats if available
                 try:
                     data = await self.data_manager.load_daily_forecasts()
                     stats_7d = data.get("statistics", {}).get("last_7_days", {})
                     if stats_7d:
-                        _LOGGER.info(
+                        _LOGGER.debug(
                             f"Last 7 days: Avg yield={stats_7d.get('avg_yield', 0):.2f} kWh, "
                             f"Avg accuracy={stats_7d.get('avg_accuracy', 0):.1f}%"
                         )
@@ -644,12 +554,61 @@ class ScheduledTasksManager:
                     pass  # Non-critical
             else:
                 _LOGGER.error("Failed to calculate statistics")
-                
+
         except Exception as e:
             _LOGGER.error(f"Failed to calculate statistics: {e}", exc_info=True)
 
+    async def _night_cleanup_internal(self, now: datetime) -> None:
+        """Internal: Night cleanup - remove duplicates and zero-production samples by @Zara"""
+        try:
+            # Step 1: Remove duplicate samples
+            duplicate_result = await self.data_manager.cleanup_duplicate_samples()
+            _LOGGER.debug(
+                f"Duplicate cleanup: {duplicate_result['removed']} removed, "
+                f"{duplicate_result['remaining']} remaining"
+            )
+
+            # Step 2: Remove zero-production samples
+            zero_result = await self.data_manager.cleanup_zero_production_samples()
+            _LOGGER.debug(
+                f"Zero-production cleanup: {zero_result['removed']} removed, "
+                f"{zero_result['remaining']} remaining"
+            )
+
+            # Summary
+            total_removed = duplicate_result['removed'] + zero_result['removed']
+            _LOGGER.info(
+                f"✓ Night cleanup: {total_removed} samples removed, "
+                f"{zero_result['remaining']} remaining"
+            )
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to execute night cleanup: {e}", exc_info=True)
+
+    # ==================================================================================
+    # DEPRECATED: Old separate task functions (kept for service calls compatibility)
+    # ==================================================================================
+
+    @callback
+    async def finalize_day_task(self, now: datetime) -> None:
+        """DEPRECATED: Use end_of_day_workflow instead"""
+        _LOGGER.warning("finalize_day_task called directly (deprecated, use end_of_day_workflow)")
+        await self._finalize_day_internal(now)
+
+    @callback
+    async def move_to_history_task(self, now: datetime) -> None:
+        """DEPRECATED: Use end_of_day_workflow instead"""
+        _LOGGER.warning("move_to_history_task called directly (deprecated, use end_of_day_workflow)")
+        await self._move_to_history_internal(now)
+
+    @callback
+    async def calculate_stats_task(self, now: datetime) -> None:
+        """DEPRECATED: Use end_of_day_workflow instead"""
+        _LOGGER.warning("calculate_stats_task called directly (deprecated, use end_of_day_workflow)")
+        await self._calculate_stats_internal(now)
+
     async def _save_actual_best_hour(self) -> None:
-        """Calculate and save the actual best production hour from todays hourly samples by Zara"""
+        """Calculate and save the actual best production hour from todays hourly samples by @Zara"""
         try:
             today = dt_util.now().date()
             hourly_samples = await self.data_manager.get_hourly_samples()

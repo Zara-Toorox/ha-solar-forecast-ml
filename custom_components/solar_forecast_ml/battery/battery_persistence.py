@@ -17,7 +17,7 @@ import aiofiles
 import asyncio
 import json
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pathlib import Path
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,23 +28,10 @@ DEFAULT_BATTERY_CAPACITY = 10.0
 
 
 class BatteryChargePersistence:
-    """
-    Handles JSON persistence for battery charge tracking
-
-    Structure:
-    - Daily: Detailed events + summaries
-    - Monthly: Aggregated summaries
-    - Yearly: Aggregated summaries
-    """
+    """Handles JSON persistence for battery charge tracking Structure: - Daily: Detailed events + summaries - Monthly: Aggregated summaries - Yearly: Aggregated summaries"""
 
     def __init__(self, file_path: str, battery_capacity: float = DEFAULT_BATTERY_CAPACITY):
-        """
-        Initialize persistence handler
-
-        Args:
-            file_path: Path to JSON file
-            battery_capacity: Battery capacity in kWh
-        """
+        """Initialize persistence handler Args: file_path: Path to JSON file battery_capacity: Battery capacity in kWh"""
         self.file_path = Path(file_path)
         self.battery_capacity = battery_capacity
         self.data: Dict[str, Any] = {}
@@ -56,12 +43,7 @@ class BatteryChargePersistence:
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
     async def load(self) -> bool:
-        """
-        Load data from JSON file
-
-        Returns:
-            True if loaded successfully, False otherwise
-        """
+        """Load data from JSON file Returns: True if loaded successfully, False otherwise"""
         try:
             if not self.file_path.exists():
                 _LOGGER.info(f"Creating new battery charge history at {self.file_path}")
@@ -148,17 +130,7 @@ class BatteryChargePersistence:
         kwh: float,
         price_cent_kwh: float,
     ):
-        """
-        Add a charging event
-
-        Args:
-            timestamp: Event timestamp (local time)
-            source: 'grid' or 'solar'
-            power_w: Power in Watts
-            duration_min: Duration in minutes
-            kwh: Energy in kWh
-            price_cent_kwh: Price in Cent/kWh (0 for solar)
-        """
+        """Add a charging event Args: timestamp: Event timestamp (local time) source: 'grid' or 'solar' power_w: Power in Watts duration_min: Duration in minutes kwh: Energy in kWh price_cent_kwh: Price in Cent/kWh (0 for solar)"""
         date_str = timestamp.date().isoformat()
         self._ensure_day_exists(date_str)
 
@@ -200,17 +172,7 @@ class BatteryChargePersistence:
         price_cent_kwh: float,
         solar_ratio: float,
     ):
-        """
-        Add a discharging event
-
-        Args:
-            timestamp: Event timestamp (local time)
-            power_w: Power in Watts (positive value)
-            duration_min: Duration in minutes
-            kwh: Total energy discharged in kWh
-            price_cent_kwh: Current electricity price in Cent/kWh
-            solar_ratio: Ratio of solar energy in battery (0.0-1.0)
-        """
+        """Add a discharging event Args: timestamp: Event timestamp (local time) power_w: Power in Watts (positive value) duration_min: Duration in minutes kwh: Total energy discharged in kWh price_cent_kwh: Current electricity price in Cent/kWh solar_ratio: Ratio of solar energy in battery (0.0-1.0)"""
         date_str = timestamp.date().isoformat()
         self._ensure_day_exists(date_str)
 
@@ -315,16 +277,11 @@ class BatteryChargePersistence:
         key = str(year)
         return self.data['yearly'].get(key, {})
 
-    async def rollup_to_monthly(self, date: datetime):
-        """
-        Aggregate daily data to monthly summary
-
-        Args:
-            date: Date to rollup (typically yesterday)
-        """
+    async def rollup_to_monthly(self, date: date):
+        """Aggregate daily data to monthly summary Args: date: Date to rollup (typically yesterday) - date object, not datetime"""
         try:
             year_month = f"{date.year}-{date.month:02d}"
-            date_str = date.date().isoformat()
+            date_str = date.isoformat()  # FIX: date is already a date object, not datetime
 
             if date_str not in self.data['daily']:
                 return
@@ -361,13 +318,7 @@ class BatteryChargePersistence:
             _LOGGER.error(f"Error rolling up to monthly: {e}")
 
     async def rollup_to_yearly(self, year: int, month: int):
-        """
-        Aggregate monthly data to yearly summary
-
-        Args:
-            year: Year
-            month: Month
-        """
+        """Aggregate monthly data to yearly summary Args: year: Year month: Month"""
         try:
             year_str = str(year)
             year_month = f"{year}-{month:02d}"
@@ -407,12 +358,7 @@ class BatteryChargePersistence:
             _LOGGER.error(f"Error rolling up to yearly: {e}")
 
     async def cleanup_old_events(self, keep_days: int = EVENTS_RETENTION_DAYS):
-        """
-        Remove detailed events older than keep_days, but keep summaries
-
-        Args:
-            keep_days: Number of days to keep detailed events
-        """
+        """Remove detailed events older than keep_days, but keep summaries Args: keep_days: Number of days to keep detailed events"""
         try:
             cutoff_date = (datetime.now() - timedelta(days=keep_days)).date()
             removed_count = 0

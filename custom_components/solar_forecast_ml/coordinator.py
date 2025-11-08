@@ -20,7 +20,6 @@ Copyright (C) 2025 Zara-Toorox
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from homeassistant.config_entries import ConfigEntry
@@ -30,23 +29,14 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
 from .const import (
-    DOMAIN, CONF_SOLAR_CAPACITY, CONF_UPDATE_INTERVAL, CONF_WEATHER_ENTITY,
-    CONF_LEARNING_ENABLED,
-    CONF_HOURLY, CONF_POWER_ENTITY, CONF_SOLAR_YIELD_TODAY,
-    CONF_TOTAL_CONSUMPTION_TODAY,
+    DOMAIN, CONF_UPDATE_INTERVAL,
     CONF_HUMIDITY_SENSOR,
     CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX, DATA_DIR,
     ML_MODEL_VERSION, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR,
     CONF_TEMP_SENSOR, CONF_WIND_SENSOR, CONF_RAIN_SENSOR,
     CONF_UV_SENSOR, CONF_LUX_SENSOR,
-    DEFAULT_SOLAR_CAPACITY,
     UPDATE_INTERVAL,
     CONF_FALLBACK_ENTITY,
-    # Battery Management constants
-    CONF_BATTERY_ENABLED,
-    CONF_ELECTRICITY_ENABLED,
-    CONF_ELECTRICITY_COUNTRY,
-    DEFAULT_ELECTRICITY_COUNTRY,
 )
 from .data.data_manager import DataManager
 from .core.core_exceptions import SolarForecastMLException, WeatherAPIException, MLModelException
@@ -60,12 +50,11 @@ from .sensors.sensor_data_collector import SensorDataCollector
 from .forecast.forecast_orchestrator import ForecastOrchestrator
 from .production.production_scheduled_tasks import ScheduledTasksManager
 from .ml.ml_predictor import ModelState, MLPredictor
+from .ml.ml_best_hour_calculator import BestHourCalculator
 from .services.service_error_handler import ErrorHandlingService
 from .forecast.forecast_weather import WeatherService
 
-# Battery Management components (completely separate from Solar/ML)
-from .battery.battery_data_collector import BatteryDataCollector
-from .battery.electricity_price_service import ElectricityPriceService
+# Battery Management components imported in init helpers
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,6 +66,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         entry: ConfigEntry,
         dependencies_ok: bool = False,
     ):
+        """Initialize coordinator - refactored for clarity by @Zara"""
         update_interval_seconds = entry.options.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL.total_seconds())
         update_interval_timedelta = timedelta(seconds=update_interval_seconds)
 
@@ -90,39 +80,45 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.dependencies_ok = dependencies_ok
 
-        config_dir = hass.config.path()
-        data_dir_path = Path(config_dir) / DOMAIN
+        # Import init helpers
+        from .core.core_coordinator_init_helpers import CoordinatorInitHelpers
+
+        # Extract configuration
+        config = CoordinatorInitHelpers.extract_configuration(entry)
+
+        # Setup data directory and managers
+        data_dir_path = CoordinatorInitHelpers.setup_data_directory(hass)
         self.data_manager = DataManager(hass, entry.entry_id, data_dir_path)
         self.sensor_collector = SensorDataCollector(hass, entry)
 
-        # Migration: Support old plant_kwp field for backward compatibility
-        solar_capacity_value = entry.data.get(CONF_SOLAR_CAPACITY)
-        if solar_capacity_value is None or solar_capacity_value == 0:
-            # Try old field name for backward compatibility
-            solar_capacity_value = entry.data.get("plant_kwp", DEFAULT_SOLAR_CAPACITY)
-            if solar_capacity_value != DEFAULT_SOLAR_CAPACITY:
-                _LOGGER.warning(f"Using legacy 'plant_kwp' value: {solar_capacity_value} kW. Please reconfigure to update.")
-        
-        self.solar_capacity = float(solar_capacity_value)
-        self.learning_enabled = entry.options.get(CONF_LEARNING_ENABLED, True)
-        self.enable_hourly = entry.options.get(CONF_HOURLY, False)
+        # Apply configuration
+        self.solar_capacity = config.solar_capacity
+        self.learning_enabled = config.learning_enabled
+        self.enable_hourly = config.enable_hourly
 
-        self.power_entity = self.sensor_collector.strip_entity_id(entry.data.get(CONF_POWER_ENTITY))
-        self.solar_yield_today = self.sensor_collector.strip_entity_id(entry.data.get(CONF_SOLAR_YIELD_TODAY))
-        self.primary_weather_entity = self.sensor_collector.strip_entity_id(entry.data.get(CONF_WEATHER_ENTITY))
+        # Entity IDs (strip prefixes)
+        self.power_entity = self.sensor_collector.strip_entity_id(config.power_entity)
+        self.solar_yield_today = self.sensor_collector.strip_entity_id(config.solar_yield_today)
+        self.primary_weather_entity = self.sensor_collector.strip_entity_id(config.primary_weather_entity)
         self.current_weather_entity: Optional[str] = self.primary_weather_entity
-        self.total_consumption_today = self.sensor_collector.strip_entity_id(entry.data.get(CONF_TOTAL_CONSUMPTION_TODAY))
+        self.total_consumption_today = self.sensor_collector.strip_entity_id(config.total_consumption_today)
 
+        # Initialize core calculators and orchestrators
         self.weather_calculator = WeatherCalculator()
         self.historical_calculator = HistoricalProductionCalculator(hass, self.data_manager)
-        self.production_time_calculator = ProductionTimeCalculator(hass=hass, power_entity=self.power_entity, data_manager=self.data_manager, coordinator=self)
+        self.production_time_calculator = ProductionTimeCalculator(
+            hass=hass,
+            power_entity=self.power_entity,
+            data_manager=self.data_manager,
+            coordinator=self
+        )
+        self.best_hour_calculator = BestHourCalculator(data_manager=self.data_manager)
         self.forecast_orchestrator = ForecastOrchestrator(
             hass=hass,
             data_manager=self.data_manager,
             solar_capacity=self.solar_capacity,
             weather_calculator=self.weather_calculator
         )
-
         self.scheduled_tasks = ScheduledTasksManager(
             hass=hass,
             coordinator=self,
@@ -130,13 +126,14 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             data_manager=self.data_manager
         )
 
-        # Initialize services directly (no ServiceManager)
+        # Services initialization
         self.error_handler = ErrorHandlingService()
         self.weather_service: Optional[WeatherService] = None
         self.ml_predictor: Optional[MLPredictor] = None
         self._services_initialized = False
         self._ml_ready = False
 
+        # Coordinator state
         self.weather_fallback_active = False
         self._last_weather_update: Optional[datetime] = None
         self._forecast_cache: Dict[str, Any] = {}
@@ -144,6 +141,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self._last_update_success_time: Optional[datetime] = None
         self._startup_sensors_ready: bool = False
 
+        # Sensor properties
         self.next_hour_pred: float = 0.0
         self.peak_production_time_today: str = "Calculating..."
         self.production_time_today: str = "Initializing..."
@@ -157,40 +155,32 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self.expected_daily_production: Optional[float] = None
         self._last_statistics_calculation: Optional[datetime] = None
 
-        # Recovery lock to prevent concurrent recovery attempts
+        # Cloudiness trends cache (updated every coordinator update)
+        self.cloudiness_trend_1h: float = 0.0
+        self.cloudiness_trend_3h: float = 0.0
+        self.cloudiness_volatility: float = 0.0
+
+        # Recovery lock
         self._recovery_lock = asyncio.Lock()
         self._recovery_in_progress = False
 
-        # ========================================================================
-        # BATTERY MANAGEMENT (v8.3.0 Extension) - Completely separate from Solar/ML
-        # ========================================================================
-        self.battery_enabled = entry.options.get(CONF_BATTERY_ENABLED, False)
-        self.electricity_enabled = entry.options.get(CONF_ELECTRICITY_ENABLED, False)
+        # Battery management (v8.3.0)
+        self.battery_enabled = config.battery_enabled
+        self.electricity_enabled = config.electricity_enabled
+        self.battery_collector = CoordinatorInitHelpers.initialize_battery_collector(
+            hass, entry, config.battery_enabled
+        )
+        self.electricity_service = CoordinatorInitHelpers.initialize_electricity_service(
+            config.electricity_enabled, config.electricity_country
+        )
 
-        # Initialize battery collector if enabled
-        self.battery_collector: Optional[BatteryDataCollector] = None
-        if self.battery_enabled:
-            try:
-                self.battery_collector = BatteryDataCollector(hass, entry)
-                _LOGGER.info("BatteryDataCollector initialized successfully")
-            except Exception as e:
-                _LOGGER.error(f"Failed to initialize BatteryDataCollector: {e}")
-
-        # Initialize electricity price service if enabled (aWATTar API - Free)
-        self.electricity_service: Optional[ElectricityPriceService] = None
-        if self.electricity_enabled:
-            try:
-                # Get country from options with fallback to data for backwards compatibility
-                country = entry.options.get(CONF_ELECTRICITY_COUNTRY) or entry.data.get(CONF_ELECTRICITY_COUNTRY, DEFAULT_ELECTRICITY_COUNTRY)
-                self.electricity_service = ElectricityPriceService(country=country)
-                _LOGGER.info(f"ElectricityPriceService initialized for {country} using aWATTar API (free, no registration)")
-            except Exception as e:
-                _LOGGER.error(f"Failed to initialize ElectricityPriceService: {e}")
-
-        _LOGGER.info(f"SolarForecastMLCoordinator initialized - Using Weather Entity: {self.primary_weather_entity or 'None'}")
+        _LOGGER.info(
+            f"SolarForecastMLCoordinator initialized - "
+            f"Weather Entity: {self.primary_weather_entity or 'None'}"
+        )
 
     async def _load_persistent_state(self) -> None:
-        """Load persistent coordinator state eg expected_daily_production by Zara"""
+        """Load persistent coordinator state eg expected_daily_production by @Zara"""
         try:
             # Load expected_daily_production if it was set today
             loaded_value = await self.data_manager.load_expected_daily_production()
@@ -204,7 +194,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(f"Failed to load persistent coordinator state: {e}")
 
     async def _initialize_services(self) -> bool:
-        """Initialize all services weather ML error handler by Zara"""
+        """Initialize all services weather ML error handler by @Zara"""
         try:
             # Error handler is already initialized
             
@@ -283,7 +273,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             return False
 
     async def _initialize_forecast_orchestrator(self) -> None:
-        """Initialize the forecast orchestrator strategies by Zara"""
+        """Initialize the forecast orchestrator strategies by @Zara"""
         if not self.ml_predictor:
             _LOGGER.info("Initializing ForecastOrchestrator without ML predictor")
             self.forecast_orchestrator.initialize_strategies(
@@ -299,7 +289,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         _LOGGER.info("ForecastOrchestrator strategies initialized successfully")
 
     async def async_setup(self) -> bool:
-        """Setup coordinator and start tracking by Zara"""
+        """Setup coordinator and start tracking by @Zara"""
         try:
             _LOGGER.info("Starting coordinator setup...")
 
@@ -339,7 +329,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             # Setup next_hour forecast updates (zur vollen Stunde)
             @callback
             def _scheduled_next_hour_update(now: datetime) -> None:
-                """Callback for next hour forecast update - zur vollen Stunde by Zara"""
+                """Callback for next hour forecast update - zur vollen Stunde by @Zara"""
                 asyncio.create_task(self._update_next_hour_forecast())
             
             async_track_time_change(
@@ -352,7 +342,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
             # One-time update after HA restart (only if during production time)
             async def startup_next_hour_init():
-                """Initial next hour calculation after startup by Zara"""
+                """Initial next hour calculation after startup by @Zara"""
                 await asyncio.sleep(60)  # Wait 60 seconds for sensors to stabilize
 
                 now_local = dt_util.now()
@@ -370,7 +360,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             # Setup midnight forecast rotation (00:00:30)
             @callback
             def _scheduled_midnight_rotation(now: datetime) -> None:
-                """Callback for midnight forecast rotation - thread-safe by Zara"""
+                """Callback for midnight forecast rotation - thread-safe by @Zara"""
                 asyncio.create_task(self._rotate_forecasts_midnight())
             
             async_track_time_change(
@@ -381,6 +371,22 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 second=30
             )
             _LOGGER.info("Scheduled: midnight forecast rotation (00:00:30)")
+
+            # Setup weekly ML retraining (Sunday at 3 AM only)
+            if self.ml_predictor:
+                @callback
+                def _scheduled_weekly_retraining(now: datetime) -> None:
+                    """Callback for weekly model retraining - Sundays only."""
+                    if now.weekday() == 6:  # Sunday = 6
+                        _LOGGER.info("Weekly ML training (Sunday): Starting...")
+                        asyncio.create_task(self.ml_predictor.train_and_evaluate_model())
+                    else:
+                        _LOGGER.debug(f"Weekly training skipped (today is {now.strftime('%A')}, training only on Sunday)")
+
+                async_track_time_change(
+                    self.hass, _scheduled_weekly_retraining, hour=3, minute=0, second=0
+                )
+                _LOGGER.info("Scheduled: weekly ML model retraining (Sunday at 03:00 AM) + intelligent training at 23:05")
 
             # Calculate yesterday's deviation
             await self.scheduled_tasks.calculate_yesterday_deviation_on_startup()
@@ -405,7 +411,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             return False
 
     async def async_shutdown(self) -> None:
-        """Cleanup coordinator resources by Zara"""
+        """Cleanup coordinator resources by @Zara"""
         _LOGGER.info("Shutting down coordinator...")
 
         try:
@@ -416,7 +422,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Error during coordinator shutdown: {e}", exc_info=True)
 
     async def _setup_power_peak_tracking(self) -> None:
-        """Setup event listener for power peak tracking by Zara"""
+        """Setup event listener for power peak tracking by @Zara"""
         if not self.power_entity:
             _LOGGER.debug("No power entity configured - power peak tracking disabled")
             return
@@ -473,127 +479,48 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         _LOGGER.info(f"Power peak tracking enabled for {self.power_entity}")
 
     async def _async_update_data(self):
-        """Fetch data from API endpoint by Zara"""
+        """Fetch data from API endpoint - refactored for clarity by @Zara"""
         try:
             # Initialize services on first update
             if not self._services_initialized:
                 services_ok = await self._initialize_services()
                 if not services_ok:
                     raise UpdateFailed("Failed to initialize services")
-                    
+
             # Initialize forecast orchestrator
             await self._initialize_forecast_orchestrator()
-            
-            # Restart initialization check - verify forecast exists
-            today_forecast = await self.data_manager.get_current_day_forecast()
-            now_local = dt_util.now()
 
-            if not today_forecast or not today_forecast.get("forecast_day", {}).get("locked"):
-                if now_local.hour < 12:
-                    _LOGGER.warning(
-                        "System started without locked forecast (before 12:00) - "
-                        "initiating recovery"
-                    )
-                    # Immediately start fallback process
-                    await self._recovery_forecast_process(source="startup_recovery")
-                else:
-                    _LOGGER.warning(
-                        "System started late without forecast (after 12:00) - "
-                        "using current forecast (NOT morning baseline!)"
-                    )
-                    # Late startup - use current forecast
-                    if self.data and "forecast_today" in self.data:
-                        forecast_value = self.data.get("forecast_today")
-                        await self.data_manager.save_daily_forecast(
-                            prediction_kwh=forecast_value,
-                            source=f"late_startup_{now_local.hour:02d}:{now_local.minute:02d}"
-                        )
-                        _LOGGER.warning(
-                            f"Set forecast to current value: {forecast_value:.2f} kWh "
-                            f"(not representative of morning prediction)"
-                        )
+            # Import helper class
+            from .core.core_coordinator_update_helpers import CoordinatorUpdateHelpers
+            helpers = CoordinatorUpdateHelpers(self)
+
+            # Startup recovery check
+            await helpers.handle_startup_recovery()
 
             # Check weather service health
-            if self.weather_service and not self.weather_service.get_health_status().get('healthy'):
-                _LOGGER.warning("Weather service unhealthy, attempting recovery...")
-                try:
-                    await self.weather_service.force_update()
-                except Exception as e:
-                    _LOGGER.error(f"Weather service recovery failed: {e}")
+            await helpers.check_weather_service_health()
 
-            # Get current weather data
-            current_weather = None
-            hourly_forecast = None
-            
-            if self.weather_service:
-                try:
-                    current_weather = await self.weather_service.get_current_weather()
-                    hourly_forecast = await self.weather_service.get_processed_hourly_forecast()
-                    self._last_weather_update = dt_util.now()
-                    
-                    if not hourly_forecast or len(hourly_forecast) == 0:
-                        _LOGGER.warning("Weather service returned no hourly forecast data")
-                        
-                except Exception as e:
-                    _LOGGER.error(f"Error fetching weather data: {e}", exc_info=True)
+            # Fetch weather data
+            current_weather, hourly_forecast = await helpers.fetch_weather_data()
 
             # Get external sensor data
             external_sensors = self.sensor_collector.collect_all_sensor_data_dict()
 
             # Generate forecast
-            forecast = await self.forecast_orchestrator.orchestrate_forecast(
-                current_weather=current_weather,
-                hourly_forecast=hourly_forecast,
-                external_sensors=external_sensors,
-                ml_prediction_today=None,
-                ml_prediction_tomorrow=None,
-                correction_factor=self.learned_correction_factor
+            forecast = await helpers.generate_forecast(
+                current_weather, hourly_forecast, external_sensors
             )
 
-            if not forecast:
-                raise UpdateFailed("Forecast generation failed")
-
-            _LOGGER.debug(f"Forecast data from orchestrator: {forecast}")
-
-            # Update coordinator data
-            result = {
-                "forecast_today": forecast.get("today"),
-                "forecast_tomorrow": forecast.get("tomorrow"),
-                "forecast_day_after_tomorrow": forecast.get("day_after_tomorrow"),
-                "hourly_forecast": forecast.get("hourly", []) if self.enable_hourly else [],
-                "current_weather": current_weather,
-                "external_sensors": external_sensors,
-                # Production time data from tracker (using safe properties)
-                "production_time": {
-                    "active": self.production_time_calculator.is_active,
-                    "duration_seconds": self.production_time_calculator.total_seconds,
-                    "start_time": self.production_time_calculator.start_time,
-                    "end_time": self.production_time_calculator.end_time
-                },
-                "peak_today": {
-                    "power_w": getattr(self, '_peak_power_today', 0.0),
-                    "at": getattr(self, '_peak_time_today', None)
-                },
-                "yield_today": {
-                    "kwh": external_sensors.get("solar_yield_today"),
-                    "sensor": self.solar_yield_today
-                }
-            }
+            # Build coordinator result
+            result = helpers.build_coordinator_result(
+                forecast, current_weather, external_sensors
+            )
 
             # Update sensor properties
             await self._update_sensor_properties(result)
 
-            # Save forecasts to daily_forecasts.json
-            await self._save_forecasts_to_storage(
-                forecast_data={
-                    "today": forecast.get("today"),
-                    "tomorrow": forecast.get("tomorrow"),
-                    "day_after_tomorrow": forecast.get("day_after_tomorrow"),
-                    "best_hour": forecast.get("best_hour"),
-                    "best_hour_kwh": forecast.get("best_hour_kwh"),
-                },
-                hourly_forecast=result.get("hourly_forecast", []),
-            )
+            # Save forecasts to storage
+            await helpers.save_forecasts(forecast, result.get("hourly_forecast", []))
 
             # Update success tracking
             self._last_update_success_time = dt_util.now()
@@ -603,32 +530,8 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 self._startup_sensors_ready = True
                 _LOGGER.info("Sensor initialization complete")
 
-            # ========================================================================
-            # BATTERY MANAGEMENT: Update electricity prices (v8.3.0)
-            # ========================================================================
-            if self.electricity_service:
-                try:
-                    # Update prices once per day or if not cached
-                    should_update = False
-                    last_update = self.electricity_service.get_last_update()
-
-                    if last_update is None:
-                        should_update = True
-                    else:
-                        # Update if last update was more than 12 hours ago
-                        hours_since_update = (dt_util.now() - last_update).total_seconds() / 3600
-                        should_update = hours_since_update > 12
-
-                    if should_update:
-                        _LOGGER.debug("Fetching electricity prices from ENTSO-E...")
-                        prices = await self.electricity_service.fetch_day_ahead_prices()
-                        if prices:
-                            _LOGGER.info(f"Electricity prices updated successfully: {len(prices.get('prices', []))} price points")
-                        else:
-                            _LOGGER.warning("Failed to fetch electricity prices")
-
-                except Exception as e:
-                    _LOGGER.error(f"Error updating electricity prices: {e}", exc_info=True)
+            # Battery management: Update electricity prices
+            await helpers.update_electricity_prices()
 
             return result
 
@@ -639,7 +542,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error communicating with API: {err}")
 
     async def _update_sensor_properties(self, data: Dict[str, Any]) -> None:
-        """Update coordinator properties used by sensors by Zara"""
+        """Update coordinator properties used by sensors by @Zara"""
         try:
             if data.get("hourly_forecast"):
                 hourly = data["hourly_forecast"]
@@ -678,8 +581,26 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             self.last_successful_learning = getattr(ml_predictor, 'last_training_time', None)
             if self.model_accuracy is None:
                 self.model_accuracy = getattr(ml_predictor, 'current_accuracy', None)
+
+            # Update cloudiness trends cache (every coordinator update)
+            try:
+                await ml_predictor._load_recent_weather_samples(hours_back=6)
+                trends = ml_predictor._calculate_cloudiness_trends()
+                self.cloudiness_trend_1h = trends.get('cloudiness_trend_1h', 0.0)
+                self.cloudiness_trend_3h = trends.get('cloudiness_trend_3h', 0.0)
+                self.cloudiness_volatility = trends.get('cloudiness_volatility', 0.0)
+                _LOGGER.debug(f"Updated cloudiness trends: 1h={self.cloudiness_trend_1h:.1f}, "
+                             f"3h={self.cloudiness_trend_3h:.1f}, vol={self.cloudiness_volatility:.1f}")
+            except Exception as e:
+                _LOGGER.debug(f"Failed to update cloudiness trends: {e}")
+                self.cloudiness_trend_1h = 0.0
+                self.cloudiness_trend_3h = 0.0
+                self.cloudiness_volatility = 0.0
         else:
             self.last_successful_learning = None
+            self.cloudiness_trend_1h = 0.0
+            self.cloudiness_trend_3h = 0.0
+            self.cloudiness_volatility = 0.0
 
         _LOGGER.debug("Coordinator sensor properties updated.")
 
@@ -687,7 +608,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
     async def _save_forecasts_to_storage(
         self, forecast_data: dict, hourly_forecast: list
     ) -> None:
-        """Save forecasts to daily_forecastsjson based on current time by Zara"""
+        """Save forecasts to daily_forecastsjson based on current time by @Zara"""
         try:
             now_local = dt_util.now()
             hour = now_local.hour
@@ -734,22 +655,25 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     _LOGGER.info(f"Saved today forecast: {today_kwh:.2f} kWh")
 
                 # --- BEST HOUR ---
-                # Get best hour from forecast result (calculated by strategy)
-                best_hour = forecast_data.get("best_hour")
-                best_hour_kwh = forecast_data.get("best_hour_kwh")
+                # Calculate best hour using weather-based method (independent from ML model)
+                try:
+                    best_hour, best_hour_score = await self.best_hour_calculator.calculate_best_hour_today()
 
-                if best_hour is not None and best_hour_kwh is not None:
-                    try:
+                    if best_hour is not None and best_hour_score is not None:
+                        # Note: best_hour_score is now a weather score (0-100), not kWh
                         await self.data_manager.save_forecast_best_hour(
                             hour=best_hour,
-                            prediction_kwh=best_hour_kwh,
-                            source=source,
+                            prediction_kwh=best_hour_score,  # Actually a weather score now
+                            source="Weather-based" if best_hour_score > 10 else "Profile",
                         )
-                        _LOGGER.info(f"Saved best hour: {best_hour}:00 with {best_hour_kwh:.3f} kWh")
-                    except Exception as e:
-                        _LOGGER.warning(f"Could not save best hour: {e}")
-                else:
-                    _LOGGER.debug("Best hour not calculated in forecast - skipping")
+                        _LOGGER.info(
+                            f"Saved best hour: {best_hour:02d}:00 with score {best_hour_score:.1f}/100 "
+                            f"(weather-based calculation, independent from ML)"
+                        )
+                    else:
+                        _LOGGER.debug("Could not calculate best hour - no weather or profile data available")
+                except Exception as e:
+                    _LOGGER.warning(f"Could not calculate best hour: {e}")
             
             elif 12 <= hour < 13:
                 # Lock tomorrow's forecast
@@ -779,7 +703,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Failed to save forecasts to storage: {e}", exc_info=True)
 
     async def _update_next_hour_forecast(self) -> None:
-        """Update next hour forecast - only during production time by Zara"""
+        """Update next hour forecast - only during production time by @Zara"""
         try:
             now_local = dt_util.now()
             # Calculate for the next full hour
@@ -801,7 +725,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 return
             
             # Berechne Vorhersage
-            current_weather = await self.weather_service.get_current_weather() if self.weather_service else None
+            current_weather = await self.weather_service.get_current_weather() if self.weather_service else None  # type: ignore
             sensor_data = self.sensor_collector.collect_all_sensor_data_dict()
             
             next_hour_kwh = self.forecast_orchestrator.calculate_next_hour_prediction(
@@ -823,7 +747,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Next hour update failed: {e}", exc_info=True)
 
     async def _rotate_forecasts_midnight(self) -> None:
-        """Rotate forecasts at midnight by Zara"""
+        """Rotate forecasts at midnight by @Zara"""
         try:
             _LOGGER.info("Starting midnight forecast rotation...")
             
@@ -890,7 +814,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self.async_update_listeners()
 
     async def set_expected_daily_production(self) -> None:
-        """Set expected daily production at 6 AM and save persistently by Zara"""
+        """Set expected daily production at 6 AM and save persistently by @Zara"""
         try:
             _LOGGER.info("=== Setting expected daily production (6 AM task) ===")
             
@@ -973,14 +897,14 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             self.expected_daily_production = None
 
     async def reset_expected_daily_production(self) -> None:
-        """Reset expected daily production at midnight and clear persistent storage by Zara"""
+        """Reset expected daily production at midnight and clear persistent storage by @Zara"""
         self.expected_daily_production = None
         await self.data_manager.clear_expected_daily_production()
         _LOGGER.info("Expected daily production reset to None and cleared from persistent storage")
         self.async_update_listeners()
 
     async def _recovery_forecast_process(self, source: str) -> bool:
-        """Fallback process for missing forecasts by Zara"""
+        """Fallback process for missing forecasts by @Zara"""
         # Prevent concurrent recovery attempts with lock
         async with self._recovery_lock:
             if self._recovery_in_progress:
@@ -994,7 +918,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 self._recovery_in_progress = False
 
     async def _execute_recovery(self, source: str) -> bool:
-        """Internal method to execute the recovery process by Zara"""
+        """Internal method to execute the recovery process by @Zara"""
         _LOGGER.info(f"=== Starting recovery forecast process (source: {source}) ===")
 
         # Early validation: Check if weather service is available
@@ -1077,12 +1001,12 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         return False
 
     async def force_refresh_with_weather_update(self) -> None:
-        """Force refresh with immediate weather update by Zara"""
+        """Force refresh with immediate weather update by @Zara"""
         _LOGGER.info("Force refresh requested - updating weather first...")
 
         # Force weather service to fetch fresh data
         if self.weather_service:
-            success = await self.weather_service.force_update()
+            success = await self.weather_service.force_update()  # type: ignore
             if success:
                 _LOGGER.info("Weather data successfully refreshed")
             else:
@@ -1094,7 +1018,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Force refresh completed")
 
     async def forecast_day_after_tomorrow(self) -> None:
-        """Triggers and saves the forecast for the day after tomorrow by Zara"""
+        """Triggers and saves the forecast for the day after tomorrow by @Zara"""
         try:
             _LOGGER.info("Service call: Manually triggering forecast for day after tomorrow.")
 

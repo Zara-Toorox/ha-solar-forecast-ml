@@ -22,12 +22,11 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-# [Version Update] Set version numbers to 8.2.4
-VERSION = "8.2.4"
-RELEASE_VERSION = "8.2.4"
-SOFTWARE_VERSION = "8.2.4"
-INTEGRATION_MODEL = "v8.2.4" # Model string might differ based on ML changes
-ML_VERSION = "10.0.0" # Keep ML Model version unless model structure changed significantly
+VERSION = "8.2.6"
+RELEASE_VERSION = "8.2.6"
+SOFTWARE_VERSION = "8.2.6"
+INTEGRATION_MODEL = "v8.2.6"
+ML_VERSION = "8.2.6"
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 

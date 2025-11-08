@@ -42,21 +42,10 @@ UPDATE_INTERVAL = timedelta(minutes=2)
 
 
 class BatteryCoordinator(DataUpdateCoordinator):
-    """
-    Battery Coordinator - Handles battery charge tracking
-
-    Completely separate from Solar Forecast ML Coordinator
-    Updates every 2 minutes to track charging/discharging
-    """
+    """Battery Coordinator - Handles battery charge tracking Completely separate from Solar Forecast ML Coordinator Updates every 2 minutes to track charging/discharging"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """
-        Initialize battery coordinator
-
-        Args:
-            hass: Home Assistant instance
-            entry: Config entry
-        """
+        """Initialize battery coordinator Args: hass: Home Assistant instance entry: Config entry"""
         super().__init__(
             hass,
             _LOGGER,
@@ -136,12 +125,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
             return False
 
     async def _async_update_data(self):
-        """
-        Fetch battery data and track charging/discharging
-
-        Returns:
-            Dictionary with current battery data
-        """
+        """Fetch battery data and track charging/discharging Returns: Dictionary with current battery data"""
         try:
             # Get current battery power
             battery_power = await self._get_battery_power()
@@ -230,12 +214,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error updating battery data: {e}")
 
     async def _get_battery_power(self) -> Optional[float]:
-        """
-        Get current battery power from sensor
-
-        Returns:
-            Power in Watts (+ charging, - discharging) or None
-        """
+        """Get current battery power from sensor Returns: Power in Watts (+ charging, - discharging) or None"""
         if not self.power_entity:
             return None
 
@@ -250,12 +229,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
             return None
 
     async def _get_grid_charge_power(self) -> Optional[float]:
-        """
-        Get current grid charge power from configured entity
-
-        Returns:
-            Power in Watts or None
-        """
+        """Get current grid charge power from configured entity Returns: Power in Watts or None"""
         if not self.grid_charge_power_entity:
             _LOGGER.debug("No grid charge power entity configured")
             return 0.0
@@ -280,11 +254,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
                 _LOGGER.error(f"Error refreshing electricity prices: {e}")
 
     async def async_daily_rollup(self):
-        """
-        Perform daily rollup tasks
-
-        Called at midnight to aggregate daily data to monthly
-        """
+        """Perform daily rollup tasks Called at midnight to aggregate daily data to monthly"""
         try:
             if not self.persistence:
                 return
@@ -305,11 +275,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Error during daily rollup: {e}")
 
     async def async_monthly_rollup(self):
-        """
-        Perform monthly rollup tasks
-
-        Called at end of month to aggregate monthly data to yearly
-        """
+        """Perform monthly rollup tasks Called at end of month to aggregate monthly data to yearly"""
         try:
             if not self.persistence:
                 return

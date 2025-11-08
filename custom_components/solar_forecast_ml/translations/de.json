@@ -283,13 +283,16 @@
         "name": "Ø Genauigkeit 30 Tage"
       },
       "cloudiness_trend_1h": {
-        "name": "Bewölkungstrend 1h"
+        "name": "Wetterentwicklung 1 Stunde"
       },
       "cloudiness_trend_3h": {
-        "name": "Bewölkungstrend 3h"
+        "name": "Wetterentwicklung 3 Stunden"
       },
       "cloudiness_volatility": {
-        "name": "Bewölkungsvolatilität"
+        "name": "Wetterstabilität"
+      },
+      "next_production_start": {
+        "name": "Nächster Produktionsbeginn"
       },
       "battery_soc": {
         "name": "Batterie Ladezustand",
