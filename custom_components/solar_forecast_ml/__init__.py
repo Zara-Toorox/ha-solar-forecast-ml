@@ -62,6 +62,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .coordinator import SolarForecastMLCoordinator
     from .core.core_dependency_handler import DependencyHandler
     from .services.service_notification import create_notification_service
+    from .battery.battery_coordinator import BatteryCoordinator
+    from .const import CONF_BATTERY_ENABLED
 
     # Check dependencies
     dependency_handler = DependencyHandler()
@@ -81,24 +83,46 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         _LOGGER.warning("NotificationService could not be created")
 
-    # Create coordinator
+    # Create Solar Forecast coordinator
     coordinator = SolarForecastMLCoordinator(
         hass,
         entry,
         dependencies_ok=dependencies_ok
     )
 
-    # Setup coordinator
+    # Setup Solar coordinator
     setup_ok = await coordinator.async_setup()
     if not setup_ok:
-        _LOGGER.error("Failed to setup coordinator")
+        _LOGGER.error("Failed to setup Solar Forecast coordinator")
         return False
 
     # Perform initial data fetch
     await coordinator.async_config_entry_first_refresh()
 
-    # Store coordinator in hass.data
+    # Store Solar coordinator in hass.data
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    # Setup Battery coordinator (separate, optional)
+    battery_coordinator = None
+    battery_enabled = entry.options.get(CONF_BATTERY_ENABLED, entry.data.get(CONF_BATTERY_ENABLED, False))
+
+    if battery_enabled:
+        try:
+            _LOGGER.info("Battery management enabled - initializing BatteryCoordinator")
+            battery_coordinator = BatteryCoordinator(hass, entry)
+
+            battery_setup_ok = await battery_coordinator.async_setup()
+            if battery_setup_ok:
+                await battery_coordinator.async_config_entry_first_refresh()
+                # Store Battery coordinator separately
+                hass.data[DOMAIN][f"{entry.entry_id}_battery"] = battery_coordinator
+                _LOGGER.info("BatteryCoordinator initialized successfully")
+            else:
+                _LOGGER.warning("BatteryCoordinator setup failed, continuing without battery features")
+                battery_coordinator = None
+        except Exception as e:
+            _LOGGER.error(f"Error setting up BatteryCoordinator: {e}", exc_info=True)
+            battery_coordinator = None
 
     # Forward entry setup to platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -128,29 +152,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.warning(f"Failed to show startup notification: {e}", exc_info=True)
 
-    _LOGGER.info("Solar Forecast ML integration setup completed successfully")
+    # Final startup log with comprehensive status
+    mode_str = "ML Mode (Full Features)" if dependencies_ok else "Fallback Mode (Rule-Based)"
+    battery_str = "Enabled" if battery_coordinator else "Disabled"
+
+    _LOGGER.info(
+        "="*70 + "\n"
+        "Solar Forecast ML v8.2.1 \"Sarpeidon\" 🌟 - Setup Complete! ✓\n"
+        f"Mode: {mode_str} | Battery Management: {battery_str}\n"
+        "\"The future is not set in stone, but with data we illuminate the path.\"\n"
+        "Author: Zara-Toorox | Live long and prosper! 🖖\n" +
+        "="*70
+    )
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry by Zara"""
     _LOGGER.info("Unloading Solar Forecast ML integration...")
-    
+
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
+
     if unload_ok:
-        # Remove coordinator from hass.data
+        # Remove Solar coordinator from hass.data
         coordinator = hass.data[DOMAIN].pop(entry.entry_id)
 
-        # Cleanup coordinator
+        # Cleanup Solar coordinator
         if hasattr(coordinator, 'scheduled_tasks'):
             coordinator.scheduled_tasks.cancel_listeners()
-        
+
+        # Remove Battery coordinator if exists (separate cleanup)
+        battery_key = f"{entry.entry_id}_battery"
+        if battery_key in hass.data[DOMAIN]:
+            battery_coordinator = hass.data[DOMAIN].pop(battery_key)
+            # Battery coordinator cleanup (if needed in future)
+            _LOGGER.info("BatteryCoordinator unloaded")
+
         # Unregister services only if this is the last entry
         if not hass.data[DOMAIN]:
             _async_unregister_services(hass)
-    
+
     _LOGGER.info("Solar Forecast ML integration unloaded successfully")
     return unload_ok
 

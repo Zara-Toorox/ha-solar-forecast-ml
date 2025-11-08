@@ -180,26 +180,25 @@ class ElectricityPriceService:
         if not self._price_cache or self.country not in self._price_cache:
             return None
 
+        # Use UTC for internal comparison since aWATTar timestamps are UTC
         now = datetime.now(timezone.utc)
-        current_hour = now.hour
 
         prices = self._price_cache[self.country].get('prices', [])
 
         for price_entry in prices:
-            if price_entry['hour'] == current_hour:
-                # Check if timestamp is today
-                price_time = price_entry['timestamp']
-                if price_time.date() == now.date():
-                    return price_entry['price']
+            price_time = price_entry['timestamp']
+            # Match the exact hour in UTC (aWATTar provides hourly prices)
+            if price_time <= now < price_time + timedelta(hours=1):
+                return price_entry['price']
 
         return None
 
     def get_price_at_hour(self, hour: int) -> Optional[float]:
         """
-        Get price at specific hour today
+        Get price at specific hour today (in local time)
 
         Args:
-            hour: Hour of day (0-23)
+            hour: Hour of day in local time (0-23)
 
         Returns:
             Price at specified hour or None
@@ -207,18 +206,29 @@ class ElectricityPriceService:
         if not self._price_cache or self.country not in self._price_cache:
             return None
 
-        today = datetime.now(timezone.utc).date()
+        # Create target datetime in local time for the specified hour today
+        now_local = datetime.now()
+        target_local = now_local.replace(hour=hour, minute=0, second=0, microsecond=0)
+
+        # Convert local naive datetime to UTC for comparison
+        # Assume local system timezone
+        local_offset = datetime.now() - datetime.utcnow()
+        target_utc = target_local - local_offset
+
         prices = self._price_cache[self.country].get('prices', [])
 
         for price_entry in prices:
-            if price_entry['hour'] == hour and price_entry['timestamp'].date() == today:
+            price_time = price_entry['timestamp'].replace(tzinfo=None)  # Compare as naive
+            target_utc_naive = target_utc.replace(tzinfo=None)
+            # Match the hour slot
+            if price_time <= target_utc_naive < price_time + timedelta(hours=1):
                 return price_entry['price']
 
         return None
 
     def get_average_price_today(self) -> Optional[float]:
         """
-        Calculate average price for today
+        Calculate average price for today (in local time)
 
         Returns:
             Average price in Cent/kWh or None
@@ -226,12 +236,18 @@ class ElectricityPriceService:
         if not self._price_cache or self.country not in self._price_cache:
             return None
 
-        today = datetime.now(timezone.utc).date()
+        # Get today's date in local time
+        today_local = datetime.now().date()
+
+        # Calculate offset to convert UTC to local
+        local_offset = datetime.now() - datetime.utcnow()
+
         prices = self._price_cache[self.country].get('prices', [])
 
         today_prices = [
             p['price'] for p in prices
-            if p['timestamp'].date() == today
+            # Convert UTC timestamp to local date for comparison
+            if (p['timestamp'].replace(tzinfo=None) + local_offset).date() == today_local
         ]
 
         if not today_prices:
@@ -267,24 +283,33 @@ class ElectricityPriceService:
 
     def get_cheapest_hours(self, count: int = 3) -> List[Tuple[int, float]]:
         """
-        Get cheapest hours today
+        Get cheapest hours today (in local time)
 
         Args:
             count: Number of cheapest hours to return
 
         Returns:
-            List of (hour, price) tuples sorted by price
+            List of (hour, price) tuples sorted by price (hour in local time)
         """
         if not self._price_cache or self.country not in self._price_cache:
             return []
 
-        today = datetime.now(timezone.utc).date()
+        # Get today's date in local time
+        today_local = datetime.now().date()
+
+        # Calculate offset to convert UTC to local
+        local_offset = datetime.now() - datetime.utcnow()
+
         prices = self._price_cache[self.country].get('prices', [])
 
         today_prices = [
-            (p['hour'], p['price'])
+            (
+                (p['timestamp'].replace(tzinfo=None) + local_offset).hour,  # Convert to local hour
+                p['price']
+            )
             for p in prices
-            if p['timestamp'].date() == today
+            # Convert UTC timestamp to local date for comparison
+            if (p['timestamp'].replace(tzinfo=None) + local_offset).date() == today_local
         ]
 
         if not today_prices:
@@ -296,24 +321,33 @@ class ElectricityPriceService:
 
     def get_most_expensive_hours(self, count: int = 3) -> List[Tuple[int, float]]:
         """
-        Get most expensive hours today
+        Get most expensive hours today (in local time)
 
         Args:
             count: Number of most expensive hours to return
 
         Returns:
-            List of (hour, price) tuples sorted by price (descending)
+            List of (hour, price) tuples sorted by price descending (hour in local time)
         """
         if not self._price_cache or self.country not in self._price_cache:
             return []
 
-        today = datetime.now(timezone.utc).date()
+        # Get today's date in local time
+        today_local = datetime.now().date()
+
+        # Calculate offset to convert UTC to local
+        local_offset = datetime.now() - datetime.utcnow()
+
         prices = self._price_cache[self.country].get('prices', [])
 
         today_prices = [
-            (p['hour'], p['price'])
+            (
+                (p['timestamp'].replace(tzinfo=None) + local_offset).hour,  # Convert to local hour
+                p['price']
+            )
             for p in prices
-            if p['timestamp'].date() == today
+            # Convert UTC timestamp to local date for comparison
+            if (p['timestamp'].replace(tzinfo=None) + local_offset).date() == today_local
         ]
 
         if not today_prices:

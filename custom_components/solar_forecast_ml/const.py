@@ -23,10 +23,10 @@ from homeassistant.const import Platform
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
 # [Version Update] Set version numbers to 8.2.0
-VERSION = "8.2.0"
-RELEASE_VERSION = "8.2.0"
-SOFTWARE_VERSION = "8.2.0"
-INTEGRATION_MODEL = "v8.2.0" # Model string might differ based on ML changes
+VERSION = "8.2.1"
+RELEASE_VERSION = "8.2.1"
+SOFTWARE_VERSION = "8.2.1"
+INTEGRATION_MODEL = "v8.2.1" # Model string might differ based on ML changes
 ML_VERSION = "10.0.0" # Keep ML Model version unless model structure changed significantly
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
@@ -264,10 +264,11 @@ FALLBACK_PRODUCTION_END_HOUR = 21
 # --- Battery Configuration Keys ---
 CONF_BATTERY_ENABLED = "battery_enabled"
 CONF_BATTERY_CAPACITY = "battery_capacity"  # Battery capacity in kWh
-CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"  # State of Charge sensor
-CONF_BATTERY_POWER_ENTITY = "battery_power_entity"  # Current charge/discharge power (W)
-CONF_BATTERY_CHARGE_TODAY_ENTITY = "battery_charge_today_entity"  # Daily charge (kWh)
-CONF_BATTERY_DISCHARGE_TODAY_ENTITY = "battery_discharge_today_entity"  # Daily discharge (kWh)
+CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"  # State of Charge sensor (%)
+CONF_BATTERY_POWER_ENTITY = "battery_power_entity"  # Current charge/discharge power (W, +charge/-discharge)
+CONF_BATTERY_GRID_CHARGE_POWER_ENTITY = "battery_grid_charge_power_entity"  # Grid charge power (W)
+CONF_BATTERY_CHARGE_TODAY_ENTITY = "battery_charge_today_entity"  # LEGACY: Daily charge (kWh)
+CONF_BATTERY_DISCHARGE_TODAY_ENTITY = "battery_discharge_today_entity"  # LEGACY: Daily discharge (kWh)
 CONF_BATTERY_TEMPERATURE_ENTITY = "battery_temperature_entity"  # Optional temperature sensor
 
 # --- Electricity Price Configuration ---
@@ -337,6 +338,17 @@ ELECTRICITY_CHEAPEST_HOUR_TODAY_SENSOR = "cheapest_hour_today"
 ELECTRICITY_MOST_EXPENSIVE_HOUR_TODAY_SENSOR = "most_expensive_hour_today"
 ELECTRICITY_CHARGING_RECOMMENDATION_SENSOR = "charging_recommendation"
 ELECTRICITY_SAVINGS_TODAY_SENSOR = "savings_today"
+
+# --- Battery Cost & Profit Sensors ---
+BATTERY_SOLAR_DISCHARGE_TODAY_SENSOR = "solar_discharge_today"
+BATTERY_GRID_DISCHARGE_TODAY_SENSOR = "grid_discharge_today"
+BATTERY_GRID_CHARGE_COST_TODAY_SENSOR = "grid_charge_cost_today"
+BATTERY_SOLAR_SAVINGS_TODAY_SENSOR = "solar_savings_today"
+BATTERY_GRID_ARBITRAGE_PROFIT_TODAY_SENSOR = "grid_arbitrage_profit_today"
+BATTERY_TOTAL_PROFIT_TODAY_SENSOR = "total_profit_today"
+BATTERY_GRID_CHARGE_MONTH_SENSOR = "grid_charge_month"
+BATTERY_TOTAL_PROFIT_MONTH_SENSOR = "total_profit_month"
+BATTERY_TOTAL_PROFIT_YEAR_SENSOR = "total_profit_year"
 
 # --- Autarky & Self-Consumption (with Battery) ---
 AUTARKY_WITH_BATTERY_SENSOR = "autarky_with_battery"

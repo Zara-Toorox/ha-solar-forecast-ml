@@ -59,6 +59,7 @@ from .const import (
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_BATTERY_POWER_ENTITY,
+    CONF_BATTERY_GRID_CHARGE_POWER_ENTITY,
     CONF_BATTERY_CHARGE_TODAY_ENTITY,
     CONF_BATTERY_DISCHARGE_TODAY_ENTITY,
     CONF_ELECTRICITY_ENABLED,
@@ -146,6 +147,10 @@ def _get_base_schema(defaults: dict | None) -> vol.Schema:
         vol.Optional(
             CONF_BATTERY_POWER_ENTITY,
             default=_get_default(defaults, CONF_BATTERY_POWER_ENTITY)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_BATTERY_GRID_CHARGE_POWER_ENTITY,
+            default=_get_default(defaults, CONF_BATTERY_GRID_CHARGE_POWER_ENTITY)
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
         vol.Optional(
             CONF_BATTERY_CHARGE_TODAY_ENTITY,

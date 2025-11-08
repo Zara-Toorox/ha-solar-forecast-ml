@@ -176,8 +176,12 @@ class BatteryPowerSensor(BaseBatterySensor):
     def native_value(self) -> Optional[float]:
         """Return the battery power"""
         if not self.coordinator.battery_collector:
+            _LOGGER.debug("BatteryPowerSensor: No battery_collector available")
             return None
-        return self.coordinator.battery_collector.get_battery_power()
+
+        power = self.coordinator.battery_collector.get_battery_power()
+        _LOGGER.debug(f"BatteryPowerSensor: Returning power value: {power} W")
+        return power
 
     @property
     def icon(self) -> str:

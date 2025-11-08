@@ -126,7 +126,26 @@ class BatteryDataCollector:
         Returns:
             Power in Watts or None
         """
-        return self._get_numeric_state(self.power_entity, 0.0)
+        if not self.power_entity:
+            _LOGGER.debug("Battery power entity not configured")
+            return None
+
+        state = self._get_entity_state(self.power_entity)
+        if state is None:
+            _LOGGER.warning(f"Battery power entity '{self.power_entity}' not found or unavailable")
+            return None
+
+        if state.state in ('unknown', 'unavailable', 'none', 'None'):
+            _LOGGER.debug(f"Battery power entity '{self.power_entity}' state is: {state.state}")
+            return None
+
+        try:
+            power = float(state.state)
+            _LOGGER.debug(f"Battery power from '{self.power_entity}': {power} W")
+            return power
+        except (ValueError, TypeError) as e:
+            _LOGGER.warning(f"Invalid battery power state for '{self.power_entity}': {state.state} - Error: {e}")
+            return None
 
     def get_charge_today(self) -> float:
         """
@@ -298,3 +317,40 @@ class BatteryDataCollector:
             'discharge_today': self._get_entity_state(self.discharge_today_entity) is not None,
             'temperature': self._get_entity_state(self.temperature_entity) is not None if self.temperature_entity else True,
         }
+
+    def get_diagnostic_info(self) -> Dict[str, Any]:
+        """
+        Get diagnostic information for troubleshooting
+
+        Returns:
+            Dictionary with diagnostic data
+        """
+        info = {
+            'configured_entities': {
+                'soc_entity': self.soc_entity,
+                'power_entity': self.power_entity,
+                'charge_today_entity': self.charge_today_entity,
+                'discharge_today_entity': self.discharge_today_entity,
+                'temperature_entity': self.temperature_entity,
+            },
+            'entity_states': {},
+            'entity_validation': self.validate_entities(),
+            'battery_capacity': self.battery_capacity,
+        }
+
+        # Get raw states
+        for key, entity_id in info['configured_entities'].items():
+            if entity_id:
+                state = self._get_entity_state(entity_id)
+                if state:
+                    info['entity_states'][key] = {
+                        'state': state.state,
+                        'attributes': dict(state.attributes),
+                        'last_changed': state.last_changed.isoformat(),
+                    }
+                else:
+                    info['entity_states'][key] = 'NOT_FOUND'
+            else:
+                info['entity_states'][key] = 'NOT_CONFIGURED'
+
+        return info

@@ -129,11 +129,27 @@ class DataStateHandler(DataManagerIO):
                 return float(value)
             
             return None
-            
+
         except Exception as e:
             _LOGGER.error(f"Failed to load expected daily production: {e}")
             return None
 
+    async def clear_expected_daily_production(self) -> bool:
+        """Clear expected daily production from persistent storage by Zara"""
+        try:
+            state = {
+                "version": DATA_VERSION,
+                "expected_daily_production": None,
+                "last_set_date": None,
+                "last_updated": dt_util.now().isoformat()
+            }
+
+            await self._atomic_write_json(self.coordinator_state_file, state)
+            _LOGGER.debug("Expected daily production cleared from persistent storage")
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to clear expected daily production: {e}")
             return False
 
     async def get_last_collected_hour(self) -> Optional[datetime]:

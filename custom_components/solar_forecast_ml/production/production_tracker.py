@@ -185,9 +185,11 @@ class ProductionTimeCalculator:
                 break
             else:
                 if attempt < max_retries - 1:
-                    _LOGGER.warning(
-                        f"[PRODUCTION_TRACKER] Power entity '{self.power_entity}' not found yet. "
-                        f"Retry {attempt + 1}/{max_retries} in {retry_delay}s..."
+                    # First retry is INFO (normal during startup), subsequent retries are WARNING
+                    log_func = _LOGGER.info if attempt == 0 else _LOGGER.warning
+                    log_func(
+                        f"[PRODUCTION_TRACKER] Power entity '{self.power_entity}' not available yet. "
+                        f"Waiting for sensor to initialize (attempt {attempt + 1}/{max_retries}, retry in {retry_delay}s)..."
                     )
                     await asyncio.sleep(retry_delay)
                 else:

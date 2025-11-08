@@ -164,24 +164,64 @@ class NotificationService:
             return False
 
         try:
+            # Build dependency list
             installed_list = ""
             if installed_packages:
-                installed_items = "\n".join([f"- [OK] {pkg}" for pkg in installed_packages])
-                installed_list = f"\n**Installed Dependencies:**\n{installed_items}\n"
+                installed_items = "\n".join([f"✓ {pkg}" for pkg in installed_packages])
+                installed_list = f"\n\n**Installed Dependencies:**\n{installed_items}"
 
+            missing_list = ""
+            if missing_packages:
+                missing_items = "\n".join([f"✗ {pkg}" for pkg in missing_packages])
+                missing_list = f"\n\n**Missing Packages:**\n{missing_items}"
+
+            # Create personalized startup message
             if ml_mode:
-                message = f"""Solar Forecast ML Started Successfully by Zara"""
-            else:
-                missing_list = ""
-                if missing_packages:
-                    missing_items = "\n".join([f"- [X] {pkg}" for pkg in missing_packages])
-                    missing_list = f"\n**Missing Packages:**\n{missing_items}\n"
+                message = f"""**Solar Forecast ML v8.2.1 "Sarpeidon" 🌟 Started Successfully!** ☀️
 
-                message = f""" Solar Forecast ML Started in Fallback Mode by Zara"""
+**Mode:** Machine Learning (Full Feature Set)
+**Version:** 8 "Sarpeidon" - Named after the doomed planet whose inhabitants used time portals to escape
+**Author:** Zara-Toorox
+
+**Active Features:**
+• ML-based solar production forecasting
+• Historical data analysis & learning
+• Weather integration for accuracy
+• Peak production time detection
+• Autarky & self-sufficiency tracking
+• Battery management & cost optimization{installed_list}
+
+**System Status:** All systems operational ✓
+
+*"The future is not set in stone, but with data and logic, we can illuminate the path ahead."*
+— Inspired by Star Trek
+
+**Personal Note from Zara:**
+Thank you for using Solar Forecast ML! May your panels generate efficiently and your batteries stay charged. Live long and prosper! 🖖"""
+            else:
+                message = f"""**Solar Forecast ML v8.2.1 "Sarpeidon" 🌟 Started in Fallback Mode** ⚠️
+
+**Mode:** Rule-Based Calculations (Limited Features)
+**Version:** 8 "Sarpeidon"
+**Author:** Zara-Toorox
+
+**Active Features:**
+• Rule-based solar forecasting
+• Historical data tracking
+• Basic production statistics{missing_list}{installed_list}
+
+**Note:** Install missing Python packages to enable ML features.
+The integration will continue working with rule-based calculations.
+
+*"Even in the absence of certainty, we must still chart our course."*
+— Inspired by Star Trek
+
+**Personal Note from Zara:**
+Thank you for using Solar Forecast ML! Install the missing dependencies to unlock the full power of machine learning. 🖖"""
 
             await self._safe_create_notification(
                 message=message,
-                title="Solar Forecast ML Started",
+                title="🌤️ Solar Forecast ML Started",
                 notification_id=NOTIFICATION_ID_STARTUP
             )
 

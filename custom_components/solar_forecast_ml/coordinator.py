@@ -385,7 +385,19 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             # Calculate yesterday's deviation
             await self.scheduled_tasks.calculate_yesterday_deviation_on_startup()
 
-            _LOGGER.info("Coordinator setup completed successfully")
+            # Log comprehensive setup summary
+            ml_status = "Active & Ready" if self._ml_ready else "Disabled/Fallback"
+            weather_status = "Configured" if self.primary_weather_entity else "Not configured"
+
+            _LOGGER.info(
+                f"Solar Forecast Coordinator Setup Complete ✓\n"
+                f"  → ML Engine: {ml_status}\n"
+                f"  → Weather Integration: {weather_status}\n"
+                f"  → Solar Capacity: {self.solar_capacity} kWp\n"
+                f"  → Production Tracking: Active\n"
+                f"  → Scheduled Tasks: All registered"
+            )
+
             return True
 
         except Exception as e:

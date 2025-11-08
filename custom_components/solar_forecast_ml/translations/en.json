@@ -241,6 +241,74 @@
       },
       "cloudiness_volatility": {
         "name": "Cloudiness Volatility"
+      },
+      "battery_cost_grid_charge_today": {
+        "name": "Grid Charge Today"
+      },
+      "battery_cost_solar_charge_today": {
+        "name": "Solar Charge Today"
+      },
+      "battery_cost_grid_charge_cost_today": {
+        "name": "Grid Charge Cost Today"
+      },
+      "battery_cost_grid_discharge_today": {
+        "name": "Grid Discharge Today"
+      },
+      "battery_cost_solar_discharge_today": {
+        "name": "Solar Discharge Today"
+      },
+      "battery_cost_solar_savings_today": {
+        "name": "Solar Savings Today",
+        "state_attributes": {
+          "solar_discharge_kwh": {
+            "name": "Solar Discharge Energy"
+          },
+          "avg_price_cent_kwh": {
+            "name": "Average Price"
+          }
+        }
+      },
+      "battery_cost_grid_arbitrage_profit_today": {
+        "name": "Grid Arbitrage Profit Today",
+        "state_attributes": {
+          "grid_discharge_kwh": {
+            "name": "Grid Discharge Energy"
+          },
+          "avg_charge_price": {
+            "name": "Average Charge Price"
+          },
+          "avg_discharge_price": {
+            "name": "Average Discharge Price"
+          }
+        }
+      },
+      "battery_cost_net_cost_today": {
+        "name": "Net Cost Today",
+        "state_attributes": {
+          "grid_charge_cost": {
+            "name": "Grid Charge Cost"
+          },
+          "solar_savings": {
+            "name": "Solar Savings"
+          },
+          "grid_arbitrage_profit": {
+            "name": "Grid Arbitrage Profit"
+          }
+        }
+      },
+      "battery_cost_total_profit_today": {
+        "name": "Total Profit Today",
+        "state_attributes": {
+          "solar_savings": {
+            "name": "Solar Savings"
+          },
+          "grid_arbitrage_profit": {
+            "name": "Grid Arbitrage Profit"
+          },
+          "grid_charge_cost": {
+            "name": "Grid Charge Cost"
+          }
+        }
       }
     },
     "button": {

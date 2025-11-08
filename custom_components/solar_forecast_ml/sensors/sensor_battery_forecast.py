@@ -145,7 +145,7 @@ class BatteryChargeFromSolarSensor(BaseBatteryForecastSensor):
     @property
     def native_value(self) -> Optional[float]:
         """Return energy charged from solar today"""
-        # This would require tracking - for now return estimate
+        # Placeholder - will be implemented with actual tracking
         # TODO: Implement actual tracking in future version
         if not self.coordinator.battery_collector:
             return None

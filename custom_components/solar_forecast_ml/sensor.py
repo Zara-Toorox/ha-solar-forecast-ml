@@ -75,6 +75,7 @@ from .sensors.sensor_states import (
 from .sensors.sensor_battery import BATTERY_SENSORS
 from .sensors.sensor_electricity_price import ELECTRICITY_PRICE_SENSORS
 from .sensors.sensor_battery_forecast import BATTERY_FORECAST_SENSORS
+from .sensors.sensor_battery_cost import BATTERY_COST_SENSORS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -164,11 +165,29 @@ async def async_setup_entry(
     electricity_enabled = entry.options.get(CONF_ELECTRICITY_ENABLED, False)
 
     if battery_enabled:
-        battery_entities = [sensor_class(coordinator, entry) for sensor_class in BATTERY_SENSORS]
-        battery_forecast_entities = [sensor_class(coordinator, entry) for sensor_class in BATTERY_FORECAST_SENSORS]
-        entities_to_add.extend(battery_entities)
-        entities_to_add.extend(battery_forecast_entities)
-        _LOGGER.info(f"Battery Management enabled - Adding {len(battery_entities) + len(battery_forecast_entities)} battery sensors")
+        # Get BatteryCoordinator (separate from Solar coordinator)
+        battery_coordinator_key = f"{entry.entry_id}_battery"
+        battery_coordinator = hass.data[DOMAIN].get(battery_coordinator_key)
+
+        if battery_coordinator:
+            # Battery sensors use Solar coordinator (legacy)
+            battery_entities = [sensor_class(coordinator, entry) for sensor_class in BATTERY_SENSORS]
+            battery_forecast_entities = [sensor_class(coordinator, entry) for sensor_class in BATTERY_FORECAST_SENSORS]
+
+            # Battery COST sensors use BatteryCoordinator (new)
+            battery_cost_entities = [sensor_class(battery_coordinator, entry) for sensor_class in BATTERY_COST_SENSORS]
+
+            entities_to_add.extend(battery_entities)
+            entities_to_add.extend(battery_forecast_entities)
+            entities_to_add.extend(battery_cost_entities)
+
+            _LOGGER.info(
+                f"Battery Management enabled - Adding {len(battery_entities)} battery sensors, "
+                f"{len(battery_forecast_entities)} forecast sensors, "
+                f"{len(battery_cost_entities)} cost sensors"
+            )
+        else:
+            _LOGGER.warning("Battery enabled but BatteryCoordinator not found - skipping battery sensors")
 
     if electricity_enabled:
         electricity_entities = [sensor_class(coordinator, entry) for sensor_class in ELECTRICITY_PRICE_SENSORS]
