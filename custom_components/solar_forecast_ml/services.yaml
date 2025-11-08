@@ -145,3 +145,24 @@ night_cleanup:
     Removes duplicate samples and zero-production samples from the database.
     Useful for testing data cleanup logic.
   fields: {}
+
+run_all_scheduled_tasks:
+  name: Run All Scheduled Tasks (Testing)
+  description: >
+    TESTING SERVICE: Execute ALL scheduled tasks in chronological order.
+    This simulates a complete day-night cycle for debugging.
+
+    Task execution order:
+    1. 23:00 - Battery Daily Rollup
+    2. 23:15 - Fetch Electricity Prices (aWATTar)
+    3. 23:30 - Finalize Current Day
+    4. 23:31 - Move to History
+    5. 23:32 - Calculate Statistics
+    6. 23:45 - Reset Daily Data
+    7. 00:01 - Battery Midnight Reset
+    8. 02:00 - Night Cleanup (Remove duplicates & zero-production samples)
+    9. 03:00 - ML Training (if ML mode available)
+    10. 06:00 - Morning Prediction
+
+    Use this to verify all tasks work correctly without waiting for scheduled times.
+  fields: {}

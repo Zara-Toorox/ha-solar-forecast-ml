@@ -22,11 +22,11 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-# [Version Update] Set version numbers to 8.2.0
-VERSION = "8.2.1"
-RELEASE_VERSION = "8.2.1"
-SOFTWARE_VERSION = "8.2.1"
-INTEGRATION_MODEL = "v8.2.1" # Model string might differ based on ML changes
+# [Version Update] Set version numbers to 8.2.4
+VERSION = "8.2.4"
+RELEASE_VERSION = "8.2.4"
+SOFTWARE_VERSION = "8.2.4"
+INTEGRATION_MODEL = "v8.2.4" # Model string might differ based on ML changes
 ML_VERSION = "10.0.0" # Keep ML Model version unless model structure changed significantly
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
@@ -203,6 +203,7 @@ SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM = "debugging_day_after_tomorrow_6pm" # 
 
 SERVICE_COLLECT_HOURLY_SAMPLE = "collect_hourly_sample"
 SERVICE_NIGHT_CLEANUP = "night_cleanup" # Manual night cleanup (remove duplicates and zero-production samples)
+SERVICE_RUN_ALL_SCHEDULED_TASKS = "run_all_scheduled_tasks" # Testing: Run all scheduled tasks in sequence
 
 # --- Other Constants ---
 ICON_SOLAR = "mdi:solar-power"

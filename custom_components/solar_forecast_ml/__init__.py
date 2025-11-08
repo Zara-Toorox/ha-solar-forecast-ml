@@ -41,6 +41,8 @@ from .const import (
     SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM,
     SERVICE_COLLECT_HOURLY_SAMPLE,
     SERVICE_NIGHT_CLEANUP,
+    SERVICE_RUN_ALL_SCHEDULED_TASKS,
+    CONF_BATTERY_ENABLED,
 )
 
 from .core.core_helpers import SafeDateTimeUtil as dt_util
@@ -158,7 +160,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.info(
         "="*70 + "\n"
-        "Solar Forecast ML v8.2.1 \"Sarpeidon\" 🌟 - Setup Complete! ✓\n"
+        "Solar Forecast ML v8 \"Sarpeidon\" 🌟 - Setup Complete! ✓\n"
         f"Mode: {mode_str} | Battery Management: {battery_str}\n"
         "\"The future is not set in stone, but with data we illuminate the path.\"\n"
         "Author: Zara-Toorox | Live long and prosper! 🖖\n" +
@@ -571,7 +573,132 @@ async def _async_register_services(
 
         except Exception as e:
             _LOGGER.error(f"Error during collect_hourly_sample service: {e}", exc_info=True)
-    
+
+    async def handle_run_all_scheduled_tasks(call: ServiceCall) -> None:
+        """Handle run_all_scheduled_tasks service call - Execute all scheduled tasks in order"""
+        _LOGGER.info("="*80)
+        _LOGGER.info("SERVICE: run_all_scheduled_tasks - Starting complete task sequence")
+        _LOGGER.info("="*80)
+
+        try:
+            # Get battery coordinator if available
+            battery_enabled = entry.options.get(CONF_BATTERY_ENABLED, entry.data.get(CONF_BATTERY_ENABLED, False))
+            battery_coordinator_key = f"{entry.entry_id}_battery"
+            battery_coordinator = hass.data[DOMAIN].get(battery_coordinator_key) if battery_enabled else None
+
+            # Task 1: 23:00 - Battery Daily Rollup
+            if battery_coordinator:
+                _LOGGER.info("TASK 1/10: [23:00] Battery Daily Rollup")
+                try:
+                    await battery_coordinator.async_daily_rollup()
+                    _LOGGER.info("✓ Task 1/10 completed: Battery Daily Rollup")
+                except Exception as e:
+                    _LOGGER.error(f"✗ Task 1/10 failed: Battery Daily Rollup - {e}", exc_info=True)
+            else:
+                _LOGGER.info("⊘ Task 1/10 skipped: Battery Daily Rollup (battery disabled)")
+
+            # Task 2: 23:15 - Fetch Electricity Prices
+            if battery_coordinator and battery_coordinator.electricity_service:
+                _LOGGER.info("TASK 2/10: [23:15] Fetch Electricity Prices (aWATTar)")
+                try:
+                    await battery_coordinator.async_refresh_prices()
+                    _LOGGER.info("✓ Task 2/10 completed: Fetch Electricity Prices")
+                except Exception as e:
+                    _LOGGER.error(f"✗ Task 2/10 failed: Fetch Electricity Prices - {e}", exc_info=True)
+            else:
+                _LOGGER.info("⊘ Task 2/10 skipped: Fetch Electricity Prices (battery disabled)")
+
+            # Task 3: 23:30 - Finalize Current Day
+            _LOGGER.info("TASK 3/10: [23:30] Finalize Current Day")
+            try:
+                if hasattr(coordinator, 'scheduled_tasks'):
+                    await coordinator.scheduled_tasks.finalize_day_task(None)
+                    _LOGGER.info("✓ Task 3/10 completed: Finalize Current Day")
+                else:
+                    _LOGGER.warning("✗ Task 3/10 failed: Scheduled tasks manager not available")
+            except Exception as e:
+                _LOGGER.error(f"✗ Task 3/10 failed: Finalize Current Day - {e}", exc_info=True)
+
+            # Task 4: 23:31 - Move to History
+            _LOGGER.info("TASK 4/10: [23:31] Move to History")
+            try:
+                if hasattr(coordinator, 'scheduled_tasks'):
+                    await coordinator.scheduled_tasks.move_to_history_task(None)
+                    _LOGGER.info("✓ Task 4/10 completed: Move to History")
+                else:
+                    _LOGGER.warning("✗ Task 4/10 failed: Scheduled tasks manager not available")
+            except Exception as e:
+                _LOGGER.error(f"✗ Task 4/10 failed: Move to History - {e}", exc_info=True)
+
+            # Task 5: 23:32 - Calculate Statistics
+            _LOGGER.info("TASK 5/10: [23:32] Calculate Statistics")
+            try:
+                if hasattr(coordinator, 'scheduled_tasks'):
+                    await coordinator.scheduled_tasks.calculate_stats_task(None)
+                    _LOGGER.info("✓ Task 5/10 completed: Calculate Statistics")
+                else:
+                    _LOGGER.warning("✗ Task 5/10 failed: Scheduled tasks manager not available")
+            except Exception as e:
+                _LOGGER.error(f"✗ Task 5/10 failed: Calculate Statistics - {e}", exc_info=True)
+
+            # Task 6: 23:45 - Reset Daily Data (skipped - no such task)
+            _LOGGER.info("TASK 6/10: [23:45] Reset Daily Data")
+            _LOGGER.info("⊘ Task 6/10 skipped: No reset_daily_data_task exists (handled by midnight)")
+
+            # Task 7: 00:01 - Battery Midnight Reset
+            _LOGGER.info("TASK 7/10: [00:01] Battery Midnight Reset")
+            try:
+                if hasattr(coordinator, 'scheduled_tasks'):
+                    # Call with dt_util.now() instead of None to avoid strftime error
+                    await coordinator.scheduled_tasks.reset_expected_production(dt_util.now())
+                    _LOGGER.info("✓ Task 7/10 completed: Battery Midnight Reset")
+                else:
+                    _LOGGER.warning("✗ Task 7/10 failed: Scheduled tasks manager not available")
+            except Exception as e:
+                _LOGGER.error(f"✗ Task 7/10 failed: Battery Midnight Reset - {e}", exc_info=True)
+
+            # Task 8: 02:00 - Night Cleanup (Remove duplicates & zero-production samples)
+            _LOGGER.info("TASK 8/10: [02:00] Night Cleanup")
+            try:
+                if hasattr(coordinator, 'scheduled_tasks'):
+                    await coordinator.scheduled_tasks.scheduled_night_cleanup(dt_util.now())
+                    _LOGGER.info("✓ Task 8/10 completed: Night Cleanup")
+                else:
+                    _LOGGER.warning("✗ Task 8/10 failed: Scheduled tasks manager not available")
+            except Exception as e:
+                _LOGGER.error(f"✗ Task 8/10 failed: Night Cleanup - {e}", exc_info=True)
+
+            # Task 9: 03:00 - ML Training (if ML mode available)
+            _LOGGER.info("TASK 9/10: [03:00] ML Training")
+            try:
+                if hasattr(coordinator, 'ml_mode') and coordinator.ml_mode:
+                    # Trigger ML retraining
+                    await coordinator.ml_mode.train_model()
+                    _LOGGER.info("✓ Task 9/10 completed: ML Training")
+                else:
+                    _LOGGER.info("⊘ Task 9/10 skipped: ML mode not available")
+            except Exception as e:
+                _LOGGER.error(f"✗ Task 9/10 failed: ML Training - {e}", exc_info=True)
+
+            # Task 10: 06:00 - Morning Prediction
+            _LOGGER.info("TASK 10/10: [06:00] Morning Prediction")
+            try:
+                if hasattr(coordinator, 'scheduled_tasks'):
+                    # Call with dt_util.now() instead of None to avoid strftime error
+                    await coordinator.scheduled_tasks.scheduled_morning_update(dt_util.now())
+                    _LOGGER.info("✓ Task 10/10 completed: Morning Prediction")
+                else:
+                    _LOGGER.warning("✗ Task 10/10 failed: Scheduled tasks manager not available")
+            except Exception as e:
+                _LOGGER.error(f"✗ Task 10/10 failed: Morning Prediction - {e}", exc_info=True)
+
+            _LOGGER.info("="*80)
+            _LOGGER.info("SERVICE: run_all_scheduled_tasks - Complete!")
+            _LOGGER.info("="*80)
+
+        except Exception as e:
+            _LOGGER.error(f"CRITICAL ERROR during run_all_scheduled_tasks: {e}", exc_info=True)
+
     # Register all services
     hass.services.async_register(DOMAIN, SERVICE_RETRAIN_MODEL, handle_retrain_model)
     hass.services.async_register(DOMAIN, SERVICE_RESET_LEARNING_DATA, handle_reset_model)
@@ -586,6 +713,7 @@ async def _async_register_services(
     hass.services.async_register(DOMAIN, SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM, handle_debugging_day_after_tomorrow_6pm)
     hass.services.async_register(DOMAIN, SERVICE_COLLECT_HOURLY_SAMPLE, handle_collect_hourly_sample)
     hass.services.async_register(DOMAIN, SERVICE_NIGHT_CLEANUP, handle_night_cleanup)
+    hass.services.async_register(DOMAIN, SERVICE_RUN_ALL_SCHEDULED_TASKS, handle_run_all_scheduled_tasks)
 
     _LOGGER.info("All services registered successfully")
 
@@ -606,6 +734,7 @@ def _async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM,
         SERVICE_COLLECT_HOURLY_SAMPLE,
         SERVICE_NIGHT_CLEANUP,
+        SERVICE_RUN_ALL_SCHEDULED_TASKS,
     ]
 
     for service in services:

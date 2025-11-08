@@ -1136,15 +1136,16 @@ class DataForecastHandler(DataManagerIO):
 
             # Create history entry from finalized data
             # FIX: Map correct field names from finalized structure
+            # All optional numeric fields get safe defaults to prevent None formatting errors
             history_entry = {
                 "date": date_str,
-                "forecast_kwh": predicted_kwh,  # From forecast_day
-                "actual_kwh": finalized_data.get("yield_kwh", 0.0),  # FIX: was "actual_kwh"
-                "accuracy": finalized_data.get("accuracy_percent", 0.0),  # FIX: was "accuracy"
-                "consumption_kwh": finalized_data.get("consumption_kwh"),
-                "autarky": autarky_percent,  # From autarky block
+                "forecast_kwh": predicted_kwh or 0.0,  # From forecast_day
+                "actual_kwh": finalized_data.get("yield_kwh") or 0.0,  # FIX: was "actual_kwh"
+                "accuracy": finalized_data.get("accuracy_percent") or 0.0,  # FIX: was "accuracy"
+                "consumption_kwh": finalized_data.get("consumption_kwh") or 0.0,  # Safe default
+                "autarky": autarky_percent or 0.0,  # From autarky block - safe default
                 "production_hours": production_hours_str,  # Keep formatted string
-                "peak_power_w": peak_power_w,  # From peak_today
+                "peak_power_w": peak_power_w or 0.0,  # From peak_today - safe default
                 "peak_at": peak_at,  # From peak_today (time only, format: "HH:MM:SS")
                 "forecast_source": forecast_source,  # From forecast_day
                 "finalized_at": finalized_data.get("at")  # FIX: was "finalized_at"
@@ -1164,11 +1165,16 @@ class DataForecastHandler(DataManagerIO):
 
             await self._atomic_write_json(self.daily_forecasts_file, data)
 
+            # Safe logging with None-check for optional values
+            forecast_val = history_entry['forecast_kwh'] or 0.0
+            actual_val = history_entry['actual_kwh'] or 0.0
+            accuracy_val = history_entry['accuracy'] or 0.0
+
             _LOGGER.info(
                 f"Moved to history: {date_str} - "
-                f"Forecast={history_entry['forecast_kwh']:.2f} kWh, "
-                f"Actual={history_entry['actual_kwh']:.2f} kWh, "
-                f"Accuracy={history_entry['accuracy']:.1f}%"
+                f"Forecast={forecast_val:.2f} kWh, "
+                f"Actual={actual_val:.2f} kWh, "
+                f"Accuracy={accuracy_val:.1f}%"
             )
 
             return True
