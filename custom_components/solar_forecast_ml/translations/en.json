@@ -234,13 +234,49 @@
         "name": "Yield Sensor State"
       },
       "cloudiness_trend_1h": {
-        "name": "Cloudiness Trend 1h"
+        "name": "Cloud Trend 1h",
+        "state": {
+          "getting_clearer": "Getting clearer",
+          "slightly_clearer": "Slightly clearer",
+          "stable": "Stable",
+          "slightly_cloudier": "Slightly cloudier",
+          "getting_cloudier": "Getting cloudier"
+        }
       },
       "cloudiness_trend_3h": {
-        "name": "Cloudiness Trend 3h"
+        "name": "Cloud Trend 3h",
+        "state": {
+          "much_clearer": "Much clearer",
+          "getting_clearer": "Getting clearer",
+          "relatively_stable": "Relatively stable",
+          "getting_cloudier": "Getting cloudier",
+          "much_cloudier": "Much cloudier"
+        }
       },
       "cloudiness_volatility": {
-        "name": "Cloudiness Volatility"
+        "name": "Weather Stability",
+        "state": {
+          "very_stable": "Very stable",
+          "stable": "Stable",
+          "moderate": "Moderate",
+          "variable": "Variable",
+          "very_variable": "Very variable"
+        },
+        "state_attributes": {
+          "interpretation": {
+            "name": "Interpretation",
+            "state": {
+              "very_stable": "Very stable",
+              "stable": "Stable",
+              "moderate": "Moderate",
+              "variable": "Variable",
+              "very_variable": "Very variable"
+            }
+          },
+          "volatility_percent": {
+            "name": "Volatility"
+          }
+        }
       },
       "battery_cost_grid_charge_today": {
         "name": "Grid Charge Today"
@@ -312,9 +348,6 @@
       }
     },
     "button": {
-      "manual_forecast": {
-        "name": "Update Forecast"
-      },
       "manual_learning": {
         "name": "Train Model"
       }

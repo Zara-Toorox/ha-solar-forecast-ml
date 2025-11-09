@@ -248,9 +248,38 @@ class DataManager(DataManagerIO):
         production_seconds: int = 0
     ) -> bool:
         """Finalize today with actual values by @Zara"""
-        return await self.forecast_handler.finalize_today(
+        # Finalize in daily_forecasts.json
+        success = await self.forecast_handler.finalize_today(
             yield_kwh, consumption_kwh, production_seconds
         )
+
+        if success:
+            # Calculate accuracy for prediction_history.json
+            try:
+                # Get today's forecast to calculate accuracy
+                current_day = await self.forecast_handler.get_current_day_forecast()
+                accuracy_percent = None
+
+                if current_day and "forecast_day" in current_day:
+                    forecast_kwh = current_day["forecast_day"].get("prediction_kwh")
+                    if forecast_kwh and forecast_kwh > 0:
+                        error = abs(forecast_kwh - yield_kwh)
+                        accuracy = max(0.0, 100.0 - (error / forecast_kwh * 100))
+                        accuracy_percent = round(accuracy, 1)
+
+                # Update prediction_history.json with actual values
+                await self.update_today_predictions_actual(
+                    actual_value=yield_kwh,
+                    accuracy=accuracy_percent
+                )
+                _LOGGER.debug(
+                    f"Updated prediction_history.json: actual_value={yield_kwh:.2f} kWh, "
+                    f"accuracy={f'{accuracy_percent:.1f}' if accuracy_percent else 'N/A'}%"
+                )
+            except Exception as e:
+                _LOGGER.warning(f"Failed to update prediction_history with actual values: {e}")
+
+        return success
 
     async def get_history(
         self,

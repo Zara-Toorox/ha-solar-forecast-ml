@@ -37,6 +37,8 @@ from .const import (
     CONF_POWER_ENTITY,
     CONF_SOLAR_YIELD_TODAY,
     CONF_TOTAL_CONSUMPTION_TODAY,
+    CONF_GRID_IMPORT_TODAY,
+    CONF_GRID_EXPORT_TODAY,
     CONF_SOLAR_CAPACITY,
     CONF_RAIN_SENSOR,
     CONF_LUX_SENSOR,
@@ -101,6 +103,15 @@ def _get_base_schema(defaults: dict | None) -> vol.Schema:
         vol.Optional(
             CONF_TOTAL_CONSUMPTION_TODAY,
             default=_get_default(defaults, CONF_TOTAL_CONSUMPTION_TODAY)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+
+        vol.Optional(
+            CONF_GRID_IMPORT_TODAY,
+            default=_get_default(defaults, CONF_GRID_IMPORT_TODAY)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_GRID_EXPORT_TODAY,
+            default=_get_default(defaults, CONF_GRID_EXPORT_TODAY)
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
 
         vol.Optional(
@@ -314,12 +325,9 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
             except (ValueError, TypeError): errors[CONF_UPDATE_INTERVAL] = "invalid_input"
 
             if errors:
-                 options_schema = self._get_options_schema()
                  return self.async_show_form(
                      step_id="init",
-                     data_schema=self.add_suggested_values_to_schema(
-                         options_schema, user_input or self.config_entry.options
-                     ),
+                     data_schema=self._get_options_schema(),
                      errors=errors,
                  )
 
@@ -333,32 +341,18 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
                      CONF_NOTIFY_SUCCESSFUL_LEARNING,
                      CONF_BATTERY_ENABLED,  # Only battery enable flag
                      CONF_ELECTRICITY_ENABLED  # Only electricity enable flag
-                 ]},
-                 CONF_DIAGNOSTIC: user_input.get(CONF_DIAGNOSTIC, True)
+                 ]}
             }
 
-            # Update options only (no data changes needed here)
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                options=updated_options
-            )
+            # Return updated options to OptionsFlowWithReload
+            return self.async_create_entry(title="", data=updated_options)
 
-            return self.async_create_entry(title="", data={})
-
-        # Show form with suggested values from options or data (fallback)
+        # Show form with current options (defaults are already in schema)
         options_schema = self._get_options_schema()
-
-        # Merge options with data as fallback for suggested values
-        suggested_values = {
-            **self.config_entry.data,  # Fallback to data
-            **self.config_entry.options,  # Override with options if present
-        }
 
         return self.async_show_form(
             step_id="init",
-            data_schema=self.add_suggested_values_to_schema(
-                options_schema, suggested_values
-            ),
+            data_schema=options_schema,
             errors=errors,
         )
 

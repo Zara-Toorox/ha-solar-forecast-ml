@@ -759,10 +759,10 @@ class DataForecastHandler(DataManagerIO):
                 f"Production={production_hours}, "
                 f"Accuracy={f'{accuracy_percent:.1f}' if accuracy_percent else 'N/A'}%"
             )
-            
+
             # Update aggregated statistics
             await self._update_aggregated_data(yield_kwh, consumption_kwh)
-            
+
             return True
             
         except Exception as e:

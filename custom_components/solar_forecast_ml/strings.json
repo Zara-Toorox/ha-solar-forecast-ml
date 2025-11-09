@@ -9,6 +9,8 @@
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
+          "grid_import_today": "Grid Import Today (kWh)",
+          "grid_export_today": "Grid Export Today (kWh)",
           "solar_capacity": "System Capacity (kWp)",
           "rain_sensor": "Rain Sensor",
           "lux_sensor": "Illuminance Sensor (lx)",
@@ -22,6 +24,8 @@
           "power_entity": "Current power in Watts (Required)",
           "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
           "total_consumption_today": "Daily consumption in kWh (Optional)",
+          "grid_import_today": "Grid import in kWh - Energy from grid (Optional, improves autarky calculation)",
+          "grid_export_today": "Grid export in kWh - Energy to grid (Optional)",
           "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, default: 5.0)",
           "rain_sensor": "External rain sensor (Optional)",
           "lux_sensor": "External illuminance in Lux (Optional)",
@@ -39,6 +43,8 @@
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
+          "grid_import_today": "Grid Import Today (kWh)",
+          "grid_export_today": "Grid Export Today (kWh)",
           "solar_capacity": "System Capacity (kWp)",
           "rain_sensor": "Rain Sensor",
           "lux_sensor": "Illuminance Sensor (lx)",
@@ -58,6 +64,8 @@
           "power_entity": "Current power in Watts (Required)",
           "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
           "total_consumption_today": "Daily consumption in kWh (Optional)",
+          "grid_import_today": "Grid import in kWh - Energy from grid (Optional, improves autarky calculation)",
+          "grid_export_today": "Grid export in kWh - Energy to grid (Optional)",
           "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, default: 5.0)",
           "rain_sensor": "External rain sensor (Optional)",
           "lux_sensor": "External illuminance in Lux (Optional)",
@@ -152,9 +160,6 @@
   },
   "entity": {
     "sensor": {
-      "today_forecast": {
-        "name": "Forecast Today"
-      },
       "tomorrow_forecast": {
         "name": "Forecast Tomorrow"
       },
@@ -211,12 +216,39 @@
           "rate_limited": "Rate Limited",
           "unavailable": "Unavailable"
         }
+      },
+      "cloudiness_trend_1h": {
+        "name": "Cloudiness Trend 1h",
+        "state": {
+          "getting_clearer": "Getting Clearer",
+          "slightly_clearer": "Slightly Clearer",
+          "stable": "Stable",
+          "slightly_cloudier": "Slightly Cloudier",
+          "getting_cloudier": "Getting Cloudier"
+        }
+      },
+      "cloudiness_trend_3h": {
+        "name": "Cloudiness Trend 3h",
+        "state": {
+          "much_clearer": "Much Clearer",
+          "getting_clearer": "Getting Clearer",
+          "relatively_stable": "Relatively Stable",
+          "getting_cloudier": "Getting Cloudier",
+          "much_cloudier": "Much Cloudier"
+        }
+      },
+      "cloudiness_volatility": {
+        "name": "Weather Stability",
+        "state": {
+          "very_stable": "Very Stable",
+          "stable": "Stable",
+          "moderate": "Moderate",
+          "variable": "Variable",
+          "very_variable": "Very Variable"
+        }
       }
     },
     "button": {
-      "manual_forecast": {
-        "name": "Update Forecast"
-      },
       "manual_learning": {
         "name": "Train Model"
       }

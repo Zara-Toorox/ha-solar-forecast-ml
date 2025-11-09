@@ -766,6 +766,7 @@ class DataSchemaValidator:
     async def _validate_prediction_history(self) -> bool:
         """Validate prediction_history json by @Zara"""
         file_path = self.data_dir / "stats" / "prediction_history.json"
+        old_file_path = self.data_dir / "data" / "prediction_history.json"
 
         data = await self._read_json(file_path)
         if data is None:
@@ -795,7 +796,26 @@ class DataSchemaValidator:
 
         if modified:
             self._log_migration("prediction_history.json: Schema updated and validated")
-            return await self._write_json(file_path, data)
+            await self._write_json(file_path, data)
+
+        # CLEANUP: Remove old prediction_history.json from data/ directory if it exists
+        # This file is a relict from before the stats/ subdirectory migration
+        if old_file_path.exists():
+            try:
+                # Safety check: Only remove if new file has data
+                if data.get("predictions") and len(data["predictions"]) > 0:
+                    self._log_migration(
+                        f"Removing obsolete data/prediction_history.json "
+                        f"(backup exists in backups/pre_migration/)"
+                    )
+                    await self.hass.async_add_executor_job(old_file_path.unlink)
+                else:
+                    _LOGGER.warning(
+                        "Old data/prediction_history.json exists but new file is empty - "
+                        "keeping old file for safety. Manual review recommended."
+                    )
+            except Exception as e:
+                _LOGGER.warning(f"Failed to remove old prediction_history.json: {e}")
 
         return True
 

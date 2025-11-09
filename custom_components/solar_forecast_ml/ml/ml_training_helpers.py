@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from ..const import MIN_TRAINING_DATA_POINTS, CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX, ML_MODEL_VERSION
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
-from .ml_types import LearnedWeights, TrainingResult
+from .ml_types import LearnedWeights
 
 _LOGGER = logging.getLogger(__name__)
 

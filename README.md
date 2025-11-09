@@ -8,7 +8,7 @@
 
 <a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee ' /></a>
 
-Imagine your smart home not just reacting, but **predicting** - using machine learning that adapts daily to your unique solar installation. That's exactly what **Solar Forecast ML** does, and with Version 6 "Risa" we reach a new dimension of precision.
+Imagine your smart home not just reacting, but **predicting** - using machine learning that adapts daily to your unique solar installation. That's exactly what **Solar Forecast ML** does, and with Version 8 "Sarpeidon" we reach a new dimension of precision.
 
 ## What Makes This Integration Special?
 

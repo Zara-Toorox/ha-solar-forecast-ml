@@ -368,6 +368,9 @@ class ScheduledTasksManager:
     async def end_of_day_workflow(self, now: datetime) -> None:
         """Consolidated End-of-Day Workflow at 23:30 - All tasks in sequence by @Zara"""
         current_time = now if now is not None else dt_util.now()
+
+        # CRITICAL FIX: Ensure this log ALWAYS appears
+        _LOGGER.critical(f"🔴 END_OF_DAY_WORKFLOW TRIGGERED at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
         _LOGGER.info(f"=== END_OF_DAY_WORKFLOW Started (Local Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}) ===")
 
         workflow_start = asyncio.get_event_loop().time()
@@ -400,8 +403,27 @@ class ScheduledTasksManager:
             workflow_duration = asyncio.get_event_loop().time() - workflow_start
             _LOGGER.info(f"=== END_OF_DAY_WORKFLOW Completed (Duration: {workflow_duration:.1f}s) ===")
 
+            # Update system status sensor
+            self.coordinator.update_system_status(
+                event_type="end_of_day_workflow",
+                event_status="success",
+                event_summary="Tagesabschluss erfolgreich abgeschlossen",
+                event_details={
+                    "duration_seconds": round(workflow_duration, 1),
+                    "steps_completed": "4/4"
+                }
+            )
+
         except Exception as e:
             _LOGGER.error(f"END_OF_DAY_WORKFLOW failed: {e}", exc_info=True)
+
+            # Update system status with error
+            self.coordinator.update_system_status(
+                event_type="end_of_day_workflow",
+                event_status="failed",
+                event_summary=f"Tagesabschluss fehlgeschlagen: {str(e)}",
+                event_details={"error": str(e)}
+            )
 
     async def _finalize_day_internal(self, now: datetime) -> None:
         """Internal: Finalize current day with actual values by @Zara"""

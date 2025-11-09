@@ -46,6 +46,9 @@ from .sensors.sensor_base import (
     AverageAccuracy30DaysSensor,
 )
 
+# Import system status sensor
+from .sensors.sensor_system_status import SystemStatusSensor
+
 # Import diagnostic sensors
 from .sensors.sensor_diagnostic import (
     DiagnosticStatusSensor,
@@ -99,8 +102,15 @@ async def async_setup_entry(
     )
     
     # Core sensors are always added
+    # System Status Sensor (always added)
+    system_status_sensor = SystemStatusSensor(coordinator, entry.entry_id)
+    coordinator.system_status_sensor = system_status_sensor  # Register with coordinator
+
+    # NOTE: Do NOT call update_system_status() here - sensor not yet added to hass!
+    # Initial status will be set in __init__ or after entity is added
+
     core_entities = [
-        SolarForecastSensor(coordinator, entry, "remaining"),
+        system_status_sensor,
         SolarForecastSensor(coordinator, entry, "tomorrow"),
         PeakProductionHourSensor(coordinator, entry),
         ProductionTimeSensor(coordinator, entry),

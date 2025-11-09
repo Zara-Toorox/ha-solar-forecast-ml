@@ -35,7 +35,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ..const import DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, ML_VERSION
 from ..coordinator import SolarForecastMLCoordinator
-from .sensor_mixins import FileBasedSensorMixin, StatisticsFileBasedMixin
+from .sensor_mixins import FileBasedSensorMixin, StatisticsFileBasedMixin, AlwaysAvailableFileBasedMixin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ class SolarForecastSensor(SensorEntity):
         config = self._key_mapping[key]
         self._data_key = config["data_key"]
         
-        self._attr_unique_id = f"{entry.entry_id}_{key}"
+        self._attr_unique_id = f"{entry.entry_id}_ml_forecast_{key}"
         self._attr_translation_key = config["translation_key"]
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL
@@ -199,7 +199,7 @@ class SolarForecastSensor(SensorEntity):
         self.async_write_ha_state()
 
 
-class NextHourSensor(FileBasedSensorMixin, SensorEntity):
+class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
     """Sensor for the next hours solar forecast - reads from daily_forecastsjson by @Zara"""
 
     _attr_has_entity_name = True
@@ -209,9 +209,9 @@ class NextHourSensor(FileBasedSensorMixin, SensorEntity):
         """Initialize the next hour sensor by @Zara"""
         self._coordinator = coordinator
         self.entry = entry
-        FileBasedSensorMixin.__init__(self)
+        AlwaysAvailableFileBasedMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_next_hour"
+        self._attr_unique_id = f"{entry.entry_id}_ml_next_hour_forecast"
         self._attr_translation_key = "next_hour_forecast"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL
@@ -221,6 +221,11 @@ class NextHourSensor(FileBasedSensorMixin, SensorEntity):
             identifiers={(DOMAIN, entry.entry_id)},
         )
 
+    @property
+    def native_value(self) -> float:
+        """Return next hour forecast or 0.0 if no data by @Zara"""
+        return self._cached_value if self._cached_value is not None else 0.0
+
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
         """Extract next hour forecast from daily_forecasts.json by @Zara"""
         today = forecast_data.get("today", {})
@@ -228,7 +233,7 @@ class NextHourSensor(FileBasedSensorMixin, SensorEntity):
         return next_hour.get("prediction_kwh")
 
 
-class PeakProductionHourSensor(FileBasedSensorMixin, SensorEntity):
+class PeakProductionHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
     """Sensor indicating the forecasted best production hour from morning forecast by @Zara"""
 
     _attr_has_entity_name = True
@@ -238,14 +243,19 @@ class PeakProductionHourSensor(FileBasedSensorMixin, SensorEntity):
         """Initialize the peak hour sensor by @Zara"""
         self._coordinator = coordinator
         self.entry = entry
-        FileBasedSensorMixin.__init__(self)
+        AlwaysAvailableFileBasedMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_peak_production_hour"
+        self._attr_unique_id = f"{entry.entry_id}_ml_peak_production_hour"
         self._attr_translation_key = "peak_production_hour"
         self._attr_icon = "mdi:solar-power-variant-outline"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
         )
+
+    @property
+    def native_value(self) -> str:
+        """Return peak hour or '--:--' if no data by @Zara"""
+        return self._cached_value if self._cached_value is not None else "--:--"
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[str]:
         """Extract forecasted best hour from daily_forecasts.json by @Zara"""
@@ -261,7 +271,7 @@ class AverageYieldSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize the average yield sensor by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_average_yield"
+        self._attr_unique_id = f"{entry.entry_id}_ml_average_yield"
         self._attr_translation_key = "average_yield"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -286,8 +296,10 @@ class AutarkySensor(SensorEntity):
         self.entry = entry
         self._yield_entity = entry.data.get("solar_yield_today")
         self._consumption_entity = entry.data.get("total_consumption_today")
-        
-        self._attr_unique_id = f"{entry.entry_id}_autarky"
+        self._grid_import_entity = entry.data.get("grid_import_today")
+        self._grid_export_entity = entry.data.get("grid_export_today")
+
+        self._attr_unique_id = f"{entry.entry_id}_ml_self_sufficiency"
         self._attr_translation_key = "self_sufficiency"
         self._attr_native_unit_of_measurement = PERCENTAGE
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -310,39 +322,57 @@ class AutarkySensor(SensorEntity):
         coord_value = getattr(self._coordinator, 'autarky_today', None)
         if coord_value is not None:
             return max(0.0, min(100.0, coord_value))
-        
-        # Fallback: Calculate live
-        if not (self._yield_entity and self._consumption_entity):
-            return None
-            
-        try:
-            yield_state = self.hass.states.get(self._yield_entity)
-            consumption_state = self.hass.states.get(self._consumption_entity)
-            
-            if (yield_state and consumption_state and
-                yield_state.state not in ["unavailable", "unknown", "none", None, ""] and
-                consumption_state.state not in ["unavailable", "unknown", "none", None, ""]):
-                
-                yield_val = float(str(yield_state.state).split()[0].replace(",", "."))
-                consumption_val = float(str(consumption_state.state).split()[0].replace(",", "."))
-                
-                if consumption_val > 0:
-                    autarky = (yield_val / consumption_val) * 100.0
-                    return max(0.0, min(100.0, autarky))
-        except (ValueError, TypeError, AttributeError):
-            pass
-        
+
+        # Calculate live with Grid Import if available
+        if self._grid_import_entity and self._consumption_entity:
+            try:
+                grid_import_state = self.hass.states.get(self._grid_import_entity)
+                consumption_state = self.hass.states.get(self._consumption_entity)
+
+                if (grid_import_state and consumption_state and
+                    grid_import_state.state not in ["unavailable", "unknown", "none", None, ""] and
+                    consumption_state.state not in ["unavailable", "unknown", "none", None, ""]):
+
+                    grid_import_val = float(str(grid_import_state.state).split()[0].replace(",", "."))
+                    consumption_val = float(str(consumption_state.state).split()[0].replace(",", "."))
+
+                    if consumption_val > 0:
+                        # Autarky = (Consumption - Grid Import) / Consumption * 100
+                        autarky = ((consumption_val - grid_import_val) / consumption_val) * 100.0
+                        return max(0.0, min(100.0, autarky))
+            except (ValueError, TypeError, AttributeError):
+                pass
+
+        # Fallback to old calculation (Yield / Consumption) if Grid Import not configured
+        if self._yield_entity and self._consumption_entity:
+            try:
+                yield_state = self.hass.states.get(self._yield_entity)
+                consumption_state = self.hass.states.get(self._consumption_entity)
+
+                if (yield_state and consumption_state and
+                    yield_state.state not in ["unavailable", "unknown", "none", None, ""] and
+                    consumption_state.state not in ["unavailable", "unknown", "none", None, ""]):
+
+                    yield_val = float(str(yield_state.state).split()[0].replace(",", "."))
+                    consumption_val = float(str(consumption_state.state).split()[0].replace(",", "."))
+
+                    if consumption_val > 0:
+                        autarky = (yield_val / consumption_val) * 100.0
+                        return max(0.0, min(100.0, autarky))
+            except (ValueError, TypeError, AttributeError):
+                pass
+
         return None
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass by @Zara"""
         await super().async_added_to_hass()
-        
+
         # Listen to coordinator updates
         self.async_on_remove(
             self._coordinator.async_add_listener(self._handle_coordinator_update)
         )
-        
+
         # Listen to yield and consumption sensor changes for live updates
         if self._yield_entity:
             self.async_on_remove(
@@ -356,7 +386,20 @@ class AutarkySensor(SensorEntity):
                     self.hass, self._consumption_entity, self._handle_sensor_change
                 )
             )
-        
+        # Listen to grid import/export sensor changes for live updates
+        if self._grid_import_entity:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, self._grid_import_entity, self._handle_sensor_change
+                )
+            )
+        if self._grid_export_entity:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, self._grid_export_entity, self._handle_sensor_change
+                )
+            )
+
         # Initial state
         self.async_write_ha_state()
 
@@ -383,7 +426,7 @@ class ExpectedDailyProductionSensor(FileBasedSensorMixin, SensorEntity):
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_expected_daily_production"
+        self._attr_unique_id = f"{entry.entry_id}_ml_expected_daily_production"
         self._attr_translation_key = "expected_daily_production"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL
@@ -414,7 +457,7 @@ class ProductionTimeSensor(FileBasedSensorMixin, SensorEntity):
         self._coordinator = coordinator
         FileBasedSensorMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_production_time"
+        self._attr_unique_id = f"{entry.entry_id}_ml_production_time"
         self._attr_translation_key = "production_time"
         self._attr_icon = "mdi:timer-outline"
         self._attr_device_info = DeviceInfo(
@@ -435,7 +478,7 @@ class ProductionTimeSensor(FileBasedSensorMixin, SensorEntity):
 
 # --- New Statistical Sensors from daily_forecasts.json ---
 
-class MaxPeakTodaySensor(FileBasedSensorMixin, SensorEntity):
+class MaxPeakTodaySensor(AlwaysAvailableFileBasedMixin, SensorEntity):
     """Sensor for todays maximum power peak by @Zara"""
 
     _attr_has_entity_name = True
@@ -445,9 +488,9 @@ class MaxPeakTodaySensor(FileBasedSensorMixin, SensorEntity):
         """Initialize the max peak today sensor by @Zara"""
         self._coordinator = coordinator
         self.entry = entry
-        FileBasedSensorMixin.__init__(self)
+        AlwaysAvailableFileBasedMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_max_peak_today"
+        self._attr_unique_id = f"{entry.entry_id}_ml_max_peak_today"
         self._attr_translation_key = "max_peak_today"
         self._attr_native_unit_of_measurement = "W"
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -458,9 +501,9 @@ class MaxPeakTodaySensor(FileBasedSensorMixin, SensorEntity):
         )
 
     @property
-    def available(self) -> bool:
-        """Sensor is available if we have a value > 0 by @Zara"""
-        return self._cached_value is not None and self._cached_value > 0
+    def native_value(self) -> float:
+        """Return max peak or 0 if no data by @Zara"""
+        return self._cached_value if self._cached_value is not None else 0.0
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
         """Extract max peak today from daily_forecasts.json by @Zara"""
@@ -469,7 +512,7 @@ class MaxPeakTodaySensor(FileBasedSensorMixin, SensorEntity):
         return peak_today.get("power_w", 0.0)
 
 
-class MaxPeakAllTimeSensor(FileBasedSensorMixin, SensorEntity):
+class MaxPeakAllTimeSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
     """Sensor for all-time maximum power peak by @Zara"""
 
     _attr_has_entity_name = True
@@ -480,9 +523,9 @@ class MaxPeakAllTimeSensor(FileBasedSensorMixin, SensorEntity):
         self._coordinator = coordinator
         self.entry = entry
         self._cached_date: Optional[str] = None
-        FileBasedSensorMixin.__init__(self)
+        AlwaysAvailableFileBasedMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_max_peak_all_time"
+        self._attr_unique_id = f"{entry.entry_id}_ml_max_peak_all_time"
         self._attr_translation_key = "max_peak_all_time"
         self._attr_native_unit_of_measurement = "W"
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -493,9 +536,9 @@ class MaxPeakAllTimeSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     @property
-    def available(self) -> bool:
-        """Sensor is available if we have a value > 0 by @Zara"""
-        return self._cached_value is not None and self._cached_value > 0
+    def native_value(self) -> float:
+        """Return max peak all time or 0 if no data by @Zara"""
+        return self._cached_value if self._cached_value is not None else 0.0
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -525,7 +568,7 @@ class ForecastDayAfterTomorrowSensor(FileBasedSensorMixin, SensorEntity):
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_forecast_day_after_tomorrow"
+        self._attr_unique_id = f"{entry.entry_id}_ml_forecast_day_after_tomorrow"
         self._attr_translation_key = "forecast_day_after_tomorrow"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL
@@ -554,7 +597,7 @@ class MonthlyYieldSensor(StatisticsFileBasedMixin, SensorEntity):
         self.entry = entry
         StatisticsFileBasedMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_monthly_yield"
+        self._attr_unique_id = f"{entry.entry_id}_ml_monthly_yield"
         self._attr_translation_key = "monthly_yield"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL  # FIX: Not INCREASING - resets monthly
@@ -583,7 +626,7 @@ class MonthlyConsumptionSensor(StatisticsFileBasedMixin, SensorEntity):
         self.entry = entry
         StatisticsFileBasedMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_monthly_consumption"
+        self._attr_unique_id = f"{entry.entry_id}_ml_monthly_consumption"
         self._attr_translation_key = "monthly_consumption"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL  # FIX: Not INCREASING - resets monthly
@@ -612,7 +655,7 @@ class WeeklyYieldSensor(StatisticsFileBasedMixin, SensorEntity):
         self.entry = entry
         StatisticsFileBasedMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_weekly_yield"
+        self._attr_unique_id = f"{entry.entry_id}_ml_weekly_yield"
         self._attr_translation_key = "weekly_yield"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL  # FIX: Not INCREASING - resets weekly
@@ -641,7 +684,7 @@ class WeeklyConsumptionSensor(StatisticsFileBasedMixin, SensorEntity):
         self.entry = entry
         StatisticsFileBasedMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_weekly_consumption"
+        self._attr_unique_id = f"{entry.entry_id}_ml_weekly_consumption"
         self._attr_translation_key = "weekly_consumption"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL  # FIX: Not INCREASING - resets weekly
@@ -670,7 +713,7 @@ class AverageYield7DaysSensor(FileBasedSensorMixin, SensorEntity):
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_avg_yield_7d"
+        self._attr_unique_id = f"{entry.entry_id}_ml_avg_yield_7d"
         self._attr_translation_key = "avg_yield_7d"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL
@@ -699,7 +742,7 @@ class AverageYield30DaysSensor(FileBasedSensorMixin, SensorEntity):
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_avg_yield_30d"
+        self._attr_unique_id = f"{entry.entry_id}_ml_avg_yield_30d"
         self._attr_translation_key = "avg_yield_30d"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_state_class = SensorStateClass.TOTAL
@@ -728,7 +771,7 @@ class AverageAutarkyMonthSensor(FileBasedSensorMixin, SensorEntity):
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_avg_autarky_month"
+        self._attr_unique_id = f"{entry.entry_id}_ml_avg_autarky_month"
         self._attr_translation_key = "avg_autarky_month"
         self._attr_native_unit_of_measurement = PERCENTAGE
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -756,7 +799,7 @@ class AverageAccuracy30DaysSensor(FileBasedSensorMixin, SensorEntity):
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
 
-        self._attr_unique_id = f"{entry.entry_id}_avg_accuracy_30d"
+        self._attr_unique_id = f"{entry.entry_id}_ml_avg_accuracy_30d"
         self._attr_translation_key = "avg_accuracy_30d"
         self._attr_native_unit_of_measurement = PERCENTAGE
         self._attr_state_class = SensorStateClass.MEASUREMENT

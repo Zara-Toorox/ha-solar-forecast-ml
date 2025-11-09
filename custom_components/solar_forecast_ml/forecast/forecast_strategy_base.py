@@ -19,7 +19,7 @@ Copyright (C) 2025 Zara-Toorox
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field # Import field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,6 +49,9 @@ class ForecastResult:
     # Best production hour for today (0-23)
     best_hour_today: Optional[int] = None          # Hour with highest predicted production (0-23)
     best_hour_production_kwh: Optional[float] = None  # Predicted production in that hour (kWh)
+
+    # Hourly forecast values (optional - for detailed hourly breakdown)
+    hourly_values: Optional[List[Dict[str, Any]]] = None  # List of {hour, datetime, production_kwh, date}
 
     def __post_init__(self):
          """Validate values after initialization by @Zara"""
@@ -84,6 +87,8 @@ class ForecastResult:
             result["_features_used_count"] = self.features_used # Renamed key slightly
         if self.model_accuracy is not None:
             result["_ml_model_accuracy"] = round(self.model_accuracy, 4) # More precision
+        if self.hourly_values is not None:
+            result["hourly"] = self.hourly_values  # Include hourly breakdown
 
         return result
 

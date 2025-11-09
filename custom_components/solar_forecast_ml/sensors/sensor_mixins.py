@@ -165,3 +165,12 @@ class StatisticsFileBasedMixin(FileBasedSensorMixin):
     def native_value(self) -> float:
         """Return value or 0.0 if None by @Zara"""
         return self._cached_value if self._cached_value is not None else 0.0
+
+
+class AlwaysAvailableFileBasedMixin(FileBasedSensorMixin):
+    """Mixin for sensors that should always be available with fallback values by @Zara"""
+
+    @property
+    def available(self) -> bool:
+        """Always available - shows fallback value if no data by @Zara"""
+        return True

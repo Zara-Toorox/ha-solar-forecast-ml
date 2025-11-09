@@ -362,6 +362,13 @@ class ForecastOrchestrator:
             best_hour_kwh = rule_result.best_hour_production_kwh
             _LOGGER.debug(f"Using Rule-based best hour: {best_hour}:00 with {best_hour_kwh:.3f} kWh")
 
+        # Get hourly values (prefer ML if available, otherwise use rule-based)
+        hourly_values = []
+        if ml_result and ml_result.hourly_values:
+            hourly_values = ml_result.hourly_values
+        elif rule_result and rule_result.hourly_values:
+            hourly_values = rule_result.hourly_values
+
         # Save prediction to history
         try:
             model_version = self._ml_predictor.current_weights.model_version if self._ml_predictor and self._ml_predictor.current_weights else ML_MODEL_VERSION
@@ -390,7 +397,8 @@ class ForecastOrchestrator:
             "method": method_str,
             "model_accuracy": model_accuracy if self._ml_predictor else None,
             "best_hour": best_hour,
-            "best_hour_kwh": round(best_hour_kwh, 3) if best_hour_kwh is not None else None
+            "best_hour_kwh": round(best_hour_kwh, 3) if best_hour_kwh is not None else None,
+            "hourly": hourly_values  # Include hourly breakdown
         }
 
     def calculate_next_hour_prediction(

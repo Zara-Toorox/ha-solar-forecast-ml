@@ -38,6 +38,7 @@ from ..const import (
     SERVICE_DEBUGGING_TOMORROW_12PM,
     SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6AM,
     SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM,
+    SERVICE_LOCK_TODAY_FORECAST,
     SERVICE_COLLECT_HOURLY_SAMPLE,
     SERVICE_NIGHT_CLEANUP,
     SERVICE_RUN_ALL_SCHEDULED_TASKS,
@@ -158,6 +159,13 @@ class ServiceRegistry:
                 name=SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM,
                 handler=self._handle_debugging_day_after_tomorrow_6pm,
                 description="Debug: Simulate 18 PM day after tomorrow lock"
+            ),
+
+            # Manual Services - User control
+            ServiceDefinition(
+                name=SERVICE_LOCK_TODAY_FORECAST,
+                handler=self._handle_lock_today_forecast,
+                description="Manual: Lock today's forecast (6 AM task with force overwrite)"
             ),
 
             # Collection & Cleanup Services
@@ -287,6 +295,16 @@ class ServiceRegistry:
             _LOGGER.info("✓ 6 AM forecast logic executed: TODAY locked")
         except Exception as e:
             _LOGGER.error(f"✗ Error in debugging_6am_forecast: {e}", exc_info=True)
+
+    async def _handle_lock_today_forecast(self, call: ServiceCall) -> None:
+        """Handle lock_today_forecast service - manual 6 AM task trigger by @Zara"""
+        _LOGGER.info("Service: lock_today_forecast (MANUAL)")
+        _LOGGER.info("User manually triggered the 6 AM forecast lock task via Developer Tools")
+        try:
+            await self.coordinator.set_expected_daily_production()
+            _LOGGER.info("✓ Manual forecast lock successful: TODAY locked with force_overwrite=True")
+        except Exception as e:
+            _LOGGER.error(f"✗ Error in lock_today_forecast: {e}", exc_info=True)
 
     async def _handle_debugging_best_hour(self, call: ServiceCall) -> None:
         """Handle debugging_best_hour service by @Zara"""
@@ -594,7 +612,7 @@ class ServiceRegistry:
             try:
                 if has_ml_predictor:
                     if now.weekday() == 6:  # Sunday
-                        await self.coordinator.ml_predictor.train_and_evaluate_model()
+                        await self.coordinator.ml_predictor.train_model()
                         _LOGGER.info(f"✓ Task {task_count} completed: Weekly ML Retraining (Sunday)")
                         success_count += 1
                     else:

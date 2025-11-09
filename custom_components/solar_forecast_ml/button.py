@@ -57,8 +57,9 @@ async def async_setup_entry(
 
 
     buttons = [
-        ManualForecastButton(coordinator, entry, base_device_info),
         ManualLearningButton(coordinator, entry, base_device_info),
+        # === [REMOVED] Manual Forecast Button - Redundant with automatic workflows ===
+        # ManualForecastButton(coordinator, entry, base_device_info),
         # === [FIX] Backfill Button Removed ===
         # MLBackfillButton(coordinator, entry),
         # === END REMOVAL ===
@@ -66,89 +67,21 @@ async def async_setup_entry(
 
     async_add_entities(buttons)
     # Update log message to reflect available buttons
-    _LOGGER.info("Solar Forecast ML Buttons successfully set up: Manual Forecast, Manual Learning.")
+    _LOGGER.info("Solar Forecast ML Buttons successfully set up: Manual Learning.")
 
 
 # =============================================================================
-# 1. Manual Forecast Button
+# 1. Manual Forecast Button (REMOVED - Redundant with automatic workflows)
 # =============================================================================
-class ManualForecastButton(ButtonEntity):
-    """Button entity to trigger a manual forecast refresh via the coordinator by @Zara"""
-
-    _attr_has_entity_name = True
-    _attr_translation_key = "manual_forecast"
-    _attr_icon = "mdi:refresh-circle"
-
-    def __init__(
-            self,
-            coordinator: SolarForecastMLCoordinator,
-            entry: ConfigEntry,
-            device_info: DeviceInfo # Accept base device info
-        ) -> None:
-        """Initialize the button by @Zara"""
-        # super().__init__() # Not strictly needed if async_press is defined
-
-        self.coordinator = coordinator
-        self._entry_id = entry.entry_id
-
-        # Unique ID for this specific button entity
-        self._attr_unique_id = f"{self._entry_id}_manual_forecast"
-        # Link this entity to the main device
-        self._attr_device_info = device_info
-
-    async def async_press(self) -> None:
-        """Handle the button press Only create new forecast if NOT locked by @Zara"""
-        _LOGGER.info("Manual Forecast button pressed - checking lock status...")
-        
-        # Check if today's forecast is already locked
-        current_day = await self.coordinator.data_manager.get_current_day_forecast()
-        
-        if current_day and current_day.get("locked"):
-            _LOGGER.warning(
-                f"Expected daily production already locked for today "
-                f"({current_day.get('date')}) with {current_day.get('prediction_kwh')} kWh. "
-                f"Button has no effect after 06:00 lock."
-            )
-            return  # Exit - button does NOTHING if locked
-        
-        # NOT locked yet - create new forecast
-        _LOGGER.info("No locked forecast found - creating new forecast...")
-        
-        # Force refresh
-        await self.coordinator.force_refresh_with_weather_update()
-        
-        # Update expected_daily_production if data is available
-        if self.coordinator.data and self.coordinator.data.get("forecast_today") is not None:
-            today_value = self.coordinator.data.get("forecast_today")
-            self.coordinator.expected_daily_production = today_value
-            
-            # Save to persistent storage (BOTH systems)
-            # OLD system (coordinator_state.json)
-            await self.coordinator.data_manager.save_expected_daily_production(today_value)
-            
-            await self.coordinator.data_manager.save_daily_forecast(
-                prediction_kwh=today_value,
-                source="manual_button"
-            )
-            
-            _LOGGER.info(
-                f"Expected daily production set to {today_value:.2f} kWh "
-                f"(saved to persistent storage, source: manual_button)"
-            )
-            
-            # Force sensor update
-            self.coordinator.async_update_listeners()
-            
-            _LOGGER.info(
-                f"Coordinator data after refresh: "
-                f"today={today_value}, "
-                f"tomorrow={self.coordinator.data.get('forecast_tomorrow')}, "
-                f"method={self.coordinator.data.get('_forecast_method')}"
-            )
-        else:
-            _LOGGER.error("ERROR: Coordinator data is None or missing forecast_today after force refresh!")
-        
-        _LOGGER.debug("Force refresh with weather update completed.")
+# Removed on 2025-11-09: Manual forecast button is no longer needed
+# - Automatic workflow at 6 AM sets the forecast
+# - Retry mechanism (6:15, 6:30, 6:45) catches failures
+# - Recovery process handles problems
+# - Coordinator updates keep forecasts current
+#
+# class ManualForecastButton(ButtonEntity):
+#     """Button entity to trigger a manual forecast refresh via the coordinator by @Zara"""
+#     ... (Implementation removed)
 
 
 # =============================================================================
@@ -174,7 +107,7 @@ class ManualLearningButton(ButtonEntity):
         self._entry_id = entry.entry_id
 
         # Unique ID for this specific button entity
-        self._attr_unique_id = f"{self._entry_id}_manual_learning"
+        self._attr_unique_id = f"{self._entry_id}_ml_manual_learning"
         # Link this entity to the main device
         self._attr_device_info = device_info
 

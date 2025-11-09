@@ -22,11 +22,11 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "8.2.6"
-RELEASE_VERSION = "8.2.6"
-SOFTWARE_VERSION = "8.2.6"
-INTEGRATION_MODEL = "v8.2.6"
-ML_VERSION = "8.2.6"
+VERSION = "8.2.8"
+RELEASE_VERSION = "8.2.8"
+SOFTWARE_VERSION = "8.2.8"
+INTEGRATION_MODEL = "v8.2.8"
+ML_VERSION = "8.2.8"
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 
@@ -38,6 +38,8 @@ CONF_SOLAR_CAPACITY = "solar_capacity" # Changed from plant_kwp
 
 # --- Optional Configuration Keys ---
 CONF_TOTAL_CONSUMPTION_TODAY = "total_consumption_today"
+CONF_GRID_IMPORT_TODAY = "grid_import_today"
+CONF_GRID_EXPORT_TODAY = "grid_export_today"
 CONF_RAIN_SENSOR = "rain_sensor"
 CONF_LUX_SENSOR = "lux_sensor"
 CONF_TEMP_SENSOR = "temp_sensor"
@@ -180,12 +182,10 @@ ATTR_RETRY_COUNT = "retry_count" # Check if used
 ATTR_FALLBACK_ACTIVE = "fallback_active" # Check if used
 
 # --- Button Keys (Used in button platform) ---
-BUTTON_MANUAL_FORECAST = "manual_forecast"
 BUTTON_MANUAL_LEARNING = "manual_learning" # Changed from retrain_model for consistency
 # BUTTON_RESET_DATA = "reset_data" # Removed? Check services.yaml
 
 # --- Service Names (Used for service registration) ---
-SERVICE_MANUAL_FORECAST = "manual_forecast" # Check services.yaml
 SERVICE_RETRAIN_MODEL = "force_retrain" # Match services.yaml
 SERVICE_RESET_LEARNING_DATA = "reset_model" # Match services.yaml
 SERVICE_FINALIZE_DAY = "finalize_day" # Emergency day-end service
@@ -199,6 +199,9 @@ SERVICE_DEBUGGING_BEST_HOUR = "debugging_best_hour" # Debugging: Simulates 6 AM 
 SERVICE_DEBUGGING_TOMORROW_12PM = "debugging_tomorrow_12pm" # Debugging: Simulates 12 PM TOMORROW forecast lock
 SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6AM = "debugging_day_after_tomorrow_6am" # Debugging: Simulates 6 AM DAY AFTER TOMORROW forecast (unlocked)
 SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM = "debugging_day_after_tomorrow_6pm" # Debugging: Simulates 18 PM DAY AFTER TOMORROW forecast lock
+
+# MANUAL SERVICES - Direct user control
+SERVICE_LOCK_TODAY_FORECAST = "lock_today_forecast" # Manual: Trigger 6 AM forecast lock with force overwrite
 
 SERVICE_COLLECT_HOURLY_SAMPLE = "collect_hourly_sample"
 SERVICE_NIGHT_CLEANUP = "night_cleanup" # Manual night cleanup (remove duplicates and zero-production samples)

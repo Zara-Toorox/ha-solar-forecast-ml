@@ -9,6 +9,8 @@
           "power_entity": "Leistungs-Sensor (W)",
           "solar_yield_today": "Tagesertrag (kWh)",
           "total_consumption_today": "Tagesverbrauch (kWh)",
+          "grid_import_today": "Netzbezug Heute (kWh)",
+          "grid_export_today": "Netzeinspeisung Heute (kWh)",
           "solar_capacity": "Anlagenleistung (kWp)",
           "rain_sensor": "Regen-Sensor",
           "lux_sensor": "Helligkeits-Sensor (lx)",
@@ -29,6 +31,8 @@
           "power_entity": "Aktuelle Leistung in Watt (Pflicht)",
           "solar_yield_today": "Tagesertrag in kWh - MUSS um Mitternacht zurückgesetzt werden (Pflicht)",
           "total_consumption_today": "Tagesverbrauch in kWh (Optional)",
+          "grid_import_today": "Netzbezug in kWh - Strom aus dem Netz (Optional, verbessert Autarkie-Berechnung)",
+          "grid_export_today": "Netzeinspeisung in kWh - Strom ins Netz (Optional)",
           "solar_capacity": "Spitzenleistung in kWp, z.B. 5.5 (Optional, Standard: 5.0)",
           "rain_sensor": "Externer Regen-Sensor (Optional)",
           "lux_sensor": "Externe Helligkeit in Lux (Optional)",
@@ -53,6 +57,8 @@
           "power_entity": "Leistungs-Sensor (W)",
           "solar_yield_today": "Tagesertrag (kWh)",
           "total_consumption_today": "Tagesverbrauch (kWh)",
+          "grid_import_today": "Netzbezug Heute (kWh)",
+          "grid_export_today": "Netzeinspeisung Heute (kWh)",
           "solar_capacity": "Anlagenleistung (kWp)",
           "rain_sensor": "Regen-Sensor",
           "lux_sensor": "Helligkeits-Sensor (lx)",
@@ -168,17 +174,14 @@
   },
   "entity": {
     "sensor": {
-      "today_forecast": {
-        "name": "Prognose Heute Verbleibend"
-      },
       "tomorrow_forecast": {
-        "name": "Prognose Morgen"
+        "name": "Prognose (morgen)"
       },
       "next_hour_forecast": {
         "name": "Prognose Nächste Stunde"
       },
       "peak_production_hour": {
-        "name": "Beste Stunde für Verbrauch"
+        "name": "Beste Stunde"
       },
       "average_yield": {
         "name": "Durchschnittlicher Monatsertrag"
@@ -187,7 +190,7 @@
         "name": "Autarkie"
       },
       "expected_daily_production": {
-        "name": "Erwartete Tagesproduktion"
+        "name": "Prognose (heute)"
       },
       "production_time": {
         "name": "Produktionszeit Heute"
@@ -223,7 +226,7 @@
         "name": "Coordinator-Gesundheit"
       },
       "data_files_status": {
-        "name": "Datendateien Status"
+        "name": "Dateien Status"
       },
       "external_temp_state": {
         "name": "Externer Temperatursensor Status"
@@ -283,13 +286,49 @@
         "name": "Ø Genauigkeit 30 Tage"
       },
       "cloudiness_trend_1h": {
-        "name": "Wetterentwicklung 1 Stunde"
+        "name": "Wolken-Trend 1h",
+        "state": {
+          "getting_clearer": "Aufklarend",
+          "slightly_clearer": "Leicht aufklarend",
+          "stable": "Stabil",
+          "slightly_cloudier": "Leicht bewölkter",
+          "getting_cloudier": "Zunehmend bewölkt"
+        }
       },
       "cloudiness_trend_3h": {
-        "name": "Wetterentwicklung 3 Stunden"
+        "name": "Wolken-Trend 3h",
+        "state": {
+          "much_clearer": "Deutlich aufklarend",
+          "getting_clearer": "Aufklarend",
+          "relatively_stable": "Relativ stabil",
+          "getting_cloudier": "Zunehmend bewölkt",
+          "much_cloudier": "Deutlich bewölkter"
+        }
       },
       "cloudiness_volatility": {
-        "name": "Wetterstabilität"
+        "name": "Wetterstabilität",
+        "state": {
+          "very_stable": "Sehr stabil",
+          "stable": "Stabil",
+          "moderate": "Mäßig",
+          "variable": "Variabel",
+          "very_variable": "Sehr variabel"
+        },
+        "state_attributes": {
+          "interpretation": {
+            "name": "Bewertung",
+            "state": {
+              "very_stable": "Sehr stabil",
+              "stable": "Stabil",
+              "moderate": "Mäßig",
+              "variable": "Variabel",
+              "very_variable": "Sehr variabel"
+            }
+          },
+          "volatility_percent": {
+            "name": "Volatilität"
+          }
+        }
       },
       "next_production_start": {
         "name": "Nächster Produktionsbeginn"
@@ -583,9 +622,6 @@
       }
     },
     "button": {
-      "manual_forecast": {
-        "name": "Prognose aktualisieren"
-      },
       "manual_learning": {
         "name": "Modell trainieren"
       }

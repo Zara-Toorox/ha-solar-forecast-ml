@@ -93,6 +93,9 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             tomorrow_date = today_date + timedelta(days=1)
             day_after_tomorrow_date = today_date + timedelta(days=2)
 
+            # Collect hourly values for detailed breakdown
+            hourly_values = []
+
             for hour_data in hourly_weather_forecast:
                 try:
                     hour_dt_local = hour_data.get("local_datetime")
@@ -127,6 +130,14 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                     
                     hourly_kwh = max(0.0, hourly_kwh)
 
+                    # Store hourly value
+                    hourly_values.append({
+                        "hour": hour_local,
+                        "datetime": hour_dt_local.isoformat(),
+                        "production_kwh": round(hourly_kwh, 3),
+                        "date": hour_date.isoformat()
+                    })
+
                     if hour_date == today_date:
                         total_today_kwh += hourly_kwh
                         # Track best production hour for today
@@ -137,7 +148,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         total_tomorrow_kwh += hourly_kwh
                     elif hour_date == day_after_tomorrow_date:
                         total_day_after_kwh += hourly_kwh
-                        
+
                 except Exception as e_inner:
                     _LOGGER.warning(f"Failed to process hour {hour_data.get('local_hour')}: {e_inner}")
                     continue
@@ -215,6 +226,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 correction_factor=correction_factor,
                 best_hour_today=best_hour_today,
                 best_hour_production_kwh=best_hour_production if best_hour_today is not None else None,
+                hourly_values=hourly_values,  # Include hourly breakdown
             )
 
             _LOGGER.info(

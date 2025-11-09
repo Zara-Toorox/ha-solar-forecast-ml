@@ -174,6 +174,9 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             config.electricity_enabled, config.electricity_country
         )
 
+        # System Status Sensor reference (will be set by sensor platform)
+        self.system_status_sensor = None
+
         _LOGGER.info(
             f"SolarForecastMLCoordinator initialized - "
             f"Weather Entity: {self.primary_weather_entity or 'None'}"
@@ -379,7 +382,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     """Callback for weekly model retraining - Sundays only."""
                     if now.weekday() == 6:  # Sunday = 6
                         _LOGGER.info("Weekly ML training (Sunday): Starting...")
-                        asyncio.create_task(self.ml_predictor.train_and_evaluate_model())
+                        asyncio.create_task(self.ml_predictor.train_model())
                     else:
                         _LOGGER.debug(f"Weekly training skipped (today is {now.strftime('%A')}, training only on Sunday)")
 
@@ -813,6 +816,27 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             self.model_accuracy = accuracy
         self.async_update_listeners()
 
+        # Update system status sensor
+        if accuracy is not None:
+            samples = self.ml_predictor.training_samples if self.ml_predictor else 0
+            self.update_system_status(
+                event_type="ml_training",
+                event_status="success",
+                event_summary=f"ML Training erfolgreich - Genauigkeit: {accuracy*100:.1f}%",
+                event_details={
+                    "accuracy_percent": round(accuracy * 100, 1),
+                    "samples_used": samples,
+                    "training_time": timestamp.isoformat()
+                }
+            )
+        else:
+            self.update_system_status(
+                event_type="ml_training",
+                event_status="failed",
+                event_summary="ML Training fehlgeschlagen",
+                event_details={}
+            )
+
     async def set_expected_daily_production(self) -> None:
         """Set expected daily production at 6 AM and save persistently by @Zara"""
         try:
@@ -957,7 +981,8 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 if forecast and forecast.get("today") is not None:
                     success = await self.data_manager.save_daily_forecast(
                         prediction_kwh=forecast["today"],
-                        source=f"fallback_weather_cache_{source}"
+                        source=f"fallback_weather_cache_{source}",
+                        force_overwrite=True  # Recovery process can overwrite locks
                     )
                     if success:
                         _LOGGER.info(
@@ -987,7 +1012,8 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             if forecast and forecast.get("today") is not None:
                 success = await self.data_manager.save_daily_forecast(
                     prediction_kwh=forecast["today"],
-                    source=f"fallback_rule_based_{source}"
+                    source=f"fallback_rule_based_{source}",
+                    force_overwrite=True  # Recovery process can overwrite locks
                 )
                 if success:
                     _LOGGER.info(
@@ -1061,5 +1087,28 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
         except Exception as e:
             _LOGGER.error(f"Error in forecast_day_after_tomorrow service: {e}", exc_info=True)
-        
-        
+
+    def update_system_status(
+        self,
+        event_type: str,
+        event_status: str,
+        event_summary: str,
+        event_details: Optional[dict] = None,
+        warnings: Optional[list] = None
+    ) -> None:
+        """Update system status sensor with event information by @Zara"""
+        if self.system_status_sensor is None:
+            _LOGGER.debug("System status sensor not yet registered - skipping update")
+            return
+
+        try:
+            self.system_status_sensor.update_status(
+                event_type=event_type,
+                event_status=event_status,
+                event_summary=event_summary,
+                event_details=event_details,
+                warnings=warnings
+            )
+            _LOGGER.debug(f"System status updated: {event_type} -> {event_status}")
+        except Exception as e:
+            _LOGGER.error(f"Failed to update system status: {e}", exc_info=True)

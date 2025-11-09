@@ -1047,32 +1047,48 @@ class MLPredictor:
 
     def _schedule_daily_training_check(self, reschedule_delay_sec: Optional[float] = None) -> None:
         """Schedules the next daily check to see if model retraining is needed by @Zara"""
-        if self._daily_training_task:
-            self._daily_training_task.cancel()
-            self._daily_training_task = None
+        try:
+            # Cancel existing task if present
+            if self._daily_training_task:
+                self._daily_training_task.cancel()
+                self._daily_training_task = None
 
-        if reschedule_delay_sec is not None:
-             delay = reschedule_delay_sec
-             _LOGGER.info(f"Scheduling next training check in {delay:.0f} seconds.")
-        else:
-             now_local = dt_util.now()  # now() already returns local time
-             target_time_local = now_local.replace(hour=23, minute=5, second=0, microsecond=0)
-             if now_local >= target_time_local:
-                 target_time_local += timedelta(days=1)
-             delay = (target_time_local - now_local).total_seconds()
-             _LOGGER.info(f"Scheduling next daily training check at {target_time_local} (in {delay:.0f} seconds).")
+            # Calculate delay
+            if reschedule_delay_sec is not None:
+                delay = reschedule_delay_sec
+                _LOGGER.info(f"Scheduling next training check in {delay:.0f} seconds.")
+            else:
+                now_local = dt_util.now()  # now() already returns local time
+                target_time_local = now_local.replace(hour=23, minute=5, second=0, microsecond=0)
+                if now_local >= target_time_local:
+                    target_time_local += timedelta(days=1)
+                delay = (target_time_local - now_local).total_seconds()
+                _LOGGER.info(f"Scheduling next daily training check at {target_time_local.strftime('%Y-%m-%d %H:%M:%S')} (in {delay:.0f} seconds).")
 
-        # Create a proper wrapper function that handles the async task correctly
-        def _trigger_training_check():
-            """Wrapper function to properly create and handle the async task by @Zara"""
-            try:
-                task = self.hass.async_create_task(self._daily_training_check_callback())
-                # Add error callback to catch any exceptions
-                task.add_done_callback(lambda t: self._handle_training_task_error(t))
-            except Exception as e:
-                _LOGGER.error(f"Failed to create daily training check task: {e}", exc_info=True)
+            # Create a proper wrapper function that handles the async task correctly
+            def _trigger_training_check():
+                """Wrapper function to properly create and handle the async task by @Zara"""
+                try:
+                    _LOGGER.debug("Daily training check trigger fired - creating async task...")
+                    task = self.hass.async_create_task(self._daily_training_check_callback())
+                    # Add error callback to catch any exceptions
+                    task.add_done_callback(lambda t: self._handle_training_task_error(t))
+                except Exception as e:
+                    _LOGGER.error(f"Failed to create daily training check task: {e}", exc_info=True)
 
-        self._daily_training_task = self.hass.loop.call_later(delay, _trigger_training_check)
+            # Schedule the task
+            self._daily_training_task = self.hass.loop.call_later(delay, _trigger_training_check)
+            _LOGGER.debug(f"Daily training check task scheduled successfully (delay={delay:.0f}s)")
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to schedule daily training check: {e}", exc_info=True)
+            # Try to reschedule with a short delay as fallback
+            if reschedule_delay_sec is None:
+                _LOGGER.info("Attempting fallback rescheduling in 1 hour...")
+                try:
+                    self._schedule_daily_training_check(reschedule_delay_sec=3600.0)
+                except Exception as fallback_error:
+                    _LOGGER.error(f"Fallback rescheduling also failed: {fallback_error}", exc_info=True)
 
     async def _daily_training_check_callback(self) -> None:
         """Callback executed daily to check if retraining is needed and trigger it by @Zara"""
@@ -1088,7 +1104,19 @@ class MLPredictor:
         except Exception as e:
             _LOGGER.error("Error during daily training check/trigger: %s", e, exc_info=True)
         finally:
-             if not self._stop_event.is_set(): self._schedule_daily_training_check(reschedule_delay_sec=None)
+            # CRITICAL FIX: Wrap rescheduling in try-except to prevent silent failures
+            try:
+                if not self._stop_event.is_set():
+                    _LOGGER.debug("Attempting to reschedule next daily training check...")
+                    self._schedule_daily_training_check(reschedule_delay_sec=None)
+                    _LOGGER.debug("Daily training check rescheduled successfully")
+                else:
+                    _LOGGER.info("Stop event set - skipping daily training check rescheduling")
+            except Exception as reschedule_error:
+                _LOGGER.error(
+                    f"CRITICAL: Failed to reschedule daily training check: {reschedule_error}",
+                    exc_info=True
+                )
 
 
     async def _should_retrain(self) -> bool:

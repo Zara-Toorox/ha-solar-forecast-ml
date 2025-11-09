@@ -59,7 +59,7 @@ class BaseEntityStateSensor(SensorEntity):
         self.hass = hass
         self.entry = entry
         self._source_entity_id_key = source_entity_id_key
-        self._attr_unique_id = f"{entry.entry_id}_{unique_id_key}"
+        self._attr_unique_id = f"{entry.entry_id}_ml_{unique_id_key}"
         self._attr_translation_key = translation_key
         self._attr_icon = icon
         self._source_entity_id: Optional[str] = None  # Will be set in async_added_to_hass
@@ -171,7 +171,7 @@ class ExternalSensorsStatusSensor(SensorEntity):
         """Initialize the external sensors status sensor by @Zara"""
         self.hass = hass
         self.entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_external_sensors_status"
+        self._attr_unique_id = f"{entry.entry_id}_ml_external_sensors_status"
         self._attr_translation_key = "external_sensors_status"
         self._attr_icon = "mdi:sensor-check"
         self._attr_name = "External Sensors Status"

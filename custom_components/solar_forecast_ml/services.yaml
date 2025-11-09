@@ -56,15 +56,36 @@ debugging_6am_forecast:
   description: >
     DEBUGGING SERVICE: Simulates EXACTLY what happens at 6:00 AM for TODAY's forecast.
 
-    Code Reference: coordinator.py:829-910 (set_expected_daily_production)
+    Code Reference: coordinator.py:840-920 (set_expected_daily_production)
 
     What this service does:
     - Gets fresh forecast data for TODAY
-    - LOCKS today's forecast (prevents further updates)
+    - LOCKS today's forecast with FORCE OVERWRITE (overwrites midnight fallback locks)
     - Saves to daily_forecasts.json with source "auto_6am"
     - This is the morning baseline forecast
 
+    IMPORTANT: This service uses force_overwrite=True to override any existing locks
+    (e.g., from midnight fallback). Use this if the 6 AM task was blocked by a previous lock.
+
     Use this to test the 6 AM forecast lock behavior without waiting until 6 AM.
+  fields: {}
+
+lock_today_forecast:
+  name: "Manual Trigger: Lock Today's Forecast (6 AM Task)"
+  description: >
+    MANUAL SERVICE: Manually trigger the 6 AM forecast lock task.
+
+    This service does EXACTLY the same as the automatic 6 AM task:
+    - Gets the current forecast for TODAY
+    - LOCKS today's forecast with FORCE OVERWRITE
+    - Overwrites any existing locks (e.g., from midnight fallback)
+    - Saves to daily_forecasts.json with source "auto_6am"
+
+    Use this service from Developer Tools to manually trigger the 6 AM task
+    if it failed or was blocked by an earlier lock.
+
+    Example use case: If the midnight fallback locked the forecast and blocked
+    the 6 AM update, use this service to force the correct 6 AM forecast.
   fields: {}
 
 debugging_best_hour:

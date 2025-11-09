@@ -66,7 +66,7 @@ class DiagnosticStatusSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         BaseSolarSensor.__init__(self, coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_diagnostic_status"
+        self._attr_unique_id = f"{entry.entry_id}_ml_diagnostic_status"
         self._attr_translation_key = "diagnostic_status"
         self._attr_name = "Diagnostic Status"
 
@@ -86,7 +86,7 @@ class YesterdayDeviationSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         BaseSolarSensor.__init__(self, coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_yesterday_deviation"
+        self._attr_unique_id = f"{entry.entry_id}_ml_yesterday_deviation"
         self._attr_translation_key = "yesterday_deviation"
         self._attr_name = "Yesterday Deviation"
 
@@ -106,9 +106,8 @@ class CloudinessTrend1hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         BaseSolarSensor.__init__(self, coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_cloudiness_trend_1h"
+        self._attr_unique_id = f"{entry.entry_id}_ml_cloudiness_trend_1h"
         self._attr_translation_key = "cloudiness_trend_1h"
-        self._attr_name = "Cloudiness Trend 1h"
 
     def get_coordinator_value(self) -> str | None:
         """Get text interpretation from coordinator cache by @Zara"""
@@ -116,15 +115,15 @@ class CloudinessTrend1hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
             value = self.coordinator.cloudiness_trend_1h
 
             if value > 10:
-                return "Increasingly cloudy"
+                return "getting_cloudier"
             elif value > 5:
-                return "Slightly increasing"
+                return "slightly_cloudier"
             elif value < -10:
-                return "Increasingly sunny"
+                return "getting_clearer"
             elif value < -5:
-                return "Slightly clearing"
+                return "slightly_clearer"
             else:
-                return "Stable"
+                return "stable"
         except Exception as e:
             _LOGGER.debug(f"Failed to get cloudiness_trend_1h: {e}")
             return None
@@ -170,9 +169,8 @@ class CloudinessTrend3hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         BaseSolarSensor.__init__(self, coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_cloudiness_trend_3h"
+        self._attr_unique_id = f"{entry.entry_id}_ml_cloudiness_trend_3h"
         self._attr_translation_key = "cloudiness_trend_3h"
-        self._attr_name = "Cloudiness Trend 3h"
 
     def get_coordinator_value(self) -> str | None:
         """Get text interpretation from coordinator cache by @Zara"""
@@ -180,15 +178,15 @@ class CloudinessTrend3hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
             value = self.coordinator.cloudiness_trend_3h
 
             if value > 20:
-                return "Strongly increasing clouds"
+                return "much_cloudier"
             elif value > 10:
-                return "Increasingly cloudy"
+                return "getting_cloudier"
             elif value < -20:
-                return "Strongly clearing"
+                return "much_clearer"
             elif value < -10:
-                return "Increasingly sunny"
+                return "getting_clearer"
             else:
-                return "Relatively stable"
+                return "relatively_stable"
         except Exception as e:
             _LOGGER.debug(f"Failed to get cloudiness_trend_3h: {e}")
             return None
@@ -225,7 +223,7 @@ class CloudinessTrend3hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
 
 
 class CloudinessVolatilitySensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
-    """Sensor showing cloudiness volatility by @Zara"""
+    """Sensor showing weather stability index (inverted volatility) by @Zara"""
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = "%"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -234,15 +232,18 @@ class CloudinessVolatilitySensor(CoordinatorPropertySensorMixin, BaseSolarSensor
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         BaseSolarSensor.__init__(self, coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_cloudiness_volatility"
+        self._attr_unique_id = f"{entry.entry_id}_ml_cloudiness_volatility"
         self._attr_translation_key = "cloudiness_volatility"
-        self._attr_name = "Cloudiness Volatility"
 
     def get_coordinator_value(self) -> float | None:
-        """Get value from coordinator cache by @Zara"""
+        """Get stability index from coordinator cache (inverted volatility) by @Zara"""
         # Cache is updated every coordinator update (every 15 min)
         try:
-            return round(self.coordinator.cloudiness_volatility, 1)
+            volatility = self.coordinator.cloudiness_volatility
+            # Convert volatility to stability index: 100% = very stable, 0% = very unstable
+            # Cap volatility at 100 to ensure stability index doesn't go negative
+            stability_index = max(0.0, min(100.0, 100.0 - volatility))
+            return round(stability_index, 1)
         except Exception as e:
             _LOGGER.debug(f"Failed to get cloudiness_volatility: {e}")
             return None
@@ -254,18 +255,25 @@ class CloudinessVolatilitySensor(CoordinatorPropertySensorMixin, BaseSolarSensor
         if value is None:
             return {"status": "unavailable"}
 
-        if value > 30:
-            interpretation = "Very volatile"
-        elif value > 15:
-            interpretation = "Volatile"
-        elif value < 5:
-            interpretation = "Very stable"
+        # Interpret stability index (higher = more stable)
+        if value > 95:
+            interpretation = "very_stable"
+        elif value > 85:
+            interpretation = "stable"
+        elif value > 70:
+            interpretation = "moderate"
+        elif value > 60:
+            interpretation = "variable"
         else:
-            interpretation = "Stable"
+            interpretation = "very_variable"
+
+        # Also provide raw volatility for reference
+        raw_volatility = 100.0 - value
 
         return {
             "interpretation": interpretation,
-            "description": "Cloud volatility (std dev over 3h)"
+            "stability_index": round(value, 1),
+            "raw_volatility": round(raw_volatility, 1)
         }
 
 
@@ -280,7 +288,7 @@ class NextProductionStartSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_next_production_start"
+        self._attr_unique_id = f"{entry.entry_id}_ml_next_production_start"
         self._attr_translation_key = "next_production_start"
         self._attr_name = "Next Production Start"
 
@@ -420,7 +428,7 @@ class LastCoordinatorUpdateSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_last_coordinator_update"
+        self._attr_unique_id = f"{entry.entry_id}_ml_last_coordinator_update"
         self._attr_translation_key = "last_update_timestamp"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
         self._attr_icon = "mdi:clock-check-outline"
@@ -450,7 +458,7 @@ class LastMLTrainingSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_last_ml_training"
+        self._attr_unique_id = f"{entry.entry_id}_ml_last_ml_training"
         self._attr_translation_key = "last_ml_training"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
         self._attr_icon = "mdi:school-outline"
@@ -482,7 +490,7 @@ class NextScheduledUpdateSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_next_scheduled_update"
+        self._attr_unique_id = f"{entry.entry_id}_ml_next_scheduled_update"
         self._attr_translation_key = "next_scheduled_update"
         self._attr_icon = "mdi:calendar-clock"
         self._attr_name = "Next Scheduled Update"
@@ -569,7 +577,7 @@ class MLServiceStatusSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_ml_service_status"
+        self._attr_unique_id = f"{entry.entry_id}_ml_ml_service_status"
         self._attr_translation_key = "ml_service_status"
         self._attr_icon = "mdi:robot-outline"
         self._attr_name = "ML Service Status"
@@ -627,7 +635,7 @@ class MLMetricsSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_ml_metrics"
+        self._attr_unique_id = f"{entry.entry_id}_ml_ml_metrics"
         self._attr_translation_key = "ml_metrics"
         self._attr_icon = "mdi:chart-box-outline"
         self._attr_name = "ML Metrics"
@@ -674,7 +682,7 @@ class CoordinatorHealthSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_coordinator_health"
+        self._attr_unique_id = f"{entry.entry_id}_ml_coordinator_health"
         self._attr_translation_key = "coordinator_health"
         self._attr_icon = "mdi:heart-pulse"
         self._attr_name = "Coordinator Health"
@@ -724,7 +732,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize by @Zara"""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_data_files_status"
+        self._attr_unique_id = f"{entry.entry_id}_ml_data_files_status"
         self._attr_translation_key = "data_files_status"
         self._attr_icon = "mdi:file-multiple-outline"
         self._attr_name = "Data Files Status"
