@@ -29,10 +29,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class FeatureEngineer:
-    """Handles the creation and extraction of features used by the ML model by @Zara"""
+    """Handles the creation and extraction of features used by the ML model"""
 
     def __init__(self):
-        """Initializes the FeatureEngineer and defines the feature sets by @Zara"""
+        """Initializes the FeatureEngineer and defines the feature sets"""
         # Define the core input features expected
         self.base_features = [
             "temperature",          # Current temperature
@@ -93,7 +93,7 @@ class FeatureEngineer:
         prediction_date: datetime 
         # --- ENDE ---
     ) -> Dict[str, float]:
-        """Asynchronously extracts and calculates all defined features for a given time ... by @Zara"""
+        """Asynchronously extracts and calculates all defined features for a given time ..."""
         try:
             # --- (SOLUTION 1) Time logic updated ---
             target_hour = prediction_hour # Use directly
@@ -207,7 +207,7 @@ class FeatureEngineer:
         sensor_data: Dict[str, Any],
         record: Dict[str, Any] # Expecting a record containing 'timestamp'
     ) -> Dict[str, float]:
-        """Synchronously extracts and calculates all defined features typically used dur... by @Zara"""
+        """Synchronously extracts and calculates all defined features typically used dur..."""
         try:
             # --- Determine Time Context ---
             timestamp_str = record.get('timestamp')
@@ -299,7 +299,7 @@ class FeatureEngineer:
 
 
     def get_default_features(self, hour: int, date: datetime) -> Dict[str, float]:
-        """Provides a default set of feature values used as a fallback if by @Zara"""
+        """Provides a default set of feature values used as a fallback if"""
         _LOGGER.debug(f"Generating default features for hour {hour} on {date.date()}.")
         # Use typical mid-range values for weather
         temp = 15.0
@@ -363,7 +363,7 @@ class FeatureEngineer:
         min_val: Optional[float] = None,
         max_val: Optional[float] = None
     ) -> float:
-        """MEDIUM PRIORITY FIX Safely extracts a value from a dictionary with range vali... by @Zara"""
+        """MEDIUM PRIORITY FIX Safely extracts a value from a dictionary with range vali..."""
         if data is None:
             return default
 
@@ -391,7 +391,7 @@ class FeatureEngineer:
 
 
     def _calculate_weather_trend(self, cloudiness: float, wind_speed: float) -> float:
-        """Calculates a simple weather trend score 0-1 where higher is better sunnier ca... by @Zara"""
+        """Calculates a simple weather trend score 0-1 where higher is better sunnier ca..."""
         try:
             # Ensure inputs are floats and within reasonable ranges
             cloud = max(0.0, min(100.0, float(cloudiness)))
@@ -415,7 +415,7 @@ class FeatureEngineer:
 
 
     def _validate_and_sanitize_features(self, features: Dict[str, float]) -> Dict[str, float]:
-        """CRITICAL FIX 3 Validates and sanitizes feature values to prevent NaNInf errors by @Zara"""
+        """CRITICAL FIX 3 Validates and sanitizes feature values to prevent NaNInf errors"""
         import math
         sanitized = {}
         invalid_count = 0

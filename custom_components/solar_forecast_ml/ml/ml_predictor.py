@@ -65,7 +65,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Helper for Lazy NumPy Import ---
 def _ensure_numpy():
-    """Lazily imports and returns the NumPy module raising ImportError if unavailable by @Zara"""
+    """Lazily imports and returns the NumPy module raising ImportError if unavailable"""
     global _np
     if _np is None:
         try:
@@ -81,7 +81,7 @@ def _ensure_numpy():
 
 # --- Enums and Dataclasses ---
 class ModelState(Enum):
-    """Represents the operational state of the ML model by @Zara"""
+    """Represents the operational state of the ML model"""
     UNINITIALIZED = "uninitialized"
     TRAINING = "training"
     READY = "ready"
@@ -91,7 +91,7 @@ class ModelState(Enum):
 
 @dataclass
 class TrainingResult:
-    """Stores the outcome of a model training attempt by @Zara"""
+    """Stores the outcome of a model training attempt"""
     success: bool
     accuracy: float | None = None # Accuracy might be None if training failed early
     samples_used: int = 0
@@ -103,7 +103,7 @@ class TrainingResult:
 
 @dataclass
 class ModelHealth:
-    """Represents the health status of the ML model by @Zara"""
+    """Represents the health status of the ML model"""
     state: ModelState
     model_loaded: bool
     last_training: Optional[datetime]
@@ -115,7 +115,7 @@ class ModelHealth:
 
 # --- Main MLPredictor Class ---
 class MLPredictor:
-    """Manages the machine learning model lifecycle including training by @Zara"""
+    """Manages the machine learning model lifecycle including training"""
 
     def __init__(
         self,
@@ -124,7 +124,7 @@ class MLPredictor:
         error_handler: ErrorHandlingService,
         notification_service = None  # NEW: Optional for backward compatibility
     ):
-        """Initialize the MLPredictor by @Zara"""
+        """Initialize the MLPredictor"""
         self.hass = hass
         self.data_manager = data_manager
         self.error_handler = error_handler
@@ -179,7 +179,7 @@ class MLPredictor:
         _LOGGER.info("MLPredictor initialized.")
 
     async def initialize(self) -> bool:
-        """Initializes the ML Predictor by loading existing model data by @Zara"""
+        """Initializes the ML Predictor by loading existing model data"""
         _LOGGER.info("Initializing ML Predictor...")
         init_success = False
         try:
@@ -368,7 +368,7 @@ class MLPredictor:
 
 
     async def _load_historical_cache(self) -> None:
-        """Loads historical production data into memory for lag feature calculation by @Zara"""
+        """Loads historical production data into memory for lag feature calculation"""
         _LOGGER.debug("Loading historical production cache...")
         try:
             # Load hourly samples from last 60 days, as these contain the most accurate data
@@ -435,7 +435,7 @@ class MLPredictor:
             self._historical_cache = {'daily_productions': {}, 'hourly_productions': {}}
 
     async def _load_recent_weather_samples(self, hours_back: int = 24, force_reload: bool = False) -> None:
-        """IMPROVEMENT 7 Load recent weather samples for cloudiness trend calculation by @Zara PERFORMANCE FIX: Only reload if cache is stale (>15 minutes old) or force_reload=True"""
+        """IMPROVEMENT 7 Load recent weather samples for cloudiness trend calculation PERFORMANCE FIX: Only reload if cache is stale (>15 minutes old) or force_reload=True"""
         try:
             now = dt_util.now()
 
@@ -473,7 +473,7 @@ class MLPredictor:
             self._weather_samples_last_loaded = None
 
     def _calculate_cloudiness_trends(self) -> Dict[str, float]:
-        """IMPROVEMENT 7 Calculate cloudiness trends from recent weather samples by @Zara"""
+        """IMPROVEMENT 7 Calculate cloudiness trends from recent weather samples"""
         trends = {
             'cloudiness_trend_1h': 0.0,
             'cloudiness_trend_3h': 0.0,
@@ -549,7 +549,7 @@ class MLPredictor:
         sensor_data: Optional[Dict[str, Any]] = None
     ) -> PredictionResult:
     # --- END CORRECTION ---
-        """Generates a solar production prediction for a specific hour by @Zara"""
+        """Generates a solar production prediction for a specific hour"""
         prediction_start_time = dt_util.now()
         result: PredictionResult | None = None
 
@@ -643,7 +643,7 @@ class MLPredictor:
             return fallback_result
 
     async def _get_fallback_prediction(self, hour: int, date: datetime) -> PredictionResult:
-         """Generates a prediction using the fallback strategy by @Zara"""
+         """Generates a prediction using the fallback strategy"""
          _LOGGER.warning("Using fallback prediction strategy.")
          # WARNING FIX 5: Pass peak_power_kw to FallbackStrategy
          fallback_strategy = FallbackStrategy(self.peak_power_kw)
@@ -652,7 +652,7 @@ class MLPredictor:
 
 
     async def train_model(self) -> TrainingResult:
-        """Trains the Ridge Regression model using historical hourly data - refactored by @Zara"""
+        """Trains the Ridge Regression model using historical hourly data - refactored"""
         from .ml_training_helpers import MLTrainingHelpers
         helpers = MLTrainingHelpers(self)
 
@@ -798,7 +798,7 @@ class MLPredictor:
 
 
     async def _update_hourly_profile(self, training_records: List[Dict[str, Any]]) -> None:
-        """Updates the hourly production profile based on provided training records by @Zara"""
+        """Updates the hourly production profile based on provided training records"""
         _LOGGER.debug(f"Updating hourly profile using {len(training_records)} records...")
         if not training_records:
             _LOGGER.warning("No records provided for hourly profile update.")
@@ -859,7 +859,7 @@ class MLPredictor:
 
 
     async def _remove_outliers(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """CRITICAL FIX 4 Removes outliers from training data using IQR method by @Zara"""
+        """CRITICAL FIX 4 Removes outliers from training data using IQR method"""
         if not records:
             return records
 
@@ -957,7 +957,7 @@ class MLPredictor:
         samples_override: Optional[int] = None,
         training_time_override: Optional[float] = None
     ) -> None:
-        """Safely updates the model_statejson file with current predictor status by @Zara"""
+        """Safely updates the model_statejson file with current predictor status"""
         _LOGGER.debug("Updating model_state.json...")
         try:
             status_to_save = status_override if status_override else self.model_state
@@ -989,7 +989,7 @@ class MLPredictor:
 
 
     async def _check_training_data_availability(self) -> int:
-        """Checks how many valid hourly samples are available for training by @Zara"""
+        """Checks how many valid hourly samples are available for training"""
         try:
             # Load samples from last 60 days
             from ..core.core_helpers import SafeDateTimeUtil as dt_util
@@ -1007,7 +1007,7 @@ class MLPredictor:
 
 
     def _schedule_hourly_sampling(self) -> None:
-        """Schedules the hourly callback for data sampling by @Zara"""
+        """Schedules the hourly callback for data sampling"""
         if self._hourly_sample_listener_remove: self._hourly_sample_listener_remove()
         self._hourly_sample_listener_remove = async_track_time_change(
             self.hass, self._hourly_learning_callback, minute=2, second=0
@@ -1016,7 +1016,7 @@ class MLPredictor:
 
     @callback 
     async def _hourly_learning_callback(self, now_local: datetime) -> None:
-        """Callback triggered every hour to collect the sample for the previous hour by @Zara"""
+        """Callback triggered every hour to collect the sample for the previous hour"""
         hour_to_collect_dt = now_local - timedelta(hours=1)
         
         _LOGGER.info(
@@ -1046,7 +1046,7 @@ class MLPredictor:
 
 
     def _schedule_daily_training_check(self, reschedule_delay_sec: Optional[float] = None) -> None:
-        """Schedules the next daily check to see if model retraining is needed by @Zara"""
+        """Schedules the next daily check to see if model retraining is needed"""
         try:
             # Cancel existing task if present
             if self._daily_training_task:
@@ -1067,7 +1067,7 @@ class MLPredictor:
 
             # Create a proper wrapper function that handles the async task correctly
             def _trigger_training_check():
-                """Wrapper function to properly create and handle the async task by @Zara"""
+                """Wrapper function to properly create and handle the async task"""
                 try:
                     _LOGGER.debug("Daily training check trigger fired - creating async task...")
                     task = self.hass.async_create_task(self._daily_training_check_callback())
@@ -1091,7 +1091,7 @@ class MLPredictor:
                     _LOGGER.error(f"Fallback rescheduling also failed: {fallback_error}", exc_info=True)
 
     async def _daily_training_check_callback(self) -> None:
-        """Callback executed daily to check if retraining is needed and trigger it by @Zara"""
+        """Callback executed daily to check if retraining is needed and trigger it"""
         _LOGGER.info("Performing daily check: Should ML model be retrained?")
         try:
             if await self._should_retrain():
@@ -1120,7 +1120,7 @@ class MLPredictor:
 
 
     async def _should_retrain(self) -> bool:
-        """Determines if the model should be automatically retrained based on criteria by @Zara"""
+        """Determines if the model should be automatically retrained based on criteria"""
         _LOGGER.debug("Checking retraining criteria...")
         try:
             available_samples = await self._check_training_data_availability()
@@ -1155,7 +1155,7 @@ class MLPredictor:
             return False
 
     def _handle_training_task_error(self, task: asyncio.Task) -> None:
-        """Handle errors from the daily training check task by @Zara"""
+        """Handle errors from the daily training check task"""
         try:
             # This will raise if the task had an exception
             task.result()
@@ -1165,7 +1165,7 @@ class MLPredictor:
             _LOGGER.error(f"Daily training check task failed with error: {e}", exc_info=True)
 
     def _update_performance_metrics(self, prediction_time_ms: float, success: bool) -> None:
-        """Updates rolling average prediction time and error rate by @Zara"""
+        """Updates rolling average prediction time and error rate"""
         try:
             self.performance_metrics["total_predictions"] += 1
             if success:
@@ -1192,7 +1192,7 @@ class MLPredictor:
         uv_sensor: Optional[str]=None, lux_sensor: Optional[str]=None, 
         humidity_sensor: Optional[str]=None
     ) -> None:
-        """Configures the entity IDs used by the ML predictor and its components by @Zara"""
+        """Configures the entity IDs used by the ML predictor and its components"""
         _LOGGER.info("Configuring entities for MLPredictor and SampleCollector...")
         _LOGGER.debug(f"set_entities called with solar_capacity={solar_capacity}")
         
@@ -1216,7 +1216,7 @@ class MLPredictor:
 
 
     def is_healthy(self) -> bool:
-        """Performs a health check on the ML predictor state by @Zara"""
+        """Performs a health check on the ML predictor state"""
         _LOGGER.debug("Performing ML predictor health check...")
         try:
             _ensure_numpy() 
@@ -1252,17 +1252,17 @@ class MLPredictor:
             return False
 
     async def get_today_prediction(self) -> Optional[float]:
-        """Get total daily prediction for today by @Zara"""
+        """Get total daily prediction for today"""
         _LOGGER.debug("get_today_prediction stub called, returning None (use orchestrator)")
         return None
 
     async def get_tomorrow_prediction(self) -> Optional[float]:
-        """Get total daily prediction for tomorrow by @Zara"""
+        """Get total daily prediction for tomorrow"""
         _LOGGER.debug("get_tomorrow_prediction stub called, returning None (use orchestrator)")
         return None
 
     async def force_training(self) -> bool:
-        """Force model training regardless of conditions by @Zara"""
+        """Force model training regardless of conditions"""
         _LOGGER.info("Force training requested via service...")
         try:
             result = await self.train_model()
@@ -1272,7 +1272,7 @@ class MLPredictor:
             return False
 
     async def reset_model(self) -> bool:
-        """Reset the ML model by clearing learned weights and reverting to rule-based pr... by @Zara"""
+        """Reset the ML model by clearing learned weights and reverting to rule-based pr..."""
         _LOGGER.info("Resetting ML model...")
         try:
             # Clear current weights and model state
@@ -1321,7 +1321,7 @@ class MLPredictor:
             return False
 
     async def async_will_remove_from_hass(self) -> None:
-        """Clean up resources when the integration is unloaded or HA stops by @Zara"""
+        """Clean up resources when the integration is unloaded or HA stops"""
         _LOGGER.info("Cleaning up MLPredictor background tasks and listeners...")
         self._stop_event.set() # Signal background tasks to stop first
 

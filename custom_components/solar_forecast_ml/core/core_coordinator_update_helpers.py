@@ -28,14 +28,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class CoordinatorUpdateHelpers:
-    """Helper methods for coordinator data updates by @Zara"""
+    """Helper methods for coordinator data updates"""
 
     def __init__(self, coordinator: "SolarForecastMLCoordinator"):
-        """Initialize helpers by @Zara"""
+        """Initialize helpers"""
         self.coordinator = coordinator
 
     async def fetch_weather_data(self) -> Tuple[Optional[Dict], Optional[list]]:
-        """Fetch current weather and hourly forecast by @Zara"""
+        """Fetch current weather and hourly forecast"""
         current_weather = None
         hourly_forecast = None
 
@@ -59,7 +59,7 @@ class CoordinatorUpdateHelpers:
         hourly_forecast: Optional[list],
         external_sensors: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Generate forecast using orchestrator by @Zara"""
+        """Generate forecast using orchestrator"""
         forecast = await self.coordinator.forecast_orchestrator.orchestrate_forecast(
             current_weather=current_weather,
             hourly_forecast=hourly_forecast,
@@ -81,7 +81,7 @@ class CoordinatorUpdateHelpers:
         current_weather: Optional[Dict],
         external_sensors: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Build coordinator result dictionary by @Zara"""
+        """Build coordinator result dictionary"""
         result = {
             "forecast_today": forecast.get("today"),
             "forecast_tomorrow": forecast.get("tomorrow"),
@@ -112,7 +112,7 @@ class CoordinatorUpdateHelpers:
         forecast_data: Dict[str, Any],
         hourly_forecast: list
     ) -> None:
-        """Save forecasts to storage by @Zara"""
+        """Save forecasts to storage"""
         await self.coordinator._save_forecasts_to_storage(
             forecast_data={
                 "today": forecast_data.get("today"),
@@ -125,7 +125,7 @@ class CoordinatorUpdateHelpers:
         )
 
     async def update_electricity_prices(self) -> None:
-        """Update electricity prices if battery management enabled by @Zara"""
+        """Update electricity prices if battery management enabled"""
         if not self.coordinator.electricity_service:
             return
 
@@ -152,7 +152,7 @@ class CoordinatorUpdateHelpers:
             _LOGGER.error(f"Error updating electricity prices: {e}", exc_info=True)
 
     async def handle_startup_recovery(self) -> None:
-        """Handle startup recovery for missing forecasts by @Zara"""
+        """Handle startup recovery for missing forecasts"""
         today_forecast = await self.coordinator.data_manager.get_current_day_forecast()
         now_local = dt_util.now()
 
@@ -180,7 +180,7 @@ class CoordinatorUpdateHelpers:
                     )
 
     async def check_weather_service_health(self) -> None:
-        """Check and recover weather service if unhealthy by @Zara"""
+        """Check and recover weather service if unhealthy"""
         if self.coordinator.weather_service and not self.coordinator.weather_service.get_health_status().get('healthy'):
             _LOGGER.warning("Weather service unhealthy, attempting recovery...")
             try:

@@ -32,10 +32,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ProductionTimeCalculator:
-    """Live tracks production time based on power entity state changes by @Zara"""
+    """Live tracks production time based on power entity state changes"""
 
     def __init__(self, hass: HomeAssistant, power_entity: Optional[str] = None, data_manager=None, coordinator=None):
-        """Initialize the live production time tracker with persistent state by @Zara"""
+        """Initialize the live production time tracker with persistent state"""
         self.hass = hass
         self.power_entity = power_entity
         self.data_manager = data_manager
@@ -70,7 +70,7 @@ class ProductionTimeCalculator:
         _LOGGER.info("ProductionTimeCalculator (Live Tracking) initialized with LOCAL time and persistence")
 
     async def _load_persistent_state(self) -> bool:
-        """Load production time state from persistent storage by @Zara"""
+        """Load production time state from persistent storage"""
         if not self.data_manager:
             return False
         
@@ -123,7 +123,7 @@ class ProductionTimeCalculator:
             return False
 
     async def _save_persistent_state(self, force: bool = False) -> bool:
-        """Save current production time state to persistent storage by @Zara"""
+        """Save current production time state to persistent storage"""
         if not self.data_manager:
             return False
         
@@ -167,7 +167,7 @@ class ProductionTimeCalculator:
             return False
 
     async def start_tracking(self) -> None:
-        """Starts the live tracking listeners and initializes state by @Zara"""
+        """Starts the live tracking listeners and initializes state"""
         _LOGGER.info(f"[PRODUCTION_TRACKER] start_tracking called with power_entity={self.power_entity}")
         
         if not self.power_entity:
@@ -310,7 +310,7 @@ class ProductionTimeCalculator:
 
     @callback
     def _handle_power_change(self, event) -> None:
-        """Callback triggered by state changes of the power entity by @Zara"""
+        """Callback triggered by state changes of the power entity"""
         try:
             new_state = event.data.get("new_state")
             old_state = event.data.get("old_state")
@@ -423,7 +423,7 @@ class ProductionTimeCalculator:
 
 
     def _start_production_tracking(self, start_time_local: datetime) -> None:
-        """Starts a new production phase Sets the active flag and records the start time... by @Zara"""
+        """Starts a new production phase Sets the active flag and records the start time..."""
         self._is_active = True
         self._start_time = start_time_local
         self._last_power_above_10w = start_time_local
@@ -436,7 +436,7 @@ class ProductionTimeCalculator:
 
 
     def _stop_production_tracking(self, stop_time_local: datetime) -> None:
-        """Stops the current production phase Accumulates the time from this phase LOCAL by @Zara"""
+        """Stops the current production phase Accumulates the time from this phase LOCAL"""
         if not self._is_active:
             # Stop called but tracking not active (debug log removed)
             return
@@ -462,7 +462,7 @@ class ProductionTimeCalculator:
 
     @callback
     def _handle_midnight_reset(self, now: datetime) -> None:
-        """Callback for midnight reset of daily counters by @Zara"""
+        """Callback for midnight reset of daily counters"""
         try:
             # Save the total hours for the previous day
             self._today_total_hours = self.get_production_hours()
@@ -495,7 +495,7 @@ class ProductionTimeCalculator:
 
 
     def get_production_hours(self) -> float:
-        """Get total production hours for today by @Zara"""
+        """Get total production hours for today"""
         total = self._accumulated_hours
 
         if self._is_active and self._start_time:
@@ -508,7 +508,7 @@ class ProductionTimeCalculator:
 
 
     def get_production_time(self) -> str:
-        """Get formatted production time string HHMMSS by @Zara"""
+        """Get formatted production time string HHMMSS"""
         total_hours = self.get_production_hours()
 
         # Convert to HH:MM:SS format
@@ -520,12 +520,12 @@ class ProductionTimeCalculator:
 
 
     def is_currently_producing(self) -> bool:
-        """Check if production is currently active by @Zara"""
+        """Check if production is currently active"""
         return self._is_active
     
     @callback
     def _handle_periodic_save(self, now: datetime) -> None:
-        """Callback for periodic save of production time state by @Zara"""
+        """Callback for periodic save of production time state"""
         try:
             now_local = dt_util.now()
             
@@ -554,7 +554,7 @@ class ProductionTimeCalculator:
             _LOGGER.error(f"Error during periodic save/timeout check: {e}")
     
     async def _save_state_async(self) -> None:
-        """Async wrapper for saving both persistent state and production tracking by @Zara"""
+        """Async wrapper for saving both persistent state and production tracking"""
         try:
             # Save to production_time_state.json
             await self._save_persistent_state(force=True)
@@ -581,7 +581,7 @@ class ProductionTimeCalculator:
             _LOGGER.error(f"Failed to save production state: {e}")
     
     async def stop_tracking(self) -> None:
-        """Stops all tracking listeners and saves final state by @Zara"""
+        """Stops all tracking listeners and saves final state"""
         try:
             # Save final state before stopping
             if self.data_manager and self._needs_save:
@@ -610,25 +610,25 @@ class ProductionTimeCalculator:
 
     @property
     def is_active(self) -> bool:
-        """Returns True if production is currently active by @Zara"""
+        """Returns True if production is currently active"""
         return self._is_active
 
     @property
     def total_seconds(self) -> int:
-        """Returns total production time in seconds for today by @Zara"""
+        """Returns total production time in seconds for today"""
         total_hours = self.get_production_hours()
         return int(total_hours * 3600)
 
     @property
     def start_time(self) -> Optional[datetime]:
-        """Returns the start time of currentlast production phase LOCAL by @Zara"""
+        """Returns the start time of currentlast production phase LOCAL"""
         return self._start_time
 
     @property
     def end_time(self) -> Optional[datetime]:
-        """Returns the end time of last production phase LOCAL by @Zara"""
+        """Returns the end time of last production phase LOCAL"""
         return self._end_time
 
     def get_today_total_hours(self) -> float:
-        """Get the final production hours from the previous day by @Zara"""
+        """Get the final production hours from the previous day"""
         return self._today_total_hours if self._today_total_hours > 0 else self.get_production_hours()

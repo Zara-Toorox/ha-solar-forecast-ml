@@ -35,16 +35,16 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataSchemaValidator:
-    """Validates and migrates JSON files to ensure they match code expectations by @Zara"""
+    """Validates and migrates JSON files to ensure they match code expectations"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
-        """Initialize the schema validator by @Zara"""
+        """Initialize the schema validator"""
         self.hass = hass
         self.data_dir = data_dir
         self.migration_log = []
 
     async def validate_and_migrate_all(self) -> bool:
-        """Validate and migrate all JSON files on startup by @Zara"""
+        """Validate and migrate all JSON files on startup"""
         try:
             _LOGGER.info("=== Starting JSON Schema Validation and Migration ===")
 
@@ -80,12 +80,12 @@ class DataSchemaValidator:
             return False
 
     def _log_migration(self, message: str) -> None:
-        """Log a migration action by @Zara"""
+        """Log a migration action"""
         self.migration_log.append(message)
         _LOGGER.info(f"MIGRATION: {message}")
 
     async def _read_json(self, file_path: Path) -> Optional[Dict[str, Any]]:
-        """Read JSON file async by @Zara"""
+        """Read JSON file async"""
         try:
             import aiofiles
             import json
@@ -101,7 +101,7 @@ class DataSchemaValidator:
             return None
 
     async def _write_json(self, file_path: Path, data: Dict[str, Any]) -> bool:
-        """Write JSON file async atomically by @Zara"""
+        """Write JSON file async atomically"""
         try:
             import aiofiles
             import json
@@ -127,7 +127,7 @@ class DataSchemaValidator:
     # =================================================================
 
     async def _validate_learned_weights(self) -> bool:
-        """Validate learned_weights json by @Zara"""
+        """Validate learned_weights json"""
         file_path = self.data_dir / "ml" / "learned_weights.json"
 
         data = await self._read_json(file_path)
@@ -206,7 +206,7 @@ class DataSchemaValidator:
         return True
 
     def _get_expected_feature_names(self) -> List[str]:
-        """Get the 27 expected feature names by @Zara"""
+        """Get the 27 expected feature names"""
         features = [
             # Base features (18)
             "temperature", "humidity", "cloudiness", "wind_speed",
@@ -224,7 +224,7 @@ class DataSchemaValidator:
         return features
 
     def _create_default_learned_weights(self) -> Dict[str, Any]:
-        """Create default learned weights structure by @Zara"""
+        """Create default learned weights structure"""
         return {
             "weights": {},
             "bias": 0.0,
@@ -246,7 +246,7 @@ class DataSchemaValidator:
     # =================================================================
 
     async def _validate_hourly_profile(self) -> bool:
-        """Validate hourly_profile json by @Zara"""
+        """Validate hourly_profile json"""
         file_path = self.data_dir / "ml" / "hourly_profile.json"
 
         data = await self._read_json(file_path)
@@ -301,7 +301,7 @@ class DataSchemaValidator:
         return True
 
     def _calculate_sine_hour(self, hour: int) -> float:
-        """Calculate sine curve value for an hour by @Zara"""
+        """Calculate sine curve value for an hour"""
         start_hour = 6
         daylight_hours = 12
 
@@ -312,7 +312,7 @@ class DataSchemaValidator:
         return 0.0
 
     def _create_default_hourly_profile(self) -> Dict[str, Any]:
-        """Create default hourly profile structure by @Zara"""
+        """Create default hourly profile structure"""
         hourly_averages = {}
         for hour in range(24):
             hourly_averages[str(hour)] = self._calculate_sine_hour(hour)
@@ -331,7 +331,7 @@ class DataSchemaValidator:
     # =================================================================
 
     async def _validate_model_state(self) -> bool:
-        """Validate model_state json by @Zara"""
+        """Validate model_state json"""
         file_path = self.data_dir / "ml" / "model_state.json"
 
         data = await self._read_json(file_path)
@@ -373,7 +373,7 @@ class DataSchemaValidator:
         return True
 
     def _create_default_model_state(self) -> Dict[str, Any]:
-        """Create default model state structure by @Zara"""
+        """Create default model state structure"""
         return {
             "version": DATA_VERSION,
             "model_loaded": False,
@@ -388,7 +388,7 @@ class DataSchemaValidator:
     # =================================================================
 
     async def _validate_hourly_samples(self) -> bool:
-        """Validate hourly_samples json by @Zara"""
+        """Validate hourly_samples json"""
         file_path = self.data_dir / "ml" / "hourly_samples.json"
 
         data = await self._read_json(file_path)
@@ -431,7 +431,7 @@ class DataSchemaValidator:
         return True
 
     def _create_default_hourly_samples(self) -> Dict[str, Any]:
-        """Create default hourly samples structure by @Zara"""
+        """Create default hourly samples structure"""
         return {
             "version": DATA_VERSION,
             "samples": [],
@@ -444,7 +444,7 @@ class DataSchemaValidator:
     # =================================================================
 
     async def _validate_daily_forecasts(self) -> bool:
-        """Validate daily_forecasts json by @Zara"""
+        """Validate daily_forecasts json"""
         file_path = self.data_dir / "stats" / "daily_forecasts.json"
 
         data = await self._read_json(file_path)
@@ -503,7 +503,7 @@ class DataSchemaValidator:
         return True
 
     async def _validate_today_block(self, today: Dict[str, Any]) -> bool:
-        """Validate today block structure by @Zara"""
+        """Validate today block structure"""
         modified = False
 
         if "date" not in today:
@@ -534,7 +534,7 @@ class DataSchemaValidator:
         return modified
 
     async def _validate_statistics_block(self, stats: Dict[str, Any]) -> bool:
-        """Validate statistics block structure by @Zara"""
+        """Validate statistics block structure"""
         modified = False
 
         stat_blocks = [
@@ -554,7 +554,7 @@ class DataSchemaValidator:
         return modified
 
     def _create_default_daily_forecasts(self) -> Dict[str, Any]:
-        """Create complete default daily_forecasts structure by @Zara"""
+        """Create complete default daily_forecasts structure"""
         return {
             "version": DATA_VERSION,
             "today": self._create_default_today_block(),
@@ -568,7 +568,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_today_block(self) -> Dict[str, Any]:
-        """Create default today block by @Zara"""
+        """Create default today block"""
         return {
             "date": None,
             "forecast_day": self._create_default_forecast_day(),
@@ -586,7 +586,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_forecast_day(self) -> Dict[str, Any]:
-        """Create default forecast_day block by @Zara"""
+        """Create default forecast_day block"""
         return {
             "prediction_kwh": None,
             "locked": False,
@@ -595,7 +595,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_forecast_tomorrow(self) -> Dict[str, Any]:
-        """Create default forecast_tomorrow block by @Zara"""
+        """Create default forecast_tomorrow block"""
         return {
             "date": None,
             "prediction_kwh": None,
@@ -606,7 +606,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_forecast_day_after(self) -> Dict[str, Any]:
-        """Create default forecast_day_after_tomorrow block by @Zara"""
+        """Create default forecast_day_after_tomorrow block"""
         return {
             "date": None,
             "prediction_kwh": None,
@@ -617,7 +617,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_forecast_best_hour(self) -> Dict[str, Any]:
-        """Create default forecast_best_hour block by @Zara"""
+        """Create default forecast_best_hour block"""
         return {
             "hour": None,
             "prediction_kwh": None,
@@ -627,7 +627,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_actual_best_hour(self) -> Dict[str, Any]:
-        """Create default actual_best_hour block by @Zara"""
+        """Create default actual_best_hour block"""
         return {
             "hour": None,
             "actual_kwh": None,
@@ -635,7 +635,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_forecast_next_hour(self) -> Dict[str, Any]:
-        """Create default forecast_next_hour block by @Zara"""
+        """Create default forecast_next_hour block"""
         return {
             "period": None,
             "prediction_kwh": None,
@@ -644,7 +644,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_production_time(self) -> Dict[str, Any]:
-        """Create default production_time block by @Zara"""
+        """Create default production_time block"""
         return {
             "active": False,
             "duration_seconds": 0,
@@ -655,35 +655,35 @@ class DataSchemaValidator:
         }
 
     def _create_default_peak_today(self) -> Dict[str, Any]:
-        """Create default peak_today block by @Zara"""
+        """Create default peak_today block"""
         return {
             "power_w": 0.0,
             "at": None
         }
 
     def _create_default_yield_today(self) -> Dict[str, Any]:
-        """Create default yield_today block by @Zara"""
+        """Create default yield_today block"""
         return {
             "kwh": None,
             "sensor": None
         }
 
     def _create_default_consumption_today(self) -> Dict[str, Any]:
-        """Create default consumption_today block by @Zara"""
+        """Create default consumption_today block"""
         return {
             "kwh": None,
             "sensor": None
         }
 
     def _create_default_autarky(self) -> Dict[str, Any]:
-        """Create default autarky block by @Zara"""
+        """Create default autarky block"""
         return {
             "percent": None,
             "calculated_at": None
         }
 
     def _create_default_finalized(self) -> Dict[str, Any]:
-        """Create default finalized block by @Zara"""
+        """Create default finalized block"""
         return {
             "yield_kwh": None,
             "consumption_kwh": None,
@@ -693,7 +693,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_statistics_block(self) -> Dict[str, Any]:
-        """Create default statistics block by @Zara"""
+        """Create default statistics block"""
         return {
             "all_time_peak": self._create_default_all_time_peak(),
             "current_week": self._create_default_current_week(),
@@ -704,7 +704,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_all_time_peak(self) -> Dict[str, Any]:
-        """Create default all_time_peak block by @Zara"""
+        """Create default all_time_peak block"""
         return {
             "power_w": 0.0,
             "date": None,
@@ -712,7 +712,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_current_week(self) -> Dict[str, Any]:
-        """Create default current_week block by @Zara"""
+        """Create default current_week block"""
         return {
             "period": None,
             "date_range": None,
@@ -723,7 +723,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_current_month(self) -> Dict[str, Any]:
-        """Create default current_month block by @Zara"""
+        """Create default current_month block"""
         return {
             "period": None,
             "yield_kwh": 0.0,
@@ -734,7 +734,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_last_7_days(self) -> Dict[str, Any]:
-        """Create default last_7_days block by @Zara"""
+        """Create default last_7_days block"""
         return {
             "avg_yield_kwh": 0.0,
             "avg_accuracy": 0.0,
@@ -743,7 +743,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_last_30_days(self) -> Dict[str, Any]:
-        """Create default last_30_days block by @Zara"""
+        """Create default last_30_days block"""
         return {
             "avg_yield_kwh": 0.0,
             "avg_accuracy": 0.0,
@@ -752,7 +752,7 @@ class DataSchemaValidator:
         }
 
     def _create_default_last_365_days(self) -> Dict[str, Any]:
-        """Create default last_365_days block by @Zara"""
+        """Create default last_365_days block"""
         return {
             "avg_yield_kwh": 0.0,
             "total_yield_kwh": 0.0,
@@ -764,7 +764,7 @@ class DataSchemaValidator:
     # =================================================================
 
     async def _validate_prediction_history(self) -> bool:
-        """Validate prediction_history json by @Zara"""
+        """Validate prediction_history json"""
         file_path = self.data_dir / "stats" / "prediction_history.json"
         old_file_path = self.data_dir / "data" / "prediction_history.json"
 
@@ -820,7 +820,7 @@ class DataSchemaValidator:
         return True
 
     def _create_default_prediction_history(self) -> Dict[str, Any]:
-        """Create default prediction_history structure by @Zara"""
+        """Create default prediction_history structure"""
         return {
             "version": DATA_VERSION,
             "predictions": [],
@@ -832,7 +832,7 @@ class DataSchemaValidator:
     # =================================================================
 
     async def _validate_coordinator_state(self) -> bool:
-        """Validate coordinator_state json by @Zara"""
+        """Validate coordinator_state json"""
         file_path = self.data_dir / "data" / "coordinator_state.json"
 
         data = await self._read_json(file_path)
@@ -870,7 +870,7 @@ class DataSchemaValidator:
         return True
 
     def _create_default_coordinator_state(self) -> Dict[str, Any]:
-        """Create default coordinator_state structure by @Zara"""
+        """Create default coordinator_state structure"""
         return {
             "version": DATA_VERSION,
             "expected_daily_production": None,

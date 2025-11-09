@@ -27,16 +27,16 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MLSampleStorage:
-    """Handles storage and retrieval of ML training samples by @Zara"""
+    """Handles storage and retrieval of ML training samples"""
     
     def __init__(self, data_manager):
-        """Initialize sample storage by @Zara"""
+        """Initialize sample storage"""
         self.data_manager = data_manager
         self._cache: List[Dict[str, Any]] = []
         self._cache_loaded = False
     
     async def add_sample(self, sample: Dict[str, Any]) -> bool:
-        """Add a single sample to storage by @Zara"""
+        """Add a single sample to storage"""
         try:
             # Load cache if not loaded
             if not self._cache_loaded:
@@ -68,7 +68,7 @@ class MLSampleStorage:
         limit: Optional[int] = None,
         min_timestamp: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
-        """Retrieve samples from storage by @Zara"""
+        """Retrieve samples from storage"""
         try:
             # Load cache if not loaded
             if not self._cache_loaded:
@@ -94,13 +94,13 @@ class MLSampleStorage:
             return []
     
     async def get_sample_count(self) -> int:
-        """Get total number of stored samples by @Zara"""
+        """Get total number of stored samples"""
         if not self._cache_loaded:
             await self._load_cache()
         return len(self._cache)
     
     async def clear_samples(self) -> bool:
-        """Clear all stored samples by @Zara"""
+        """Clear all stored samples"""
         try:
             self._cache.clear()
             self._cache_loaded = True
@@ -118,7 +118,7 @@ class MLSampleStorage:
             return False
     
     async def _load_cache(self) -> None:
-        """Load samples from persistent storage into cache by @Zara"""
+        """Load samples from persistent storage into cache"""
         try:
             data = await self.data_manager.load_hourly_samples()
             self._cache = data.get("samples", [])

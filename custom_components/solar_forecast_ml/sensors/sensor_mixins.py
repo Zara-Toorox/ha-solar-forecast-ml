@@ -27,20 +27,20 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class FileBasedSensorMixin(ABC):
-    """Mixin for sensors that read from daily_forecasts.json by @Zara"""
+    """Mixin for sensors that read from daily_forecasts.json"""
 
     def __init__(self, *args, **kwargs):
-        """Initialize mixin by @Zara"""
+        """Initialize mixin"""
         super().__init__(*args, **kwargs)
         self._cached_value: Optional[Any] = None
 
     @abstractmethod
     def extract_value_from_file(self, forecast_data: dict) -> Optional[Any]:
-        """Extract value from loaded forecast data - must be implemented by @Zara"""
+        """Extract value from loaded forecast data - must be implemented"""
         pass
 
     async def async_added_to_hass(self) -> None:
-        """Setup sensor with file loading by @Zara"""
+        """Setup sensor with file loading"""
         await super().async_added_to_hass()
         await self._load_from_file()
         self.async_on_remove(
@@ -50,16 +50,16 @@ class FileBasedSensorMixin(ABC):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates by @Zara"""
+        """Handle coordinator updates"""
         self.hass.async_create_task(self._reload_and_update())
 
     async def _reload_and_update(self) -> None:
-        """Reload value and update state by @Zara"""
+        """Reload value and update state"""
         await self._load_from_file()
         self.async_write_ha_state()
 
     async def _load_from_file(self) -> None:
-        """Load value from daily_forecasts.json by @Zara"""
+        """Load value from daily_forecasts.json"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
@@ -72,51 +72,51 @@ class FileBasedSensorMixin(ABC):
 
     @property
     def available(self) -> bool:
-        """Sensor availability by @Zara"""
+        """Sensor availability"""
         return self._cached_value is not None
 
     @property
     def native_value(self) -> Any:
-        """Return cached value by @Zara"""
+        """Return cached value"""
         return self._cached_value
 
 
 class CoordinatorPropertySensorMixin(ABC):
-    """Mixin for sensors reading from coordinator properties by @Zara"""
+    """Mixin for sensors reading from coordinator properties"""
 
     @abstractmethod
     def get_coordinator_value(self) -> Optional[Any]:
-        """Get value from coordinator - must be implemented by @Zara"""
+        """Get value from coordinator - must be implemented"""
         pass
 
     @property
     def available(self) -> bool:
-        """Sensor availability by @Zara"""
+        """Sensor availability"""
         return (self.coordinator.last_update_success and
                 self.coordinator.data is not None and
                 self.native_value is not None)
 
     @property
     def native_value(self) -> Any:
-        """Return value from coordinator by @Zara"""
+        """Return value from coordinator"""
         return self.get_coordinator_value()
 
 
 class LiveSensorMixin(ABC):
-    """Mixin for sensors with live entity tracking by @Zara"""
+    """Mixin for sensors with live entity tracking"""
 
     @abstractmethod
     def get_tracked_entities(self) -> list[str]:
-        """Return list of entity IDs to track - must be implemented by @Zara"""
+        """Return list of entity IDs to track - must be implemented"""
         pass
 
     @abstractmethod
     def calculate_live_value(self) -> Optional[Any]:
-        """Calculate value from tracked entities - must be implemented by @Zara"""
+        """Calculate value from tracked entities - must be implemented"""
         pass
 
     async def async_added_to_hass(self) -> None:
-        """Setup live tracking by @Zara"""
+        """Setup live tracking"""
         await super().async_added_to_hass()
 
         # Listen to coordinator updates
@@ -139,38 +139,38 @@ class LiveSensorMixin(ABC):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates by @Zara"""
+        """Handle coordinator updates"""
         self.async_write_ha_state()
 
     @callback
     def _handle_sensor_change(self, event) -> None:
-        """Handle entity state changes by @Zara"""
+        """Handle entity state changes"""
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> Any:
-        """Return calculated live value by @Zara"""
+        """Return calculated live value"""
         return self.calculate_live_value()
 
 
 class StatisticsFileBasedMixin(FileBasedSensorMixin):
-    """Specialized mixin for statistics from daily_forecasts.json by @Zara"""
+    """Specialized mixin for statistics from daily_forecasts.json"""
 
     @property
     def available(self) -> bool:
-        """Always available, shows 0.0 if no data by @Zara"""
+        """Always available, shows 0.0 if no data"""
         return True
 
     @property
     def native_value(self) -> float:
-        """Return value or 0.0 if None by @Zara"""
+        """Return value or 0.0 if None"""
         return self._cached_value if self._cached_value is not None else 0.0
 
 
 class AlwaysAvailableFileBasedMixin(FileBasedSensorMixin):
-    """Mixin for sensors that should always be available with fallback values by @Zara"""
+    """Mixin for sensors that should always be available with fallback values"""
 
     @property
     def available(self) -> bool:
-        """Always available - shows fallback value if no data by @Zara"""
+        """Always available - shows fallback value if no data"""
         return True

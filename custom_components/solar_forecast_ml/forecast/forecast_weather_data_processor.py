@@ -25,11 +25,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class WeatherDataProcessor:
-    """Processes and transforms weather data for ML features by @Zara"""
+    """Processes and transforms weather data for ML features"""
     
     @staticmethod
     def process_forecast_data(forecast_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Process raw forecast data into standardized format by @Zara"""
+        """Process raw forecast data into standardized format"""
         processed = []
         
         for entry in forecast_list:
@@ -57,7 +57,7 @@ class WeatherDataProcessor:
         hour: int,
         latitude: float = 50.0
     ) -> float:
-        """Estimate solar radiation based on cloud cover and time by @Zara"""
+        """Estimate solar radiation based on cloud cover and time"""
         # Simple solar radiation model
         # Peak radiation around noon, reduced by cloud cover
         
@@ -86,7 +86,7 @@ class WeatherDataProcessor:
     
     @staticmethod
     def normalize_weather_features(weather_data: Dict[str, Any]) -> Dict[str, float]:
-        """Normalize weather features for ML input by @Zara"""
+        """Normalize weather features for ML input"""
         return {
             "temperature_norm": WeatherDataProcessor._normalize(
                 weather_data.get("temperature", 15.0),
@@ -117,7 +117,7 @@ class WeatherDataProcessor:
     
     @staticmethod
     def _safe_float(value: Any, default: float) -> float:
-        """Safely convert value to float with default by @Zara"""
+        """Safely convert value to float with default"""
         try:
             return float(value) if value is not None else default
         except (ValueError, TypeError):
@@ -125,7 +125,7 @@ class WeatherDataProcessor:
     
     @staticmethod
     def _normalize(value: float, min_val: float, max_val: float) -> float:
-        """Normalize value to range 0 1 by @Zara"""
+        """Normalize value to range 0 1"""
         if max_val == min_val:
             return 0.5
         return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))

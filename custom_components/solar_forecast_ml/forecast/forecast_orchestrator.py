@@ -39,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ForecastOrchestrator:
-    """Selects and executes the most appropriate forecast strategy based on by @Zara"""
+    """Selects and executes the most appropriate forecast strategy based on"""
 
     FALLBACK_PRODUCTION_START_HOUR = 6
     FALLBACK_PRODUCTION_END_HOUR = 21
@@ -51,7 +51,7 @@ class ForecastOrchestrator:
         solar_capacity: float,
         weather_calculator: WeatherCalculator
     ):
-        """Initialize the ForecastOrchestrator by @Zara"""
+        """Initialize the ForecastOrchestrator"""
         self.hass = hass
         self.data_manager = data_manager
         self.solar_capacity = solar_capacity
@@ -68,37 +68,48 @@ class ForecastOrchestrator:
         _LOGGER.debug("ForecastOrchestrator initialized.")
 
     def is_production_hour(self, target_dt: datetime) -> bool:
-        """Checks if a given datetime is within realistic solar production hours by @Zara"""
+        """Checks if a given datetime is within realistic solar production hours"""
         # Method 1: sun.sun with margins (most accurate)
         sun_state = self.hass.states.get("sun.sun")
         if sun_state and sun_state.attributes:
             try:
                 next_rising_str = sun_state.attributes.get("next_rising")
                 next_setting_str = sun_state.attributes.get("next_setting")
-                
+
                 if next_rising_str and next_setting_str:
                     next_rising = dt_util.parse_datetime(next_rising_str)
                     next_setting = dt_util.parse_datetime(next_setting_str)
-                    
+
                     if next_rising and next_setting:
-                        # CRITICAL: Convert UTC to Local
                         next_rising_local = dt_util.as_local(next_rising)
                         next_setting_local = dt_util.as_local(next_setting)
                         now_local = dt_util.now()
-                        
-                        # Determine production window based on time of day
-                        if next_rising_local.date() > now_local.date():
-                            # next_rising is tomorrow = sun has already risen today
-                            # Production start was early today (estimate: 6:00)
-                            production_start = now_local.replace(hour=6, minute=0, second=0, microsecond=0)
-                            # Production end is 60 min after today's sunset
-                            production_end = next_setting_local + timedelta(minutes=60)
-                        else:
-                            # next_rising is today = we are before sunrise
-                            # Production starts 60 min before sunrise
+
+                        # Case 1: We are BEFORE sunrise (next_rising is today and in the future)
+                        if next_rising_local.date() == now_local.date() and next_rising_local > now_local:
+                            # Production window: 60 min before sunrise to 60 min after sunset
                             production_start = next_rising_local - timedelta(minutes=60)
-                            # Production ends 60 min after sunset
                             production_end = next_setting_local + timedelta(minutes=60)
+
+                        # Case 2: We are BETWEEN sunrise and sunset (next_rising is tomorrow)
+                        elif next_rising_local.date() > now_local.date() and next_setting_local.date() == now_local.date():
+                            # Sun has risen today, will set today
+                            # Production window: start of day (estimate 6:00) to 60 min after sunset TODAY
+                            production_start = now_local.replace(hour=6, minute=0, second=0, microsecond=0)
+                            production_end = next_setting_local + timedelta(minutes=60)
+
+                        # Case 3: We are AFTER sunset (next_rising is tomorrow AND next_setting is tomorrow)
+                        elif next_rising_local.date() > now_local.date() and next_setting_local.date() > now_local.date():
+                            # Sun has already set today - NO production possible
+                            _LOGGER.debug(
+                                f"Production check: {target_dt.strftime('%H:%M')} - sun has set, no production"
+                            )
+                            return False
+
+                        else:
+                            # Unexpected state - use fallback
+                            _LOGGER.debug(f"Unexpected sun state, using fallback")
+                            raise ValueError("Unexpected sun state")
 
                         # Check if target_dt is within production window
                         if production_start <= target_dt <= production_end:
@@ -113,7 +124,7 @@ class ForecastOrchestrator:
                                 f"{production_start.strftime('%H:%M')}-{production_end.strftime('%H:%M')}"
                             )
                             return False
-                            
+
             except Exception as e:
                 _LOGGER.debug(f"sun.sun parsing failed, using fallback: {e}")
         
@@ -140,7 +151,7 @@ class ForecastOrchestrator:
         ml_predictor: Optional[MLPredictor] = None,
         error_handler: Optional[ErrorHandlingService] = None
     ) -> None:
-        """Initializes the available forecast strategy instances by @Zara"""
+        """Initializes the available forecast strategy instances"""
         _LOGGER.info("Initializing forecast strategies...")
         
         self._ml_predictor = ml_predictor
@@ -182,7 +193,7 @@ class ForecastOrchestrator:
         ml_prediction_tomorrow: Optional[float] = None,
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
-        """Orchestrates forecast creation with all available data by @Zara"""
+        """Orchestrates forecast creation with all available data"""
         hourly_weather_forecast = hourly_forecast if hourly_forecast else []
         sensor_data = external_sensors if external_sensors else {}
         
@@ -201,7 +212,7 @@ class ForecastOrchestrator:
         sensor_data: Dict[str, Any],
         correction_factor: float = 1.0
     ) -> Dict[str, Any]:
-        """Creates daily solar forecast today tomorrow day after tomorrow through by @Zara"""
+        """Creates daily solar forecast today tomorrow day after tomorrow through"""
         _LOGGER.debug("Creating blended daily forecast (Iterative Pipeline)...")
 
         ml_result: Optional[ForecastResult] = None
@@ -407,7 +418,7 @@ class ForecastOrchestrator:
         weather_data: Optional[Dict[str, Any]] = None,
         sensor_data: Optional[Dict[str, Any]] = None
     ) -> float:
-        """Estimates the solar production for the next full hour by @Zara"""
+        """Estimates the solar production for the next full hour"""
         _LOGGER.debug("Calculating next hour prediction...")
         try:
             now_local = dt_util.now()
@@ -461,7 +472,7 @@ class ForecastOrchestrator:
             return 0.0
 
     def _get_ml_hourly_profile_base(self, forecast_today_kwh: float, target_hour: int) -> Optional[float]:
-        """Calculates the base production for a specific hour using the ML hourly profile by @Zara"""
+        """Calculates the base production for a specific hour using the ML hourly profile"""
         if not self._ml_predictor or not self._ml_predictor.current_profile:
             _LOGGER.debug("ML Predictor or its current_profile not available for hourly base.")
             return None
@@ -500,7 +511,7 @@ class ForecastOrchestrator:
         current_weather_data: Optional[Dict[str, Any]],
         current_sensor_data: Optional[Dict[str, Any]]
     ) -> Dict[str, float]:
-        """Calculates adjustment multipliers based on current weather and sensor readings by @Zara"""
+        """Calculates adjustment multipliers based on current weather and sensor readings"""
         factors = {
             'cloud/lux': 1.0,
             'temperature': 1.0,

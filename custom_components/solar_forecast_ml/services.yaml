@@ -191,3 +191,43 @@ run_all_scheduled_tasks:
 
     Use this to verify all tasks work correctly without waiting for scheduled times.
   fields: {}
+
+generate_chart:
+  name: Generate Forecast Chart
+  description: >
+    Generate a PNG chart visualizing forecast vs actual production data.
+    The chart is saved to /config/solar_forecast_ml/exports/pictures/
+    and can be displayed in Home Assistant using a local_file camera.
+
+    Chart types:
+    - daily: Forecast vs Actual for a specific day (default: today)
+    - weekly: Weekly accuracy bar chart (last 7 days)
+    - production_weather: Production vs Weather conditions (dual-axis chart)
+    - monthly_heatmap: Monthly production heatmap showing daily patterns
+    - sensor_correlation: Correlation between weather sensors and forecast accuracy
+
+    The daily and production_weather charts are automatically generated at day-end (23:30).
+
+    The generated chart can be viewed in Lovelace using:
+    camera:
+      - platform: local_file
+        file_path: /config/solar_forecast_ml/exports/pictures/daily_forecast_YYYY-MM-DD.png
+
+  fields:
+    chart_type:
+      description: Type of chart to generate
+      example: "daily"
+      default: "daily"
+      selector:
+        select:
+          options:
+            - "daily"
+            - "weekly"
+            - "production_weather"
+            - "monthly_heatmap"
+            - "sensor_correlation"
+    date:
+      description: Target date for daily/production_weather/monthly_heatmap chart (YYYY-MM-DD format). Default is today.
+      example: "2025-11-08"
+      selector:
+        text:

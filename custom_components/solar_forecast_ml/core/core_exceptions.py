@@ -31,7 +31,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Severity Enum ---
 class ErrorSeverity(Enum):
-    """Defines severity levels for exceptions by @Zara"""
+    """Defines severity levels for exceptions"""
     LOW = "low"         # Informational or minor issue
     MEDIUM = "medium"   # Warning, potentially recoverable
     HIGH = "high"       # Error, likely requires attention
@@ -40,7 +40,7 @@ class ErrorSeverity(Enum):
 
 # --- Base Exception ---
 class SolarForecastMLException(Exception):
-    """Base exception for all custom errors in the Solar Forecast ML integration by @Zara"""
+    """Base exception for all custom errors in the Solar Forecast ML integration"""
 
     def __init__(
         self,
@@ -48,7 +48,7 @@ class SolarForecastMLException(Exception):
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
         context: Optional[Dict[str, Any]] = None
     ):
-        """Initialize the base exception by @Zara"""
+        """Initialize the base exception"""
         super().__init__(message)
         self.message = message
         self.severity = severity
@@ -64,7 +64,7 @@ class SolarForecastMLException(Exception):
 
 
     def severity_to_loglevel(self) -> int:
-        """Map error severity to standard logging levels by @Zara"""
+        """Map error severity to standard logging levels"""
         if self.severity == ErrorSeverity.CRITICAL:
             return logging.CRITICAL
         elif self.severity == ErrorSeverity.HIGH:
@@ -78,7 +78,7 @@ class SolarForecastMLException(Exception):
 # --- Specific Exception Types ---
 
 class ConfigurationException(SolarForecastMLException):
-    """Exception raised for errors in the integrations configuration by @Zara"""
+    """Exception raised for errors in the integrations configuration"""
     def __init__(
         self,
         message: str,
@@ -89,7 +89,7 @@ class ConfigurationException(SolarForecastMLException):
 
 
 class DependencyException(SolarForecastMLException):
-    """Exception raised for missing or incompatible Python dependencies by @Zara"""
+    """Exception raised for missing or incompatible Python dependencies"""
     def __init__(
         self,
         message: str,
@@ -100,7 +100,7 @@ class DependencyException(SolarForecastMLException):
 
 
 class WeatherAPIException(SolarForecastMLException):
-    """Exception raised for errors interacting with the weather data source API or e... by @Zara"""
+    """Exception raised for errors interacting with the weather data source API or e..."""
     def __init__(
         self,
         message: str,
@@ -116,7 +116,7 @@ class WeatherAPIException(SolarForecastMLException):
 
 
 class DataIntegrityException(SolarForecastMLException):
-    """Exception raised for issues with data storage files corruption IO errors by @Zara"""
+    """Exception raised for issues with data storage files corruption IO errors"""
     def __init__(
         self,
         message: str,
@@ -127,7 +127,7 @@ class DataIntegrityException(SolarForecastMLException):
 
 
 class DataValidationException(SolarForecastMLException):
-    """Exception raised when loaded data fails validation checks by @Zara"""
+    """Exception raised when loaded data fails validation checks"""
     def __init__(
         self,
         message: str,
@@ -142,7 +142,7 @@ class DataValidationException(SolarForecastMLException):
 
 
 class MLModelException(SolarForecastMLException):
-    """Exception related to the Machine Learning model training prediction by @Zara"""
+    """Exception related to the Machine Learning model training prediction"""
     def __init__(
         self,
         message: str,
@@ -165,7 +165,7 @@ class MLModelException(SolarForecastMLException):
 
 
 class CircuitBreakerOpenException(SolarForecastMLException):
-    """Exception raised when an operation is blocked by an open circuit breaker by @Zara"""
+    """Exception raised when an operation is blocked by an open circuit breaker"""
     def __init__(
         self,
         message: str,
@@ -180,7 +180,7 @@ class CircuitBreakerOpenException(SolarForecastMLException):
 # --- Helper Functions ---
 
 def create_context(**kwargs) -> Dict[str, Any]:
-    """Creates a standardized context dictionary adding a timestamp by @Zara"""
+    """Creates a standardized context dictionary adding a timestamp"""
     context = {
         "timestamp": dt_util.now().isoformat(), # Use LOCAL timestamp
         **kwargs # Add other context details

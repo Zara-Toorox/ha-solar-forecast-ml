@@ -35,11 +35,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class TypedDataAdapter:
-    """Adapter class responsible for converting data between unstructured dictionaries by @Zara"""
+    """Adapter class responsible for converting data between unstructured dictionaries"""
 
     @staticmethod
     def dict_to_prediction_record(data: Dict[str, Any]) -> PredictionRecord:
-        """Converts a dictionary to a PredictionRecord dataclass instance by @Zara"""
+        """Converts a dictionary to a PredictionRecord dataclass instance"""
         if isinstance(data, PredictionRecord):
             return data # Return if already the correct type
 
@@ -73,7 +73,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def dict_to_learned_weights(data: Dict[str, Any]) -> LearnedWeights:
-        """Converts a dictionary to a LearnedWeights dataclass instance by @Zara"""
+        """Converts a dictionary to a LearnedWeights dataclass instance"""
         if isinstance(data, LearnedWeights):
             return data # Return if already the correct type
 
@@ -153,7 +153,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def learned_weights_to_dict(weights: LearnedWeights) -> Dict[str, Any]:
-        """Converts a LearnedWeights dataclass instance back into a dictionary by @Zara"""
+        """Converts a LearnedWeights dataclass instance back into a dictionary"""
         if not isinstance(weights, LearnedWeights):
             _LOGGER.error("Invalid input: learned_weights_to_dict expects a LearnedWeights instance.")
             # Return dict from default? Or raise error? Return default dict for now.
@@ -185,7 +185,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def dict_to_hourly_profile(data: Dict[str, Any]) -> HourlyProfile:
-        """Converts a dictionary to an HourlyProfile dataclass instance by @Zara"""
+        """Converts a dictionary to an HourlyProfile dataclass instance"""
         if isinstance(data, HourlyProfile):
             return data # Return if already the correct type
 
@@ -228,7 +228,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def hourly_profile_to_dict(profile: HourlyProfile) -> Dict[str, Any]:
-        """Converts an HourlyProfile dataclass instance back into a dictionary by @Zara"""
+        """Converts an HourlyProfile dataclass instance back into a dictionary"""
         if not isinstance(profile, HourlyProfile):
              _LOGGER.error("Invalid input: hourly_profile_to_dict expects an HourlyProfile instance.")
              return TypedDataAdapter.hourly_profile_to_dict(create_default_hourly_profile())
@@ -251,7 +251,7 @@ class TypedDataAdapter:
 
     @staticmethod
     def prediction_record_to_dict(record: PredictionRecord) -> Dict[str, Any]:
-        """Converts a PredictionRecord dataclass instance into a dictionary by @Zara"""
+        """Converts a PredictionRecord dataclass instance into a dictionary"""
         if not isinstance(record, PredictionRecord):
              _LOGGER.error("Invalid input: prediction_record_to_dict expects a PredictionRecord instance.")
              # Cannot easily create a default record, return empty dict or raise? Empty dict safer.

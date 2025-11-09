@@ -28,11 +28,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MLSampleAggregator:
-    """Aggregates and summarizes ML training samples by @Zara"""
+    """Aggregates and summarizes ML training samples"""
     
     @staticmethod
     def aggregate_by_hour(samples: List[Dict[str, Any]]) -> Dict[int, List[Dict[str, Any]]]:
-        """Group samples by hour of day by @Zara"""
+        """Group samples by hour of day"""
         hourly_samples = defaultdict(list)
         
         for sample in samples:
@@ -47,7 +47,7 @@ class MLSampleAggregator:
     
     @staticmethod
     def aggregate_by_day(samples: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        """Group samples by date by @Zara"""
+        """Group samples by date"""
         daily_samples = defaultdict(list)
         
         for sample in samples:
@@ -62,7 +62,7 @@ class MLSampleAggregator:
     
     @staticmethod
     def calculate_hourly_statistics(samples: List[Dict[str, Any]]) -> Dict[int, Dict[str, float]]:
-        """Calculate statistics for each hour by @Zara"""
+        """Calculate statistics for each hour"""
         hourly_samples = MLSampleAggregator.aggregate_by_hour(samples)
         statistics = {}
         
@@ -88,7 +88,7 @@ class MLSampleAggregator:
         samples: List[Dict[str, Any]],
         days: int = 30
     ) -> List[Dict[str, Any]]:
-        """Get samples from the last N days by @Zara"""
+        """Get samples from the last N days"""
         cutoff = dt_util.now() - timedelta(days=days)
         recent_samples = []
         
@@ -104,7 +104,7 @@ class MLSampleAggregator:
     
     @staticmethod
     def calculate_feature_statistics(samples: List[Dict[str, Any]]) -> Dict[str, Dict[str, float]]:
-        """Calculate statistics for each feature by @Zara"""
+        """Calculate statistics for each feature"""
         feature_values = defaultdict(list)
         
         # Collect all feature values
@@ -130,7 +130,7 @@ class MLSampleAggregator:
     
     @staticmethod
     def _calculate_std(values: List[float]) -> float:
-        """Calculate standard deviation by @Zara"""
+        """Calculate standard deviation"""
         if not values:
             return 0.0
         
@@ -140,7 +140,7 @@ class MLSampleAggregator:
     
     @staticmethod
     def summarize_samples(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Create a comprehensive summary of samples by @Zara"""
+        """Create a comprehensive summary of samples"""
         if not samples:
             return {
                 "total_samples": 0,

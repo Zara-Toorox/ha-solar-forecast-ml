@@ -66,7 +66,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         entry: ConfigEntry,
         dependencies_ok: bool = False,
     ):
-        """Initialize coordinator - refactored for clarity by @Zara"""
+        """Initialize coordinator - refactored for clarity"""
         update_interval_seconds = entry.options.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL.total_seconds())
         update_interval_timedelta = timedelta(seconds=update_interval_seconds)
 
@@ -183,7 +183,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         )
 
     async def _load_persistent_state(self) -> None:
-        """Load persistent coordinator state eg expected_daily_production by @Zara"""
+        """Load persistent coordinator state eg expected_daily_production"""
         try:
             # Load expected_daily_production if it was set today
             loaded_value = await self.data_manager.load_expected_daily_production()
@@ -197,7 +197,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(f"Failed to load persistent coordinator state: {e}")
 
     async def _initialize_services(self) -> bool:
-        """Initialize all services weather ML error handler by @Zara"""
+        """Initialize all services weather ML error handler"""
         try:
             # Error handler is already initialized
             
@@ -276,7 +276,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             return False
 
     async def _initialize_forecast_orchestrator(self) -> None:
-        """Initialize the forecast orchestrator strategies by @Zara"""
+        """Initialize the forecast orchestrator strategies"""
         if not self.ml_predictor:
             _LOGGER.info("Initializing ForecastOrchestrator without ML predictor")
             self.forecast_orchestrator.initialize_strategies(
@@ -292,7 +292,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         _LOGGER.info("ForecastOrchestrator strategies initialized successfully")
 
     async def async_setup(self) -> bool:
-        """Setup coordinator and start tracking by @Zara"""
+        """Setup coordinator and start tracking"""
         try:
             _LOGGER.info("Starting coordinator setup...")
 
@@ -332,7 +332,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             # Setup next_hour forecast updates (zur vollen Stunde)
             @callback
             def _scheduled_next_hour_update(now: datetime) -> None:
-                """Callback for next hour forecast update - zur vollen Stunde by @Zara"""
+                """Callback for next hour forecast update - zur vollen Stunde"""
                 asyncio.create_task(self._update_next_hour_forecast())
             
             async_track_time_change(
@@ -345,7 +345,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
             # One-time update after HA restart (only if during production time)
             async def startup_next_hour_init():
-                """Initial next hour calculation after startup by @Zara"""
+                """Initial next hour calculation after startup"""
                 await asyncio.sleep(60)  # Wait 60 seconds for sensors to stabilize
 
                 now_local = dt_util.now()
@@ -363,7 +363,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             # Setup midnight forecast rotation (00:00:30)
             @callback
             def _scheduled_midnight_rotation(now: datetime) -> None:
-                """Callback for midnight forecast rotation - thread-safe by @Zara"""
+                """Callback for midnight forecast rotation - thread-safe"""
                 asyncio.create_task(self._rotate_forecasts_midnight())
             
             async_track_time_change(
@@ -414,7 +414,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             return False
 
     async def async_shutdown(self) -> None:
-        """Cleanup coordinator resources by @Zara"""
+        """Cleanup coordinator resources"""
         _LOGGER.info("Shutting down coordinator...")
 
         try:
@@ -425,7 +425,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Error during coordinator shutdown: {e}", exc_info=True)
 
     async def _setup_power_peak_tracking(self) -> None:
-        """Setup event listener for power peak tracking by @Zara"""
+        """Setup event listener for power peak tracking"""
         if not self.power_entity:
             _LOGGER.debug("No power entity configured - power peak tracking disabled")
             return
@@ -482,7 +482,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         _LOGGER.info(f"Power peak tracking enabled for {self.power_entity}")
 
     async def _async_update_data(self):
-        """Fetch data from API endpoint - refactored for clarity by @Zara"""
+        """Fetch data from API endpoint - refactored for clarity"""
         try:
             # Initialize services on first update
             if not self._services_initialized:
@@ -545,7 +545,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error communicating with API: {err}")
 
     async def _update_sensor_properties(self, data: Dict[str, Any]) -> None:
-        """Update coordinator properties used by sensors by @Zara"""
+        """Update coordinator properties used by sensors"""
         try:
             if data.get("hourly_forecast"):
                 hourly = data["hourly_forecast"]
@@ -611,7 +611,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
     async def _save_forecasts_to_storage(
         self, forecast_data: dict, hourly_forecast: list
     ) -> None:
-        """Save forecasts to daily_forecastsjson based on current time by @Zara"""
+        """Save forecasts to daily_forecastsjson based on current time"""
         try:
             now_local = dt_util.now()
             hour = now_local.hour
@@ -706,7 +706,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Failed to save forecasts to storage: {e}", exc_info=True)
 
     async def _update_next_hour_forecast(self) -> None:
-        """Update next hour forecast - only during production time by @Zara"""
+        """Update next hour forecast - only during production time"""
         try:
             now_local = dt_util.now()
             # Calculate for the next full hour
@@ -750,7 +750,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Next hour update failed: {e}", exc_info=True)
 
     async def _rotate_forecasts_midnight(self) -> None:
-        """Rotate forecasts at midnight by @Zara"""
+        """Rotate forecasts at midnight"""
         try:
             _LOGGER.info("Starting midnight forecast rotation...")
             
@@ -838,7 +838,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             )
 
     async def set_expected_daily_production(self) -> None:
-        """Set expected daily production at 6 AM and save persistently by @Zara"""
+        """Set expected daily production at 6 AM and save persistently"""
         try:
             _LOGGER.info("=== Setting expected daily production (6 AM task) ===")
             
@@ -921,14 +921,14 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             self.expected_daily_production = None
 
     async def reset_expected_daily_production(self) -> None:
-        """Reset expected daily production at midnight and clear persistent storage by @Zara"""
+        """Reset expected daily production at midnight and clear persistent storage"""
         self.expected_daily_production = None
         await self.data_manager.clear_expected_daily_production()
         _LOGGER.info("Expected daily production reset to None and cleared from persistent storage")
         self.async_update_listeners()
 
     async def _recovery_forecast_process(self, source: str) -> bool:
-        """Fallback process for missing forecasts by @Zara"""
+        """Fallback process for missing forecasts"""
         # Prevent concurrent recovery attempts with lock
         async with self._recovery_lock:
             if self._recovery_in_progress:
@@ -942,7 +942,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 self._recovery_in_progress = False
 
     async def _execute_recovery(self, source: str) -> bool:
-        """Internal method to execute the recovery process by @Zara"""
+        """Internal method to execute the recovery process"""
         _LOGGER.info(f"=== Starting recovery forecast process (source: {source}) ===")
 
         # Early validation: Check if weather service is available
@@ -1027,7 +1027,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         return False
 
     async def force_refresh_with_weather_update(self) -> None:
-        """Force refresh with immediate weather update by @Zara"""
+        """Force refresh with immediate weather update"""
         _LOGGER.info("Force refresh requested - updating weather first...")
 
         # Force weather service to fetch fresh data
@@ -1044,7 +1044,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Force refresh completed")
 
     async def forecast_day_after_tomorrow(self) -> None:
-        """Triggers and saves the forecast for the day after tomorrow by @Zara"""
+        """Triggers and saves the forecast for the day after tomorrow"""
         try:
             _LOGGER.info("Service call: Manually triggering forecast for day after tomorrow.")
 
@@ -1096,7 +1096,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         event_details: Optional[dict] = None,
         warnings: Optional[list] = None
     ) -> None:
-        """Update system status sensor with event information by @Zara"""
+        """Update system status sensor with event information"""
         if self.system_status_sensor is None:
             _LOGGER.debug("System status sensor not yet registered - skipping update")
             return

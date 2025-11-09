@@ -33,10 +33,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SystemStatusSensor(CoordinatorEntity, SensorEntity):
-    """Sensor showing the system status and last events by @Zara"""
+    """Sensor showing the system status and last events"""
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry_id: str):
-        """Initialize the system status sensor by @Zara"""
+        """Initialize the system status sensor"""
         super().__init__(coordinator)
         self._attr_name = "System Status"
         self._attr_unique_id = f"{entry_id}_ml_system_status"
@@ -62,7 +62,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        """Return device information by @Zara"""
+        """Return device information"""
         return {
             "identifiers": {(DOMAIN, self.coordinator.entry.entry_id)},
             "name": "Solar Forecast ML",
@@ -72,7 +72,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def icon(self) -> str:
-        """Return the icon based on state by @Zara"""
+        """Return the icon based on state"""
         state = self._attr_native_value
 
         if state == "ok":
@@ -88,7 +88,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return sensor attributes by @Zara"""
+        """Return sensor attributes"""
         # Get ML predictor info
         ml_predictor = self.coordinator.ml_predictor
 
@@ -103,7 +103,6 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
             ml_samples = getattr(ml_predictor, 'training_samples', 0)
             ml_accuracy = getattr(ml_predictor, 'current_accuracy', None)
             ml_last_training = getattr(ml_predictor, 'last_training_time', None)
-            # TODO: ml_next_check from predictor
 
         # Convert datetime to ISO format
         last_event_time_str = None
@@ -161,7 +160,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         }
 
     def _get_forecast_source(self) -> str:
-        """Determine current forecast source by @Zara"""
+        """Determine current forecast source"""
         if hasattr(self.coordinator, 'forecast_orchestrator'):
             orchestrator = self.coordinator.forecast_orchestrator
             if hasattr(orchestrator, 'ml_strategy') and orchestrator.ml_strategy:
@@ -177,7 +176,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         event_details: Optional[Dict[str, Any]] = None,
         warnings: Optional[List[str]] = None
     ) -> None:
-        """Update sensor with new event information by @Zara"""
+        """Update sensor with new event information"""
         from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
         now = dt_util.now()
@@ -213,7 +212,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         )
 
     def _calculate_state(self) -> str:
-        """Calculate overall system state by @Zara"""
+        """Calculate overall system state"""
         # Error wenn letztes Event fehlgeschlagen
         if self._last_event_status == "failed":
             return "error"
@@ -245,7 +244,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         return "ok"
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity is added to hass by @Zara"""
+        """Run when entity is added to hass"""
         await super().async_added_to_hass()
 
         # Set initial status now that sensor is registered
@@ -259,14 +258,14 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator by @Zara"""
+        """Handle updated data from the coordinator"""
         # Update state calculations based on coordinator data
         self._warnings = self._collect_warnings()
         self._attr_native_value = self._calculate_state()
         self.async_write_ha_state()
 
     def _collect_warnings(self) -> List[str]:
-        """Collect current system warnings by @Zara"""
+        """Collect current system warnings"""
         warnings = []
 
         # Check ML status
@@ -296,7 +295,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         return warnings
 
     def _get_hourly_forecast_for_day(self, day: str) -> List[Dict[str, Any]]:
-        """Extract hourly forecast data for a specific day by @Zara
+        """Extract hourly forecast data for a specific day
 
         Args:
             day: "today", "tomorrow", or "day_after_tomorrow"

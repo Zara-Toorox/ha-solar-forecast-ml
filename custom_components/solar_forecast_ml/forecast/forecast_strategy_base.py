@@ -27,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class ForecastResult:
-    """Standardized result object returned by all forecast strategies by @Zara"""
+    """Standardized result object returned by all forecast strategies"""
     # Core forecast values
     forecast_today: float        # Predicted energy for today (e.g., kWh)
     forecast_tomorrow: float     # Predicted energy for tomorrow (e.g., kWh)
@@ -54,7 +54,7 @@ class ForecastResult:
     hourly_values: Optional[List[Dict[str, Any]]] = None  # List of {hour, datetime, production_kwh, date}
 
     def __post_init__(self):
-         """Validate values after initialization by @Zara"""
+         """Validate values after initialization"""
          # Ensure forecasts are non-negative
          self.forecast_today = max(0.0, self.forecast_today)
          self.forecast_tomorrow = max(0.0, self.forecast_tomorrow)
@@ -65,7 +65,7 @@ class ForecastResult:
          self.confidence_day_after = max(0.0, min(100.0, self.confidence_day_after))
 
     def to_dict(self) -> Dict[str, Any]:
-        """Converts the ForecastResult into a dictionary format suitable for by @Zara"""
+        """Converts the ForecastResult into a dictionary format suitable for"""
         result = {
             "forecast_today": round(self.forecast_today, 2),
             "forecast_tomorrow": round(self.forecast_tomorrow, 2),
@@ -94,10 +94,10 @@ class ForecastResult:
 
 
 class ForecastStrategy(ABC):
-    """Abstract Base Class for all forecast calculation strategies by @Zara"""
+    """Abstract Base Class for all forecast calculation strategies"""
 
     def __init__(self, name: str):
-        """Initialize the forecast strategy by @Zara"""
+        """Initialize the forecast strategy"""
         self.name = name
         # Create a specific logger for this strategy instance
         self._logger = logging.getLogger(f"{__name__}.{self.name}")
@@ -110,21 +110,21 @@ class ForecastStrategy(ABC):
         sensor_data: Dict[str, Any],
         correction_factor: float
     ) -> ForecastResult:
-        """Abstract method to calculate the solar forecast by @Zara"""
+        """Abstract method to calculate the solar forecast"""
         pass
 
     @abstractmethod
     def is_available(self) -> bool:
-        """Abstract method to check if the strategy is currently usable by @Zara"""
+        """Abstract method to check if the strategy is currently usable"""
         pass
 
     @abstractmethod
     def get_priority(self) -> int:
-        """Abstract method to return the execution priority of the strategy by @Zara"""
+        """Abstract method to return the execution priority of the strategy"""
         pass
 
     def _apply_bounds(self, value: float, min_val: float, max_val: float) -> float:
-        """Utility method to clamp a float value between a minimum and maximum by @Zara"""
+        """Utility method to clamp a float value between a minimum and maximum"""
         if max_val < min_val:
              self._logger.warning(f"Invalid bounds provided: min_val ({min_val}) > max_val ({max_val}).")
              # Handle invalid bounds gracefully, e.g., return min_val or original value
@@ -134,7 +134,7 @@ class ForecastStrategy(ABC):
 
 
     def _log_calculation(self, result: ForecastResult, details: str = "") -> None:
-        """Helper method for consistent logging of forecast calculation results by @Zara"""
+        """Helper method for consistent logging of forecast calculation results"""
         # Log essential info at INFO level, details at DEBUG level
         self._logger.info(
             f"Forecast calculated using '{self.name}': "

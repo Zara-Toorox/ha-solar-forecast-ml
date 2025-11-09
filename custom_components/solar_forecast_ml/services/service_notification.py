@@ -45,10 +45,10 @@ NOTIFICATION_ID_RETRAINING = "solar_forecast_ml_retraining"
 
 
 class NotificationService:
-    """Service for Persistent Notifications in Home Assistant by @Zara"""
+    """Service for Persistent Notifications in Home Assistant"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """Initialize Notification Service by @Zara"""
+        """Initialize Notification Service"""
         self.hass = hass
         self.entry = entry
         self._initialized = False
@@ -56,7 +56,7 @@ class NotificationService:
         _LOGGER.debug("NotificationService instance created")
 
     async def initialize(self) -> bool:
-        """Initialize the Notification Service by @Zara"""
+        """Initialize the Notification Service"""
         try:
             async with self._notification_lock:
                 if self._initialized:
@@ -84,7 +84,7 @@ class NotificationService:
             return False
 
     def _should_notify(self, notification_type: str) -> bool:
-        """Centralized check if notification should be displayed by @Zara"""
+        """Centralized check if notification should be displayed"""
         if not self._initialized:
             return False
 
@@ -102,7 +102,7 @@ class NotificationService:
         title: str,
         notification_id: str
     ) -> bool:
-        """Create notification with error handling by @Zara"""
+        """Create notification with error handling"""
         if not self._initialized:
             _LOGGER.warning(
                 f"[!] NotificationService not initialized - "
@@ -132,7 +132,7 @@ class NotificationService:
             return False
 
     async def _safe_dismiss_notification(self, notification_id: str) -> bool:
-        """Remove notification with error handling by @Zara"""
+        """Remove notification with error handling"""
         if not self._initialized:
             return False
 
@@ -160,7 +160,7 @@ class NotificationService:
         installed_packages: Optional[List[str]] = None,
         missing_packages: Optional[List[str]] = None
     ) -> bool:
-        """Show startup notification with integration status by @Zara"""
+        """Show startup notification with integration status"""
         if not self._should_notify(CONF_NOTIFY_STARTUP):
             return False
 
@@ -238,7 +238,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
         forecast_energy: float,
         confidence: Optional[float] = None
     ) -> bool:
-        """Show forecast update notification by @Zara"""
+        """Show forecast update notification"""
         if not self._should_notify(CONF_NOTIFY_FORECAST):
             return False
 
@@ -247,7 +247,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             if confidence is not None:
                 confidence_text = f"\n**Confidence:** {confidence:.1f}%"
 
-            message = f"""Solar Forecast Updated by @Zara"""
+            message = f"""Solar Forecast Updated"""
 
             await self._safe_create_notification(
                 message=message,
@@ -262,12 +262,12 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def show_training_start(self, sample_count: int) -> bool:
-        """Show notification when ML training starts by @Zara"""
+        """Show notification when ML training starts"""
         if not self._should_notify(CONF_NOTIFY_LEARNING):
             return False
 
         try:
-            message = f"""ML Training Started by @Zara"""
+            message = f"""ML Training Started"""
 
             await self._safe_create_notification(
                 message=message,
@@ -287,7 +287,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
         accuracy: Optional[float] = None,
         sample_count: Optional[int] = None
     ) -> bool:
-        """Show notification when ML training completes by @Zara"""
+        """Show notification when ML training completes"""
         if not self._should_notify(CONF_NOTIFY_SUCCESSFUL_LEARNING):
             return False
 
@@ -301,9 +301,9 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
                 if sample_count is not None:
                     sample_text = f"\n**Samples Used:** {sample_count}"
 
-                message = f"""OK ML Training Complete by @Zara"""
+                message = f"""OK ML Training Complete"""
             else:
-                message = """ ML Training Failed by @Zara"""
+                message = """ ML Training Failed"""
 
             await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
@@ -320,15 +320,15 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def dismiss_startup_notification(self) -> bool:
-        """Remove startup notification by @Zara"""
+        """Remove startup notification"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_STARTUP)
 
     async def dismiss_forecast_notification(self) -> bool:
-        """Remove forecast notification by @Zara"""
+        """Remove forecast notification"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_FORECAST)
 
     async def dismiss_training_notification(self) -> bool:
-        """Remove training notification by @Zara"""
+        """Remove training notification"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
     async def show_model_retraining_required(
@@ -337,7 +337,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
         old_features: Optional[int] = None,
         new_features: Optional[int] = None
     ) -> bool:
-        """Show notification when ML model needs retraining by @Zara"""
+        """Show notification when ML model needs retraining"""
         try:
             # Build reason-specific message
             if reason == "feature_mismatch":
@@ -379,7 +379,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             return False
 
     async def dismiss_retraining_notification(self) -> bool:
-        """Remove retraining notification by @Zara"""
+        """Remove retraining notification"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_RETRAINING)
 
 
@@ -387,7 +387,7 @@ async def create_notification_service(
     hass: HomeAssistant,
     entry: ConfigEntry
 ) -> Optional[NotificationService]:
-    """Factory function to create and initialize NotificationService by @Zara"""
+    """Factory function to create and initialize NotificationService"""
     try:
         service = NotificationService(hass, entry)
 

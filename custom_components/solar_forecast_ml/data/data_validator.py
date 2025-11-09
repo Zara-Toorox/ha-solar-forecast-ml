@@ -27,11 +27,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataValidator:
-    """Validates data integrity for ML and forecast data by @Zara"""
+    """Validates data integrity for ML and forecast data"""
     
     @staticmethod
     def validate_prediction_data(data: Dict[str, Any]) -> bool:
-        """Validate prediction data structure by @Zara"""
+        """Validate prediction data structure"""
         required_fields = ["timestamp", "prediction_kwh", "confidence"]
         
         for field in required_fields:
@@ -61,7 +61,7 @@ class DataValidator:
     
     @staticmethod
     def validate_sample_data(sample: Dict[str, Any]) -> bool:
-        """Validate ML sample data structure by @Zara"""
+        """Validate ML sample data structure"""
         required_fields = ["timestamp", "actual_power", "features"]
         
         for field in required_fields:
@@ -85,7 +85,7 @@ class DataValidator:
     
     @staticmethod
     def validate_model_state(state: Dict[str, Any]) -> bool:
-        """Validate model state data by @Zara"""
+        """Validate model state data"""
         required_fields = ["version", "model_loaded", "training_samples"]
         
         for field in required_fields:
@@ -107,7 +107,7 @@ class DataValidator:
     
     @staticmethod
     def validate_daily_forecast(forecast: Dict[str, Any]) -> bool:
-        """Validate daily forecast data by @Zara"""
+        """Validate daily forecast data"""
         required_fields = ["date", "prediction_kwh"]
         
         for field in required_fields:
@@ -133,7 +133,7 @@ class DataValidator:
     
     @staticmethod  
     def check_data_quality(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Check overall data quality metrics by @Zara"""
+        """Check overall data quality metrics"""
         if not samples:
             return {
                 "total_samples": 0,

@@ -52,14 +52,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Solar Forecast ML integration legacy by @Zara"""
+    """Set up the Solar Forecast ML integration legacy"""
     # Store empty dict for the domain
     hass.data.setdefault(DOMAIN, {})
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Solar Forecast ML from a config entry by @Zara"""
+    """Set up Solar Forecast ML from a config entry"""
     # Deferring imports to avoid blocking the event loop during component loading
     from .coordinator import SolarForecastMLCoordinator
     from .core.core_dependency_handler import DependencyHandler
@@ -171,7 +171,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry by @Zara"""
+    """Unload a config entry"""
     _LOGGER.info("Unloading Solar Forecast ML integration...")
 
     # Unload platforms
@@ -205,7 +205,7 @@ async def _async_register_services(
     entry: ConfigEntry,
     coordinator: "SolarForecastMLCoordinator"
 ) -> None:
-    """Register integration services using Service Registry by @Zara"""
+    """Register integration services using Service Registry"""
     from .services.service_registry import ServiceRegistry
 
     registry = ServiceRegistry(hass, entry, coordinator)
@@ -216,7 +216,7 @@ async def _async_register_services(
 
 
 def _async_unregister_services(hass: HomeAssistant) -> None:
-    """Unregister integration services using Service Registry by @Zara"""
+    """Unregister integration services using Service Registry"""
     registry = hass.data[DOMAIN].get("service_registry")
     if registry:
         registry.unregister_all_services()

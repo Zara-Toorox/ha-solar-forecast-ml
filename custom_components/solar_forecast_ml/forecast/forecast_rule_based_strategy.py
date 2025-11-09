@@ -33,14 +33,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class RuleBasedForecastStrategy(ForecastStrategy):
-    """A fallback forecast strategy that uses simple rule-based heuristics by @Zara"""
+    """A fallback forecast strategy that uses simple rule-based heuristics"""
 
     def __init__(
         self, 
         weather_calculator: WeatherCalculator, 
         solar_capacity: float
     ):
-        """Initialize the Rule-Based Forecast Strategy by @Zara"""
+        """Initialize the Rule-Based Forecast Strategy"""
         super().__init__("rule_based")
         self.weather_calculator = weather_calculator
         self.solar_capacity = solar_capacity
@@ -53,11 +53,11 @@ class RuleBasedForecastStrategy(ForecastStrategy):
 
 
     def is_available(self) -> bool:
-        """This strategy is always available as a fallback by @Zara"""
+        """This strategy is always available as a fallback"""
         return True
 
     def get_priority(self) -> int:
-        """Returns the priority of this strategy Lower than ML strategy by @Zara"""
+        """Returns the priority of this strategy Lower than ML strategy"""
         return 50
 
     async def calculate_forecast(
@@ -67,7 +67,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         correction_factor: float,
         **kwargs
     ) -> ForecastResult:
-        """Calculates a forecast using simple weather rules combined with a learned by @Zara"""
+        """Calculates a forecast using simple weather rules combined with a learned"""
         _LOGGER.debug("Calculating forecast using Rule-based (Iterative) strategy...")
 
         try:
@@ -260,7 +260,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             )
 
     def _get_hour_factor(self, hour: int) -> float:
-        """Calculates a factor 00 to 10 based on sun curve sine by @Zara"""
+        """Calculates a factor 00 to 10 based on sun curve sine"""
         try:
             if hour >= 22 or hour <= 5:
                 return 0.0

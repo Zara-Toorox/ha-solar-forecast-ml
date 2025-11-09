@@ -89,7 +89,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> bool:
-    """Set up Solar Forecast ML sensors from config entry by @Zara"""
+    """Set up Solar Forecast ML sensors from config entry"""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
     # Determine which sensor sets to add based on options

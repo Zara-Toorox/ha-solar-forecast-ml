@@ -41,7 +41,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the button entities from a config entry by @Zara"""
+    """Set up the button entities from a config entry"""
     coordinator: SolarForecastMLCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     # Define the base device info reused by buttons
@@ -80,7 +80,7 @@ async def async_setup_entry(
 # - Coordinator updates keep forecasts current
 #
 # class ManualForecastButton(ButtonEntity):
-#     """Button entity to trigger a manual forecast refresh via the coordinator by @Zara"""
+#     """Button entity to trigger a manual forecast refresh via the coordinator"""
 #     ... (Implementation removed)
 
 
@@ -88,7 +88,7 @@ async def async_setup_entry(
 # 2. Manual Learning Button
 # =============================================================================
 class ManualLearningButton(ButtonEntity):
-    """Button entity to trigger manual ML model training by @Zara"""
+    """Button entity to trigger manual ML model training"""
 
     _attr_has_entity_name = True
     _attr_translation_key = "manual_learning"
@@ -100,7 +100,7 @@ class ManualLearningButton(ButtonEntity):
             entry: ConfigEntry,
             device_info: DeviceInfo # Accept base device info
         ) -> None:
-        """Initialize the button by @Zara"""
+        """Initialize the button"""
         # super().__init__() # Not strictly needed
 
         self.coordinator = coordinator
@@ -112,7 +112,7 @@ class ManualLearningButton(ButtonEntity):
         self._attr_device_info = device_info
 
     async def async_press(self) -> None:
-        """Handle the button press trigger ML model training by @Zara"""
+        """Handle the button press trigger ML model training"""
         _LOGGER.info("Manual Learning button pressed - starting training process.")
 
         # FIXED: Direct access to ml_predictor instead of service_manager

@@ -42,12 +42,12 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Base Class for Coordinator-based Sensors in this file ---
 class BaseSolarSensor(CoordinatorEntity, SensorEntity):
-    """Base class for core sensors updated by the coordinator by @Zara"""
+    """Base class for core sensors updated by the coordinator"""
 
     _attr_has_entity_name = True
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the base sensor by @Zara"""
+        """Initialize the base sensor"""
         super().__init__(coordinator)
         self.entry = entry
         self._attr_device_info = DeviceInfo(
@@ -61,7 +61,7 @@ class BaseSolarSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available based on coordinator by @Zara"""
+        """Return if entity is available based on coordinator"""
         # Check if coordinator has successfully run at least once
         return self.coordinator.last_update_success and self.coordinator.data is not None
 
@@ -69,13 +69,13 @@ class BaseSolarSensor(CoordinatorEntity, SensorEntity):
 # --- Core Sensors ---
 
 class SolarForecastSensor(SensorEntity):
-    """Sensor for todays or tomorrows solar forecast by @Zara"""
+    """Sensor for todays or tomorrows solar forecast"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry, key: str):
-        """Initialize the forecast sensor by @Zara"""
+        """Initialize the forecast sensor"""
         self._coordinator = coordinator
         self.entry = entry
         self._key = key
@@ -107,12 +107,12 @@ class SolarForecastSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available by @Zara"""
+        """Return if entity is available"""
         return True
 
     @property
     def native_value(self) -> float:
-        """Return the forecast value by @Zara"""
+        """Return the forecast value"""
         if self._key == "tomorrow":
             # Tomorrow: Just return coordinator data
             if not self._coordinator.data:
@@ -141,7 +141,7 @@ class SolarForecastSensor(SensorEntity):
         return round(remaining, 2)
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass by @Zara"""
+        """Run when entity about to be added to hass"""
         await super().async_added_to_hass()
         
         # For "remaining": Load initial forecast from file
@@ -167,19 +167,19 @@ class SolarForecastSensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates - reload file for remaining by @Zara"""
+        """Handle coordinator updates - reload file for remaining"""
         if self._key == "remaining":
             self.hass.async_create_task(self._reload_forecast_and_update())
         else:
             self.async_write_ha_state()
 
     async def _reload_forecast_and_update(self) -> None:
-        """Reload forecast from file and update state by @Zara"""
+        """Reload forecast from file and update state"""
         await self._load_forecast_from_file()
         self.async_write_ha_state()
 
     async def _load_forecast_from_file(self) -> None:
-        """Load todays LOCKED forecast from daily_forecastsjson by @Zara"""
+        """Load todays LOCKED forecast from daily_forecastsjson"""
         try:
             forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
             if forecast_data and isinstance(forecast_data, dict):
@@ -195,18 +195,18 @@ class SolarForecastSensor(SensorEntity):
 
     @callback
     def _handle_yield_change(self, event) -> None:
-        """Handle yield sensor state changes only for remaining by @Zara"""
+        """Handle yield sensor state changes only for remaining"""
         self.async_write_ha_state()
 
 
 class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
-    """Sensor for the next hours solar forecast - reads from daily_forecastsjson by @Zara"""
+    """Sensor for the next hours solar forecast - reads from daily_forecastsjson"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the next hour sensor by @Zara"""
+        """Initialize the next hour sensor"""
         self._coordinator = coordinator
         self.entry = entry
         AlwaysAvailableFileBasedMixin.__init__(self)
@@ -223,24 +223,24 @@ class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
 
     @property
     def native_value(self) -> float:
-        """Return next hour forecast or 0.0 if no data by @Zara"""
+        """Return next hour forecast or 0.0 if no data"""
         return self._cached_value if self._cached_value is not None else 0.0
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract next hour forecast from daily_forecasts.json by @Zara"""
+        """Extract next hour forecast from daily_forecasts.json"""
         today = forecast_data.get("today", {})
         next_hour = today.get("forecast_next_hour", {})
         return next_hour.get("prediction_kwh")
 
 
 class PeakProductionHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
-    """Sensor indicating the forecasted best production hour from morning forecast by @Zara"""
+    """Sensor indicating the forecasted best production hour from morning forecast"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the peak hour sensor by @Zara"""
+        """Initialize the peak hour sensor"""
         self._coordinator = coordinator
         self.entry = entry
         AlwaysAvailableFileBasedMixin.__init__(self)
@@ -254,11 +254,11 @@ class PeakProductionHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        """Return peak hour or '--:--' if no data by @Zara"""
+        """Return peak hour or '--:--' if no data"""
         return self._cached_value if self._cached_value is not None else "--:--"
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[str]:
-        """Extract forecasted best hour from daily_forecasts.json by @Zara"""
+        """Extract forecasted best hour from daily_forecasts.json"""
         today = forecast_data.get("today", {})
         forecast_best_hour = today.get("forecast_best_hour", {})
         hour = forecast_best_hour.get("hour")
@@ -266,10 +266,10 @@ class PeakProductionHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
 
 
 class AverageYieldSensor(BaseSolarSensor):
-    """Sensor for the calculated average monthly yield by @Zara"""
+    """Sensor for the calculated average monthly yield"""
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average yield sensor by @Zara"""
+        """Initialize the average yield sensor"""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_ml_average_yield"
         self._attr_translation_key = "average_yield"
@@ -279,19 +279,19 @@ class AverageYieldSensor(BaseSolarSensor):
 
     @property
     def native_value(self) -> float | None:
-        """Return the average monthly yield by @Zara"""
+        """Return the average monthly yield"""
         value = getattr(self.coordinator, 'avg_month_yield', None)
         return value if value is not None and value > 0 else None
 
 
 class AutarkySensor(SensorEntity):
-    """Sensor for the calculated self-sufficiency Autarky with live updates by @Zara"""
+    """Sensor for the calculated self-sufficiency Autarky with live updates"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the autarky sensor by @Zara"""
+        """Initialize the autarky sensor"""
         self._coordinator = coordinator
         self.entry = entry
         self._yield_entity = entry.data.get("solar_yield_today")
@@ -310,14 +310,14 @@ class AutarkySensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available by @Zara"""
+        """Return if entity is available"""
         return (self._coordinator.last_update_success and 
                 self._coordinator.data is not None and
                 self.native_value is not None)
 
     @property
     def native_value(self) -> float | None:
-        """Return the autarky percentage - LIVE calculation by @Zara"""
+        """Return the autarky percentage - LIVE calculation"""
         # Try coordinator value first (updated during coordinator refresh)
         coord_value = getattr(self._coordinator, 'autarky_today', None)
         if coord_value is not None:
@@ -365,7 +365,7 @@ class AutarkySensor(SensorEntity):
         return None
 
     async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass by @Zara"""
+        """Run when entity about to be added to hass"""
         await super().async_added_to_hass()
 
         # Listen to coordinator updates
@@ -405,23 +405,23 @@ class AutarkySensor(SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates by @Zara"""
+        """Handle coordinator updates"""
         self.async_write_ha_state()
 
     @callback
     def _handle_sensor_change(self, event) -> None:
-        """Handle yield or consumption sensor state changes by @Zara"""
+        """Handle yield or consumption sensor state changes"""
         self.async_write_ha_state()
 
 
 class ExpectedDailyProductionSensor(FileBasedSensorMixin, SensorEntity):
-    """Sensor for expected daily production morning snapshot by @Zara"""
+    """Sensor for expected daily production morning snapshot"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the expected daily production sensor by @Zara"""
+        """Initialize the expected daily production sensor"""
         self._coordinator = coordinator
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
@@ -437,7 +437,7 @@ class ExpectedDailyProductionSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract expected daily production from daily_forecasts.json by @Zara"""
+        """Extract expected daily production from daily_forecasts.json"""
         today = forecast_data.get("today", {})
         forecast_day = today.get("forecast_day", {})
         return forecast_day.get("prediction_kwh")
@@ -446,13 +446,13 @@ class ExpectedDailyProductionSensor(FileBasedSensorMixin, SensorEntity):
 # --- Production Time Sensor (Reads from daily_forecasts.json) ---
 
 class ProductionTimeSensor(FileBasedSensorMixin, SensorEntity):
-    """Sensor for production time today - reads directly from daily_forecastsjson by @Zara"""
+    """Sensor for production time today - reads directly from daily_forecastsjson"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the production time sensor by @Zara"""
+        """Initialize the production time sensor"""
         self.entry = entry
         self._coordinator = coordinator
         FileBasedSensorMixin.__init__(self)
@@ -465,7 +465,7 @@ class ProductionTimeSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[str]:
-        """Extract production time from daily_forecasts.json by @Zara"""
+        """Extract production time from daily_forecasts.json"""
         today = forecast_data.get("today", {})
         production_time = today.get("production_time", {})
         duration_seconds = production_time.get("duration_seconds", 0)
@@ -479,13 +479,13 @@ class ProductionTimeSensor(FileBasedSensorMixin, SensorEntity):
 # --- New Statistical Sensors from daily_forecasts.json ---
 
 class MaxPeakTodaySensor(AlwaysAvailableFileBasedMixin, SensorEntity):
-    """Sensor for todays maximum power peak by @Zara"""
+    """Sensor for todays maximum power peak"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the max peak today sensor by @Zara"""
+        """Initialize the max peak today sensor"""
         self._coordinator = coordinator
         self.entry = entry
         AlwaysAvailableFileBasedMixin.__init__(self)
@@ -502,24 +502,24 @@ class MaxPeakTodaySensor(AlwaysAvailableFileBasedMixin, SensorEntity):
 
     @property
     def native_value(self) -> float:
-        """Return max peak or 0 if no data by @Zara"""
+        """Return max peak or 0 if no data"""
         return self._cached_value if self._cached_value is not None else 0.0
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract max peak today from daily_forecasts.json by @Zara"""
+        """Extract max peak today from daily_forecasts.json"""
         today = forecast_data.get("today", {})
         peak_today = today.get("peak_today", {})
         return peak_today.get("power_w", 0.0)
 
 
 class MaxPeakAllTimeSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
-    """Sensor for all-time maximum power peak by @Zara"""
+    """Sensor for all-time maximum power peak"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the max peak all time sensor by @Zara"""
+        """Initialize the max peak all time sensor"""
         self._coordinator = coordinator
         self.entry = entry
         self._cached_date: Optional[str] = None
@@ -537,18 +537,18 @@ class MaxPeakAllTimeSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
 
     @property
     def native_value(self) -> float:
-        """Return max peak all time or 0 if no data by @Zara"""
+        """Return max peak all time or 0 if no data"""
         return self._cached_value if self._cached_value is not None else 0.0
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Return additional attributes by @Zara"""
+        """Return additional attributes"""
         if self._cached_date:
             return {"date": self._cached_date}
         return {}
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract max peak all time from daily_forecasts.json by @Zara"""
+        """Extract max peak all time from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         all_time_peak = statistics.get("all_time_peak", {})
         # Store date for extra_state_attributes
@@ -557,13 +557,13 @@ class MaxPeakAllTimeSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
 
 
 class ForecastDayAfterTomorrowSensor(FileBasedSensorMixin, SensorEntity):
-    """Sensor for day after tomorrows solar forecast by @Zara"""
+    """Sensor for day after tomorrows solar forecast"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the day after tomorrow sensor by @Zara"""
+        """Initialize the day after tomorrow sensor"""
         self._coordinator = coordinator
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
@@ -579,20 +579,20 @@ class ForecastDayAfterTomorrowSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract day after tomorrow forecast from daily_forecasts.json by @Zara"""
+        """Extract day after tomorrow forecast from daily_forecasts.json"""
         today = forecast_data.get("today", {})
         day_after = today.get("forecast_day_after_tomorrow", {})
         return day_after.get("prediction_kwh")
 
 
 class MonthlyYieldSensor(StatisticsFileBasedMixin, SensorEntity):
-    """Sensor for current months total yield by @Zara"""
+    """Sensor for current months total yield"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the monthly yield sensor by @Zara"""
+        """Initialize the monthly yield sensor"""
         self._coordinator = coordinator
         self.entry = entry
         StatisticsFileBasedMixin.__init__(self)
@@ -608,20 +608,20 @@ class MonthlyYieldSensor(StatisticsFileBasedMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> float:
-        """Extract monthly yield from daily_forecasts.json by @Zara"""
+        """Extract monthly yield from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         current_month = statistics.get("current_month", {})
         return current_month.get("yield_kwh", 0.0)
 
 
 class MonthlyConsumptionSensor(StatisticsFileBasedMixin, SensorEntity):
-    """Sensor for current months total consumption by @Zara"""
+    """Sensor for current months total consumption"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the monthly consumption sensor by @Zara"""
+        """Initialize the monthly consumption sensor"""
         self._coordinator = coordinator
         self.entry = entry
         StatisticsFileBasedMixin.__init__(self)
@@ -637,20 +637,20 @@ class MonthlyConsumptionSensor(StatisticsFileBasedMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> float:
-        """Extract monthly consumption from daily_forecasts.json by @Zara"""
+        """Extract monthly consumption from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         current_month = statistics.get("current_month", {})
         return current_month.get("consumption_kwh", 0.0)
 
 
 class WeeklyYieldSensor(StatisticsFileBasedMixin, SensorEntity):
-    """Sensor for current weeks total yield by @Zara"""
+    """Sensor for current weeks total yield"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the weekly yield sensor by @Zara"""
+        """Initialize the weekly yield sensor"""
         self._coordinator = coordinator
         self.entry = entry
         StatisticsFileBasedMixin.__init__(self)
@@ -666,20 +666,20 @@ class WeeklyYieldSensor(StatisticsFileBasedMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> float:
-        """Extract weekly yield from daily_forecasts.json by @Zara"""
+        """Extract weekly yield from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         current_week = statistics.get("current_week", {})
         return current_week.get("yield_kwh", 0.0)
 
 
 class WeeklyConsumptionSensor(StatisticsFileBasedMixin, SensorEntity):
-    """Sensor for current weeks total consumption by @Zara"""
+    """Sensor for current weeks total consumption"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the weekly consumption sensor by @Zara"""
+        """Initialize the weekly consumption sensor"""
         self._coordinator = coordinator
         self.entry = entry
         StatisticsFileBasedMixin.__init__(self)
@@ -695,20 +695,20 @@ class WeeklyConsumptionSensor(StatisticsFileBasedMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> float:
-        """Extract weekly consumption from daily_forecasts.json by @Zara"""
+        """Extract weekly consumption from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         current_week = statistics.get("current_week", {})
         return current_week.get("consumption_kwh", 0.0)
 
 
 class AverageYield7DaysSensor(FileBasedSensorMixin, SensorEntity):
-    """Sensor for average daily yield over last 7 days by @Zara"""
+    """Sensor for average daily yield over last 7 days"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average yield 7 days sensor by @Zara"""
+        """Initialize the average yield 7 days sensor"""
         self._coordinator = coordinator
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
@@ -724,20 +724,20 @@ class AverageYield7DaysSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract average yield 7 days from daily_forecasts.json by @Zara"""
+        """Extract average yield 7 days from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         last_7d = statistics.get("last_7_days", {})
         return last_7d.get("avg_yield_kwh")
 
 
 class AverageYield30DaysSensor(FileBasedSensorMixin, SensorEntity):
-    """Sensor for average daily yield over last 30 days by @Zara"""
+    """Sensor for average daily yield over last 30 days"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average yield 30 days sensor by @Zara"""
+        """Initialize the average yield 30 days sensor"""
         self._coordinator = coordinator
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
@@ -753,20 +753,20 @@ class AverageYield30DaysSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract average yield 30 days from daily_forecasts.json by @Zara"""
+        """Extract average yield 30 days from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         last_30d = statistics.get("last_30_days", {})
         return last_30d.get("avg_yield_kwh")
 
 
 class AverageAutarkyMonthSensor(FileBasedSensorMixin, SensorEntity):
-    """Sensor for average autarky for current month by @Zara"""
+    """Sensor for average autarky for current month"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average autarky month sensor by @Zara"""
+        """Initialize the average autarky month sensor"""
         self._coordinator = coordinator
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
@@ -781,20 +781,20 @@ class AverageAutarkyMonthSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract average autarky month from daily_forecasts.json by @Zara"""
+        """Extract average autarky month from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         current_month = statistics.get("current_month", {})
         return current_month.get("avg_autarky")
 
 
 class AverageAccuracy30DaysSensor(FileBasedSensorMixin, SensorEntity):
-    """Sensor for average accuracy over last 30 days by @Zara"""
+    """Sensor for average accuracy over last 30 days"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize the average accuracy 30 days sensor by @Zara"""
+        """Initialize the average accuracy 30 days sensor"""
         self._coordinator = coordinator
         self.entry = entry
         FileBasedSensorMixin.__init__(self)
@@ -809,7 +809,7 @@ class AverageAccuracy30DaysSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract average accuracy 30 days from daily_forecasts.json by @Zara"""
+        """Extract average accuracy 30 days from daily_forecasts.json"""
         statistics = forecast_data.get("statistics", {})
         last_30d = statistics.get("last_30_days", {})
         return last_30d.get("avg_accuracy")

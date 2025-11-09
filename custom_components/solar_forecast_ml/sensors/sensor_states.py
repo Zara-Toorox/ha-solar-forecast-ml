@@ -39,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Base Class for Entity State Sensors ---
 class BaseEntityStateSensor(SensorEntity):
-    """Base class for sensors that track the state of another entity by @Zara"""
+    """Base class for sensors that track the state of another entity"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False  # Event-driven, no polling needed
@@ -55,7 +55,7 @@ class BaseEntityStateSensor(SensorEntity):
         translation_key: str,
         icon: str
     ):
-        """Initialize the state sensor by @Zara"""
+        """Initialize the state sensor"""
         self.hass = hass
         self.entry = entry
         self._source_entity_id_key = source_entity_id_key
@@ -75,7 +75,7 @@ class BaseEntityStateSensor(SensorEntity):
 
     @property
     def source_entity_id(self) -> Optional[str]:
-        """Get the source entity ID from config entry data by @Zara"""
+        """Get the source entity ID from config entry data"""
         if self._source_entity_id is None and self._source_entity_id_key:
             entity_id_raw = self.entry.data.get(self._source_entity_id_key)
             if isinstance(entity_id_raw, str) and entity_id_raw.strip():
@@ -88,11 +88,11 @@ class BaseEntityStateSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """This sensor is always available to show the state or lack thereof by @Zara"""
+        """This sensor is always available to show the state or lack thereof"""
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Register state change listener by @Zara"""
+        """Register state change listener"""
         await super().async_added_to_hass()
         source_id = self.source_entity_id  # Use property to get ID
         if source_id:
@@ -109,12 +109,12 @@ class BaseEntityStateSensor(SensorEntity):
 
     @callback
     def _handle_sensor_update(self, event) -> None:
-        """Handle state update from the source entity by @Zara"""
+        """Handle state update from the source entity"""
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> str:
-        """Return the state of the source entity as a string by @Zara"""
+        """Return the state of the source entity as a string"""
         source_id = self.source_entity_id
         if not source_id:
             return "Not configured"
@@ -127,7 +127,7 @@ class BaseEntityStateSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return attributes about the source entity by @Zara"""
+        """Return attributes about the source entity"""
         source_id = self.source_entity_id
         base_attrs = {
             "source_entity_id": source_id,
@@ -161,14 +161,14 @@ class BaseEntityStateSensor(SensorEntity):
 # --- External Sensors Status Sensor ---
 
 class ExternalSensorsStatusSensor(SensorEntity):
-    """Sensor showing status of all configured external sensors by @Zara"""
+    """Sensor showing status of all configured external sensors"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """Initialize the external sensors status sensor by @Zara"""
+        """Initialize the external sensors status sensor"""
         self.hass = hass
         self.entry = entry
         self._attr_unique_id = f"{entry.entry_id}_ml_external_sensors_status"
@@ -195,11 +195,11 @@ class ExternalSensorsStatusSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is always available by @Zara"""
+        """Sensor is always available"""
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Register state change listeners for all external sensors by @Zara"""
+        """Register state change listeners for all external sensors"""
         await super().async_added_to_hass()
 
         entity_ids_to_track = []
@@ -219,12 +219,12 @@ class ExternalSensorsStatusSensor(SensorEntity):
 
     @callback
     def _handle_sensor_update(self, event) -> None:
-        """Handle state update from external sensors by @Zara"""
+        """Handle state update from external sensors"""
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> str:
-        """Return overall status of external sensors by @Zara"""
+        """Return overall status of external sensors"""
         configured_count = 0
         ok_count = 0
         unavailable_count = 0
@@ -259,7 +259,7 @@ class ExternalSensorsStatusSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return detailed status of each external sensor by @Zara"""
+        """Return detailed status of each external sensor"""
         sensors_status = {}
 
         for sensor_name, sensor_key in self._sensor_config.items():
@@ -308,7 +308,7 @@ class ExternalSensorsStatusSensor(SensorEntity):
 # --- State Sensors for Core Entities ---
 
 class PowerSensorStateSensor(BaseEntityStateSensor):
-    """State sensor for the configured main power sensor by @Zara"""
+    """State sensor for the configured main power sensor"""
     # FIXED: Changed to diagnostic
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     
@@ -331,7 +331,7 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
     # FIXED: Override to return float instead of string
     @property
     def native_value(self) -> float | None:
-        """Return the power value as float with units by @Zara"""
+        """Return the power value as float with units"""
         source_id = self.source_entity_id
         if not source_id:
             return None
@@ -350,7 +350,7 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
 
 
 class YieldSensorStateSensor(BaseEntityStateSensor):
-    """State sensor for the configured daily yield sensor by @Zara"""
+    """State sensor for the configured daily yield sensor"""
     # FIXED: Changed to diagnostic
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     
@@ -373,7 +373,7 @@ class YieldSensorStateSensor(BaseEntityStateSensor):
     # FIXED: Override to return float instead of string
     @property
     def native_value(self) -> float | None:
-        """Return the yield value as float with units by @Zara"""
+        """Return the yield value as float with units"""
         source_id = self.source_entity_id
         if not source_id:
             return None

@@ -28,10 +28,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class WeatherCalculator:
-    """Calculates various rule-based weather adjustment factors based on simple heur... by @Zara"""
+    """Calculates various rule-based weather adjustment factors based on simple heur..."""
 
     def __init__(self):
-        """Initializes the WeatherCalculator with predefined factor mappings by @Zara"""
+        """Initializes the WeatherCalculator with predefined factor mappings"""
         # Seasonal base factors (adjust based on general solar intensity per season)
         self.SEASONAL_FACTORS = {
             "winter": 0.35, # Slightly higher base for winter
@@ -70,7 +70,7 @@ class WeatherCalculator:
         }
 
     def get_temperature_factor(self, temperature_c: Optional[float]) -> float:
-        """Calculates a simple efficiency factor based on ambient temperature by @Zara"""
+        """Calculates a simple efficiency factor based on ambient temperature"""
         if temperature_c is None:
              return 0.9 # Default factor if temp is unavailable
 
@@ -93,7 +93,7 @@ class WeatherCalculator:
             return 0.9  # Fallback on calculation error
 
     def get_cloud_factor(self, cloud_coverage_percent: Optional[float]) -> float:
-        """Calculates a simple factor based on cloud coverage percentage by @Zara"""
+        """Calculates a simple factor based on cloud coverage percentage"""
         if cloud_coverage_percent is None:
             return 0.6 # Default factor for unknown cloud cover (partly cloudy guess)
 
@@ -117,7 +117,7 @@ class WeatherCalculator:
             return 0.6  # Fallback on calculation error
 
     def get_condition_factor(self, condition: Optional[str]) -> float:
-        """Gets a reduction factor based on specific adverse weather conditions by @Zara"""
+        """Gets a reduction factor based on specific adverse weather conditions"""
         if not condition or not isinstance(condition, str):
             return 1.0 # No condition specified or invalid type
 
@@ -132,7 +132,7 @@ class WeatherCalculator:
             return 1.0  # Fallback on error
 
     def get_seasonal_adjustment(self, now: Optional[datetime] = None) -> float:
-        """Calculates a seasonal adjustment factor based on the month by @Zara"""
+        """Calculates a seasonal adjustment factor based on the month"""
         try:
             # Use current local time if no specific time is provided
             if now is None:
@@ -164,7 +164,7 @@ class WeatherCalculator:
             return 0.65  # Fallback to a neutral season factor
 
     def get_current_season(self, now: Optional[datetime] = None) -> str:
-        """Returns the current season name winter spring summer autumn by @Zara"""
+        """Returns the current season name winter spring summer autumn"""
         try:
             if now is None: now = dt_util.now()
             elif now.tzinfo is None: now = dt_util.ensure_local(now)
@@ -181,7 +181,7 @@ class WeatherCalculator:
         weather_data: Dict[str, Any],
         include_seasonal: bool = True
     ) -> float:
-        """Combines temperature cloud condition and optionally seasonal factors by @Zara"""
+        """Combines temperature cloud condition and optionally seasonal factors"""
         try:
             # Extract values safely from weather_data dict
             temp_c = weather_data.get("temperature")

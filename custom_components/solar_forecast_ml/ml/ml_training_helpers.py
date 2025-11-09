@@ -29,14 +29,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MLTrainingHelpers:
-    """Helper methods for ML training process by @Zara"""
+    """Helper methods for ML training process"""
 
     def __init__(self, predictor: "MLPredictor"):
-        """Initialize training helpers by @Zara"""
+        """Initialize training helpers"""
         self.predictor = predictor
 
     async def validate_training_data(self, training_records: List[Dict]) -> Tuple[bool, str, int]:
-        """Validate training data meets minimum requirements by @Zara"""
+        """Validate training data meets minimum requirements"""
         valid_records_count = len(training_records)
         absolute_min_samples = 20
         recommended_min_samples = MIN_TRAINING_DATA_POINTS
@@ -61,7 +61,7 @@ class MLTrainingHelpers:
         self,
         training_records: List[Dict]
     ) -> Tuple[List[List[float]], List[float]]:
-        """Extract features and labels from training records by @Zara"""
+        """Extract features and labels from training records"""
         X_train_raw = []
         y_train = []
 
@@ -112,7 +112,7 @@ class MLTrainingHelpers:
         return X_train_raw, y_train
 
     def _add_lag_features(self, sensor_data: Dict, record_time_local: datetime) -> Dict:
-        """Add lag features from historical cache by @Zara"""
+        """Add lag features from historical cache"""
         yesterday_dt = record_time_local - timedelta(days=1)
         yesterday_key = yesterday_dt.date().isoformat()
         yesterday_total = self.predictor._historical_cache['daily_productions'].get(yesterday_key, 0.0)
@@ -131,7 +131,7 @@ class MLTrainingHelpers:
         X_train_raw: List[List[float]],
         y_train: List[float]
     ) -> Tuple[Dict, float, float, float]:
-        """Scale features and train model by @Zara"""
+        """Scale features and train model"""
         X_train_scaled_list = await self.predictor.hass.async_add_executor_job(
             self.predictor.scaler.fit_transform,
             X_train_raw,
@@ -158,7 +158,7 @@ class MLTrainingHelpers:
         valid_records_count: int,
         training_start_time: datetime
     ) -> LearnedWeights:
-        """Create LearnedWeights object by @Zara"""
+        """Create LearnedWeights object"""
         mapped_weights = self.predictor.trainer.map_weights_to_features(
             weights_dict_raw,
             self.predictor.feature_engineer.feature_names
@@ -215,7 +215,7 @@ class MLTrainingHelpers:
         training_records: List[Dict],
         training_start_time: datetime
     ) -> None:
-        """Save weights and update predictor state by @Zara"""
+        """Save weights and update predictor state"""
         await self.predictor.data_manager.save_learned_weights(new_weights)
         await self.predictor._update_hourly_profile(training_records)
 
@@ -239,7 +239,7 @@ class MLTrainingHelpers:
         accuracy: float = None,
         sample_count: int = 0
     ) -> None:
-        """Send training notifications if service available by @Zara"""
+        """Send training notifications if service available"""
         if not self.predictor.notification_service:
             return
 

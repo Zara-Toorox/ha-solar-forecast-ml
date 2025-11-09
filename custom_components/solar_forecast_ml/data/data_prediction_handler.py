@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataPredictionHandler(DataManagerIO):
-    """Handles prediction history tracking and accuracy calculations by @Zara"""
+    """Handles prediction history tracking and accuracy calculations"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
@@ -46,7 +46,7 @@ class DataPredictionHandler(DataManagerIO):
         }
 
     async def ensure_prediction_history_file(self) -> None:
-        """Ensure prediction history file exists by @Zara"""
+        """Ensure prediction history file exists"""
         if not self.prediction_history_file.exists():
             await self._atomic_write_json(
                 self.prediction_history_file,
@@ -58,7 +58,7 @@ class DataPredictionHandler(DataManagerIO):
     # ═════════════════════════════════════════════════════════════
 
     async def save_prediction(self, prediction_data: Dict[str, Any]) -> bool:
-        """Save a single prediction to history by @Zara"""
+        """Save a single prediction to history"""
         try:
             if not validate_prediction_record(prediction_data):
                 _LOGGER.error("Prediction data validation failed")
@@ -101,7 +101,7 @@ class DataPredictionHandler(DataManagerIO):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get prediction history with optional filtering by @Zara"""
+        """Get prediction history with optional filtering"""
         try:
             history = await self._read_json_file(
                 self.prediction_history_file,
@@ -133,7 +133,7 @@ class DataPredictionHandler(DataManagerIO):
             return []
 
     async def get_latest_prediction(self) -> Optional[Dict[str, Any]]:
-        """Get most recent prediction by @Zara"""
+        """Get most recent prediction"""
         try:
             predictions = await self.get_predictions(limit=1)
             return predictions[0] if predictions else None
@@ -141,7 +141,7 @@ class DataPredictionHandler(DataManagerIO):
             return None
 
     async def get_prediction_for_date(self, date: str) -> Optional[Dict[str, Any]]:
-        """Get prediction for specific date by @Zara"""
+        """Get prediction for specific date"""
         try:
             predictions = await self.get_predictions()
             for pred in reversed(predictions):
@@ -152,7 +152,7 @@ class DataPredictionHandler(DataManagerIO):
             return None
 
     async def cleanup_old_predictions(self, days: int = 365) -> bool:
-        """Remove predictions older than specified days by @Zara"""
+        """Remove predictions older than specified days"""
         try:
             # Get the lock specific to this file for read-modify-write operation
             file_lock = await self._get_file_lock(self.prediction_history_file)
@@ -193,7 +193,7 @@ class DataPredictionHandler(DataManagerIO):
         self,
         days: int = 30
     ) -> Dict[str, Any]:
-        """Calculate accuracy statistics for recent predictions by @Zara"""
+        """Calculate accuracy statistics for recent predictions"""
         try:
             predictions = await self.get_predictions()
             
@@ -260,7 +260,7 @@ class DataPredictionHandler(DataManagerIO):
         self,
         days: int = 30
     ) -> List[Dict[str, Any]]:
-        """Get daily accuracy trend for recent period by @Zara"""
+        """Get daily accuracy trend for recent period"""
         try:
             predictions = await self.get_predictions()
             
@@ -289,7 +289,7 @@ class DataPredictionHandler(DataManagerIO):
             return []
 
     async def get_predictions_count(self) -> int:
-        """Get total count of predictions by @Zara"""
+        """Get total count of predictions"""
         try:
             history = await self._read_json_file(
                 self.prediction_history_file,
@@ -304,7 +304,7 @@ class DataPredictionHandler(DataManagerIO):
         actual_value: float,
         accuracy: Optional[float] = None
     ) -> bool:
-        """Update todays prediction records with actual value and accuracy by @Zara"""
+        """Update todays prediction records with actual value and accuracy"""
         try:
             today_date = dt_util.now().date().isoformat()
 

@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import shutil
+import re
 from datetime import datetime, date
 # --- IMPORT HIER ENTFERNT ---
 # import aiofiles (Wird in die Funktionen verschoben)
@@ -40,7 +41,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DateTimeEncoder(json.JSONEncoder):
-    """Custom JSON Encoder that converts datetime and date objects to ISO format str... by @Zara"""
+    """Custom JSON Encoder that converts datetime and date objects to ISO format str..."""
     def default(self, obj):
         if isinstance(obj, (datetime, date)):
             if isinstance(obj, datetime):
@@ -56,10 +57,10 @@ class DateTimeEncoder(json.JSONEncoder):
 
 
 class DataManagerIO:
-    """Base class providing asynchronous thread-safe file IO operations by @Zara"""
+    """Base class providing asynchronous thread-safe file IO operations"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
-        """Initialize the IO manager by @Zara"""
+        """Initialize the IO manager"""
         self.hass = hass
         self.data_dir = Path(data_dir) # Ensure it's a Path object
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="DataManagerIO")
@@ -69,7 +70,7 @@ class DataManagerIO:
         # DataManagerIO initialized (debug log removed)
 
     async def _get_file_lock(self, file_path: Path) -> asyncio.Lock:
-        """Get or create a lock for a specific file by @Zara"""
+        """Get or create a lock for a specific file"""
         file_key = str(file_path)  # Use full path as key
 
         async with self._locks_lock:
@@ -79,7 +80,7 @@ class DataManagerIO:
             return self._file_locks[file_key]
 
     async def _ensure_directory_exists(self, directory: Path) -> None:
-        """Ensure a directory exists creating it if necessary Non-blocking by @Zara"""
+        """Ensure a directory exists creating it if necessary Non-blocking"""
         try:
             # Check existence first (often faster if dir exists)
             exists = await self.hass.async_add_executor_job(directory.is_dir)
@@ -95,7 +96,7 @@ class DataManagerIO:
             )
 
     async def _get_file_size(self, file_path: Path) -> int:
-        """Get the size of a file in bytes Non-blocking by @Zara"""
+        """Get the size of a file in bytes Non-blocking"""
         try:
             if await self._file_exists(file_path):
                 stat_result = await self.hass.async_add_executor_job(file_path.stat)
@@ -106,7 +107,7 @@ class DataManagerIO:
             return 0
 
     async def _file_exists(self, file_path: Path) -> bool:
-        """Check if a file exists Non-blocking by @Zara"""
+        """Check if a file exists Non-blocking"""
         try:
             return await self.hass.async_add_executor_job(file_path.exists)
         except Exception as e:
@@ -114,7 +115,7 @@ class DataManagerIO:
             return False
 
     async def _atomic_write_json_unlocked(self, file_path: Path, data: Dict[str, Any]) -> None:
-        """Internal function for atomic JSON writing Assumes the caller holds _file_lock by @Zara"""
+        """Internal function for atomic JSON writing Assumes the caller holds _file_lock"""
 
         # +++ IMPORT HIER EINGEF +++
         # Wird erst importiert, wenn die Funktion aufgerufen wird
@@ -129,7 +130,10 @@ class DataManagerIO:
         parent_dir = file_path.parent
         await self._ensure_directory_exists(parent_dir)
 
-        temp_file = file_path.with_suffix(f'.tmp_{asyncio.current_task().get_name()}') # Unique temp name
+        # Create safe temp filename by sanitizing task name (remove invalid filename characters)
+        task_name = asyncio.current_task().get_name()
+        safe_task_name = re.sub(r'[^\w\-_]', '_', task_name)[:50]  # Limit length and sanitize
+        temp_file = file_path.with_suffix(f'.tmp_{safe_task_name}') # Unique temp name
         try:
             # Asynchronously write JSON data to the temporary file
             async with aiofiles.open(temp_file, 'w', encoding='utf-8') as f:
@@ -170,7 +174,7 @@ class DataManagerIO:
 
 
     async def _atomic_write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
-        """Public thread-safe method for atomically writing JSON data to a file by @Zara"""
+        """Public thread-safe method for atomically writing JSON data to a file"""
         try:
             # Get the lock specific to this file
             file_lock = await self._get_file_lock(file_path)
@@ -193,7 +197,7 @@ class DataManagerIO:
             )
 
     async def _read_json_file(self, file_path: Path, default_structure: Dict | None = None) -> Dict[str, Any]:
-        """Reads JSON data from a file asynchronously Non-blocking file read by @Zara"""
+        """Reads JSON data from a file asynchronously Non-blocking file read"""
         
         # +++ IMPORT HIER EINGEF +++
         try:
@@ -247,7 +251,7 @@ class DataManagerIO:
 
 
     async def cleanup(self) -> None:
-        """Cleans up resources specifically shutting down the ThreadPoolExecutor by @Zara"""
+        """Cleans up resources specifically shutting down the ThreadPoolExecutor"""
         try:
             _LOGGER.info("Shutting down DataManagerIO Executor...")
             # Use executor job to run the blocking shutdown method

@@ -38,7 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class CoordinatorConfiguration:
-    """Configuration data extracted from ConfigEntry by @Zara"""
+    """Configuration data extracted from ConfigEntry"""
     # Solar Configuration
     solar_capacity: float
     learning_enabled: bool
@@ -57,11 +57,11 @@ class CoordinatorConfiguration:
 
 
 class CoordinatorInitHelpers:
-    """Helper methods for coordinator initialization by @Zara"""
+    """Helper methods for coordinator initialization"""
 
     @staticmethod
     def extract_configuration(entry: ConfigEntry) -> CoordinatorConfiguration:
-        """Extract configuration from entry by @Zara"""
+        """Extract configuration from entry"""
         # Migration: Support old plant_kwp field for backward compatibility
         solar_capacity_value = entry.data.get(CONF_SOLAR_CAPACITY)
         if solar_capacity_value is None or solar_capacity_value == 0:
@@ -89,7 +89,7 @@ class CoordinatorInitHelpers:
 
     @staticmethod
     def initialize_battery_collector(hass: HomeAssistant, entry: ConfigEntry, enabled: bool):
-        """Initialize battery data collector if enabled by @Zara"""
+        """Initialize battery data collector if enabled"""
         if not enabled:
             return None
 
@@ -104,7 +104,7 @@ class CoordinatorInitHelpers:
 
     @staticmethod
     def initialize_electricity_service(enabled: bool, country: str):
-        """Initialize electricity price service if enabled by @Zara"""
+        """Initialize electricity price service if enabled"""
         if not enabled:
             return None
 
@@ -122,7 +122,7 @@ class CoordinatorInitHelpers:
 
     @staticmethod
     def setup_data_directory(hass: HomeAssistant) -> Path:
-        """Setup and return data directory path by @Zara"""
+        """Setup and return data directory path"""
         config_dir = hass.config.path()
         data_dir_path = Path(config_dir) / DOMAIN
         return data_dir_path

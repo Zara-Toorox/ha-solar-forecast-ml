@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataForecastHandler(DataManagerIO):
-    """Handles daily forecasts TODAY block statistics and history by @Zara"""
+    """Handles daily forecasts TODAY block statistics and history"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
@@ -164,7 +164,7 @@ class DataForecastHandler(DataManagerIO):
         }
 
     async def ensure_daily_forecasts_file(self) -> None:
-        """Ensure daily_forecastsjson exists with correct structure by @Zara"""
+        """Ensure daily_forecastsjson exists with correct structure"""
         if not self.daily_forecasts_file.exists():
             _LOGGER.info("Creating new daily_forecasts.json with NEW STRUCTURE")
             await self._atomic_write_json(self.daily_forecasts_file, self._daily_forecasts_default)
@@ -176,7 +176,7 @@ class DataForecastHandler(DataManagerIO):
             await self._migrate_to_new_structure(data)
 
     async def _migrate_to_new_structure(self, old_data: dict) -> None:
-        """Migrate old structure to new structure by @Zara"""
+        """Migrate old structure to new structure"""
         try:
             _LOGGER.info("=== Starting migration to NEW STRUCTURE ===")
             
@@ -227,7 +227,7 @@ class DataForecastHandler(DataManagerIO):
             _LOGGER.error(f"Migration failed: {e}", exc_info=True)
 
     async def load_daily_forecasts(self) -> Dict[str, Any]:
-        """Load daily forecasts file and ensure all required fields exist by @Zara"""
+        """Load daily forecasts file and ensure all required fields exist"""
         data = await self._read_json_file(
             self.daily_forecasts_file,
             self._daily_forecasts_default
@@ -252,7 +252,7 @@ class DataForecastHandler(DataManagerIO):
         return data
 
     async def reset_today_block(self) -> bool:
-        """Reset TODAY block at midnight by @Zara"""
+        """Reset TODAY block at midnight"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -276,7 +276,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def _archive_yesterday(self, yesterday_data: dict) -> None:
-        """Archive completed day to history by @Zara"""
+        """Archive completed day to history"""
         try:
             finalized = yesterday_data.get("finalized", {})
             if not finalized.get("yield_kwh"):
@@ -320,7 +320,7 @@ class DataForecastHandler(DataManagerIO):
         lock: bool = True,
         force_overwrite: bool = False
     ) -> bool:
-        """Save todays daily forecast locked at 6 AM by @Zara"""
+        """Save todays daily forecast locked at 6 AM"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -374,7 +374,7 @@ class DataForecastHandler(DataManagerIO):
         source: str = "ML",
         lock: bool = False
     ) -> bool:
-        """Save tomorrows forecast by @Zara"""
+        """Save tomorrows forecast"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -426,7 +426,7 @@ class DataForecastHandler(DataManagerIO):
         source: str = "ML",
         lock: bool = False
     ) -> bool:
-        """Save day after tomorrows forecast by @Zara"""
+        """Save day after tomorrows forecast"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -477,7 +477,7 @@ class DataForecastHandler(DataManagerIO):
         prediction_kwh: float,
         source: str = "ML_Hourly"
     ) -> bool:
-        """Save best hour forecast locked at 6 AM by @Zara"""
+        """Save best hour forecast locked at 6 AM"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -510,7 +510,7 @@ class DataForecastHandler(DataManagerIO):
         hour: int,
         actual_kwh: float
     ) -> bool:
-        """Save actual best production hour calculated from hourly_samples at end of day by @Zara"""
+        """Save actual best production hour calculated from hourly_samples at end of day"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -543,7 +543,7 @@ class DataForecastHandler(DataManagerIO):
         prediction_kwh: float,
         source: str = "ML_Hourly"
     ) -> bool:
-        """Save next hour forecast updated every hour by @Zara"""
+        """Save next hour forecast updated every hour"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -574,7 +574,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def deactivate_next_hour_forecast(self) -> bool:
-        """Deactivate next hour forecast set to None by @Zara"""
+        """Deactivate next hour forecast set to None"""
         try:
             data = await self.load_daily_forecasts()
             
@@ -608,7 +608,7 @@ class DataForecastHandler(DataManagerIO):
         last_power_above_10w: Optional[datetime] = None,
         zero_power_since: Optional[datetime] = None
     ) -> bool:
-        """Update production time tracking LIVE - every 30s by @Zara"""
+        """Update production time tracking LIVE - every 30s"""
         try:
             data = await self.load_daily_forecasts()
             
@@ -643,7 +643,7 @@ class DataForecastHandler(DataManagerIO):
         power_w: float,
         timestamp: datetime
     ) -> bool:
-        """Update todays peak power LIVE by @Zara"""
+        """Update todays peak power LIVE"""
         try:
             data = await self.load_daily_forecasts()
             
@@ -680,7 +680,7 @@ class DataForecastHandler(DataManagerIO):
         power_w: float,
         timestamp: datetime
     ) -> bool:
-        """Update all-time peak power by @Zara"""
+        """Update all-time peak power"""
         try:
             data = await self.load_daily_forecasts()
             
@@ -704,7 +704,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def get_all_time_peak(self) -> Optional[float]:
-        """Get all-time peak value by @Zara"""
+        """Get all-time peak value"""
         try:
             data = await self.load_daily_forecasts()
             return data.get("statistics", {}).get("all_time_peak", {}).get("power_w")
@@ -719,7 +719,7 @@ class DataForecastHandler(DataManagerIO):
         consumption_kwh: Optional[float] = None,
         production_seconds: int = 0
     ) -> bool:
-        """Finalize today with actual values at 2330 by @Zara"""
+        """Finalize today with actual values at 2330"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -774,7 +774,7 @@ class DataForecastHandler(DataManagerIO):
         yield_kwh: float,
         consumption_kwh: Optional[float] = None
     ) -> bool:
-        """Update current week month and rolling period statistics by @Zara"""
+        """Update current week month and rolling period statistics"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -919,7 +919,7 @@ class DataForecastHandler(DataManagerIO):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get history entries with optional filtering by @Zara"""
+        """Get history entries with optional filtering"""
         try:
             data = await self.load_daily_forecasts()
             history = data.get("history", [])
@@ -943,7 +943,7 @@ class DataForecastHandler(DataManagerIO):
             return []
 
     async def rotate_forecasts_at_midnight(self) -> bool:
-        """Rotate forecasts at midnight 000030 by @Zara"""
+        """Rotate forecasts at midnight 000030"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -1078,7 +1078,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def move_to_history(self) -> bool:
-        """Move finalized today data to history runs at 2331 by @Zara"""
+        """Move finalized today data to history runs at 2331"""
         try:
             data = await self.load_daily_forecasts()
             today_data = data.get("today", {})
@@ -1181,7 +1181,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def calculate_statistics(self) -> bool:
-        """Calculate aggregated statistics from history runs at 2332 by @Zara"""
+        """Calculate aggregated statistics from history runs at 2332"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()

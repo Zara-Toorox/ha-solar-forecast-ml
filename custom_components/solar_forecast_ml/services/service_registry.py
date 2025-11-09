@@ -42,6 +42,7 @@ from ..const import (
     SERVICE_COLLECT_HOURLY_SAMPLE,
     SERVICE_NIGHT_CLEANUP,
     SERVICE_RUN_ALL_SCHEDULED_TASKS,
+    SERVICE_GENERATE_CHART,
     CONF_BATTERY_ENABLED,
 )
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
@@ -58,7 +59,7 @@ class ServiceDefinition:
 
 
 class ServiceRegistry:
-    """Central service registry for Solar Forecast ML by @Zara"""
+    """Central service registry for Solar Forecast ML"""
 
     def __init__(
         self,
@@ -66,14 +67,14 @@ class ServiceRegistry:
         entry: ConfigEntry,
         coordinator: "SolarForecastMLCoordinator"
     ):
-        """Initialize service registry by @Zara"""
+        """Initialize service registry"""
         self.hass = hass
         self.entry = entry
         self.coordinator = coordinator
         self._registered_services: List[str] = []
 
     async def async_register_all_services(self) -> None:
-        """Register all services by @Zara"""
+        """Register all services"""
         services = self._build_service_definitions()
 
         for service in services:
@@ -88,7 +89,7 @@ class ServiceRegistry:
         _LOGGER.info(f"Registered {len(services)} services successfully")
 
     def unregister_all_services(self) -> None:
-        """Unregister all services by @Zara"""
+        """Unregister all services"""
         for service_name in self._registered_services:
             if self.hass.services.has_service(DOMAIN, service_name):
                 self.hass.services.async_remove(DOMAIN, service_name)
@@ -98,7 +99,7 @@ class ServiceRegistry:
         _LOGGER.info(f"Unregistered {count} services")
 
     def _build_service_definitions(self) -> List[ServiceDefinition]:
-        """Build all service definitions by @Zara"""
+        """Build all service definitions"""
         return [
             # ML Services
             ServiceDefinition(
@@ -184,6 +185,11 @@ class ServiceRegistry:
                 handler=self._handle_run_all_scheduled_tasks,
                 description="Testing: Run all scheduled tasks"
             ),
+            ServiceDefinition(
+                name=SERVICE_GENERATE_CHART,
+                handler=self._handle_generate_chart,
+                description="Generate forecast vs actual chart"
+            ),
         ]
 
     # ==========================================================================
@@ -191,7 +197,7 @@ class ServiceRegistry:
     # ==========================================================================
 
     async def _handle_retrain_model(self, call: ServiceCall) -> None:
-        """Handle force_retrain service by @Zara"""
+        """Handle force_retrain service"""
         _LOGGER.info("Service: force_retrain")
         try:
             if self.coordinator.ml_predictor:
@@ -206,7 +212,7 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in force_retrain: {e}", exc_info=True)
 
     async def _handle_reset_model(self, call: ServiceCall) -> None:
-        """Handle reset_model service by @Zara"""
+        """Handle reset_model service"""
         _LOGGER.info("Service: reset_model")
         try:
             if self.coordinator.ml_predictor:
@@ -221,7 +227,7 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in reset_model: {e}", exc_info=True)
 
     async def _handle_finalize_day(self, call: ServiceCall) -> None:
-        """Handle finalize_day service by @Zara"""
+        """Handle finalize_day service"""
         _LOGGER.info("Service: finalize_day (EMERGENCY)")
         try:
             if hasattr(self.coordinator, 'scheduled_tasks'):
@@ -233,7 +239,7 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in finalize_day: {e}", exc_info=True)
 
     async def _handle_move_to_history(self, call: ServiceCall) -> None:
-        """Handle move_to_history service by @Zara"""
+        """Handle move_to_history service"""
         _LOGGER.info("Service: move_to_history (EMERGENCY)")
         try:
             if hasattr(self.coordinator, 'scheduled_tasks'):
@@ -245,7 +251,7 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in move_to_history: {e}", exc_info=True)
 
     async def _handle_calculate_stats(self, call: ServiceCall) -> None:
-        """Handle calculate_stats service by @Zara"""
+        """Handle calculate_stats service"""
         _LOGGER.info("Service: calculate_stats (MANUAL)")
         try:
             # Check if statistics were recently calculated
@@ -268,7 +274,7 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in calculate_stats: {e}", exc_info=True)
 
     async def _handle_run_all_day_end_tasks(self, call: ServiceCall) -> None:
-        """Handle run_all_day_end_tasks service by @Zara"""
+        """Handle run_all_day_end_tasks service"""
         _LOGGER.info("Service: run_all_day_end_tasks (EMERGENCY)")
         try:
             if hasattr(self.coordinator, 'scheduled_tasks'):
@@ -288,7 +294,7 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in run_all_day_end_tasks: {e}", exc_info=True)
 
     async def _handle_debugging_6am_forecast(self, call: ServiceCall) -> None:
-        """Handle debugging_6am_forecast service by @Zara"""
+        """Handle debugging_6am_forecast service"""
         _LOGGER.info("Service: debugging_6am_forecast (DEBUGGING)")
         try:
             await self.coordinator.set_expected_daily_production()
@@ -297,7 +303,7 @@ class ServiceRegistry:
             _LOGGER.error(f"✗ Error in debugging_6am_forecast: {e}", exc_info=True)
 
     async def _handle_lock_today_forecast(self, call: ServiceCall) -> None:
-        """Handle lock_today_forecast service - manual 6 AM task trigger by @Zara"""
+        """Handle lock_today_forecast service - manual 6 AM task trigger"""
         _LOGGER.info("Service: lock_today_forecast (MANUAL)")
         _LOGGER.info("User manually triggered the 6 AM forecast lock task via Developer Tools")
         try:
@@ -307,7 +313,7 @@ class ServiceRegistry:
             _LOGGER.error(f"✗ Error in lock_today_forecast: {e}", exc_info=True)
 
     async def _handle_debugging_best_hour(self, call: ServiceCall) -> None:
-        """Handle debugging_best_hour service by @Zara"""
+        """Handle debugging_best_hour service"""
         _LOGGER.info("Service: debugging_best_hour (DEBUGGING)")
         try:
             best_hour, best_hour_kwh = await self.coordinator.best_hour_calculator.calculate_best_hour_today()
@@ -333,7 +339,7 @@ class ServiceRegistry:
             _LOGGER.error(f"✗ Error in debugging_best_hour: {e}", exc_info=True)
 
     async def _handle_debugging_tomorrow_12pm(self, call: ServiceCall) -> None:
-        """Handle debugging_tomorrow_12pm service by @Zara"""
+        """Handle debugging_tomorrow_12pm service"""
         _LOGGER.info("Service: debugging_tomorrow_12pm (DEBUGGING)")
         try:
             weather_service = self.coordinator.weather_service
@@ -380,7 +386,7 @@ class ServiceRegistry:
             _LOGGER.error(f"✗ Error in debugging_tomorrow_12pm: {e}", exc_info=True)
 
     async def _handle_debugging_day_after_tomorrow_6am(self, call: ServiceCall) -> None:
-        """Handle debugging_day_after_tomorrow_6am service by @Zara"""
+        """Handle debugging_day_after_tomorrow_6am service"""
         _LOGGER.info("Service: debugging_day_after_tomorrow_6am (DEBUGGING)")
         try:
             weather_service = self.coordinator.weather_service
@@ -435,7 +441,7 @@ class ServiceRegistry:
             _LOGGER.error(f"✗ Error in debugging_day_after_tomorrow_6am: {e}", exc_info=True)
 
     async def _handle_debugging_day_after_tomorrow_6pm(self, call: ServiceCall) -> None:
-        """Handle debugging_day_after_tomorrow_6pm service by @Zara"""
+        """Handle debugging_day_after_tomorrow_6pm service"""
         _LOGGER.info("Service: debugging_day_after_tomorrow_6pm (DEBUGGING)")
         try:
             weather_service = self.coordinator.weather_service
@@ -482,7 +488,7 @@ class ServiceRegistry:
             _LOGGER.error(f"✗ Error in debugging_day_after_tomorrow_6pm: {e}", exc_info=True)
 
     async def _handle_night_cleanup(self, call: ServiceCall) -> None:
-        """Handle night_cleanup service by @Zara"""
+        """Handle night_cleanup service"""
         _LOGGER.info("Service: night_cleanup (MANUAL TEST)")
         try:
             if hasattr(self.coordinator, 'scheduled_tasks'):
@@ -494,7 +500,7 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in night_cleanup: {e}", exc_info=True)
 
     async def _handle_collect_hourly_sample(self, call: ServiceCall) -> None:
-        """Handle collect_hourly_sample service by @Zara"""
+        """Handle collect_hourly_sample service"""
         _LOGGER.info("Service: collect_hourly_sample")
         try:
             if not self.coordinator.ml_predictor:
@@ -519,7 +525,7 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in collect_hourly_sample: {e}", exc_info=True)
 
     async def _handle_run_all_scheduled_tasks(self, call: ServiceCall) -> None:
-        """Handle run_all_scheduled_tasks service - COMPLETE TEST of all 18 scheduled tasks by @Zara This service runs ALL scheduled tasks in chronological order for debugging and testing. Updated: 2025-11-08 - Complete rewrite to match actual task schedule"""
+        """Handle run_all_scheduled_tasks service - COMPLETE TEST of all 18 scheduled tasks This service runs ALL scheduled tasks in chronological order for debugging and testing. Updated: 2025-11-08 - Complete rewrite to match actual task schedule"""
         _LOGGER.info("="*80)
         _LOGGER.info("SERVICE: run_all_scheduled_tasks - COMPLETE TEST SEQUENCE (18 Tasks)")
         _LOGGER.info("="*80)
@@ -748,3 +754,71 @@ class ServiceRegistry:
 
         except Exception as e:
             _LOGGER.error(f"CRITICAL ERROR in run_all_scheduled_tasks: {e}", exc_info=True)
+
+    async def _handle_generate_chart(self, call: ServiceCall) -> None:
+        """Handle generate_chart service"""
+        _LOGGER.info("Service: generate_chart")
+        try:
+            from .service_chart_generator import ChartGenerator
+            from datetime import date
+
+            # Get parameters
+            chart_type = call.data.get("chart_type", "daily")
+            target_date_str = call.data.get("date")  # Optional: YYYY-MM-DD
+
+            # Parse date if provided
+            target_date = None
+            if target_date_str:
+                try:
+                    target_date = date.fromisoformat(target_date_str)
+                except ValueError:
+                    _LOGGER.error(f"Invalid date format: {target_date_str}")
+                    return
+
+            # Get data directory from coordinator
+            data_dir = self.coordinator.data_manager.data_dir
+
+            # Create chart generator
+            chart_gen = ChartGenerator(data_dir)
+
+            # Generate chart based on type
+            if chart_type == "daily":
+                chart_path = await chart_gen.generate_daily_forecast_chart(target_date)
+                if chart_path:
+                    _LOGGER.info(f"✅ Daily forecast chart generated: {chart_path}")
+                else:
+                    _LOGGER.warning("❌ Failed to generate daily forecast chart (check if matplotlib is installed or if data is available for requested date)")
+
+            elif chart_type == "weekly":
+                chart_path = await chart_gen.generate_weekly_accuracy_chart()
+                if chart_path:
+                    _LOGGER.info(f"✅ Weekly accuracy chart generated: {chart_path}")
+                else:
+                    _LOGGER.warning("❌ Failed to generate weekly accuracy chart (check if matplotlib is installed or if enough data is available)")
+
+            elif chart_type == "production_weather":
+                chart_path = await chart_gen.generate_production_weather_chart(target_date)
+                if chart_path:
+                    _LOGGER.info(f"✅ Production vs Weather chart generated: {chart_path}")
+                else:
+                    _LOGGER.warning("❌ Failed to generate production-weather chart (check if matplotlib is installed or if data is available)")
+
+            elif chart_type == "monthly_heatmap":
+                chart_path = await chart_gen.generate_monthly_heatmap()
+                if chart_path:
+                    _LOGGER.info(f"✅ Monthly heatmap generated: {chart_path}")
+                else:
+                    _LOGGER.warning("❌ Failed to generate monthly heatmap (check if matplotlib is installed or if enough data is available)")
+
+            elif chart_type == "sensor_correlation":
+                chart_path = await chart_gen.generate_sensor_correlation_chart()
+                if chart_path:
+                    _LOGGER.info(f"✅ Sensor correlation chart generated: {chart_path}")
+                else:
+                    _LOGGER.warning("❌ Failed to generate sensor correlation chart (check if matplotlib is installed or if enough data is available)")
+
+            else:
+                _LOGGER.error(f"Unknown chart type: {chart_type}")
+
+        except Exception as e:
+            _LOGGER.error(f"Error generating chart: {e}", exc_info=True)

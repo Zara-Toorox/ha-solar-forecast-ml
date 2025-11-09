@@ -9,7 +9,8 @@
   "issue_tracker": "https://github.com/Zara-Toorox/ha-solar-forecast-ml/issues",
   "requirements": [
     "aiofiles>=23.0.0",
-    "numpy>=1.21.0"
+    "numpy>=1.21.0",
+    "matplotlib>=3.5.0"
   ],
-  "version": "8.2.8"
+  "version": "8.4.0"
 }

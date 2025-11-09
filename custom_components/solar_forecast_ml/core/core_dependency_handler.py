@@ -33,16 +33,16 @@ REQUIRED_DEPENDENCIES = {
 
 
 class DependencyHandler:
-    """Handler for dependency checks by @Zara"""
+    """Handler for dependency checks"""
     
     def __init__(self) -> None:
-        """Initialize dependency handler by @Zara"""
+        """Initialize dependency handler"""
         self._checked = False
         self._all_satisfied = False
         self._package_status = {}
     
     def _check_package_sync(self, package: str) -> bool:
-        """Synchronous check if a package is installed and functional by @Zara"""
+        """Synchronous check if a package is installed and functional"""
         try:
             if package == "numpy":
                 import numpy as np
@@ -66,7 +66,7 @@ class DependencyHandler:
             return False
     
     async def check_dependencies(self, hass=None) -> bool:
-        """Check all dependencies asynchronously if hass provided or synchronously by @Zara"""
+        """Check all dependencies asynchronously if hass provided or synchronously"""
         if self._checked:
             _LOGGER.debug(f"Dependencies already checked: {self._all_satisfied}")
             return self._all_satisfied
@@ -102,7 +102,7 @@ class DependencyHandler:
         return False
     
     def _get_package_version_sync(self, package: str) -> str:
-        """Blocking function to get the package version by @Zara"""
+        """Blocking function to get the package version"""
         
         # Import here - executed after HA has installed dependencies
         try:
@@ -128,7 +128,7 @@ class DependencyHandler:
             return "unknown"
     
     async def get_dependency_status(self, hass=None) -> dict[str, Any]:
-        """Get the status of all dependencies by @Zara"""
+        """Get the status of all dependencies"""
         status = {}
 
         for package, min_version in REQUIRED_DEPENDENCIES.items():
@@ -164,7 +164,7 @@ class DependencyHandler:
         return status
 
     def get_installed_packages(self) -> list[str]:
-        """Get list of installed package names by @Zara"""
+        """Get list of installed package names"""
         if not self._checked:
             _LOGGER.warning("Dependencies not checked yet, returning empty list")
             return []
@@ -172,7 +172,7 @@ class DependencyHandler:
         return [pkg for pkg, status in self._package_status.items() if status]
 
     def get_missing_packages(self) -> list[str]:
-        """Get list of missing package names by @Zara"""
+        """Get list of missing package names"""
         if not self._checked:
             _LOGGER.warning("Dependencies not checked yet, returning empty list")
             return []

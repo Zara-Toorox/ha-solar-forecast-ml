@@ -74,7 +74,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Helper function to safely get defaults ---
 def _get_default(data: dict | None, key: str, default: Any = vol.UNDEFINED):
-    """Safely get default value for schema by @Zara"""
+    """Safely get default value for schema"""
     if data is None:
         return default
     value = data.get(key)
@@ -82,7 +82,7 @@ def _get_default(data: dict | None, key: str, default: Any = vol.UNDEFINED):
 
 # --- Schema Definition ---
 def _get_base_schema(defaults: dict | None) -> vol.Schema:
-    """Returns the base schema for user and reconfigure steps by @Zara"""
+    """Returns the base schema for user and reconfigure steps"""
     if defaults is None:
         defaults = {}
 
@@ -185,17 +185,17 @@ def _get_base_schema(defaults: dict | None) -> vol.Schema:
 
 @config_entries.HANDLERS.register(DOMAIN)
 class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handles the configuration flow for Solar Forecast ML by @Zara"""
+    """Handles the configuration flow for Solar Forecast ML"""
     VERSION = 1
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        """Redirect users to the options flow handler by @Zara"""
+        """Redirect users to the options flow handler"""
         return SolarForecastMLOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial setup step by @Zara"""
+        """Handle the initial setup step"""
         errors = {}
         prefill_data = user_input if user_input is not None else {}
 
@@ -246,7 +246,7 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the reconfiguration step by @Zara"""
+        """Handle the reconfiguration step"""
         if self.source != SOURCE_RECONFIGURE: return self.async_abort(reason="not_reconfigure")
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if entry is None: return self.async_abort(reason="entry_not_found")
@@ -311,10 +311,10 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
-    """Handles the options flow with automatic reload after changes by @Zara"""
+    """Handles the options flow with automatic reload after changes"""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage the options by @Zara"""
+        """Manage the options"""
         errors = {}
         if user_input is not None:
             # Validation
@@ -357,7 +357,7 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
         )
 
     def _get_options_schema(self) -> vol.Schema:
-         """Define the schema for the options form by @Zara"""
+         """Define the schema for the options form"""
          current_options = self.config_entry.options
 
          return vol.Schema({

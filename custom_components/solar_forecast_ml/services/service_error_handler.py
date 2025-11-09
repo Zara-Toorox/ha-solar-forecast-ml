@@ -41,14 +41,14 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Enums for State and Error Types ---
 class CircuitBreakerState(Enum):
-    """Possible states of the Circuit Breaker by @Zara"""
+    """Possible states of the Circuit Breaker"""
     CLOSED = "closed"       # Operations allowed, monitoring failures
     OPEN = "open"           # Operations blocked for a timeout period
     HALF_OPEN = "half_open" # Allows a limited number of test operations
 
 
 class ErrorType(Enum):
-    """Categorization of errors for circuit breaker and logging by @Zara"""
+    """Categorization of errors for circuit breaker and logging"""
     CONFIGURATION = "configuration"
     API_ERROR = "api_error"         # External API errors (e.g., weather)
     NETWORK_ERROR = "network_error"     # General network issues
@@ -63,7 +63,7 @@ class ErrorType(Enum):
 
 # --- Circuit Breaker Implementation ---
 class CircuitBreaker:
-    """Implements the Circuit Breaker pattern to prevent repeated failures by @Zara"""
+    """Implements the Circuit Breaker pattern to prevent repeated failures"""
     def __init__(
         self,
         name: str,
@@ -72,7 +72,7 @@ class CircuitBreaker:
         open_timeout_seconds: int = 60, # Duration the circuit stays OPEN
         # half_open_timeout removed, not typically needed as success/failure in HALF_OPEN decides state
     ):
-        """Initialize the Circuit Breaker by @Zara"""
+        """Initialize the Circuit Breaker"""
         if failure_threshold < 1 or success_threshold < 1 or open_timeout_seconds < 1:
              raise ValueError("Thresholds and timeout must be positive integers.")
 
@@ -95,17 +95,17 @@ class CircuitBreaker:
                      f"OpenTimeout={open_timeout_seconds}s")
 
     def _get_current_time(self) -> datetime:
-        """Return the current time in UTC by @Zara"""
+        """Return the current time in UTC"""
         # Consistently use UTC for time comparisons
         return datetime.now(timezone.utc)
 
     def _reset_counts(self):
-        """Reset failure and success counts by @Zara"""
+        """Reset failure and success counts"""
         self.failure_count = 0
         self.success_count = 0
 
     def _change_state(self, new_state: CircuitBreakerState):
-        """Handles state transitions and logging by @Zara"""
+        """Handles state transitions and logging"""
         if self.state != new_state:
              old_state = self.state
              self.state = new_state
@@ -124,7 +124,7 @@ class CircuitBreaker:
 
 
     def allow_request(self) -> bool:
-        """Check if the circuit breaker should allow the operation to proceed by @Zara"""
+        """Check if the circuit breaker should allow the operation to proceed"""
         current_time = self._get_current_time()
 
         if self.state == CircuitBreakerState.CLOSED:
@@ -153,7 +153,7 @@ class CircuitBreaker:
 
 
     def record_success(self):
-        """Record a successful operation Handles state transition from HALF_OPEN to CLOSED by @Zara"""
+        """Record a successful operation Handles state transition from HALF_OPEN to CLOSED"""
         if self.state == CircuitBreakerState.HALF_OPEN:
             self.success_count += 1
             _LOGGER.debug(f"Circuit Breaker '{self.name}' (HALF_OPEN): Success recorded ({self.success_count}/{self.success_threshold}).")
@@ -166,7 +166,7 @@ class CircuitBreaker:
              pass
 
     def record_failure(self, error_type: ErrorType = ErrorType.UNKNOWN):
-        """Record a failed operation Handles state transitions to OPEN by @Zara"""
+        """Record a failed operation Handles state transitions to OPEN"""
         current_time = self._get_current_time()
         self.last_failure_time = current_time
         self.error_type_counts[error_type] += 1
@@ -192,14 +192,14 @@ class CircuitBreaker:
 
 
     def reset(self):
-        """Manually reset the circuit breaker to the CLOSED state by @Zara"""
+        """Manually reset the circuit breaker to the CLOSED state"""
         _LOGGER.info(f"Circuit Breaker '{self.name}' manually reset to CLOSED state.")
         self._change_state(CircuitBreakerState.CLOSED)
         self.last_failure_time = None # Clear last failure time on manual reset
 
 
     def get_status(self) -> Dict[str, Any]:
-        """Return the current status of the circuit breaker by @Zara"""
+        """Return the current status of the circuit breaker"""
         status = {
             "name": self.name,
             "state": self.state.value,
@@ -225,9 +225,9 @@ class CircuitBreaker:
 
 # --- Error Handling Service ---
 class ErrorHandlingService:
-    """Central service for handling errors logging operational details by @Zara"""
+    """Central service for handling errors logging operational details"""
     def __init__(self):
-        """Initialize the Error Handling Service by @Zara"""
+        """Initialize the Error Handling Service"""
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
         # Use limited-size lists (like deques) for logs if memory is a concern
         self.error_log: List[Dict[str, Any]] = []
@@ -249,7 +249,7 @@ class ErrorHandlingService:
         success_threshold: int = 2,
         open_timeout_seconds: int = 60,
     ) -> CircuitBreaker:
-        """Register and configure a new circuit breaker by @Zara"""
+        """Register and configure a new circuit breaker"""
         if name in self.circuit_breakers:
             _LOGGER.warning(f"Circuit Breaker '{name}' is already registered. Returning existing instance.")
             return self.circuit_breakers[name]
@@ -271,7 +271,7 @@ class ErrorHandlingService:
 
 
     def get_circuit_breaker(self, name: str) -> Optional[CircuitBreaker]:
-        """Get a registered circuit breaker by name by @Zara"""
+        """Get a registered circuit breaker by name"""
         breaker = self.circuit_breakers.get(name)
         if breaker is None:
              _LOGGER.warning(f"Attempted to get non-existent Circuit Breaker '{name}'.")
@@ -285,7 +285,7 @@ class ErrorHandlingService:
         *args: Any,
         **kwargs: Any
     ) -> Any:
-        """Execute an asynchronous operation protected by a circuit breaker by @Zara"""
+        """Execute an asynchronous operation protected by a circuit breaker"""
         breaker = self.get_circuit_breaker(breaker_name)
         if breaker is None:
             raise ValueError(f"Circuit Breaker '{breaker_name}' is not registered.")
@@ -325,7 +325,7 @@ class ErrorHandlingService:
         context: Optional[Dict[str, Any]] = None,
         pipeline_position: Optional[str] = None # Specific step within the source
     ) -> None:
-        """Log and store detailed information about an encountered error by @Zara"""
+        """Log and store detailed information about an encountered error"""
         error_type_enum = self._classify_error(error)
         error_class_name = type(error).__name__
 
@@ -361,7 +361,7 @@ class ErrorHandlingService:
 
 
     def _classify_error(self, error: Exception) -> ErrorType:
-        """Classify an exception into an ErrorType category by @Zara"""
+        """Classify an exception into an ErrorType category"""
         if isinstance(error, MLModelException):
             # Further classify ML errors if needed
             msg = str(error).lower()
@@ -409,7 +409,7 @@ class ErrorHandlingService:
         context: Optional[Dict[str, Any]] = None,
         duration_seconds: Optional[float] = None
     ) -> None:
-        """Log the outcome of a Machine Learning operation by @Zara"""
+        """Log the outcome of a Machine Learning operation"""
         timestamp = datetime.now(timezone.utc).isoformat()
         log_entry = {
             "timestamp": timestamp,
@@ -447,7 +447,7 @@ class ErrorHandlingService:
         records_count: Optional[int] = None, # If applicable (e.g., predictions read)
         error_message: Optional[str] = None
     ) -> None:
-        """Log the outcome of a JSON file operation by @Zara"""
+        """Log the outcome of a JSON file operation"""
         timestamp = datetime.now(timezone.utc).isoformat()
         log_entry = {
             "timestamp": timestamp,
@@ -486,7 +486,7 @@ class ErrorHandlingService:
         value: Optional[Any] = None,
         error_message: Optional[str] = None # If unavailable or parsing failed
     ) -> None:
-        """Log the status and value of critical external sensors by @Zara"""
+        """Log the status and value of critical external sensors"""
         timestamp = datetime.now(timezone.utc).isoformat()
         log_entry = {
             "timestamp": timestamp,
@@ -517,7 +517,7 @@ class ErrorHandlingService:
         message: str,
         error_classification: ErrorType = ErrorType.UNKNOWN
     ):
-        """Internal helper to add simple errors like CB open to the main error log by @Zara"""
+        """Internal helper to add simple errors like CB open to the main error log"""
         timestamp = datetime.now(timezone.utc).isoformat()
         error_entry = {
             "timestamp": timestamp,
@@ -536,43 +536,43 @@ class ErrorHandlingService:
 
     # --- Log Access and Management ---
     def get_error_log(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Return the most recent error log entries by @Zara"""
+        """Return the most recent error log entries"""
         return self.error_log[-limit:]
 
     def get_ml_operation_log(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Return the most recent ML operation log entries by @Zara"""
+        """Return the most recent ML operation log entries"""
         return self.ml_operation_log[-limit:]
 
     def get_json_operation_log(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Return the most recent JSON operation log entries by @Zara"""
+        """Return the most recent JSON operation log entries"""
         return self.json_operation_log[-limit:]
 
     def get_sensor_status_log(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Return the most recent sensor status log entries by @Zara"""
+        """Return the most recent sensor status log entries"""
         return self.sensor_status_log[-limit:]
 
     def clear_error_log(self):
-        """Clear all entries from the error log by @Zara"""
+        """Clear all entries from the error log"""
         self.error_log.clear()
         _LOGGER.info("Error log cleared.")
 
     def clear_ml_operation_log(self):
-        """Clear all entries from the ML operation log by @Zara"""
+        """Clear all entries from the ML operation log"""
         self.ml_operation_log.clear()
         _LOGGER.info("ML operation log cleared.")
 
     def clear_json_operation_log(self):
-        """Clear all entries from the JSON operation log by @Zara"""
+        """Clear all entries from the JSON operation log"""
         self.json_operation_log.clear()
         _LOGGER.info("JSON operation log cleared.")
 
     def clear_sensor_status_log(self):
-        """Clear all entries from the sensor status log by @Zara"""
+        """Clear all entries from the sensor status log"""
         self.sensor_status_log.clear()
         _LOGGER.info("Sensor status log cleared.")
 
     def get_all_status(self) -> Dict[str, Any]:
-        """Return a summary of the error handlers status and recent logs by @Zara"""
+        """Return a summary of the error handlers status and recent logs"""
         # Get status of all circuit breakers
         breaker_statuses = {
             name: breaker.get_status()
@@ -595,7 +595,7 @@ class ErrorHandlingService:
         }
 
     def reset_all_circuit_breakers(self):
-        """Manually reset all registered circuit breakers to the CLOSED state by @Zara"""
+        """Manually reset all registered circuit breakers to the CLOSED state"""
         _LOGGER.info("Resetting all registered circuit breakers...")
         count = 0
         for name, breaker in self.circuit_breakers.items():

@@ -22,11 +22,11 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "8.2.8"
-RELEASE_VERSION = "8.2.8"
-SOFTWARE_VERSION = "8.2.8"
-INTEGRATION_MODEL = "v8.2.8"
-ML_VERSION = "8.2.8"
+VERSION = "8.4.0"
+RELEASE_VERSION = "8.4.0"
+SOFTWARE_VERSION = "8.4.0"
+INTEGRATION_MODEL = "v8.4.0"
+ML_VERSION = "8.0.0"
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 
@@ -206,6 +206,7 @@ SERVICE_LOCK_TODAY_FORECAST = "lock_today_forecast" # Manual: Trigger 6 AM forec
 SERVICE_COLLECT_HOURLY_SAMPLE = "collect_hourly_sample"
 SERVICE_NIGHT_CLEANUP = "night_cleanup" # Manual night cleanup (remove duplicates and zero-production samples)
 SERVICE_RUN_ALL_SCHEDULED_TASKS = "run_all_scheduled_tasks" # Testing: Run all scheduled tasks in sequence
+SERVICE_GENERATE_CHART = "generate_chart" # Generate forecast vs actual chart
 
 # --- Other Constants ---
 ICON_SOLAR = "mdi:solar-power"

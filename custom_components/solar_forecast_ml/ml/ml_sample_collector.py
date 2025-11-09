@@ -25,7 +25,8 @@ from homeassistant.core import HomeAssistant, State
 from ..core.core_helpers import SafeDateTimeUtil
 from homeassistant.util import dt as dt_util # <-- dt_util used consistently
 
-# Recorder imports are now done locally in methods to avoid startup dependency issues
+# Import recorder at module level to prevent frame detection issues
+from homeassistant.components.recorder import history, get_instance
 
 from ..data.data_manager import DataManager
 from ..const import ML_MODEL_VERSION
@@ -58,7 +59,7 @@ class SampleCollector:
         self._weather_calculator = WeatherCalculator()
     
     def _check_critical_sensors_available(self) -> bool:
-        """Check if critical sensors especially power_entity are available by @Zara"""
+        """Check if critical sensors especially power_entity are available"""
         if not self.power_entity:
             _LOGGER.debug("Power entity not configured")
             return False
@@ -74,7 +75,22 @@ class SampleCollector:
         return True
 
     async def collect_sample(self, target_datetime: datetime) -> None:
-        """Collects data for the specified target hour local time by @Zara"""
+        """Collects data for the specified target hour local time"""
+        # Check if recorder is ready before attempting any database operations
+        try:
+            recorder_instance = await self.hass.async_add_executor_job(
+                lambda: get_instance(self.hass)
+            )
+            if not recorder_instance:
+                _LOGGER.debug(
+                    "Recorder not ready yet, skipping sample collection. "
+                    "This is normal during startup."
+                )
+                return
+        except Exception as e:
+            _LOGGER.debug(f"Error checking recorder status: {e}. Skipping sample collection.")
+            return
+
         target_local_hour = target_datetime.hour
         async with self._sample_lock:
             try:
@@ -115,16 +131,7 @@ class SampleCollector:
         end_time_utc: datetime,
         attribute: Optional[str] = None
     ) -> Optional[float]:
-        """Calculates the time-weighted average of a sensor or attribute by @Zara"""
-        
-        # +++ IMPORT ADDED HERE +++
-        try:
-            from homeassistant.components.recorder import history
-        except ImportError:
-            _LOGGER.error("Recorder component not available. Cannot calculate Time Weighted Average.")
-            return None
-        # +++ END ADDITION +++
-        
+        """Calculates the time-weighted average of a sensor or attribute"""
         _LOGGER.debug(f"Calculating TWA for {entity_id} (Attribute: {attribute}) from {start_time_utc} to {end_time_utc}")
         
         # 1. Fetch all states in the time window
@@ -239,20 +246,11 @@ class SampleCollector:
     # --- (TROUBLESHOOTING) NEW HELPER METHOD for dominant state ---
     async def _get_dominant_condition(
         self,
-        start_time_utc: datetime, 
+        start_time_utc: datetime,
         end_time_utc: datetime,
         entity_id: str
     ) -> str:
-        """Determines the weather condition that lasted the longest in the time window by @Zara"""
-        
-        # +++ IMPORT ADDED HERE +++
-        try:
-            from homeassistant.components.recorder import history
-        except ImportError:
-            _LOGGER.error("Recorder component not available. Cannot get dominant condition.")
-            return "unknown"
-        # +++ END ADDITION +++
-
+        """Determines the weather condition that lasted the longest in the time window"""
         _LOGGER.debug(f"Determining dominant condition for {entity_id} from {start_time_utc} to {end_time_utc}")
         try:
             history_list = await self.hass.async_add_executor_job(
@@ -321,7 +319,7 @@ class SampleCollector:
         self,
         target_time_utc: datetime
     ) -> Optional[Dict[str, Any]]:
-        """Fetches historical forecast data from the weather_forecast_cachejson by @Zara"""
+        """Fetches historical forecast data from the weather_forecast_cachejson"""
         try:
             # Load forecast cache
             cache = await self.data_manager.load_weather_cache()
@@ -349,7 +347,7 @@ class SampleCollector:
                         weather_data = {
                             'temperature': entry.get('temperature', 15.0),
                             'humidity': entry.get('humidity', 60.0),
-                            'cloud_cover': entry.get('cloud_coverage', 50.0),
+                            'cloud_cover': entry.get('cloud_cover', 50.0),
                             'wind_speed': entry.get('wind_speed', 5.0),
                             'pressure': entry.get('pressure', 1013.0),
                             'condition': entry.get('condition', 'unknown')
@@ -378,7 +376,7 @@ class SampleCollector:
         start_time_utc: datetime, 
         end_time_utc: datetime
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Fetches historical weather data primarily from forecast cache by @Zara"""
+        """Fetches historical weather data primarily from forecast cache"""
         _LOGGER.debug(f"Fetching historical data for {start_time_utc} to {end_time_utc}")
         
         weather_data = self._get_default_weather()
@@ -494,7 +492,7 @@ class SampleCollector:
 
     # --- (IMPROVEMENT 1) REVISED METHOD ---
     async def _collect_hourly_sample(self, target_datetime: datetime) -> Optional[datetime]:
-        """Collects data for the specified target hour local time by @Zara"""
+        """Collects data for the specified target hour local time"""
         try:
             # 1. Define the UTC period for the target hour
             start_time_utc, end_time_utc, sample_time_local = self._get_utc_times_for_hour(target_datetime)
@@ -561,7 +559,7 @@ class SampleCollector:
 
     # --- (IMPROVEMENT 1) NEW HELPER METHOD ---
     def _get_utc_times_for_hour(self, target_datetime: datetime) -> Tuple[Optional[datetime], Optional[datetime], Optional[datetime]]:
-        """Calculates the UTC startend window and local sample timestamp by @Zara"""
+        """Calculates the UTC startend window and local sample timestamp"""
         try:
             now_local = SafeDateTimeUtil.now()
             
@@ -613,15 +611,6 @@ class SampleCollector:
         start_time: datetime,
         end_time: datetime
     ) -> Optional[float]:
-        
-        # +++ IMPORT ADDED HERE +++
-        try:
-            from homeassistant.components.recorder import history
-        except ImportError:
-            _LOGGER.error("Recorder component not available. Cannot perform Riemann integration.")
-            return None
-        # +++ END ADDITION +++
-
         if not self.power_entity:
             _LOGGER.debug("No power_entity configured for Riemann sum")
             return None
@@ -748,7 +737,7 @@ class SampleCollector:
     
     # (Unchanged)
     async def _get_daily_production_so_far(self, end_of_hour_utc: datetime) -> Optional[float]:
-        """Fetches the daily production so far via Riemann integration up to the end of ... by @Zara"""
+        """Fetches the daily production so far via Riemann integration up to the end of ..."""
         
         # Determine start of day (local time) based on the end time
         end_of_hour_local = SafeDateTimeUtil.as_local(end_of_hour_utc)
@@ -779,14 +768,14 @@ class SampleCollector:
 
     # --- (IMPROVEMENT 1) NEW HELPER METHODS ---
     def _get_default_weather(self) -> Dict[str, Any]:
-        """Returns default weather values by @Zara"""
+        """Returns default weather values"""
         return {
             'temperature': 15.0, 'humidity': 60.0, 'cloud_cover': 50.0,
             'wind_speed': 5.0, 'pressure': 1013.0, 'condition': 'unknown'
         }
 
     def _get_default_sensor_data(self) -> Dict[str, Any]:
-        """Returns default sensor values by @Zara"""
+        """Returns default sensor values"""
         return {
             'temperature': 0.0, 'wind_speed': 0.0, 'rain': 0.0,
             'uv_index': 0.0, 'lux': 0.0, 'humidity': 0.0
@@ -808,7 +797,7 @@ class SampleCollector:
         humidity_sensor: Optional[str] = None, 
         solar_yield_today: Optional[str] = None 
     ) -> None:
-        """Configures the entity IDs used by the collector by @Zara"""
+        """Configures the entity IDs used by the collector"""
         _LOGGER.debug("Configuring entities in SampleCollector...")
         self.weather_entity = weather_entity
         self.power_entity = power_entity

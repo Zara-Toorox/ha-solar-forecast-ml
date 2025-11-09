@@ -28,10 +28,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class TaskExecutor:
-    """Executes scheduled tasks for production tracking by @Zara"""
+    """Executes scheduled tasks for production tracking"""
     
     def __init__(self):
-        """Initialize task executor by @Zara"""
+        """Initialize task executor"""
         self._running_tasks: Dict[str, asyncio.Task] = {}
         self._task_results: Dict[str, Any] = {}
     
@@ -41,7 +41,7 @@ class TaskExecutor:
         task_func: Callable[[], Awaitable[Any]],
         description: str = ""
     ) -> Optional[Any]:
-        """Execute a task and store result by @Zara"""
+        """Execute a task and store result"""
         try:
             _LOGGER.debug(f"Executing task: {task_id} - {description}")
             
@@ -82,7 +82,7 @@ class TaskExecutor:
         task_func: Callable[[], Awaitable[Any]],
         description: str = ""
     ) -> asyncio.Task:
-        """Execute task in background by @Zara"""
+        """Execute task in background"""
         # Cancel existing task
         if task_id in self._running_tasks:
             await self.cancel_task(task_id)
@@ -98,7 +98,7 @@ class TaskExecutor:
         return task
     
     async def cancel_task(self, task_id: str) -> bool:
-        """Cancel a running task by @Zara"""
+        """Cancel a running task"""
         if task_id not in self._running_tasks:
             return False
         
@@ -117,7 +117,7 @@ class TaskExecutor:
         return True
     
     async def cancel_all_tasks(self) -> None:
-        """Cancel all running tasks by @Zara"""
+        """Cancel all running tasks"""
         task_ids = list(self._running_tasks.keys())
         
         for task_id in task_ids:
@@ -126,7 +126,7 @@ class TaskExecutor:
         _LOGGER.info("All tasks cancelled")
     
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Get status of a task by @Zara"""
+        """Get status of a task"""
         if task_id in self._running_tasks:
             task = self._running_tasks[task_id]
             return {
@@ -140,7 +140,7 @@ class TaskExecutor:
         return None
     
     def get_all_task_statuses(self) -> Dict[str, Dict[str, Any]]:
-        """Get status of all tasks by @Zara"""
+        """Get status of all tasks"""
         statuses = {}
         
         # Running tasks

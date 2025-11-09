@@ -31,10 +31,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ProductionCalculator:
-    """Historical Production Calculator - Simplified Version by @Zara"""
+    """Historical Production Calculator - Simplified Version"""
 
     def __init__(self, hass: HomeAssistant, data_manager):
-        """Initialize the Production Calculator by @Zara"""
+        """Initialize the Production Calculator"""
         self.hass = hass
         self.data_manager = data_manager
         _LOGGER.info("ProductionCalculator initialized (Recorder-free mode)")
@@ -43,7 +43,7 @@ class ProductionCalculator:
         self,
         power_entity: Optional[str] = None
     ) -> str:
-        """Calculate peak production time using ML data by @Zara"""
+        """Calculate peak production time using ML data"""
         _LOGGER.debug("Peak time calculation: Using ML-based approach (no Recorder)")
         
         try:
@@ -77,7 +77,7 @@ class ProductionCalculator:
             return "12:00"
 
     async def calculate_yesterday_total_yield(self, yield_entity: str) -> float:
-        """Calculate yesterdays total yield from prediction history by @Zara"""
+        """Calculate yesterdays total yield from prediction history"""
         try:
             yesterday_str = (dt_util.now() - timedelta(days=1)).date().isoformat()
             prediction = await self.data_manager.get_prediction_for_date(yesterday_str)
@@ -93,7 +93,7 @@ class ProductionCalculator:
             return 0.0
 
     async def get_last_7_days_average_yield(self, yield_entity: str) -> float:
-        """Get average yield for the last 7 days from prediction history by @Zara"""
+        """Get average yield for the last 7 days from prediction history"""
         try:
             start_date = (dt_util.now() - timedelta(days=7)).date().isoformat()
             predictions = await self.data_manager.get_predictions(start_date=start_date)
@@ -116,7 +116,7 @@ class ProductionCalculator:
         self,
         yield_entity: str
     ) -> dict:
-        """Get monthly production statistics from prediction history by @Zara"""
+        """Get monthly production statistics from prediction history"""
         try:
             start_of_month = dt_util.now().replace(day=1).date().isoformat()
             predictions = await self.data_manager.get_predictions(start_date=start_of_month)
@@ -157,7 +157,7 @@ class ProductionCalculator:
             }
 
     async def get_historical_average(self) -> Optional[float]:
-        """Get historical average production by @Zara"""
+        """Get historical average production"""
         _LOGGER.debug("Historical average: Not available without Recorder")
         return None
 

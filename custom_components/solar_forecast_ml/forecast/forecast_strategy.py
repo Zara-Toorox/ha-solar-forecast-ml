@@ -31,10 +31,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MLForecastStrategy(ForecastStrategy):
-    """Implements the forecast strategy using a trained Machine Learning model by @Zara"""
+    """Implements the forecast strategy using a trained Machine Learning model"""
 
     def __init__(self, ml_predictor: Any, error_handler: Optional[ErrorHandlingService] = None):
-        """Initialize the ML Forecast Strategy by @Zara"""
+        """Initialize the ML Forecast Strategy"""
         super().__init__("ml_forecast")
         self.ml_predictor = ml_predictor
         self.error_handler = error_handler
@@ -61,7 +61,7 @@ class MLForecastStrategy(ForecastStrategy):
         self.TOMORROW_DISCOUNT_FACTOR = 0.92
 
     def is_available(self) -> bool:
-        """Checks if the ML Predictor instance is available and reports itself as healthy by @Zara"""
+        """Checks if the ML Predictor instance is available and reports itself as healthy"""
         if not self.ml_predictor:
             _LOGGER.debug("ML strategy unavailable: MLPredictor instance is missing.")
             return False
@@ -80,7 +80,7 @@ class MLForecastStrategy(ForecastStrategy):
             return False
 
     def get_priority(self) -> int:
-        """Returns the priority of this strategy ML has the highest priority by @Zara"""
+        """Returns the priority of this strategy ML has the highest priority"""
         return 100
 
     async def calculate_forecast(
@@ -90,7 +90,7 @@ class MLForecastStrategy(ForecastStrategy):
         lag_features: Dict[str, Any],
         correction_factor: float
     ) -> ForecastResult:
-        """Calculates the solar forecast using the ML model via the MLPredictor instance by @Zara"""
+        """Calculates the solar forecast using the ML model via the MLPredictor instance"""
         _LOGGER.debug("Attempting forecast calculation using ML (Iterative) strategy...")
 
         if not self.is_available():
