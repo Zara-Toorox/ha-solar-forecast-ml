@@ -130,7 +130,7 @@ class ChartGenerator:
             ]
 
             if not day_predictions:
-                _LOGGER.warning(f"No predictions found for {target_str}")
+                _LOGGER.debug(f"No predictions found for {target_str}")
                 return None
 
             # Sort by timestamp
@@ -474,7 +474,7 @@ class ChartGenerator:
             ]
 
             if not day_predictions:
-                _LOGGER.warning(f"No predictions found for {target_str}")
+                _LOGGER.debug(f"No predictions found for {target_str}")
                 return None
 
             # Sort by timestamp

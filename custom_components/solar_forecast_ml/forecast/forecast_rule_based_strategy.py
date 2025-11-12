@@ -27,6 +27,7 @@ from homeassistant.util import dt as dt_util
 from .forecast_strategy_base import ForecastStrategy, ForecastResult
 from .forecast_weather_calculator import WeatherCalculator
 from ..core.core_helpers import SafeDateTimeUtil as dt_util_safe
+from ..astronomy.astronomy_cache_manager import get_cache_manager
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,16 +37,18 @@ class RuleBasedForecastStrategy(ForecastStrategy):
     """A fallback forecast strategy that uses simple rule-based heuristics"""
 
     def __init__(
-        self, 
-        weather_calculator: WeatherCalculator, 
-        solar_capacity: float
+        self,
+        weather_calculator: WeatherCalculator,
+        solar_capacity: float,
+        orchestrator: Optional[Any] = None
     ):
         """Initialize the Rule-Based Forecast Strategy"""
         super().__init__("rule_based")
         self.weather_calculator = weather_calculator
         self.solar_capacity = solar_capacity
+        self.orchestrator = orchestrator
 
-        self.PEAK_KW_PER_KWP = 0.95 
+        self.PEAK_KW_PER_KWP = 0.95
         self.TOMORROW_DISCOUNT_FACTOR = 0.92
         self.MAX_REALISTIC_DAILY_KWH_PER_KWP = 8.0
 
@@ -109,11 +112,18 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         if not hour_dt_local:
                             _LOGGER.warning("Skipping hour, invalid 'local_datetime' format")
                             continue
-                        
+
+                    # Ensure timezone-aware for comparison
+                    hour_dt_local = dt_util_safe.as_local(hour_dt_local)
+
+                    # Skip past hours - only forecast current hour and future
+                    if hour_dt_local < now_local:
+                        continue
+
                     hour_date = hour_dt_local.date()
                     hour_local = hour_dt_local.hour
-                    
-                    hour_factor = self._get_hour_factor(hour_local)
+
+                    hour_factor = self._get_hour_factor(hour_local, hour_dt_local)
                     
                     combined_weather_factor = self.weather_calculator.calculate_combined_weather_factor(
                         hour_data,
@@ -259,26 +269,87 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 base_capacity=fallback_capacity
             )
 
-    def _get_hour_factor(self, hour: int) -> float:
-        """Calculates a factor 00 to 10 based on sun curve sine"""
+    def _get_hour_factor(self, hour: int, hour_datetime: Optional[datetime] = None) -> float:
+        """
+        Calculates a factor 0.0 to 1.0 based on sun curve (sine), using astronomy cache
+
+        Falls back to seasonal estimates if cache unavailable
+        """
         try:
-            if hour >= 22 or hour <= 5:
+            # Use orchestrator to check if this is a production hour (astronomy cache based)
+            if self.orchestrator and hour_datetime:
+                if not self.orchestrator.is_production_hour(hour_datetime):
+                    return 0.0
+
+            # Determine production window from in-memory astronomy cache or seasonal fallback
+            if hour_datetime:
+                try:
+                    cache_manager = get_cache_manager()
+                    if cache_manager.is_loaded():
+                        # Get production window for target date
+                        date_str = hour_datetime.date().isoformat()
+                        window = cache_manager.get_production_window(date_str)
+
+                        if window:
+                            window_start_str, window_end_str = window
+
+                            # Parse ISO timestamps and convert to naive local time
+                            window_start = datetime.fromisoformat(window_start_str).replace(tzinfo=None)
+                            window_end = datetime.fromisoformat(window_end_str).replace(tzinfo=None)
+
+                            # Extract hours for sine curve calculation
+                            start_hour = window_start.hour
+                            end_hour = window_end.hour
+
+                            # Check if hour is outside production window
+                            if hour < start_hour or hour > end_hour:
+                                return 0.0
+
+                            # Calculate sine curve factor
+                            total_duration = end_hour - start_hour
+                            if total_duration <= 0:
+                                return 0.0
+
+                            hour_pos = (hour + 0.5 - start_hour) / total_duration
+                            if not (0.0 <= hour_pos <= 1.0):
+                                return 0.0
+
+                            factor = math.sin(hour_pos * math.pi)
+                            return max(0.0, factor)
+
+                except Exception as e:
+                    _LOGGER.debug(f"Failed to use astronomy cache for hour factor: {e}")
+
+            # Fallback to seasonal estimates
+            if hour_datetime:
+                month = hour_datetime.month
+                if month in [11, 12, 1, 2]:  # Winter
+                    start_hour, end_hour = 6, 17
+                elif month in [5, 6, 7, 8]:  # Summer
+                    start_hour, end_hour = 4, 21
+                else:  # Spring/Fall
+                    start_hour, end_hour = 5, 19
+            else:
+                # Very conservative fallback
+                if hour >= 22 or hour <= 5:
+                    return 0.0
+                start_hour = 6
+                end_hour = 21
+
+            # Check if hour is outside production window
+            if hour < start_hour or hour > end_hour:
                 return 0.0
-            
-            start_hour = 6
-            end_hour = 21
+
             total_duration = end_hour - start_hour
-            
             if total_duration <= 0:
                 return 0.0
-            
+
             hour_pos = (hour + 0.5 - start_hour) / total_duration
-            
             if not (0.0 <= hour_pos <= 1.0):
                 return 0.0
-            
+
             factor = math.sin(hour_pos * math.pi)
             return max(0.0, factor)
-            
+
         except Exception:
             return 0.5

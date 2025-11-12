@@ -68,9 +68,11 @@ class DataMLHandler(DataManagerIO):
 
     async def ensure_ml_files(self) -> None:
         """Ensure ML files exist with defaults"""
+        # IMPORTANT: Do NOT create learned_weights.json if it doesn't exist
+        # Training will create the correct version (V1 or V2) based on available data
+        # Creating V1 defaults here prevents V2 training from working after a reset
         if not self.learned_weights_file.exists():
-            default_weights = create_default_learned_weights()
-            await self.save_learned_weights(default_weights)
+            _LOGGER.info("learned_weights.json does not exist - will be created by training")
         
         if not self.hourly_profile_file.exists():
             default_profile = create_default_hourly_profile()
@@ -138,10 +140,13 @@ class DataMLHandler(DataManagerIO):
     async def load_learned_weights(self) -> Optional[LearnedWeights]:
         """Load learned weights from file"""
         try:
-            data = await self._read_json_file(
-                self.learned_weights_file,
-                create_default_learned_weights()
-            )
+            # Don't pass default_structure - return None if file doesn't exist
+            # This prevents V1 fallback when file is missing after reset
+            if not self.learned_weights_file.exists():
+                _LOGGER.debug("learned_weights.json does not exist - returning None")
+                return None
+
+            data = await self._read_json_file(self.learned_weights_file, None)
             if data:
                 return self.data_adapter.dict_to_learned_weights(data)
             return None

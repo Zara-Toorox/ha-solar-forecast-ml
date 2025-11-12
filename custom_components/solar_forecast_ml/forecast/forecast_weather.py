@@ -174,28 +174,74 @@ class WeatherService:
             _LOGGER.warning(f"Forecast fetch failed: {e} - using cached data")
             return []
 
-    async def get_processed_hourly_forecast(self) -> List[Dict[str, Any]]:
-        """Get forecast - returns cached immediately updates in background"""
-        # Return cached data immediately
-        if self._cached_forecast:
-            _LOGGER.debug(f"Returning cached forecast ({len(self._cached_forecast)} hours)")
+    async def get_processed_hourly_forecast(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """Get forecast with smart fallback strategy
+
+        Priority:
+        1. FRESH: Try to fetch from weather API (if force_refresh or cache too old)
+        2. CACHED: Use cached data if < 6 hours old
+        3. FALLBACK: Use any cached data (even if older)
+        4. EMERGENCY: Return empty list
+
+        Args:
+            force_refresh: If True, always try to fetch fresh data first
+
+        Returns:
+            List of processed hourly forecast entries
+        """
+        # Check cache age
+        cache_age_minutes = None
+        if self.data_manager:
+            cache_age_minutes = await self.data_manager.get_weather_cache_age()
+
+        cache_is_fresh = cache_age_minutes is not None and cache_age_minutes < 360  # 6 hours
+
+        # Strategy 1: Use memory cache if available and fresh
+        if self._cached_forecast and not force_refresh and cache_is_fresh:
+            _LOGGER.debug(f"Using memory cache ({len(self._cached_forecast)} hours, age: {cache_age_minutes}min)")
             return self._cached_forecast
-        
-        # Try quick fetch if no cache
-        fresh = await self.try_get_forecast(timeout=3)
-        if fresh:
-            return fresh
-        
-        # Load from file as last resort
+
+        # Strategy 2: Try to fetch fresh data if needed
+        should_refresh = force_refresh or not cache_is_fresh or not self._cached_forecast
+
+        if should_refresh:
+            _LOGGER.info(
+                f"Fetching fresh weather data (force_refresh={force_refresh}, "
+                f"cache_age={cache_age_minutes}min, has_memory_cache={bool(self._cached_forecast)})"
+            )
+            fresh = await self.try_get_forecast(timeout=5)
+            if fresh:
+                _LOGGER.info(f"✓ Fresh weather data fetched: {len(fresh)} hours")
+                return fresh
+
+            # Fetch failed - log reason
+            if not self._cached_forecast:
+                _LOGGER.warning("Fresh fetch failed and no memory cache available - trying file cache")
+
+        # Strategy 3: Load from file cache (any age)
         if self.data_manager:
             cached = await self.data_manager.load_weather_cache()
             if cached:
                 forecast = cached.get("forecast_hours", [])
-                self._cached_forecast = forecast
-                _LOGGER.info(f"Loaded {len(forecast)} hours from file cache")
-                return forecast
-        
-        _LOGGER.warning("No forecast available - returning empty list")
+                if forecast:
+                    self._cached_forecast = forecast
+                    cache_age_str = f"{cache_age_minutes}min" if cache_age_minutes else "unknown age"
+                    _LOGGER.info(
+                        f"✓ Using file cache: {len(forecast)} hours ({cache_age_str}) "
+                        f"[Weather API unavailable]"
+                    )
+                    return forecast
+
+        # Strategy 4: Emergency - return memory cache even if outdated
+        if self._cached_forecast:
+            _LOGGER.warning(
+                f"⚠ Using outdated memory cache ({len(self._cached_forecast)} hours, "
+                f"age: {cache_age_minutes}min) - no fresh data available"
+            )
+            return self._cached_forecast
+
+        # No data available at all
+        _LOGGER.error("❌ No weather forecast data available (API failed, no cache)")
         return []
 
     async def _fetch_and_process_forecast(self) -> List[Dict[str, Any]]:

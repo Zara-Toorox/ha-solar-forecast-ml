@@ -20,7 +20,7 @@ Copyright (C) 2025 Zara-Toorox
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from homeassistant.core import HomeAssistant
 from ..core.core_exceptions import DataIntegrityException
 from .data_manager import DataManagerIO
@@ -186,35 +186,99 @@ class DataStateHandler(DataManagerIO):
     # =============================================================
 
     async def save_weather_cache(self, weather_data: dict[str, Any]) -> bool:
-        """Save weather forecast data to cache"""
+        """Save weather forecast data to cache with 7-day retention (Rolling Window)
+
+        Strategy:
+        1. Load existing cache (if any)
+        2. Merge new forecast_hours with existing data
+        3. Remove duplicates (by datetime)
+        4. Remove entries older than 7 days
+        5. Save merged cache
+        """
         try:
             now_local = dt_util.now()
-            
+            retention_days = 7
+            cutoff_dt = now_local - timedelta(days=retention_days)
+
             # Ensure new format with metadata
             if not isinstance(weather_data, dict) or "forecast_hours" not in weather_data:
                 _LOGGER.warning("Weather data not in expected format, converting...")
                 weather_data = {
                     "forecast_hours": weather_data if isinstance(weather_data, list) else [],
                     "cached_at": now_local.isoformat(),
-                    "data_quality": {
-                        "today_hours": 0,
-                        "tomorrow_hours": 0,
-                        "total_hours": len(weather_data) if isinstance(weather_data, list) else 0
-                    }
                 }
-            
-            # Update cached_at timestamp
-            weather_data["cached_at"] = now_local.isoformat()
-            
+
+            new_forecast_hours = weather_data.get("forecast_hours", [])
+
+            # Load existing cache to merge
+            existing_cache = await self.load_weather_cache()
+            existing_hours = []
+            if existing_cache and isinstance(existing_cache, dict):
+                existing_hours = existing_cache.get("forecast_hours", [])
+
+            # Merge: existing + new, deduplicate by datetime
+            all_hours = existing_hours + new_forecast_hours
+
+            # Deduplicate and filter old entries
+            unique_hours = {}
+            for hour_entry in all_hours:
+                dt_str = hour_entry.get("datetime")
+                if not dt_str:
+                    continue
+
+                # Parse datetime to check age
+                try:
+                    dt_obj = dt_util.parse_datetime(dt_str)
+                    if not dt_obj:
+                        continue
+
+                    # Skip entries older than retention period
+                    if dt_obj < cutoff_dt:
+                        continue
+
+                    # Keep newest entry for each datetime (new data overwrites old)
+                    unique_hours[dt_str] = hour_entry
+
+                except Exception as e:
+                    _LOGGER.debug(f"Failed to parse datetime '{dt_str}': {e}")
+                    continue
+
+            # Sort by datetime (chronological order)
+            sorted_hours = sorted(unique_hours.values(), key=lambda x: x.get("datetime", ""))
+
+            # Calculate statistics
+            today_str = now_local.date().isoformat()
+            tomorrow_str = (now_local + timedelta(days=1)).date().isoformat()
+
+            today_count = sum(1 for h in sorted_hours if h.get("local_datetime", "").startswith(today_str))
+            tomorrow_count = sum(1 for h in sorted_hours if h.get("local_datetime", "").startswith(tomorrow_str))
+
+            # Build final cache structure
+            merged_cache = {
+                "version": "2.0",
+                "cached_at": now_local.isoformat(),
+                "retention_days": retention_days,
+                "forecast_hours": sorted_hours,
+                "metadata": {
+                    "total_hours": len(sorted_hours),
+                    "today_hours": today_count,
+                    "tomorrow_hours": tomorrow_count,
+                    "oldest_entry": sorted_hours[0].get("datetime") if sorted_hours else None,
+                    "newest_entry": sorted_hours[-1].get("datetime") if sorted_hours else None,
+                }
+            }
+
             await self._ensure_directory_exists(self.weather_cache_file.parent)
-            await self._atomic_write_json(self.weather_cache_file, weather_data)
-            
-            total_hours = len(weather_data.get("forecast_hours", []))
-            _LOGGER.debug(f"Weather cache saved ({total_hours} hours)")
+            await self._atomic_write_json(self.weather_cache_file, merged_cache)
+
+            _LOGGER.debug(
+                f"Weather cache saved: {len(sorted_hours)} hours total "
+                f"(today: {today_count}, tomorrow: {tomorrow_count}, retention: {retention_days}d)"
+            )
             return True
-            
+
         except Exception as e:
-            _LOGGER.error(f"Failed to save weather cache: {e}")
+            _LOGGER.error(f"Failed to save weather cache: {e}", exc_info=True)
             return False
 
     async def load_weather_cache(self) -> Optional[dict[str, Any]]:

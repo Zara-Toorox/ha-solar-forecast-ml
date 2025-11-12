@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML",
-        "description": "Pflicht: Wetter-Sensor, Leistungs-Sensor, Tagesertrag\nOptional: Alle anderen Felder\n\nBatterie-Management optional aktivierbar",
+        "description": "Pflicht: Wetter-Sensor, Leistungs-Sensor, Tagesertrag\nOptional: Alle anderen Felder\n\n🔋 Batterie-Management v9.0.0 (optional):\n• Watt-basiertes System für präzise Energiefluss-Analyse\n• 8 klare Sensoren (alle positiv außer Batterie: +/-)\n• Benötigt: Batterie-Leistung, SOC, Solar-Produktion, Wechselrichter, Netzbezug, Netzexport, Hausverbrauch",
         "data": {
           "weather_entity": "Wetter-Sensor",
           "power_entity": "Leistungs-Sensor (W)",
@@ -19,11 +19,15 @@
           "uv_sensor": "UV-Sensor",
           "humidity_sensor": "Luftfeuchtigkeits-Sensor",
           "battery_capacity": "Batterie-Kapazität (kWh)",
-          "battery_soc_entity": "Batterie Ladezustand (%)",
-          "battery_power_entity": "Batterie Leistung (W, +/-)",
-          "battery_grid_charge_power_entity": "Netz-Ladeleistung (W)",
-          "battery_charge_today_entity": "Batterie Ladung Heute (kWh) - LEGACY",
-          "battery_discharge_today_entity": "Batterie Entladung Heute (kWh) - LEGACY",
+          "battery_power_sensor": "Batterie-Leistung (W, +/-) - v9.0.0",
+          "battery_soc_sensor": "Batterie Ladezustand (%) - v9.0.0",
+          "solar_production_sensor": "Solarzellenleistung (W) - v9.0.0",
+          "inverter_output_sensor": "Wechselrichter-Leistung (W) - v9.0.0",
+          "grid_import_sensor": "Netzbezug (W) - v9.0.0",
+          "grid_export_sensor": "Netzexport (W) - v9.0.0",
+          "house_consumption_sensor": "Hausverbrauch (W) - v9.0.0",
+          "grid_charge_power_sensor": "Akkunetzbezug (W) - v9.0.0 Optional",
+          "battery_temperature_sensor": "Batterie-Temperatur (°C) - v9.0.0 Optional",
           "electricity_country": "Land (DE/AT)"
         },
         "data_description": {
@@ -41,17 +45,21 @@
           "uv_sensor": "Externer UV-Index (Optional)",
           "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)",
           "battery_capacity": "Batterie-Kapazität in kWh (Optional, für Batterie-Management)",
-          "battery_soc_entity": "Batterie SOC in % (Optional, z.B. sensor.solarbank_soc)",
-          "battery_power_entity": "Batterie-Leistung in W, +Laden/-Entladen (Optional, z.B. sensor.akkuleistung)",
-          "battery_grid_charge_power_entity": "Netz-Ladeleistung in W (Optional, z.B. sensor.netzaufladung)",
-          "battery_charge_today_entity": "[LEGACY] Nicht mehr benötigt (Optional)",
-          "battery_discharge_today_entity": "[LEGACY] Nicht mehr benötigt (Optional)",
+          "battery_power_sensor": "[v9.0.0] Batterie-Leistung in W (Positiv=Laden, Negativ=Entladen)",
+          "battery_soc_sensor": "[v9.0.0] Batterie-Ladezustand in % (0-100)",
+          "solar_production_sensor": "[v9.0.0] DC-Leistung der Solarzellen in W (≥0)",
+          "inverter_output_sensor": "[v9.0.0] AC-Ausgang des Wechselrichters in W (≥0) - Solar+Batterie kombiniert",
+          "grid_import_sensor": "[v9.0.0] Netzbezug in W (≥0) - Strom vom öffentlichen Netz",
+          "grid_export_sensor": "[v9.0.0] Netzexport in W (≥0) - Strom ins öffentliche Netz",
+          "house_consumption_sensor": "[v9.0.0] Gesamt-Hausverbrauch in W (≥0)",
+          "grid_charge_power_sensor": "[v9.0.0 Optional] Akkunetzbezug in W (≥0) - Falls nicht vorhanden, wird automatisch berechnet",
+          "battery_temperature_sensor": "[v9.0.0 Optional] Batterie-Temperatur in °C - Für erweiterte Analyse",
           "electricity_country": "Land für Strompreise - DE oder AT (Optional)"
         }
       },
       "reconfigure": {
         "title": "Solar Forecast ML neu konfigurieren",
-        "description": "Konfiguration aktualisieren\nLeere optionale Felder löschen den aktuellen Wert",
+        "description": "Konfiguration aktualisieren\nLeere optionale Felder löschen den aktuellen Wert\n\n🔋 Batterie-Management v9.0.0:\n• Alle 8 Sensoren für Energiefluss-Analyse konfigurieren\n• Alle Werte positiv außer Batterie-Leistung (+/-)\n• Alte LEGACY Felder werden automatisch ignoriert",
         "data": {
           "weather_entity": "Wetter-Sensor",
           "power_entity": "Leistungs-Sensor (W)",
@@ -67,11 +75,15 @@
           "uv_sensor": "UV-Sensor",
           "humidity_sensor": "Luftfeuchtigkeits-Sensor",
           "battery_capacity": "Batterie-Kapazität (kWh)",
-          "battery_soc_entity": "Batterie Ladezustand Sensor (%)",
-          "battery_power_entity": "Batterie Leistungs-Sensor (W, +Laden/-Entladen)",
-          "battery_grid_charge_power_entity": "Netz-Ladeleistung Sensor (W)",
-          "battery_charge_today_entity": "Batterie Ladung Heute (kWh) - LEGACY",
-          "battery_discharge_today_entity": "Batterie Entladung Heute (kWh) - LEGACY",
+          "battery_power_sensor": "Batterie-Leistung (W, +/-) - v9.0.0",
+          "battery_soc_sensor": "Batterie Ladezustand (%) - v9.0.0",
+          "solar_production_sensor": "Solarzellenleistung (W) - v9.0.0",
+          "inverter_output_sensor": "Wechselrichter-Leistung (W) - v9.0.0",
+          "grid_import_sensor": "Netzbezug (W) - v9.0.0",
+          "grid_export_sensor": "Netzexport (W) - v9.0.0",
+          "house_consumption_sensor": "Hausverbrauch (W) - v9.0.0",
+          "grid_charge_power_sensor": "Akkunetzbezug (W) - v9.0.0 Optional",
+          "battery_temperature_sensor": "Batterie-Temperatur (°C) - v9.0.0 Optional",
           "electricity_country": "Land (DE/AT)"
         },
         "data_description": {
@@ -87,11 +99,15 @@
           "uv_sensor": "Externer UV-Index (Optional)",
           "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)",
           "battery_capacity": "Gesamt-Batteriekapazität in kWh (z.B. 10.0 für Anker Solix)",
-          "battery_soc_entity": "Sensor für Batterie-Ladezustand in % (z.B. sensor.solarbank_soc)",
-          "battery_power_entity": "Sensor für Batterie-Leistung in W - Positiv=Laden, Negativ=Entladen (z.B. sensor.akkuleistung)",
-          "battery_grid_charge_power_entity": "Sensor für Netz-Ladeleistung in W (z.B. sensor.netzaufladung)",
-          "battery_charge_today_entity": "[LEGACY] Nur für alte Systeme - wird nicht mehr benötigt",
-          "battery_discharge_today_entity": "[LEGACY] Nur für alte Systeme - wird nicht mehr benötigt",
+          "battery_power_sensor": "[v9.0.0] Batterie-Leistung in W (Positiv=Laden, Negativ=Entladen)",
+          "battery_soc_sensor": "[v9.0.0] Batterie-Ladezustand in % (0-100)",
+          "solar_production_sensor": "[v9.0.0] DC-Leistung der Solarzellen in W (≥0)",
+          "inverter_output_sensor": "[v9.0.0] AC-Ausgang des Wechselrichters in W (≥0) - Solar+Batterie kombiniert",
+          "grid_import_sensor": "[v9.0.0] Netzbezug in W (≥0) - Strom vom öffentlichen Netz",
+          "grid_export_sensor": "[v9.0.0] Netzexport in W (≥0) - Strom ins öffentliche Netz",
+          "house_consumption_sensor": "[v9.0.0] Gesamt-Hausverbrauch in W (≥0)",
+          "grid_charge_power_sensor": "[v9.0.0 Optional] Akkunetzbezug in W (≥0) - Falls nicht vorhanden, wird automatisch berechnet",
+          "battery_temperature_sensor": "[v9.0.0 Optional] Batterie-Temperatur in °C - Für erweiterte Analyse",
           "electricity_country": "Land für Strompreise (aWATTar) - Deutschland (DE) oder Österreich (AT)"
         }
       }
@@ -330,6 +346,15 @@
           }
         }
       },
+      "training_readiness": {
+        "name": "Training Bereitschaft",
+        "state": {
+          "collecting": "Daten sammeln",
+          "early": "Frühes Training",
+          "ready": "Bereit",
+          "excellent": "Exzellent"
+        }
+      },
       "next_production_start": {
         "name": "Nächster Produktionsbeginn"
       },
@@ -376,13 +401,37 @@
       "battery_efficiency": {
         "name": "Batterie Effizienz",
         "state_attributes": {
-          "charge_today": {
-            "name": "Geladen Heute"
+          "total_charge_today_kwh": {
+            "name": "Gesamt-Ladung Heute"
           },
-          "discharge_today": {
-            "name": "Entladen Heute"
+          "total_discharge_today_kwh": {
+            "name": "Gesamt-Entladung Heute"
+          },
+          "solar_charge_kwh": {
+            "name": "Solar-Ladung"
+          },
+          "grid_charge_kwh": {
+            "name": "Netz-Ladung"
           }
         }
+      },
+      "battery_solar_to_house": {
+        "name": "Solar → Haus"
+      },
+      "battery_solar_to_battery": {
+        "name": "Solar → Batterie"
+      },
+      "battery_solar_to_grid": {
+        "name": "Solar → Netz"
+      },
+      "battery_grid_to_house": {
+        "name": "Netz → Haus"
+      },
+      "battery_grid_to_battery": {
+        "name": "Netz → Batterie"
+      },
+      "battery_battery_to_house": {
+        "name": "Batterie → Haus"
       },
       "battery_forecast_expected_charge_solar": {
         "name": "Erwartete Ladung aus Solar",

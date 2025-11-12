@@ -64,6 +64,7 @@ from .sensors.sensor_diagnostic import (
     CloudinessTrend3hSensor,
     CloudinessVolatilitySensor,
     NextProductionStartSensor,
+    MLTrainingReadinessSensor,
 )
 
 # Import state sensors
@@ -111,6 +112,7 @@ async def async_setup_entry(
 
     core_entities = [
         system_status_sensor,
+        SolarForecastSensor(coordinator, entry, "remaining"),
         SolarForecastSensor(coordinator, entry, "tomorrow"),
         PeakProductionHourSensor(coordinator, entry),
         ProductionTimeSensor(coordinator, entry),
@@ -142,6 +144,7 @@ async def async_setup_entry(
             NextScheduledUpdateSensor(coordinator, entry),
             MLServiceStatusSensor(coordinator, entry),
             MLMetricsSensor(coordinator, entry),
+            MLTrainingReadinessSensor(coordinator, entry),  # NEW: Training Readiness
             CoordinatorHealthSensor(coordinator, entry),
             DataFilesStatusSensor(coordinator, entry),
             # Cloudiness Trend Sensors

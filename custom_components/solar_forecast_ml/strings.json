@@ -3,41 +3,7 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML",
-        "description": "Required: Weather Sensor, Power Sensor, Daily Yield\nOptional: All other fields",
-        "data": {
-          "weather_entity": "Weather Sensor",
-          "power_entity": "Power Sensor (W)",
-          "solar_yield_today": "Daily Yield (kWh)",
-          "total_consumption_today": "Daily Consumption (kWh)",
-          "grid_import_today": "Grid Import Today (kWh)",
-          "grid_export_today": "Grid Export Today (kWh)",
-          "solar_capacity": "System Capacity (kWp)",
-          "rain_sensor": "Rain Sensor",
-          "lux_sensor": "Illuminance Sensor (lx)",
-          "temp_sensor": "Temperature Sensor",
-          "wind_sensor": "Wind Sensor",
-          "uv_sensor": "UV Sensor",
-          "humidity_sensor": "Humidity Sensor"
-        },
-        "data_description": {
-          "weather_entity": "Weather entity for forecast (Required)",
-          "power_entity": "Current power in Watts (Required)",
-          "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
-          "total_consumption_today": "Daily consumption in kWh (Optional)",
-          "grid_import_today": "Grid import in kWh - Energy from grid (Optional, improves autarky calculation)",
-          "grid_export_today": "Grid export in kWh - Energy to grid (Optional)",
-          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, default: 5.0)",
-          "rain_sensor": "External rain sensor (Optional)",
-          "lux_sensor": "External illuminance in Lux (Optional)",
-          "temp_sensor": "External temperature (Optional)",
-          "wind_sensor": "External wind speed (Optional)",
-          "uv_sensor": "External UV index (Optional)",
-          "humidity_sensor": "External humidity (Optional)"
-        }
-      },
-      "reconfigure": {
-        "title": "Reconfigure Solar Forecast ML",
-        "description": "Update configuration\nEmpty optional fields will clear their value",
+        "description": "Required: Weather Sensor, Power Sensor, Daily Yield\nOptional: All other fields\n\nBattery Management v9.0.0 (optional):\n• Watt-based system for precise energy flow analysis\n• 8 clear sensors (all positive except Battery: +/-)\n• Required: Battery Power, SOC, Solar Production, Inverter Output, Grid Import, Grid Export, House Consumption",
         "data": {
           "weather_entity": "Weather Sensor",
           "power_entity": "Power Sensor (W)",
@@ -53,10 +19,15 @@
           "uv_sensor": "UV Sensor",
           "humidity_sensor": "Humidity Sensor",
           "battery_capacity": "Battery Capacity (kWh)",
-          "battery_soc_entity": "Battery State of Charge Sensor",
-          "battery_power_entity": "Battery Power Sensor (W)",
-          "battery_charge_today_entity": "Battery Charge Today (kWh)",
-          "battery_discharge_today_entity": "Battery Discharge Today (kWh)",
+          "battery_power_sensor": "Battery Power (W, +/-) - v9.0.0",
+          "battery_soc_sensor": "Battery State of Charge (%) - v9.0.0",
+          "solar_production_sensor": "Solar Production (W) - v9.0.0",
+          "inverter_output_sensor": "Inverter Output (W) - v9.0.0",
+          "grid_import_sensor": "Grid Import (W) - v9.0.0",
+          "grid_export_sensor": "Grid Export (W) - v9.0.0",
+          "house_consumption_sensor": "House Consumption (W) - v9.0.0",
+          "grid_charge_power_sensor": "Grid Charge Power (W) - v9.0.0 Optional",
+          "battery_temperature_sensor": "Battery Temperature (°C) - v9.0.0 Optional",
           "electricity_country": "Country (DE/AT)"
         },
         "data_description": {
@@ -73,12 +44,73 @@
           "wind_sensor": "External wind speed (Optional)",
           "uv_sensor": "External UV index (Optional)",
           "humidity_sensor": "External humidity (Optional)",
-          "battery_capacity": "Total battery capacity in kWh",
-          "battery_soc_entity": "Sensor showing battery state of charge (%)",
-          "battery_power_entity": "Sensor showing current battery power (W, positive=charging)",
-          "battery_charge_today_entity": "Sensor showing energy charged today (kWh)",
-          "battery_discharge_today_entity": "Sensor showing energy discharged today (kWh)",
-          "electricity_country": "Country for electricity prices - Germany or Austria"
+          "battery_capacity": "Battery capacity in kWh (Optional, for battery management)",
+          "battery_power_sensor": "[v9.0.0] Battery power in W (Positive=Charging, Negative=Discharging)",
+          "battery_soc_sensor": "[v9.0.0] Battery state of charge in % (0-100)",
+          "solar_production_sensor": "[v9.0.0] Solar DC production from panels in W (≥0)",
+          "inverter_output_sensor": "[v9.0.0] Inverter AC output to house in W (≥0) - Combined Solar+Battery",
+          "grid_import_sensor": "[v9.0.0] Grid import power in W (≥0) - Power from public grid",
+          "grid_export_sensor": "[v9.0.0] Grid export power in W (≥0) - Power to public grid",
+          "house_consumption_sensor": "[v9.0.0] Total house consumption in W (≥0)",
+          "grid_charge_power_sensor": "[v9.0.0 Optional] Grid charge power in W (≥0) - Auto-calculated if not provided",
+          "battery_temperature_sensor": "[v9.0.0 Optional] Battery temperature in °C - For advanced analysis",
+          "electricity_country": "Country for electricity prices - Germany (DE) or Austria (AT) (Optional)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Solar Forecast ML",
+        "description": "Update configuration\nEmpty optional fields will clear their value\n\nBattery Management v9.0.0:\n• Configure all 8 sensors for energy flow analysis\n• All positive values except Battery Power (+/-)\n• Old LEGACY fields are automatically ignored",
+        "data": {
+          "weather_entity": "Weather Sensor",
+          "power_entity": "Power Sensor (W)",
+          "solar_yield_today": "Daily Yield (kWh)",
+          "total_consumption_today": "Daily Consumption (kWh)",
+          "grid_import_today": "Grid Import Today (kWh)",
+          "grid_export_today": "Grid Export Today (kWh)",
+          "solar_capacity": "System Capacity (kWp)",
+          "rain_sensor": "Rain Sensor",
+          "lux_sensor": "Illuminance Sensor (lx)",
+          "temp_sensor": "Temperature Sensor",
+          "wind_sensor": "Wind Sensor",
+          "uv_sensor": "UV Sensor",
+          "humidity_sensor": "Humidity Sensor",
+          "battery_capacity": "Battery Capacity (kWh)",
+          "battery_power_sensor": "Battery Power (W, +/-) - v9.0.0",
+          "battery_soc_sensor": "Battery State of Charge (%) - v9.0.0",
+          "solar_production_sensor": "Solar Production (W) - v9.0.0",
+          "inverter_output_sensor": "Inverter Output (W) - v9.0.0",
+          "grid_import_sensor": "Grid Import (W) - v9.0.0",
+          "grid_export_sensor": "Grid Export (W) - v9.0.0",
+          "house_consumption_sensor": "House Consumption (W) - v9.0.0",
+          "grid_charge_power_sensor": "Grid Charge Power (W) - v9.0.0 Optional",
+          "battery_temperature_sensor": "Battery Temperature (°C) - v9.0.0 Optional",
+          "electricity_country": "Country (DE/AT)"
+        },
+        "data_description": {
+          "weather_entity": "Weather entity for forecast (Required)",
+          "power_entity": "Current power in Watts (Required)",
+          "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
+          "total_consumption_today": "Daily consumption in kWh (Optional)",
+          "grid_import_today": "Grid import in kWh - Energy from grid (Optional, improves autarky calculation)",
+          "grid_export_today": "Grid export in kWh - Energy to grid (Optional)",
+          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, default: 5.0)",
+          "rain_sensor": "External rain sensor (Optional)",
+          "lux_sensor": "External illuminance in Lux (Optional)",
+          "temp_sensor": "External temperature (Optional)",
+          "wind_sensor": "External wind speed (Optional)",
+          "uv_sensor": "External UV index (Optional)",
+          "humidity_sensor": "External humidity (Optional)",
+          "battery_capacity": "Battery capacity in kWh (Optional, for battery management)",
+          "battery_power_sensor": "[v9.0.0] Battery power in W (Positive=Charging, Negative=Discharging)",
+          "battery_soc_sensor": "[v9.0.0] Battery state of charge in % (0-100)",
+          "solar_production_sensor": "[v9.0.0] Solar DC production from panels in W (≥0)",
+          "inverter_output_sensor": "[v9.0.0] Inverter AC output to house in W (≥0) - Combined Solar+Battery",
+          "grid_import_sensor": "[v9.0.0] Grid import power in W (≥0) - Power from public grid",
+          "grid_export_sensor": "[v9.0.0] Grid export power in W (≥0) - Power to public grid",
+          "house_consumption_sensor": "[v9.0.0] Total house consumption in W (≥0)",
+          "grid_charge_power_sensor": "[v9.0.0 Optional] Grid charge power in W (≥0) - Auto-calculated if not provided",
+          "battery_temperature_sensor": "[v9.0.0 Optional] Battery temperature in °C - For advanced analysis",
+          "electricity_country": "Country for electricity prices - Germany (DE) or Austria (AT) (Optional)"
         }
       }
     },
@@ -245,6 +277,15 @@
           "moderate": "Moderate",
           "variable": "Variable",
           "very_variable": "Very Variable"
+        }
+      },
+      "training_readiness": {
+        "name": "Training Readiness",
+        "state": {
+          "collecting": "Collecting Data",
+          "early": "Early Training",
+          "ready": "Ready",
+          "excellent": "Excellent"
         }
       }
     },

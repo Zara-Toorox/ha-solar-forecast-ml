@@ -80,7 +80,7 @@ class StandardScaler:
                 # CRITICAL FIX 2: Always include all features to maintain dimension consistency
                 # For zero/low-variance features, use std=1.0 to avoid division by zero
                 if std_val < 0.01:
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         f"Feature '{name}' has low/zero variance (std={std_val:.6f}). "
                         f"Using std=1.0 to maintain dimension consistency."
                     )
@@ -150,27 +150,66 @@ class StandardScaler:
         self.fit(X, feature_names)
         return self.transform(X, feature_names)
 
-    def transform_single(self, features: Dict[str, float]) -> Dict[str, float]:
-        """Transform a single sample provided as a dictionary feature_name value"""
+    def transform_single(self, features):
+        """Transform a single sample provided as a dictionary or list
+
+        Args:
+            features: Either Dict[str, float] (V1) or List[float] (V2)
+
+        Returns:
+            Same type as input - Dict or List with scaled values
+        """
         if not self.is_fitted:
             _LOGGER.debug("Scaler not fitted, returning original features for single transform.")
             return features # Return original if scaler hasn't been trained
 
-        scaled_features: Dict[str, float] = {}
-        for name, value in features.items():
-            mean = self.means.get(name)
-            std = self.stds.get(name)
+        # V2: Handle list-based features (ordered by feature_names_order)
+        if isinstance(features, list):
+            if not self._feature_names_order:
+                _LOGGER.warning("Cannot scale list-based features: feature_names_order not available")
+                return features
 
-            if mean is not None and std is not None:
-                # Apply scaling if feature was seen during fit
-                scaled_value = (value - mean) / std if std > 1e-8 else 0.0
-                scaled_features[name] = scaled_value
-            else:
-                # Keep features not seen during fit unscaled
-                _LOGGER.debug(f"Feature '{name}' not seen during fit, keeping original value in single transform.")
-                scaled_features[name] = value
+            scaled_features = []
+            for i, value in enumerate(features):
+                if i >= len(self._feature_names_order):
+                    _LOGGER.warning(f"Feature index {i} exceeds feature_names_order length, keeping original")
+                    scaled_features.append(value)
+                    continue
 
-        return scaled_features
+                feature_name = self._feature_names_order[i]
+                mean = self.means.get(feature_name)
+                std = self.stds.get(feature_name)
+
+                if mean is not None and std is not None:
+                    scaled_value = (value - mean) / std if std > 1e-8 else 0.0
+                    scaled_features.append(scaled_value)
+                else:
+                    # Keep unscaled if not seen during fit
+                    scaled_features.append(value)
+
+            return scaled_features
+
+        # V1: Handle dict-based features
+        elif isinstance(features, dict):
+            scaled_features: Dict[str, float] = {}
+            for name, value in features.items():
+                mean = self.means.get(name)
+                std = self.stds.get(name)
+
+                if mean is not None and std is not None:
+                    # Apply scaling if feature was seen during fit
+                    scaled_value = (value - mean) / std if std > 1e-8 else 0.0
+                    scaled_features[name] = scaled_value
+                else:
+                    # Keep features not seen during fit unscaled
+                    _LOGGER.debug(f"Feature '{name}' not seen during fit, keeping original value in single transform.")
+                    scaled_features[name] = value
+
+            return scaled_features
+
+        else:
+            _LOGGER.error(f"Unsupported features type: {type(features)}. Expected dict or list.")
+            return features
 
     def get_state(self) -> Dict[str, Any]:
         """Get the internal state of the scaler means stds fitted status for serialization"""

@@ -31,6 +31,9 @@ from .data_prediction_handler import DataPredictionHandler
 from .data_state_handler import DataStateHandler
 from .data_backup_handler import DataBackupHandler
 from .data_schema_validator import DataSchemaValidator
+from .data_weather_accuracy import WeatherAccuracyTracker
+from .data_hourly_predictions import HourlyPredictionsHandler
+from .data_daily_summaries import DailySummariesHandler
 
 from ..ml.ml_types import LearnedWeights, HourlyProfile
 
@@ -50,9 +53,14 @@ class DataManager(DataManagerIO):
         # Initialize specialized handlers
         self.forecast_handler = DataForecastHandler(hass, data_dir)
         self.ml_handler = DataMLHandler(hass, data_dir)
-        self.prediction_handler = DataPredictionHandler(hass, data_dir)
+        self.prediction_handler = DataPredictionHandler(hass, data_dir)  # OLD - kept for compatibility
         self.state_handler = DataStateHandler(hass, data_dir)
         self.backup_handler = DataBackupHandler(hass, data_dir)
+        self.weather_accuracy = WeatherAccuracyTracker(hass, data_dir)
+
+        # NEW: ML-optimized handlers (with parent reference for atomic writes)
+        self.hourly_predictions = HourlyPredictionsHandler(data_dir, data_manager=self)
+        self.daily_summaries = DailySummariesHandler(data_dir, data_manager=self)
 
         # Keep file paths for backward compatibility
         self.daily_forecasts_file = self.forecast_handler.daily_forecasts_file
@@ -94,6 +102,11 @@ class DataManager(DataManagerIO):
             await self._ensure_directory_exists(self.data_dir / "assets" / "images")
             await self._ensure_directory_exists(self.data_dir / "docs")
 
+            # CRITICAL: Auto-migrate from v1 to v2 structure if needed
+            # This runs BEFORE any handlers use the files
+            _LOGGER.info("Checking for automatic migration from v1 to v2 structure...")
+            await self._auto_migrate_v1_to_v2()
+
             # CRITICAL: Validate and migrate all JSON files FIRST
             # This ensures all files have correct schema before handlers use them
             _LOGGER.info("Starting JSON schema validation and migration")
@@ -111,8 +124,8 @@ class DataManager(DataManagerIO):
             await self.prediction_handler.ensure_prediction_history_file()
             await self.state_handler.ensure_state_files()
 
-            # Deploy import tools for beta testers
-            await self._deploy_import_tools()
+            # Deploy documentation files to docs directory
+            await self._deploy_documentation()
 
             _LOGGER.info("DataManager Facade initialized successfully")
             return True
@@ -402,50 +415,7 @@ class DataManager(DataManagerIO):
         return await self.ml_handler.cleanup_zero_production_samples()
 
  
-    async def save_prediction(self, prediction_data: Dict[str, Any]) -> bool:
-        """Save prediction to history"""
-        return await self.prediction_handler.save_prediction(prediction_data)
-
-    async def get_predictions(
-        self,
-        limit: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Get predictions"""
-        return await self.prediction_handler.get_predictions(
-            limit, start_date, end_date
-        )
-
-    async def get_latest_prediction(self) -> Optional[Dict[str, Any]]:
-        """Get latest prediction"""
-        return await self.prediction_handler.get_latest_prediction()
-
-    async def get_prediction_for_date(self, date: str) -> Optional[Dict[str, Any]]:
-        """Get prediction for date"""
-        return await self.prediction_handler.get_prediction_for_date(date)
-
-    async def cleanup_old_predictions(self, days: int = 365) -> bool:
-        """Cleanup old predictions"""
-        return await self.prediction_handler.cleanup_old_predictions(days)
-
-    async def calculate_accuracy_stats(
-        self,
-        days: int = 30
-    ) -> Dict[str, Any]:
-        """Calculate accuracy statistics"""
-        return await self.prediction_handler.calculate_accuracy_stats(days)
-
-    async def get_accuracy_trend(
-        self,
-        days: int = 30
-    ) -> List[Dict[str, Any]]:
-        """Get accuracy trend"""
-        return await self.prediction_handler.get_accuracy_trend(days)
-
-    async def get_predictions_count(self) -> int:
-        """Get predictions count"""
-        return await self.prediction_handler.get_predictions_count()
+    # Note: prediction_history.json methods removed - use hourly_predictions instead
 
     async def update_today_predictions_actual(
         self,
@@ -624,67 +594,137 @@ class DataManager(DataManagerIO):
         
         return await self.finalize_today(actual_yield_kwh, actual_consumption_kwh, production_seconds)
 
-    def _deploy_import_tools_sync(self, source_dir, target_dir, marker_file) -> int:
-        """Synchronous helper to deploy import tools"""
+    def _deploy_documentation_sync(self, integration_dir, target_dir, marker_file) -> int:
+        """
+        Synchronous helper to deploy documentation files
+
+        v8.6.0: Deploy documentation to docs/ instead of import_tools to imports/
+        - Deploys README_CRITICAL.md from integration root
+        - Deploys PDF handbook from import_tools/ (if exists)
+        - Creates user-friendly docs structure
+        """
         import shutil
 
         files_copied = 0
 
-        # Check if source exists (blocking)
-        if not source_dir.exists():
-            return 0
-
-        # Check if already deployed (blocking)
+        # Check if already deployed for this version (blocking)
         if marker_file.exists():
             return -1  # Signal "already deployed"
 
-        # Copy all files (blocking)
-        for source_file in source_dir.iterdir():
-            if source_file.is_file():
-                target_file = target_dir / source_file.name
-                shutil.copy2(str(source_file), str(target_file))
-                files_copied += 1
+        try:
+            # Source files to copy
+            files_to_deploy = [
+                (integration_dir / "README_CRITICAL.md", "README.md"),  # Main documentation
+            ]
 
-        # Create marker (blocking)
-        marker_file.write_text("Import tools deployed successfully")
+            # Check if import_tools PDF exists (transitional period)
+            import_tools_pdf = integration_dir / "import_tools" / "Solar Forecast ML Integration Handbuch.pdf"
+            if import_tools_pdf.exists():
+                files_to_deploy.append((import_tools_pdf, "Handbuch.pdf"))
+
+            # Copy files (blocking)
+            for source, dest_name in files_to_deploy:
+                if source.exists():
+                    try:
+                        dest_path = target_dir / dest_name
+                        shutil.copy2(str(source), str(dest_path))
+                        files_copied += 1
+                    except Exception as e:
+                        _LOGGER.warning(f"Failed to copy {source.name}: {e}")
+
+            # Create marker file (blocking)
+            marker_file.write_text("Documentation deployed for v8.6.0")
+
+        except Exception as e:
+            _LOGGER.warning(f"Error during documentation deployment: {e}")
 
         return files_copied
 
-    async def _deploy_import_tools(self) -> None:
-        """Deploy import_tools to the imports directory for beta testers"""
+    async def _deploy_documentation(self) -> None:
+        """
+        Deploy documentation files to docs directory
+
+        v8.6.0 CHANGE:
+        - Replaces old import_tools deployment
+        - Deploys to /config/solar_forecast_ml/docs/
+        - Provides user-friendly access to documentation
+        """
         try:
             from pathlib import Path
 
-            # Source: custom_components/solar_forecast_ml/import_tools/
-            # Target: /config/solar_forecast_ml/imports/
+            # Source: custom_components/solar_forecast_ml/
+            # Target: /config/solar_forecast_ml/docs/
 
             # Get the integration's base directory
             integration_dir = Path(__file__).parent.parent
-            source_dir = integration_dir / "import_tools"
-            target_dir = self.data_dir / "imports"
-            marker_file = target_dir / ".import_tools_deployed"
+            target_dir = self.data_dir / "docs"
+            marker_file = target_dir / ".docs_deployed_v8.6"
 
-            # Fast check: If already deployed, skip entirely (non-blocking check)
+            # Fast check: If already deployed for this version, skip
             if marker_file.exists():
-                _LOGGER.debug("Import tools already deployed, skipping")
+                _LOGGER.debug("Documentation already deployed for v8.6, skipping")
                 return
 
-            # Fast check: If source doesn't exist, skip entirely (non-blocking check)
-            if not source_dir.exists():
-                _LOGGER.debug("No import_tools directory found, skipping deployment")
-                return
-
-            # Only spawn executor job if actually needed
+            # Spawn executor job for file operations
             files_copied = await self.hass.async_add_executor_job(
-                self._deploy_import_tools_sync, source_dir, target_dir, marker_file
+                self._deploy_documentation_sync, integration_dir, target_dir, marker_file
             )
 
             if files_copied > 0:
                 _LOGGER.info(
-                    f"✓ Import tools deployed: {files_copied} files copied to "
+                    f"✓ Documentation deployed: {files_copied} files to "
                     f"{target_dir.relative_to(self.data_dir.parent)}"
                 )
+            elif files_copied == -1:
+                _LOGGER.debug("Documentation already deployed")
 
         except Exception as e:
-            _LOGGER.warning(f"Failed to deploy import tools: {e}")
+            _LOGGER.warning(f"Failed to deploy documentation: {e}")
             # Non-critical error, continue initialization
+
+    async def _auto_migrate_v1_to_v2(self) -> bool:
+        """
+        Automatically migrate from v1 (prediction_history.json) to v2 (hourly_predictions.json + daily_summaries.json)
+
+        This runs silently on every startup. If old file exists, it migrates.
+        If migration fails, it just creates clean new files.
+        User doesn't need to do anything.
+        """
+        try:
+            from .data_migration import DataMigration
+
+            old_file = self.data_dir / "stats" / "prediction_history.json"
+
+            # Check if old file exists
+            if not old_file.exists():
+                _LOGGER.debug("No old prediction_history.json found - skipping migration")
+                return True
+
+            # Check if we already migrated (new files exist with data)
+            new_hourly = self.data_dir / "stats" / "hourly_predictions.json"
+            new_daily = self.data_dir / "stats" / "daily_summaries.json"
+
+            if new_hourly.exists() and new_daily.exists():
+                _LOGGER.debug("New v2 structure already exists - skipping migration")
+                return True
+
+            # Migrate!
+            _LOGGER.info("🔄 Auto-migrating from v1 to v2 structure...")
+            migration = DataMigration(self.data_dir)
+
+            # Run migration (not dry run)
+            report = await migration.migrate(dry_run=False)
+
+            if report['success']:
+                _LOGGER.info(f"✅ Auto-migration successful! Converted {len(report['converted_dates'])} days of historical data")
+                _LOGGER.info(f"   Old file archived as: prediction_history_v1_archived.json")
+                return True
+            else:
+                _LOGGER.warning("⚠️  Auto-migration had errors - creating clean new files instead")
+                # Migration failed - that's OK, just continue with clean files
+                return True
+
+        except Exception as e:
+            _LOGGER.warning(f"Auto-migration failed: {e} - continuing with clean files")
+            # Migration error is non-critical - new files will be created automatically
+            return True

@@ -20,9 +20,7 @@ Copyright (C) 2025 Zara-Toorox
 from __future__ import annotations
 
 import logging
-from typing import Any # Keep Any if needed, otherwise remove
 
-from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -30,8 +28,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 # Use constants for domain and potentially device info
 from .const import DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, ML_VERSION
-from .core.core_helpers import SafeDateTimeUtil as dt_util # Keep if used, remove if not
-from .coordinator import SolarForecastMLCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,116 +37,33 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the button entities from a config entry"""
-    coordinator: SolarForecastMLCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """
+    Set up the button entities from a config entry
 
-    # Define the base device info reused by buttons
-    base_device_info = DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
-        name="Solar Forecast ML", # Main device name
-        manufacturer="Zara-Toorox",
-        model=INTEGRATION_MODEL,
-        sw_version=f"SW {SOFTWARE_VERSION} | ML {ML_VERSION}",
-        entry_type="service", # Correct entry type
-        configuration_url="https://github.com/Zara-Toorox/ha-solar-forecast-ml",
-    )
-
-
-    buttons = [
-        ManualLearningButton(coordinator, entry, base_device_info),
-        # === [REMOVED] Manual Forecast Button - Redundant with automatic workflows ===
-        # ManualForecastButton(coordinator, entry, base_device_info),
-        # === [FIX] Backfill Button Removed ===
-        # MLBackfillButton(coordinator, entry),
-        # === END REMOVAL ===
-    ]
+    v8.6.0: ALL BUTTONS REMOVED
+    - No user-facing buttons to prevent confusion
+    - Training controlled via service calls (solar_forecast_ml.force_retrain)
+    - Users should rely on Training Readiness sensor for status
+    """
+    # === [v8.6.0] NO BUTTONS ===
+    buttons = []
 
     async_add_entities(buttons)
-    # Update log message to reflect available buttons
-    _LOGGER.info("Solar Forecast ML Buttons successfully set up: Manual Learning.")
+    _LOGGER.info("Solar Forecast ML: No user-facing buttons (training via services only).")
 
 
+# =============================================================================
+# ALL BUTTONS REMOVED in v8.6.0
 # =============================================================================
 # 1. Manual Forecast Button (REMOVED - Redundant with automatic workflows)
-# =============================================================================
-# Removed on 2025-11-09: Manual forecast button is no longer needed
-# - Automatic workflow at 6 AM sets the forecast
-# - Retry mechanism (6:15, 6:30, 6:45) catches failures
-# - Recovery process handles problems
-# - Coordinator updates keep forecasts current
+#    - Removed on 2025-11-09: Automatic workflow at 6 AM sets the forecast
 #
-# class ManualForecastButton(ButtonEntity):
-#     """Button entity to trigger a manual forecast refresh via the coordinator"""
-#     ... (Implementation removed)
-
-
+# 2. Manual Learning Button (REMOVED - Confusing UX with sample counts)
+#    - Removed on 2025-11-11: Users confused by "samples" count vs training readiness
+#    - Replaced by Training Readiness sensor showing actual quality status
+#    - Advanced users can use service: solar_forecast_ml.force_retrain
+#
+# 3. Backfill Training Button (REMOVED - Not needed)
+#    - Removed earlier: Backfill functionality not required
+#
 # =============================================================================
-# 2. Manual Learning Button
-# =============================================================================
-class ManualLearningButton(ButtonEntity):
-    """Button entity to trigger manual ML model training"""
-
-    _attr_has_entity_name = True
-    _attr_translation_key = "manual_learning"
-    _attr_icon = "mdi:brain"
-
-    def __init__(
-            self,
-            coordinator: SolarForecastMLCoordinator,
-            entry: ConfigEntry,
-            device_info: DeviceInfo # Accept base device info
-        ) -> None:
-        """Initialize the button"""
-        # super().__init__() # Not strictly needed
-
-        self.coordinator = coordinator
-        self._entry_id = entry.entry_id
-
-        # Unique ID for this specific button entity
-        self._attr_unique_id = f"{self._entry_id}_ml_manual_learning"
-        # Link this entity to the main device
-        self._attr_device_info = device_info
-
-    async def async_press(self) -> None:
-        """Handle the button press trigger ML model training"""
-        _LOGGER.info("Manual Learning button pressed - starting training process.")
-
-        # FIXED: Direct access to ml_predictor instead of service_manager
-        ml_predictor = self.coordinator.ml_predictor
-
-        if not ml_predictor:
-            _LOGGER.error("ML Predictor service is not available. Cannot start manual training.")
-            # Optionally, show a persistent notification to the user
-            # await self.hass.services.async_call(...)
-            return
-
-        # Trigger the training method on the predictor
-        _LOGGER.info("Calling ml_predictor.train_model()...")
-        result = await ml_predictor.train_model()
-        timestamp = dt_util.now() # LOCAL time for consistency
-
-        # Log result and potentially update coordinator state
-        if result and result.success:
-            accuracy_str = f"{result.accuracy * 100:.1f}%" if result.accuracy is not None else "N/A"
-            _LOGGER.info(f"Manual ML training completed successfully. Accuracy: {accuracy_str}")
-            # Update coordinator state if necessary (e.g., last training time)
-            # This might already be handled within train_model or via coordinator listeners
-
-            # If the coordinator has a specific callback method:
-            if hasattr(self.coordinator, "on_ml_training_complete"):
-                    self.coordinator.on_ml_training_complete(
-                        timestamp=timestamp,
-                        accuracy=result.accuracy
-                    )
-
-        elif result:
-            _LOGGER.error(f"Manual ML training failed: {result.error_message}")
-        else:
-                _LOGGER.error("Manual ML training failed with an unexpected result structure.")
-
-
-# =============================================================================
-# 3. Backfill Training Button (REMOVED)
-# =============================================================================
-# class MLBackfillButton(ButtonEntity): ...
-# (Entire class and references removed)

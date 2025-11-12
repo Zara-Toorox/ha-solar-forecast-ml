@@ -33,6 +33,7 @@ from ..ml.ml_predictor import MLPredictor
 from ..services.service_error_handler import ErrorHandlingService
 from .forecast_strategy_base import ForecastResult
 from ..const import ML_MODEL_VERSION
+from ..astronomy.astronomy_cache_manager import get_cache_manager
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,70 +69,53 @@ class ForecastOrchestrator:
         _LOGGER.debug("ForecastOrchestrator initialized.")
 
     def is_production_hour(self, target_dt: datetime) -> bool:
-        """Checks if a given datetime is within realistic solar production hours"""
-        # Method 1: sun.sun with margins (most accurate)
-        sun_state = self.hass.states.get("sun.sun")
-        if sun_state and sun_state.attributes:
-            try:
-                next_rising_str = sun_state.attributes.get("next_rising")
-                next_setting_str = sun_state.attributes.get("next_setting")
+        """
+        Checks if a given datetime is within realistic solar production hours
 
-                if next_rising_str and next_setting_str:
-                    next_rising = dt_util.parse_datetime(next_rising_str)
-                    next_setting = dt_util.parse_datetime(next_setting_str)
+        Uses in-memory astronomy cache with fallback to seasonal estimates
+        """
+        # Ensure target_dt is in local timezone for comparison
+        target_dt_local = dt_util.as_local(target_dt)
 
-                    if next_rising and next_setting:
-                        next_rising_local = dt_util.as_local(next_rising)
-                        next_setting_local = dt_util.as_local(next_setting)
-                        now_local = dt_util.now()
+        # Method 1: Try in-memory astronomy cache first (no I/O blocking!)
+        try:
+            cache_manager = get_cache_manager()
+            if cache_manager.is_loaded():
+                # Get production window for target date
+                date_str = target_dt_local.date().isoformat()
+                window = cache_manager.get_production_window(date_str)
 
-                        # Case 1: We are BEFORE sunrise (next_rising is today and in the future)
-                        if next_rising_local.date() == now_local.date() and next_rising_local > now_local:
-                            # Production window: 60 min before sunrise to 60 min after sunset
-                            production_start = next_rising_local - timedelta(minutes=60)
-                            production_end = next_setting_local + timedelta(minutes=60)
+                if window:
+                    window_start_str, window_end_str = window
 
-                        # Case 2: We are BETWEEN sunrise and sunset (next_rising is tomorrow)
-                        elif next_rising_local.date() > now_local.date() and next_setting_local.date() == now_local.date():
-                            # Sun has risen today, will set today
-                            # Production window: start of day (estimate 6:00) to 60 min after sunset TODAY
-                            production_start = now_local.replace(hour=6, minute=0, second=0, microsecond=0)
-                            production_end = next_setting_local + timedelta(minutes=60)
+                    # Parse ISO timestamps and convert to naive local time
+                    window_start = datetime.fromisoformat(window_start_str).replace(tzinfo=None)
+                    window_end = datetime.fromisoformat(window_end_str).replace(tzinfo=None)
 
-                        # Case 3: We are AFTER sunset (next_rising is tomorrow AND next_setting is tomorrow)
-                        elif next_rising_local.date() > now_local.date() and next_setting_local.date() > now_local.date():
-                            # Sun has already set today - NO production possible
-                            _LOGGER.debug(
-                                f"Production check: {target_dt.strftime('%H:%M')} - sun has set, no production"
-                            )
-                            return False
+                    # Convert target_dt_local to naive for comparison
+                    target_dt_naive = target_dt_local.replace(tzinfo=None)
 
-                        else:
-                            # Unexpected state - use fallback
-                            _LOGGER.debug(f"Unexpected sun state, using fallback")
-                            raise ValueError("Unexpected sun state")
+                    # Check if target_dt is within production window
+                    if window_start <= target_dt_naive <= window_end:
+                        _LOGGER.debug(
+                            f"Production check (cache): {target_dt_local.strftime('%Y-%m-%d %H:%M')} within "
+                            f"{window_start.strftime('%Y-%m-%d %H:%M')}-{window_end.strftime('%Y-%m-%d %H:%M')}"
+                        )
+                        return True
+                    else:
+                        _LOGGER.debug(
+                            f"Production check (cache): {target_dt_local.strftime('%Y-%m-%d %H:%M')} outside "
+                            f"{window_start.strftime('%Y-%m-%d %H:%M')}-{window_end.strftime('%Y-%m-%d %H:%M')}"
+                        )
+                        return False
 
-                        # Check if target_dt is within production window
-                        if production_start <= target_dt <= production_end:
-                            _LOGGER.debug(
-                                f"Production check: {target_dt.strftime('%H:%M')} within "
-                                f"{production_start.strftime('%H:%M')}-{production_end.strftime('%H:%M')}"
-                            )
-                            return True
-                        else:
-                            _LOGGER.debug(
-                                f"Production check: {target_dt.strftime('%H:%M')} outside "
-                                f"{production_start.strftime('%H:%M')}-{production_end.strftime('%H:%M')}"
-                            )
-                            return False
+        except Exception as e:
+            _LOGGER.debug(f"Astronomy cache access failed, using fallback: {e}")
 
-            except Exception as e:
-                _LOGGER.debug(f"sun.sun parsing failed, using fallback: {e}")
-        
         # Method 2: Seasonal conservative estimates (fallback)
-        hour = target_dt.hour
-        month = target_dt.month
-        
+        hour = target_dt_local.hour
+        month = target_dt_local.month
+
         # Extended production times with twilight
         if month in [11, 12, 1, 2]:  # Winter: 6-17 (incl. twilight)
             is_production = 6 <= hour <= 17
@@ -139,9 +123,9 @@ class ForecastOrchestrator:
             is_production = 4 <= hour <= 21
         else:  # Spring/Fall: 5-19
             is_production = 5 <= hour <= 19
-        
+
         _LOGGER.debug(
-            f"Production check (fallback): {target_dt.strftime('%H:%M')} month={month} "
+            f"Production check (fallback): {target_dt_local.strftime('%Y-%m-%d %H:%M')} month={month} "
             f"hour={hour} -> {is_production}"
         )
         return is_production
@@ -162,7 +146,8 @@ class ForecastOrchestrator:
         try:
             self.rule_based_strategy = RuleBasedForecastStrategy(
                 weather_calculator=self.weather_calculator,
-                solar_capacity=self.solar_capacity
+                solar_capacity=self.solar_capacity,
+                orchestrator=self
             )
             _LOGGER.info("Rule-Based forecast strategy (iterative) initialized.")
                 
@@ -315,10 +300,33 @@ class ForecastOrchestrator:
                 model_accuracy = 0.0
         
         accuracy_weight = max(0.0, min(1.0, model_accuracy))
-        
+
         ACCURACY_THRESHOLD = 0.75
         MIN_ML_WEIGHT = 0.15
-        
+        MIN_SAMPLES_FOR_CONFIDENT_ML = 50  # NEW: Minimum samples for confident ML usage
+
+        # NEW: Check training sample count for adaptive blending
+        training_sample_count = 0
+        if self._ml_predictor and hasattr(self._ml_predictor, 'last_training_samples'):
+            training_sample_count = self._ml_predictor.last_training_samples
+
+        # ADAPTIVE BLENDING: Reduce ML weight if insufficient training data
+        if training_sample_count < MIN_SAMPLES_FOR_CONFIDENT_ML and ml_result:
+            # Calculate sample-based weight reduction
+            sample_ratio = training_sample_count / MIN_SAMPLES_FOR_CONFIDENT_ML
+            # Apply additional damping beyond accuracy-based damping
+            sample_damping = sample_ratio ** 0.5  # Square root for gentler damping
+
+            original_weight = accuracy_weight
+            accuracy_weight = accuracy_weight * sample_damping
+
+            _LOGGER.warning(
+                f"ADAPTIVE BLENDING: Only {training_sample_count} training samples "
+                f"(< {MIN_SAMPLES_FOR_CONFIDENT_ML} required). "
+                f"Reducing ML weight: {original_weight:.1%} → {accuracy_weight:.1%} "
+                f"(sample_damping={sample_damping:.3f})"
+            )
+
         if accuracy_weight < ACCURACY_THRESHOLD and ml_result:
             # Quadratic damping for poor models: heavily penalize low accuracy
             raw_weight = (accuracy_weight / ACCURACY_THRESHOLD) ** 2
@@ -328,7 +336,86 @@ class ForecastOrchestrator:
                 f"Applying aggressive ML damping: {accuracy_weight:.1%} ML / {(1-accuracy_weight):.1%} Rule-Based "
                 f"(raw_weight={raw_weight:.3f})"
             )
-        
+
+        # ========================================================================
+        # SAFEGUARD OPTION 1: DIVERSITY CHECK
+        # ========================================================================
+        safeguard_diversity_applied = False
+        if ml_result and self._ml_predictor and training_sample_count > 0:
+            try:
+                # Get feature statistics from loaded weights
+                feature_stds = {}
+                if hasattr(self._ml_predictor, 'current_weights') and self._ml_predictor.current_weights:
+                    if hasattr(self._ml_predictor.current_weights, 'feature_stds'):
+                        feature_stds = self._ml_predictor.current_weights.feature_stds
+
+                # Check cloud cover variance (critical weather feature)
+                cloud_std = feature_stds.get('weather_cloud_percent', 0.0)
+                MIN_CLOUD_VARIANCE = 10.0  # Require at least 10% variance in training data
+
+                if cloud_std < MIN_CLOUD_VARIANCE:
+                    original_weight = accuracy_weight
+                    accuracy_weight = min(accuracy_weight, 0.05)  # Cap at 5% ML
+                    safeguard_diversity_applied = True
+
+                    _LOGGER.warning(
+                        f"SAFEGUARD OPTION 1 (Diversity Check) TRIGGERED: "
+                        f"Low cloud variance in training data ({cloud_std:.2f}% < {MIN_CLOUD_VARIANCE}%). "
+                        f"Training data appears homogeneous. "
+                        f"Limiting ML weight: {original_weight:.1%} → {accuracy_weight:.1%}"
+                    )
+            except Exception as e:
+                _LOGGER.debug(f"Could not apply diversity check safeguard: {e}")
+
+        # ========================================================================
+        # SAFEGUARD OPTION 2: SANITY CHECK (ML vs Rule-Based)
+        # ========================================================================
+        safeguard_sanity_applied = False
+        if ml_result and rule_result and accuracy_weight > 0:
+            try:
+                # Compare ML vs Rule-Based predictions
+                if today_rule > 0:
+                    ratio = today_ml / today_rule
+                    MIN_RATIO = 0.30  # ML should not be less than 30% of Rule-based
+                    MAX_RATIO = 3.0   # ML should not be more than 300% of Rule-based
+
+                    if ratio < MIN_RATIO:
+                        original_weight = accuracy_weight
+                        accuracy_weight = accuracy_weight * 0.10  # Reduce ML by 90%
+                        safeguard_sanity_applied = True
+
+                        _LOGGER.warning(
+                            f"SAFEGUARD OPTION 2 (Sanity Check) TRIGGERED: "
+                            f"ML prediction suspiciously low ({ratio:.1%} of Rule-based). "
+                            f"ML={today_ml:.2f} kWh, Rule={today_rule:.2f} kWh. "
+                            f"Reducing ML weight: {original_weight:.1%} → {accuracy_weight:.1%}"
+                        )
+                    elif ratio > MAX_RATIO:
+                        original_weight = accuracy_weight
+                        accuracy_weight = accuracy_weight * 0.50  # Reduce ML by 50%
+                        safeguard_sanity_applied = True
+
+                        _LOGGER.warning(
+                            f"SAFEGUARD OPTION 2 (Sanity Check) TRIGGERED: "
+                            f"ML prediction suspiciously high ({ratio:.1%} of Rule-based). "
+                            f"ML={today_ml:.2f} kWh, Rule={today_rule:.2f} kWh. "
+                            f"Reducing ML weight: {original_weight:.1%} → {accuracy_weight:.1%}"
+                        )
+            except Exception as e:
+                _LOGGER.debug(f"Could not apply sanity check safeguard: {e}")
+
+        # Log safeguard summary
+        if safeguard_diversity_applied or safeguard_sanity_applied:
+            safeguards = []
+            if safeguard_diversity_applied:
+                safeguards.append("Diversity")
+            if safeguard_sanity_applied:
+                safeguards.append("Sanity")
+            _LOGGER.info(
+                f"🛡️  SAFEGUARDS ACTIVE: {', '.join(safeguards)} | "
+                f"Final ML weight: {accuracy_weight:.1%} (protecting against poor predictions)"
+            )
+
         rule_weight = 1.0 - accuracy_weight
 
         # Blend today and tomorrow with ML + Rule-Based
@@ -373,31 +460,46 @@ class ForecastOrchestrator:
             best_hour_kwh = rule_result.best_hour_production_kwh
             _LOGGER.debug(f"Using Rule-based best hour: {best_hour}:00 with {best_hour_kwh:.3f} kWh")
 
-        # Get hourly values (prefer ML if available, otherwise use rule-based)
+        # Blend hourly values from both strategies
         hourly_values = []
-        if ml_result and ml_result.hourly_values:
-            hourly_values = ml_result.hourly_values
-        elif rule_result and rule_result.hourly_values:
-            hourly_values = rule_result.hourly_values
+        if ml_result and ml_result.hourly_values and rule_result and rule_result.hourly_values:
+            # Both strategies available: blend hourly values
+            _LOGGER.debug(f"Blending hourly values: ML={len(ml_result.hourly_values)} hours, Rule={len(rule_result.hourly_values)} hours")
 
-        # Save prediction to history
-        try:
-            model_version = self._ml_predictor.current_weights.model_version if self._ml_predictor and self._ml_predictor.current_weights else ML_MODEL_VERSION
-            prediction_record = {
-                "timestamp": dt_util.now().isoformat(),
-                "predicted_value": final_today,
-                "actual_value": None,
-                "weather_data": hourly_weather_forecast[0] if hourly_weather_forecast else {},
-                "sensor_data": sensor_data,
-                "accuracy": 0.0, # Will be calculated later
-                "model_version": model_version,
-                "source": method_str,
-                "date": dt_util.now().date().isoformat(),
-            }
-            # Fire and forget
-            asyncio.create_task(self.data_manager.save_prediction(prediction_record))
-        except Exception as e:
-            _LOGGER.error(f"Failed to save prediction to history: {e}")
+            # Create lookup dict for rule-based values by hour
+            rule_by_hour = {h['hour']: h for h in rule_result.hourly_values}
+
+            for ml_hour in ml_result.hourly_values:
+                hour = ml_hour['hour']
+                rule_hour = rule_by_hour.get(hour)
+
+                if rule_hour:
+                    # Blend this hour
+                    ml_kwh = ml_hour['production_kwh']
+                    rule_kwh = rule_hour['production_kwh']
+                    blended_kwh = (ml_kwh * accuracy_weight) + (rule_kwh * rule_weight)
+
+                    hourly_values.append({
+                        "hour": hour,
+                        "datetime": ml_hour['datetime'],
+                        "production_kwh": round(blended_kwh, 3),
+                        "date": ml_hour['date']
+                    })
+                else:
+                    # Only ML has this hour
+                    hourly_values.append(ml_hour)
+
+            _LOGGER.debug(f"Blended {len(hourly_values)} hourly values")
+        elif ml_result and ml_result.hourly_values:
+            # Only ML available
+            hourly_values = ml_result.hourly_values
+            _LOGGER.debug(f"Using ML hourly values: {len(hourly_values)} hours")
+        elif rule_result and rule_result.hourly_values:
+            # Only Rule-based available
+            hourly_values = rule_result.hourly_values
+            _LOGGER.debug(f"Using Rule-based hourly values: {len(hourly_values)} hours")
+
+        # Note: prediction_history.json removed - hourly_predictions.json is now the single source of truth
 
         return {
             "today": round(final_today, 2),
@@ -425,7 +527,7 @@ class ForecastOrchestrator:
             target_dt_local = now_local + timedelta(hours=1)
             target_hour = target_dt_local.hour
 
-            # Use new production hour check (sun.sun + safety margins)
+            # Use production hour check (astronomy cache with safety margins)
             if not self.is_production_hour(target_dt_local):
                 if sensor_data and sensor_data.get('lux') is not None:
                     if sensor_data['lux'] < 500:  # Too dark for meaningful production

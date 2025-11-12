@@ -1,6 +1,45 @@
 """
 Data Persistence Module for Solar Forecast ML Integration
 
+═══════════════════════════════════════════════════════════════════════════════
+⚠️  CRITICAL COMPONENT - DATA LOSS RISK - HANDLE WITH EXTREME CARE  ⚠️
+═══════════════════════════════════════════════════════════════════════════════
+
+This module handles ALL backup and restore operations for the integration.
+Bugs here can cause PERMANENT DATA LOSS of ML models and historical data.
+
+CRITICAL FEATURES THAT MUST NOT BE BROKEN:
+- Tar.gz backup creation (ml/, stats/, data/ directories)
+- Backup restoration with temporary directory handling
+- Automatic backup cleanup (retention policy)
+- Manual vs automatic backup separation
+- Async executor usage for blocking I/O operations
+
+BEFORE MODIFYING THIS FILE:
+1. Create a FULL MANUAL BACKUP of your system first!
+2. Test backup/restore with dummy data
+3. Verify tar.gz extraction works correctly
+4. Test cleanup logic doesn't delete wrong files
+5. Verify async operations don't cause race conditions
+
+KNOWN CRITICAL BEHAVIOR:
+- Backups are created in data_dir/backups/auto/ or /manual/
+- Automatic backups have retention policy (BACKUP_RETENTION_DAYS)
+- Manual backups are NEVER automatically deleted
+- Restore uses temp_restore/ directory before moving files
+- All blocking I/O runs in executor threads
+
+BACKUP STRUCTURE:
+backups/
+  ├── auto/      (automatic backups with cleanup)
+  └── manual/    (user-created, kept forever)
+
+Last major debugging session: November 2025
+Debugged by: Zara (@Zara-Toorox)
+
+DON'T EVEN THINK ABOUT BREAKING THIS! 💾
+═══════════════════════════════════════════════════════════════════════════════
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the

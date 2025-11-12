@@ -53,6 +53,7 @@ _np = None
 # Import ML components
 from ..ml.ml_scaler import StandardScaler
 from ..ml.ml_feature_engineering import FeatureEngineer
+from ..ml.ml_feature_engineering_v2 import FeatureEngineerV2
 from ..ml.ml_trainer import RidgeTrainer
 from ..ml.ml_prediction_strategies import (
     PredictionOrchestrator, PredictionResult,
@@ -157,6 +158,10 @@ class MLPredictor:
         self.current_accuracy: float | None = None
         self.training_samples: int = 0
         self.last_training_time: Optional[datetime] = None
+        self.last_training_samples: int = 0  # NEW: Track training sample count for adaptive blending
+
+        # Training mode flag (V2 uses hourly_predictions.json)
+        self.use_v2_training = True  # NEW: Enable V2 training by default
 
         # Performance Tracking (optional)
         self.performance_metrics = {
@@ -178,6 +183,17 @@ class MLPredictor:
 
         _LOGGER.info("MLPredictor initialized.")
 
+    @property
+    def can_predict(self) -> bool:
+        """Check if ML model can make predictions"""
+        return (
+            self.model_loaded and
+            self.model_state == ModelState.READY and
+            self.current_weights is not None and
+            self.scaler is not None and
+            self.scaler.is_fitted
+        )
+
     async def initialize(self) -> bool:
         """Initializes the ML Predictor by loading existing model data"""
         _LOGGER.info("Initializing ML Predictor...")
@@ -190,7 +206,17 @@ class MLPredictor:
             if loaded_weights:
                 # Validate feature count compatibility
                 loaded_feature_count = len(loaded_weights.feature_names) if hasattr(loaded_weights, 'feature_names') and loaded_weights.feature_names else 0
-                expected_feature_count = len(self.feature_engineer.feature_names)
+
+                # Check if loaded model is V2 (44 features) and switch feature engineer if needed
+                if loaded_feature_count == 44:
+                    _LOGGER.info(f"Loaded model has {loaded_feature_count} features (V2). Switching to FeatureEngineerV2 for predictions.")
+                    self.feature_engineer = FeatureEngineerV2()
+                    expected_feature_count = len(self.feature_engineer.feature_names)
+                elif loaded_feature_count == 27:
+                    _LOGGER.info(f"Loaded model has {loaded_feature_count} features (V1). Using FeatureEngineer for predictions.")
+                    expected_feature_count = len(self.feature_engineer.feature_names)
+                else:
+                    expected_feature_count = len(self.feature_engineer.feature_names)
 
                 if loaded_feature_count > 0 and loaded_feature_count != expected_feature_count:
                     _LOGGER.warning(
@@ -653,6 +679,13 @@ class MLPredictor:
 
     async def train_model(self) -> TrainingResult:
         """Trains the Ridge Regression model using historical hourly data - refactored"""
+        # Route to V2 if enabled
+        if self.use_v2_training:
+            _LOGGER.info("Using V2 training pipeline (hourly_predictions.json + astronomy_cache.json)")
+            return await self.train_model_v2()
+
+        # Legacy training using hourly_samples.json
+        _LOGGER.info("Using legacy training pipeline (hourly_samples.json)")
         from .ml_training_helpers import MLTrainingHelpers
         helpers = MLTrainingHelpers(self)
 
@@ -796,6 +829,107 @@ class MLPredictor:
                 samples_used=0
             )
 
+    async def train_model_v2(self) -> TrainingResult:
+        """Train model using V2 data structure (hourly_predictions.json + astronomy_cache.json)"""
+        from .ml_training_helpers_v2 import MLTrainingHelpersV2
+
+        helpers = MLTrainingHelpersV2(self)
+
+        # Prevent race condition with non-blocking lock
+        try:
+            async with asyncio.timeout(5.0):
+                async with self._training_lock:
+                    training_start_time = dt_util.now()
+                    _LOGGER.info(f"Starting ML model training (V2) at {training_start_time}...")
+                    self.model_state = ModelState.TRAINING
+                    await self._update_model_state_file(status_override=ModelState.TRAINING)
+
+                training_records = []
+                result: TrainingResult | None = None
+
+                try:
+                    _ensure_numpy()
+
+                    # Load training data from V2 structure
+                    _LOGGER.info("Loading training data from V2 structure (hourly_predictions.json + astronomy_cache.json)...")
+                    training_records, count = await helpers.load_training_data_v2()
+
+                    # Validate
+                    valid, error_msg, count = await helpers.validate_training_data(training_records)
+                    if not valid:
+                        self.model_state = ModelState.UNINITIALIZED if not self.model_loaded else ModelState.READY
+                        return TrainingResult(success=False, samples_used=count, error_message=error_msg)
+
+                    _LOGGER.info(f"Preparing {count} records for training (V2)...")
+
+                    # Prepare features using V2 feature engineering
+                    X_train_raw, y_train = await helpers.prepare_training_features_v2(training_records)
+                    _LOGGER.debug(f"V2 Feature extraction complete: {len(X_train_raw)} samples")
+
+                    # Scale and train (V2 returns feature_engineer_v2)
+                    weights_dict_raw, bias, accuracy, best_lambda, feature_eng_v2 = await helpers.scale_and_train(
+                        X_train_raw, y_train
+                    )
+
+                    # Create learned weights (pass V2 feature engineer for correct feature names)
+                    new_learned_weights = await helpers.create_learned_weights(
+                        weights_dict_raw, bias, accuracy, len(training_records), training_start_time, feature_eng_v2
+                    )
+
+                    # Finalize training
+                    await helpers.finalize_training(
+                        new_learned_weights, accuracy, len(training_records),
+                        training_records, training_start_time
+                    )
+
+                    training_end_time = dt_util.now()
+                    duration_seconds = (training_end_time - training_start_time).total_seconds()
+
+                    result = TrainingResult(
+                        success=True,
+                        accuracy=accuracy,
+                        samples_used=len(training_records),
+                        weights=new_learned_weights,
+                        training_time_seconds=duration_seconds,
+                        feature_count=len(weights_dict_raw)
+                    )
+
+                    # Store training sample count for adaptive blending (used by forecast_orchestrator)
+                    self.last_training_samples = len(training_records)
+
+                    _LOGGER.info(
+                        f"ML Training V2 successful in {duration_seconds:.2f}s. "
+                        f"Accuracy={accuracy*100:.1f}%, Samples={len(training_records)}, Features={len(weights_dict_raw)}."
+                    )
+
+                    self.error_handler.log_ml_operation(
+                        operation="model_training_v2",
+                        success=True,
+                        metrics={
+                            "accuracy": accuracy,
+                            "samples": len(training_records),
+                            "features": result.feature_count
+                        },
+                        duration_seconds=duration_seconds
+                    )
+
+                    await helpers.send_training_notifications(True, accuracy, len(training_records))
+                    return result
+
+                except Exception as e:
+                    _LOGGER.error(f"ML Training V2 failed: {e}", exc_info=True)
+                    self.model_state = ModelState.ERROR
+                    result = TrainingResult(success=False, samples_used=len(training_records), error_message=str(e))
+                    await self.error_handler.handle_error(error=Exception(str(e)), source="ml_predictor_v2", pipeline_position="train_model_v2")
+                    return result
+
+        except asyncio.TimeoutError:
+            _LOGGER.warning("Training already in progress, skipping concurrent training request")
+            return TrainingResult(
+                success=False,
+                error_message="Training already in progress",
+                samples_used=0
+            )
 
     async def _update_hourly_profile(self, training_records: List[Dict[str, Any]]) -> None:
         """Updates the hourly production profile based on provided training records"""

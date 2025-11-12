@@ -20,6 +20,7 @@ Copyright (C) 2025 Zara-Toorox
 import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
+from homeassistant.util import dt as ha_dt_util
 
 from .forecast_strategy_base import ForecastStrategy, ForecastResult
 from ..services.service_error_handler import ErrorHandlingService
@@ -106,6 +107,9 @@ class MLForecastStrategy(ForecastStrategy):
             best_hour_today = None
             best_hour_production = 0.0
 
+            # Collect hourly values for detailed breakdown
+            hourly_values = []
+
             now_local = dt_util.now() # now() already returns LOCAL time
             today_date = now_local.date()
             tomorrow_date = today_date + timedelta(days=1)
@@ -124,37 +128,100 @@ class MLForecastStrategy(ForecastStrategy):
                         if not hour_dt_local:
                             _LOGGER.warning("Skipping hour, invalid 'local_datetime' format")
                             continue
-                    
+
+                    # Ensure timezone-aware for comparison
+                    hour_dt_local = dt_util.as_local(hour_dt_local)
+
+                    # CRITICAL: Skip past hours - only forecast current hour and future
+                    if hour_dt_local < now_local:
+                        continue
+
                     # CRITICAL: Skip hours outside realistic production time
                     # This prevents ML from predicting production during darkness
-                    from ..forecast.forecast_orchestrator import ForecastOrchestrator
-                    # We need access to hass for sun.sun check - use simplified check here
                     hour_local = hour_dt_local.hour
-                    month = hour_dt_local.month
-                    
-                    # Conservative production hours by season
-                    if month in [11, 12, 1]:  # Winter
-                        is_production_hour = 7 <= hour_local <= 16
-                    elif month in [5, 6, 7, 8]:  # Summer
-                        is_production_hour = 5 <= hour_local <= 20
-                    else:  # Spring/Fall
-                        is_production_hour = 6 <= hour_local <= 18
-                    
+                    hour_date = hour_dt_local.date()
+
+                    # Try to get dynamic production window from astronomy cache or sun.sun
+                    is_production_hour = False
+                    try:
+                        # Method 1: Try astronomy cache first
+                        if hasattr(self.ml_predictor, '_historical_cache'):
+                            astro_cache = self.ml_predictor._historical_cache.get('astronomy_cache', {})
+                            date_key = hour_date.isoformat()
+
+                            if date_key in astro_cache:
+                                sunrise_str = astro_cache[date_key].get('sunrise')
+                                sunset_str = astro_cache[date_key].get('sunset')
+
+                                if sunrise_str and sunset_str:
+                                    sunrise = ha_dt_util.parse_datetime(sunrise_str)
+                                    sunset = ha_dt_util.parse_datetime(sunset_str)
+
+                                    if sunrise and sunset:
+                                        # Production window: sunrise - 1 hour to sunset + 1 hour
+                                        start_hour = max(0, sunrise.hour - 1)
+                                        end_hour = min(23, sunset.hour + 1)
+                                        is_production_hour = start_hour <= hour_local <= end_hour
+
+                        # Method 2: Fallback to sun.sun entity (always available)
+                        if not is_production_hour and hasattr(self.ml_predictor, 'hass'):
+                            sun_state = self.ml_predictor.hass.states.get('sun.sun')
+                            if sun_state and sun_state.attributes:
+                                next_rising = sun_state.attributes.get('next_rising')
+                                next_setting = sun_state.attributes.get('next_setting')
+
+                                if next_rising and next_setting:
+                                    sunrise = ha_dt_util.parse_datetime(next_rising)
+                                    sunset = ha_dt_util.parse_datetime(next_setting)
+
+                                    if sunrise and sunset:
+                                        # Production window: sunrise - 1 hour to sunset + 1 hour
+                                        start_hour = max(0, sunrise.hour - 1)
+                                        end_hour = min(23, sunset.hour + 1)
+                                        is_production_hour = start_hour <= hour_local <= end_hour
+
+                    except Exception as e:
+                        _LOGGER.debug(f"Failed to get dynamic production window: {e}, using fallback")
+
+                    # Method 3: Fallback to conservative seasonal hours if dynamic methods fail
+                    if not is_production_hour:
+                        month = hour_dt_local.month
+                        if month in [11, 12, 1]:  # Winter
+                            is_production_hour = 7 <= hour_local <= 16
+                        elif month in [5, 6, 7, 8]:  # Summer
+                            is_production_hour = 5 <= hour_local <= 20
+                        else:  # Spring/Fall
+                            is_production_hour = 6 <= hour_local <= 18
+
                     if not is_production_hour:
                         # Skip hours outside production time (no log to reduce noise)
                         continue
-                        
-                    hour_date = hour_dt_local.date()
-                    hour_local = hour_dt_local.hour
 
                     ml_sensor_data_input = lag_features.copy()
-                    
-                    features = await self.ml_predictor.feature_engineer.extract_features(
-                        weather_data=hour_data,
-                        sensor_data=ml_sensor_data_input,
-                        prediction_hour=hour_local,
-                        prediction_date=hour_dt_local
-                    )
+
+                    # Check if using V2 FeatureEngineer (has different signature)
+                    from ..ml.ml_feature_engineering_v2 import FeatureEngineerV2
+                    if isinstance(self.ml_predictor.feature_engineer, FeatureEngineerV2):
+                        # V2: Pass a single record dict
+                        record = {
+                            'weather_data': hour_data,
+                            'sensor_data': ml_sensor_data_input,
+                            'target_hour': hour_local,
+                            'target_date': hour_date.isoformat(),
+                            'target_datetime': hour_dt_local.isoformat(),
+                            # V2 needs these additional fields - will use defaults if missing
+                            'astronomy_basic': {},  # Will use defaults
+                            'astronomy_advanced': {},  # Will use defaults
+                        }
+                        features = self.ml_predictor.feature_engineer.extract_features(record)
+                    else:
+                        # V1: Pass separate parameters
+                        features = await self.ml_predictor.feature_engineer.extract_features(
+                            weather_data=hour_data,
+                            sensor_data=ml_sensor_data_input,
+                            prediction_hour=hour_local,
+                            prediction_date=hour_dt_local
+                        )
 
                     if self.ml_predictor.scaler.is_fitted:
                         features_scaled = self.ml_predictor.scaler.transform_single(features)
@@ -165,6 +232,14 @@ class MLForecastStrategy(ForecastStrategy):
 
                     hourly_kwh = prediction_result.prediction
                     hourly_kwh = max(self.PREDICTION_MIN_VALUE, min(hourly_kwh, self.HOURLY_PREDICTION_MAX_VALUE))
+
+                    # Store hourly value
+                    hourly_values.append({
+                        "hour": hour_local,
+                        "datetime": hour_dt_local.isoformat(),
+                        "production_kwh": round(hourly_kwh, 3),
+                        "date": hour_date.isoformat()
+                    })
 
                     if hour_date == today_date:
                         total_today_kwh += hourly_kwh
@@ -243,6 +318,7 @@ class MLForecastStrategy(ForecastStrategy):
                 model_accuracy=model_accuracy,
                 best_hour_today=best_hour_today,
                 best_hour_production_kwh=best_hour_production if best_hour_today is not None else None,
+                hourly_values=hourly_values,
             )
 
             accuracy_str = f", model_acc={result.model_accuracy:.3f}" if result.model_accuracy is not None else ""

@@ -54,83 +54,9 @@ class DataPredictionHandler(DataManagerIO):
             )
 
     # ═════════════════════════════════════════════════════════════
-    # PREDICTION HISTORY Methods
+    # PREDICTION HISTORY Methods - REMOVED
+    # prediction_history.json is obsolete - hourly_predictions.json is the single source of truth
     # ═════════════════════════════════════════════════════════════
-
-    async def save_prediction(self, prediction_data: Dict[str, Any]) -> bool:
-        """Save a single prediction to history"""
-        try:
-            if not validate_prediction_record(prediction_data):
-                _LOGGER.error("Prediction data validation failed")
-                return False
-
-            # Get the lock specific to this file for read-modify-write operation
-            file_lock = await self._get_file_lock(self.prediction_history_file)
-
-            async with file_lock:
-                history = await self._read_json_file(
-                    self.prediction_history_file,
-                    self._prediction_history_default
-                )
-
-                if "predictions" not in history:
-                    history["predictions"] = []
-
-                history["predictions"].append(prediction_data)
-
-                # Limit history size
-                if len(history["predictions"]) > MAX_PREDICTION_HISTORY:
-                    history["predictions"] = history["predictions"][-MAX_PREDICTION_HISTORY:]
-
-                history["last_updated"] = dt_util.now().isoformat()
-
-                await self._ensure_directory_exists(self.prediction_history_file.parent)
-                # Use unlocked version since we already hold the lock
-                await self._atomic_write_json_unlocked(self.prediction_history_file, history)
-
-                _LOGGER.debug(f"Prediction saved (total: {len(history['predictions'])})")
-                return True
-
-        except Exception as e:
-            _LOGGER.error(f"Failed to save prediction: {e}")
-            return False
-
-    async def get_predictions(
-        self,
-        limit: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Get prediction history with optional filtering"""
-        try:
-            history = await self._read_json_file(
-                self.prediction_history_file,
-                self._prediction_history_default
-            )
-            
-            predictions = history.get("predictions", [])
-            
-            # Filter by date range if provided
-            if start_date or end_date:
-                filtered = []
-                for pred in predictions:
-                    date = pred.get("date", "")
-                    if start_date and date < start_date:
-                        continue
-                    if end_date and date > end_date:
-                        continue
-                    filtered.append(pred)
-                predictions = filtered
-            
-            # Apply limit
-            if limit:
-                predictions = predictions[-limit:]
-            
-            return predictions
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to get predictions: {e}")
-            return []
 
     async def get_latest_prediction(self) -> Optional[Dict[str, Any]]:
         """Get most recent prediction"""

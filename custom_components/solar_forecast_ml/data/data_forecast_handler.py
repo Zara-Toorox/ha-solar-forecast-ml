@@ -357,7 +357,7 @@ class DataForecastHandler(DataManagerIO):
             
             lock_str = "[LOCKED]" if lock else "[UNLOCKED]"
             _LOGGER.info(
-                f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Today's forecast saved: {prediction_kwh:.2f} kWh "
+                f"✓ Today's forecast saved: {prediction_kwh:.2f} kWh "
                 f"(source: {source}) {lock_str}"
             )
             
@@ -410,7 +410,7 @@ class DataForecastHandler(DataManagerIO):
             await self._atomic_write_json(self.daily_forecasts_file, data)
             
             _LOGGER.info(
-                f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Tomorrow forecast saved: {date_str} = {prediction_kwh:.2f} kWh"
+                f"✓ Tomorrow forecast saved: {date_str} = {prediction_kwh:.2f} kWh"
             )
             
             return True
@@ -496,7 +496,7 @@ class DataForecastHandler(DataManagerIO):
             await self._atomic_write_json(self.daily_forecasts_file, data)
             
             _LOGGER.info(
-                f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Best hour forecast saved: Hour {hour} with {prediction_kwh:.2f} kWh [LOCKED]"
+                f"✓ Best hour forecast saved: Hour {hour} with {prediction_kwh:.2f} kWh [LOCKED]"
             )
             
             return True
@@ -683,25 +683,95 @@ class DataForecastHandler(DataManagerIO):
         """Update all-time peak power"""
         try:
             data = await self.load_daily_forecasts()
-            
+
             if "statistics" not in data:
                 data["statistics"] = self._daily_forecasts_default["statistics"].copy()
-            
+
             data["statistics"]["all_time_peak"] = {
                 "power_w": round(float(power_w), 2),
                 "date": timestamp.date().isoformat(),
                 "at": timestamp.isoformat()
             }
-            
+
             await self._atomic_write_json(self.daily_forecasts_file, data)
-            
+
             _LOGGER.info(f"NEW ALL-TIME PEAK: {power_w:.2f}W on {timestamp.date()}")
-            
+
+            # Also update astronomy cache with new all_time_peak
+            await self._update_astronomy_cache_all_time_peak(power_w, timestamp)
+
             return True
-            
+
         except Exception as e:
             _LOGGER.error(f"Failed to update all-time peak: {e}", exc_info=True)
             return False
+
+    async def _update_astronomy_cache_all_time_peak(
+        self,
+        power_w: float,
+        timestamp: datetime
+    ) -> None:
+        """Update all_time_peak in astronomy cache"""
+        try:
+            astronomy_cache_file = self.data_dir / "stats" / "astronomy_cache.json"
+
+            if not astronomy_cache_file.exists():
+                return
+
+            def _update_sync():
+                try:
+                    import json
+
+                    # Read astronomy cache
+                    with open(astronomy_cache_file, 'r') as f:
+                        cache = json.load(f)
+
+                    # Convert W to kW
+                    power_kw = power_w / 1000.0
+
+                    # Update top-level pv_system (user-friendly)
+                    if "pv_system" not in cache:
+                        cache["pv_system"] = {}
+
+                    cache["pv_system"]["all_time_peak_power_kw"] = round(power_kw, 4)
+                    cache["pv_system"]["all_time_peak_date"] = timestamp.date().isoformat()
+                    cache["pv_system"]["all_time_peak_at"] = timestamp.isoformat()
+
+                    # Update top-level last_updated
+                    from datetime import datetime as dt
+                    cache["last_updated"] = dt.now().isoformat()
+
+                    # Update metadata (legacy for backward compatibility)
+                    if "metadata" not in cache:
+                        cache["metadata"] = {}
+                    if "pv_system" not in cache["metadata"]:
+                        cache["metadata"]["pv_system"] = {}
+
+                    cache["metadata"]["pv_system"]["all_time_peak_power_kw"] = round(power_kw, 4)
+                    cache["metadata"]["pv_system"]["all_time_peak_date"] = timestamp.date().isoformat()
+                    cache["metadata"]["pv_system"]["all_time_peak_at"] = timestamp.isoformat()
+
+                    cache["metadata"]["last_updated"] = dt.now().isoformat()
+
+                    # Write atomically (sort_keys=False preserves user-friendly order)
+                    temp_file = astronomy_cache_file.with_suffix('.tmp')
+                    with open(temp_file, 'w') as f:
+                        json.dump(cache, f, indent=2, sort_keys=False)
+
+                    temp_file.replace(astronomy_cache_file)
+
+                    _LOGGER.debug(f"Updated astronomy cache with new all_time_peak: {power_kw:.3f} kW")
+                    return True
+
+                except Exception as e:
+                    _LOGGER.debug(f"Could not update astronomy cache all_time_peak: {e}")
+                    return False
+
+            loop = self.hass.loop
+            await loop.run_in_executor(None, _update_sync)
+
+        except Exception as e:
+            _LOGGER.debug(f"Failed to update astronomy cache all_time_peak: {e}")
 
     async def get_all_time_peak(self) -> Optional[float]:
         """Get all-time peak value"""

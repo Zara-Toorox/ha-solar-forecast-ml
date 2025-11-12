@@ -56,14 +56,19 @@ from .const import (
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
     # Defaults / Constants needed
     DEFAULT_SOLAR_CAPACITY,
-    # Battery Management (v8.3.0)
+    # Battery Management (v9.0.0 - Watt-based)
     CONF_BATTERY_ENABLED,
     CONF_BATTERY_CAPACITY,
-    CONF_BATTERY_SOC_ENTITY,
-    CONF_BATTERY_POWER_ENTITY,
-    CONF_BATTERY_GRID_CHARGE_POWER_ENTITY,
-    CONF_BATTERY_CHARGE_TODAY_ENTITY,
-    CONF_BATTERY_DISCHARGE_TODAY_ENTITY,
+    # NEW v9.0.0 watt-based sensors
+    CONF_BATTERY_POWER_SENSOR,
+    CONF_BATTERY_SOC_SENSOR,
+    CONF_SOLAR_PRODUCTION_SENSOR,
+    CONF_INVERTER_OUTPUT_SENSOR,
+    CONF_HOUSE_CONSUMPTION_SENSOR,
+    CONF_GRID_IMPORT_SENSOR,
+    CONF_GRID_EXPORT_SENSOR,
+    CONF_GRID_CHARGE_POWER_SENSOR,
+    CONF_BATTERY_TEMPERATURE_SENSOR,
     CONF_ELECTRICITY_ENABLED,
     CONF_ELECTRICITY_COUNTRY,
     DEFAULT_BATTERY_CAPACITY,
@@ -146,30 +151,48 @@ def _get_base_schema(defaults: dict | None) -> vol.Schema:
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
         # --- ENDE NEU ---
 
-        # --- Battery Management Sensors (v8.3.0) ---
+        # --- Battery Management (v9.0.0 - Watt-based) ---
         vol.Optional(
             CONF_BATTERY_CAPACITY,
             default=_get_default(defaults, CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY)
         ): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1000.0)),
+
+        # NEW v9.0.0: Watt-based sensors (REQUIRED for full functionality)
         vol.Optional(
-            CONF_BATTERY_SOC_ENTITY,
-            default=_get_default(defaults, CONF_BATTERY_SOC_ENTITY)
+            CONF_BATTERY_POWER_SENSOR,
+            default=_get_default(defaults, CONF_BATTERY_POWER_SENSOR)
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
         vol.Optional(
-            CONF_BATTERY_POWER_ENTITY,
-            default=_get_default(defaults, CONF_BATTERY_POWER_ENTITY)
+            CONF_BATTERY_SOC_SENSOR,
+            default=_get_default(defaults, CONF_BATTERY_SOC_SENSOR)
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
         vol.Optional(
-            CONF_BATTERY_GRID_CHARGE_POWER_ENTITY,
-            default=_get_default(defaults, CONF_BATTERY_GRID_CHARGE_POWER_ENTITY)
+            CONF_SOLAR_PRODUCTION_SENSOR,
+            default=_get_default(defaults, CONF_SOLAR_PRODUCTION_SENSOR)
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
         vol.Optional(
-            CONF_BATTERY_CHARGE_TODAY_ENTITY,
-            default=_get_default(defaults, CONF_BATTERY_CHARGE_TODAY_ENTITY)
+            CONF_INVERTER_OUTPUT_SENSOR,
+            default=_get_default(defaults, CONF_INVERTER_OUTPUT_SENSOR)
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
         vol.Optional(
-            CONF_BATTERY_DISCHARGE_TODAY_ENTITY,
-            default=_get_default(defaults, CONF_BATTERY_DISCHARGE_TODAY_ENTITY)
+            CONF_HOUSE_CONSUMPTION_SENSOR,
+            default=_get_default(defaults, CONF_HOUSE_CONSUMPTION_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_GRID_IMPORT_SENSOR,
+            default=_get_default(defaults, CONF_GRID_IMPORT_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_GRID_EXPORT_SENSOR,
+            default=_get_default(defaults, CONF_GRID_EXPORT_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_GRID_CHARGE_POWER_SENSOR,
+            default=_get_default(defaults, CONF_GRID_CHARGE_POWER_SENSOR)
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+        vol.Optional(
+            CONF_BATTERY_TEMPERATURE_SENSOR,
+            default=_get_default(defaults, CONF_BATTERY_TEMPERATURE_SENSOR)
         ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
 
         # --- Electricity Price Configuration ---

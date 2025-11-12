@@ -132,18 +132,27 @@ class DataSchemaValidator:
 
         data = await self._read_json(file_path)
         if data is None:
-            self._log_migration("learned_weights.json: Creating new file with default structure")
-            data = self._create_default_learned_weights()
-            return await self._write_json(file_path, data)
+            # CRITICAL FIX: Do NOT create V1 learned_weights when file is missing
+            # This prevents V2 training from working after a reset
+            # Training will create the correct version (V1 or V2) based on available data
+            self._log_migration("learned_weights.json: File missing - will be created by training (V1 or V2)")
+            return True  # Return success without creating the file
 
         modified = False
 
-        # Validate 27 feature names
-        expected_features = self._get_expected_feature_names()
-        if not data.get("feature_names") or data["feature_names"] != expected_features:
-            self._log_migration(f"learned_weights.json: Updating feature_names to 27 features")
-            data["feature_names"] = expected_features
-            modified = True
+        # CRITICAL FIX: Do NOT force V1 feature_names!
+        # Model can be V1 (27 features) OR V2 (44 features)
+        # Let training set the correct feature_names based on the version
+        # Only validate that feature_names exists and is a list
+        if not data.get("feature_names") or not isinstance(data["feature_names"], list):
+            self._log_migration(f"learned_weights.json: Missing feature_names, will be set by training")
+            # Don't set it here - let training do it
+            # data["feature_names"] = []  # Don't even set empty list
+        else:
+            # Feature names exist - log what we found
+            feature_count = len(data["feature_names"])
+            self._log_migration(f"learned_weights.json: Found {feature_count} features ({'V1' if feature_count == 27 else 'V2' if feature_count == 44 else 'Unknown'})")
+            # Don't modify it!
 
         # Ensure all required fields exist
         if "weights" not in data or not isinstance(data["weights"], dict):

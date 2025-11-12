@@ -53,6 +53,13 @@ class DateTimeEncoder(json.JSONEncoder):
                 except Exception as e:
                     _LOGGER.warning(f"Failed to convert datetime to local timezone: {e}, using original")
             return obj.isoformat()
+
+        # Handle numpy types and other non-JSON-serializable types
+        if hasattr(obj, 'item'):  # numpy scalar types
+            return obj.item()
+        if isinstance(obj, (bool, type(True), type(False))):  # Ensure standard Python bool
+            return bool(obj)
+
         return super().default(obj)
 
 
@@ -139,7 +146,8 @@ class DataManagerIO:
             async with aiofiles.open(temp_file, 'w', encoding='utf-8') as f:
                 # Use DateTimeEncoder to handle datetime objects automatically
                 # CRITICAL: DateTimeEncoder now forces all datetimes to LOCAL timezone
-                json_data = json.dumps(data, cls=DateTimeEncoder, indent=2, ensure_ascii=False, sort_keys=True)
+                # sort_keys=False preserves insertion order for user-friendly JSON structure
+                json_data = json.dumps(data, cls=DateTimeEncoder, indent=2, ensure_ascii=False, sort_keys=False)
                 await f.write(json_data)
                 await f.flush() # Ensure data is written before moving
 

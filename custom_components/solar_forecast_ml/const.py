@@ -22,10 +22,10 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "8.4.1"
-RELEASE_VERSION = "8.4.1"
-SOFTWARE_VERSION = "8.4.1"
-INTEGRATION_MODEL = "v8.4.1"
+VERSION = "8.6.0"
+RELEASE_VERSION = "8.6.0"
+SOFTWARE_VERSION = "8.6.0"
+INTEGRATION_MODEL = "v8.6.0"
 ML_VERSION = "8.0.0"
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
@@ -145,7 +145,7 @@ PRODUCTION_TIME_STATE_FILE = "production_time_state.json"  # NEW: For production
 DATA_VERSION = "1.0" # Version for the data format within JSON files
 MAX_PREDICTION_HISTORY = 365 # Max days of prediction records to keep
 MAX_HOURLY_SAMPLES = 1440 # Max hourly samples (e.g., 60 days * 24 hours)
-MIN_TRAINING_DATA_POINTS = 50  # Minimum samples for stable training
+MIN_TRAINING_DATA_POINTS = 10  # Minimum samples for stable training (lowered for V2 testing)
 BACKUP_RETENTION_DAYS = 30 # How long to keep backups (if implemented)
 MAX_BACKUP_FILES = 10      # Max number of backup files (if implemented)
 
@@ -193,20 +193,35 @@ SERVICE_MOVE_TO_HISTORY = "move_to_history" # Emergency history service
 SERVICE_CALCULATE_STATS = "calculate_stats" # Emergency statistics service
 SERVICE_RUN_ALL_DAY_END_TASKS = "run_all_day_end_tasks" # Emergency complete day-end
 
-# DEBUGGING SERVICES - Time-based forecast simulations (100% code-conformant)
-SERVICE_DEBUGGING_6AM_FORECAST = "debugging_6am_forecast" # Debugging: Simulates 6 AM TODAY forecast lock
-SERVICE_DEBUGGING_BEST_HOUR = "debugging_best_hour" # Debugging: Simulates 6 AM best hour calculation
-SERVICE_DEBUGGING_TOMORROW_12PM = "debugging_tomorrow_12pm" # Debugging: Simulates 12 PM TOMORROW forecast lock
-SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6AM = "debugging_day_after_tomorrow_6am" # Debugging: Simulates 6 AM DAY AFTER TOMORROW forecast (unlocked)
-SERVICE_DEBUGGING_DAY_AFTER_TOMORROW_6PM = "debugging_day_after_tomorrow_6pm" # Debugging: Simulates 18 PM DAY AFTER TOMORROW forecast lock
+# TESTING SERVICES - Simulate scheduled tasks for debugging (100% code-accurate replicas)
+SERVICE_TEST_MORNING_ROUTINE = "test_morning_routine"  # Test: Complete 6 AM routine (weather + forecast + best hour)
+SERVICE_TEST_BEST_HOUR = "test_best_hour"  # Test: Calculate best production hour using V2 sun-aware algorithm
+SERVICE_TEST_TOMORROW_LOCK = "test_tomorrow_lock"  # Test: Simulate 12 PM tomorrow forecast lock
+SERVICE_TEST_DAY_AFTER_SAVE = "test_day_after_save"  # Test: Simulate 6 AM day after tomorrow save (unlocked)
+SERVICE_TEST_DAY_AFTER_LOCK = "test_day_after_lock"  # Test: Simulate 18 PM day after tomorrow lock
+SERVICE_TEST_HOURLY_UPDATE = "test_hourly_update"  # Test: Trigger hourly actual update task (runs every hour at :05)
 
-# MANUAL SERVICES - Direct user control
-SERVICE_LOCK_TODAY_FORECAST = "lock_today_forecast" # Manual: Trigger 6 AM forecast lock with force overwrite
+# MANUAL CONTROL SERVICES - Direct user control (use with caution!)
+SERVICE_FORCE_TODAY_LOCK = "force_today_lock"  # Force: Override today's forecast lock (6 AM task with overwrite)
 
 SERVICE_COLLECT_HOURLY_SAMPLE = "collect_hourly_sample"
 SERVICE_NIGHT_CLEANUP = "night_cleanup" # Manual night cleanup (remove duplicates and zero-production samples)
 SERVICE_RUN_ALL_SCHEDULED_TASKS = "run_all_scheduled_tasks" # Testing: Run all scheduled tasks in sequence
 SERVICE_GENERATE_CHART = "generate_chart" # Generate forecast vs actual chart
+SERVICE_RELOAD_SCHEDULED_TASKS = "reload_scheduled_tasks"  # Reload: Re-register all scheduled task listeners
+
+# NEW: ML-Optimized Data Structure Debug Services
+SERVICE_DEBUG_CREATE_HOURLY_PREDICTIONS = "debug_create_hourly_predictions"  # Debug: Manually create hourly predictions
+SERVICE_DEBUG_UPDATE_HOURLY_ACTUAL = "debug_update_hourly_actual"  # Debug: Manually update actual value for specific hour
+SERVICE_DEBUG_CREATE_DAILY_SUMMARY = "debug_create_daily_summary"  # Debug: Manually create daily summary
+SERVICE_DEBUG_SHOW_PREDICTION = "debug_show_prediction"  # Debug: Show detailed prediction info
+SERVICE_MIGRATE_DATA = "migrate_data"  # Migration: Migrate from old prediction_history.json
+SERVICE_VALIDATE_DATA = "validate_data"  # Validation: Validate data integrity
+
+# NEW: Astronomy Cache Services
+SERVICE_BUILD_ASTRONOMY_CACHE = "build_astronomy_cache"  # Build astronomy cache for date range
+SERVICE_EXTRACT_MAX_PEAKS = "extract_max_peaks"  # Extract max peak records from history
+SERVICE_REFRESH_CACHE_TODAY = "refresh_cache_today"  # Refresh cache for today + next 7 days
 
 # --- Other Constants ---
 ICON_SOLAR = "mdi:solar-power"
@@ -261,19 +276,40 @@ FALLBACK_PRODUCTION_START_HOUR = 5
 FALLBACK_PRODUCTION_END_HOUR = 21
 
 # ============================================================================
-# BATTERY MANAGEMENT CONSTANTS (v8.3.0 Extension)
+# BATTERY MANAGEMENT CONSTANTS (v9.0.0 - Watt-based System)
 # ============================================================================
 # Completely separate from Solar/ML - no interference with existing code
+#
+# V9.0.0 BREAKING CHANGE:
+# - New watt-based energy flow calculation
+# - All sensors use Watt (W) for power measurements
+# - Energy (kWh) calculated by integration over time
+# - More accurate and universal for all battery systems
 
-# --- Battery Configuration Keys ---
+# --- NEW: Watt-based Battery Configuration (v9.0.0) ---
+# REQUIRED sensors - all power values in Watt (W)
+CONF_BATTERY_POWER_SENSOR = "battery_power_sensor"  # Battery power (W, +charge/-discharge)
+CONF_BATTERY_SOC_SENSOR = "battery_soc_sensor"  # State of Charge (%, 0-100)
+CONF_BATTERY_CAPACITY = "battery_capacity"  # Battery capacity (kWh)
+CONF_SOLAR_PRODUCTION_SENSOR = "solar_production_sensor"  # Solar production (W, ≥0)
+CONF_INVERTER_OUTPUT_SENSOR = "inverter_output_sensor"  # Inverter AC output (W, ≥0)
+CONF_HOUSE_CONSUMPTION_SENSOR = "house_consumption_sensor"  # House consumption (W, ≥0)
+CONF_GRID_IMPORT_SENSOR = "grid_import_sensor"  # Grid import (W, ≥0)
+CONF_GRID_EXPORT_SENSOR = "grid_export_sensor"  # Grid export (W, ≥0)
+
+# OPTIONAL sensors
+CONF_GRID_CHARGE_POWER_SENSOR = "grid_charge_power_sensor"  # Grid charge power (W, ≥0)
+CONF_BATTERY_TEMPERATURE_SENSOR = "battery_temperature_sensor"  # Temperature (°C)
+
+# --- LEGACY Configuration (v8.x - DEPRECATED) ---
+# These are kept for backwards compatibility but will show deprecation warnings
 CONF_BATTERY_ENABLED = "battery_enabled"
-CONF_BATTERY_CAPACITY = "battery_capacity"  # Battery capacity in kWh
-CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"  # State of Charge sensor (%)
-CONF_BATTERY_POWER_ENTITY = "battery_power_entity"  # Current charge/discharge power (W, +charge/-discharge)
-CONF_BATTERY_GRID_CHARGE_POWER_ENTITY = "battery_grid_charge_power_entity"  # Grid charge power (W)
-CONF_BATTERY_CHARGE_TODAY_ENTITY = "battery_charge_today_entity"  # LEGACY: Daily charge (kWh)
-CONF_BATTERY_DISCHARGE_TODAY_ENTITY = "battery_discharge_today_entity"  # LEGACY: Daily discharge (kWh)
-CONF_BATTERY_TEMPERATURE_ENTITY = "battery_temperature_entity"  # Optional temperature sensor
+CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"  # DEPRECATED: use CONF_BATTERY_SOC_SENSOR
+CONF_BATTERY_POWER_ENTITY = "battery_power_entity"  # DEPRECATED: use CONF_BATTERY_POWER_SENSOR
+CONF_BATTERY_GRID_CHARGE_POWER_ENTITY = "battery_grid_charge_power_entity"  # DEPRECATED
+CONF_BATTERY_CHARGE_TODAY_ENTITY = "battery_charge_today_entity"  # DEPRECATED: calculated from power
+CONF_BATTERY_DISCHARGE_TODAY_ENTITY = "battery_discharge_today_entity"  # DEPRECATED: calculated from power
+CONF_BATTERY_TEMPERATURE_ENTITY = "battery_temperature_entity"  # DEPRECATED: use CONF_BATTERY_TEMPERATURE_SENSOR
 
 # --- Electricity Price Configuration ---
 CONF_ELECTRICITY_COUNTRY = "electricity_country"  # Country for electricity prices (DE/AT)
@@ -324,13 +360,13 @@ UNIT_HOURS = "h"
 # --- Battery Sensor Unique IDs ---
 BATTERY_SOC_SENSOR = "soc"
 BATTERY_POWER_SENSOR = "power"
-BATTERY_CHARGE_TODAY_SENSOR = "charge_today"
-BATTERY_DISCHARGE_TODAY_SENSOR = "discharge_today"
+BATTERY_RUNTIME_REMAINING_SENSOR = "runtime_remaining"
+BATTERY_EFFICIENCY_SENSOR = "efficiency"
+
+# LEGACY v8.x (still used for forecast/cost sensors - not deleted)
 BATTERY_EXPECTED_CHARGE_SOLAR_SENSOR = "expected_charge_solar"
 BATTERY_CHARGE_FROM_SOLAR_SENSOR = "charge_from_solar"
 BATTERY_CHARGE_FROM_GRID_SENSOR = "charge_from_grid"
-BATTERY_RUNTIME_REMAINING_SENSOR = "runtime_remaining"
-BATTERY_EFFICIENCY_SENSOR = "efficiency"
 
 ELECTRICITY_PRICE_CURRENT_SENSOR = "price_current"
 ELECTRICITY_PRICE_NEXT_HOUR_SENSOR = "price_next_hour"
@@ -360,3 +396,11 @@ SELF_CONSUMPTION_WITH_BATTERY_SENSOR = "self_consumption_with_battery"
 GRID_EXPORT_TODAY_SENSOR = "grid_export_today"
 GRID_IMPORT_TODAY_SENSOR = "grid_import_today"
 DIRECT_SOLAR_CONSUMPTION_SENSOR = "direct_solar_consumption"
+
+# --- NEW: Energy Flow Sensors (v9.0.0) ---
+SOLAR_TO_HOUSE_SENSOR = "solar_to_house"
+SOLAR_TO_BATTERY_SENSOR = "solar_to_battery"
+SOLAR_TO_GRID_SENSOR = "solar_to_grid"
+GRID_TO_HOUSE_SENSOR = "grid_to_house"
+GRID_TO_BATTERY_SENSOR = "grid_to_battery"
+BATTERY_TO_HOUSE_SENSOR = "battery_to_house"

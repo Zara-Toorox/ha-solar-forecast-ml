@@ -79,22 +79,20 @@ class SolarForecastSensor(SensorEntity):
         self._coordinator = coordinator
         self.entry = entry
         self._key = key
-        self._yield_entity = entry.data.get("solar_yield_today") if key == "remaining" else None
-        self._cached_total_forecast: Optional[float] = None
-        
+
         # Mapping zwischen Entity-Key und Data-Key
         self._key_mapping = {
             "remaining": {"data_key": "prediction_kwh", "translation_key": "today_forecast"},
             "tomorrow": {"data_key": "forecast_tomorrow", "translation_key": "tomorrow_forecast"}
         }
-        
+
         # Validierung
         if key not in self._key_mapping:
             raise ValueError(f"Invalid sensor key: {key}. Must be 'remaining' or 'tomorrow'")
-        
+
         config = self._key_mapping[key]
         self._data_key = config["data_key"]
-        
+
         self._attr_unique_id = f"{entry.entry_id}_ml_forecast_{key}"
         self._attr_translation_key = config["translation_key"]
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -119,88 +117,83 @@ class SolarForecastSensor(SensorEntity):
                 return 0.0
             return self._coordinator.data.get(self._data_key) or 0.0
         
-        # "remaining" key: Read from daily_forecasts.json, then subtract yield
-        if self._cached_total_forecast is None:
+        # "remaining" key: Calculate from hourly_predictions.json (current hour onwards)
+        # First check if production time is over (using ProductionTimeSensor)
+        production_time_sensor = self.hass.states.get(f"sensor.{DOMAIN}_production_time")
+        if production_time_sensor and production_time_sensor.state == "00:00:00":
+            # Production time is zero - no more production possible
             return 0.0
-        
-        total_forecast = self._cached_total_forecast
-        
-        # Get current yield LIVE
-        current_yield = 0.0
-        if self._yield_entity:
-            yield_state = self.hass.states.get(self._yield_entity)
-            if yield_state and yield_state.state not in ["unavailable", "unknown", "none", None, ""]:
+
+        # Calculate remaining from hourly predictions (current hour onwards)
+        try:
+            from homeassistant.util import dt as dt_util
+
+            hourly_data = getattr(self._coordinator, '_hourly_predictions_cache', None)
+
+            if not hourly_data:
                 try:
-                    cleaned_state = str(yield_state.state).split(" ")[0].replace(",", ".")
-                    current_yield = float(cleaned_state)
-                except (ValueError, TypeError):
-                    pass
-        
-        # Calculate remaining
-        remaining = max(0.0, total_forecast - current_yield)
-        return round(remaining, 2)
+                    hourly_data = self._coordinator.data_manager.hourly_predictions._read_json()
+                except Exception:
+                    return 0.0
+
+            if not hourly_data or not isinstance(hourly_data, dict):
+                return 0.0
+
+            predictions = hourly_data.get("predictions", [])
+            if not predictions:
+                return 0.0
+
+            # Get current hour
+            now = dt_util.now()
+            current_hour = now.hour
+            today_str = now.strftime("%Y-%m-%d")
+
+            # Sum all predictions from current hour onwards for today
+            remaining_kwh = 0.0
+            for pred in predictions:
+                if pred.get("target_date") == today_str and pred.get("target_hour", -1) >= current_hour:
+                    remaining_kwh += pred.get("predicted_kwh", 0.0)
+
+            return round(remaining_kwh, 2)
+
+        except Exception as e:
+            _LOGGER.warning(f"Failed to calculate remaining from hourly predictions: {e}")
+            return 0.0
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass"""
         await super().async_added_to_hass()
-        
-        # For "remaining": Load initial forecast from file
-        if self._key == "remaining":
-            await self._load_forecast_from_file()
-        
+
         # Listen to coordinator updates
         self.async_on_remove(
             self._coordinator.async_add_listener(self._handle_coordinator_update)
         )
-        
-        # For "remaining": Also listen to yield sensor changes
-        if self._key == "remaining" and self._yield_entity:
+
+        # For "remaining": Listen to ProductionTimeSensor changes (to detect when production stops)
+        if self._key == "remaining":
+            production_time_entity = f"sensor.{DOMAIN}_production_time"
             self.async_on_remove(
                 async_track_state_change_event(
-                    self.hass, self._yield_entity, self._handle_yield_change
+                    self.hass, production_time_entity, self._handle_production_time_change
                 )
             )
-            # Listening to yield sensor for live updates (debug log removed)
-        
+
         # Initial state
         self.async_write_ha_state()
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle coordinator updates - reload file for remaining"""
-        if self._key == "remaining":
-            self.hass.async_create_task(self._reload_forecast_and_update())
-        else:
-            self.async_write_ha_state()
-
-    async def _reload_forecast_and_update(self) -> None:
-        """Reload forecast from file and update state"""
-        await self._load_forecast_from_file()
+        """Handle coordinator updates"""
         self.async_write_ha_state()
 
-    async def _load_forecast_from_file(self) -> None:
-        """Load todays LOCKED forecast from daily_forecastsjson"""
-        try:
-            forecast_data = await self._coordinator.data_manager.load_daily_forecasts()
-            if forecast_data and isinstance(forecast_data, dict):
-                today = forecast_data.get("today", {})
-                forecast_day = today.get("forecast_day", {})
-                self._cached_total_forecast = forecast_day.get("prediction_kwh")
-                # Loaded total forecast from file (debug log removed)
-            else:
-                self._cached_total_forecast = None
-        except Exception as e:
-            _LOGGER.warning(f"Failed to load forecast from file: {e}")
-            self._cached_total_forecast = None
-
     @callback
-    def _handle_yield_change(self, event) -> None:
-        """Handle yield sensor state changes only for remaining"""
+    def _handle_production_time_change(self, event) -> None:
+        """Handle production time sensor changes - update state when production stops"""
         self.async_write_ha_state()
 
 
 class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
-    """Sensor for the next hours solar forecast - reads from daily_forecastsjson"""
+    """Sensor for the next hours solar forecast - reads directly from hourly_predictions.json"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -210,6 +203,9 @@ class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
         self._coordinator = coordinator
         self.entry = entry
         AlwaysAvailableFileBasedMixin.__init__(self)
+
+        # Cache for upcoming hours (will be populated in _load_from_file)
+        self._upcoming_hours = []
 
         self._attr_unique_id = f"{entry.entry_id}_ml_next_hour_forecast"
         self._attr_translation_key = "next_hour_forecast"
@@ -226,15 +222,93 @@ class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
         """Return next hour forecast or 0.0 if no data"""
         return self._cached_value if self._cached_value is not None else 0.0
 
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return additional attributes showing all upcoming hours for the day"""
+        if not self._upcoming_hours:
+            return {}
+
+        attributes = {}
+
+        # Add ALL upcoming hours as attributes (not just 5!)
+        for i, hour_data in enumerate(self._upcoming_hours, start=1):
+            attributes[f"hour_{i}"] = hour_data.get("kwh", 0.0)
+            attributes[f"hour_{i}_time"] = hour_data.get("time", "")
+
+        # Add total for upcoming hours
+        total_upcoming = sum(h.get("kwh", 0.0) for h in self._upcoming_hours)
+        attributes["total_upcoming"] = round(total_upcoming, 2)
+
+        # Add count
+        attributes["hours_count"] = len(self._upcoming_hours)
+
+        # Add list format for easy iteration in templates
+        attributes["hours_list"] = self._upcoming_hours
+
+        return attributes
+
+    async def _load_from_file(self) -> None:
+        """Load next hour forecast and upcoming hours from hourly_predictions.json"""
+        try:
+            from homeassistant.util import dt as dt_util
+
+            # Load hourly predictions using _read_json_async
+            hourly_data = await self._coordinator.data_manager.hourly_predictions._read_json_async()
+            if not hourly_data or not isinstance(hourly_data, dict):
+                self._cached_value = None
+                self._upcoming_hours = []
+                return
+
+            predictions = hourly_data.get("predictions", [])
+            if not predictions:
+                self._cached_value = None
+                self._upcoming_hours = []
+                return
+
+            # Get current time in local timezone
+            now_local = dt_util.now()
+            today = now_local.date().isoformat()
+            current_hour = now_local.hour
+
+            # Get all predictions for upcoming hours (current hour + 1 onwards)
+            upcoming_predictions = [
+                pred for pred in predictions
+                if pred.get("target_date") == today and pred.get("target_hour", -1) > current_hour
+            ]
+
+            # Sort by hour
+            upcoming_predictions.sort(key=lambda p: p.get("target_hour", 0))
+
+            # Build upcoming hours list for attributes
+            self._upcoming_hours = [
+                {
+                    "time": f"{pred.get('target_hour', 0):02d}:00",
+                    "kwh": pred.get("predicted_kwh", 0.0)
+                }
+                for pred in upcoming_predictions
+            ]
+
+            # Set next hour value (first in list)
+            if upcoming_predictions:
+                self._cached_value = upcoming_predictions[0].get("predicted_kwh", 0.0)
+                next_hour = upcoming_predictions[0].get("target_hour")
+                _LOGGER.debug(f"NextHourSensor: Found prediction for {today} {next_hour:02d}:00 = {self._cached_value} kWh")
+            else:
+                self._cached_value = 0.0
+                _LOGGER.debug(f"NextHourSensor: No upcoming predictions found for {today}")
+
+        except Exception as e:
+            _LOGGER.warning(f"Failed to load NextHourSensor from hourly_predictions.json: {e}")
+            self._cached_value = None
+            self._upcoming_hours = []
+
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract next hour forecast from daily_forecasts.json"""
-        today = forecast_data.get("today", {})
-        next_hour = today.get("forecast_next_hour", {})
-        return next_hour.get("prediction_kwh")
+        """Not used anymore - kept for compatibility with mixin"""
+        return None
 
 
 class PeakProductionHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
-    """Sensor indicating the forecasted best production hour from morning forecast"""
+    """Sensor showing best production hour - reads from best_hour_today field in hourly_predictions.json"""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -257,12 +331,26 @@ class PeakProductionHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
         """Return peak hour or '--:--' if no data"""
         return self._cached_value if self._cached_value is not None else "--:--"
 
+    async def _load_from_file(self) -> None:
+        """Load best hour from hourly_predictions.json best_hour_today field"""
+        try:
+            # Simply read the best_hour_today field from the file
+            best_hour_str = await self._coordinator.data_manager.hourly_predictions.get_best_hour_string()
+
+            if best_hour_str:
+                self._cached_value = best_hour_str
+                _LOGGER.debug(f"PeakProductionHourSensor: Loaded best hour = {best_hour_str}")
+            else:
+                self._cached_value = None
+                _LOGGER.debug(f"PeakProductionHourSensor: No best_hour_today found in file")
+
+        except Exception as e:
+            _LOGGER.warning(f"Failed to load PeakProductionHourSensor: {e}")
+            self._cached_value = None
+
     def extract_value_from_file(self, forecast_data: dict) -> Optional[str]:
-        """Extract forecasted best hour from daily_forecasts.json"""
-        today = forecast_data.get("today", {})
-        forecast_best_hour = today.get("forecast_best_hour", {})
-        hour = forecast_best_hour.get("hour")
-        return f"{hour:02d}:00" if hour is not None else None
+        """Not used anymore - kept for compatibility with mixin"""
+        return None
 
 
 class AverageYieldSensor(BaseSolarSensor):

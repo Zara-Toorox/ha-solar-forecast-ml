@@ -67,16 +67,43 @@ class MLModelStrategy(PredictionStrategy):
             self.max_hourly_kwh = DEFAULT_MAX_HOURLY_KWH  # Fallback if not configured
             _LOGGER.warning(f"Peak power not configured, using fallback max hourly: {self.max_hourly_kwh} kWh")
     
-    async def predict(self, features: Dict[str, float]) -> PredictionResult:
+    async def predict(self, features) -> PredictionResult:
+        """Make prediction from features (dict or list)
+
+        Args:
+            features: Either Dict[str, float] (V1) or List[float] (V2)
+
+        Returns:
+            PredictionResult with prediction and metadata
+        """
         if not self.weights:
             raise MLModelException("No trained weights available")
 
         # Linear prediction: prediction = bias + sum(weight_i * feature_i)
         prediction = self.weights.bias
 
-        for feature_name, feature_value in features.items():
-            weight = self.weights.weights.get(feature_name, 0.0)
-            prediction += weight * feature_value
+        # V2: Handle list-based features (ordered by feature_names)
+        if isinstance(features, list):
+            if not hasattr(self.weights, 'feature_names') or not self.weights.feature_names:
+                raise MLModelException("Cannot predict with list features: feature_names not available in weights")
+
+            for i, feature_value in enumerate(features):
+                if i >= len(self.weights.feature_names):
+                    _LOGGER.warning(f"Feature index {i} exceeds feature_names length, skipping")
+                    continue
+
+                feature_name = self.weights.feature_names[i]
+                weight = self.weights.weights.get(feature_name, 0.0)
+                prediction += weight * feature_value
+
+        # V1: Handle dict-based features
+        elif isinstance(features, dict):
+            for feature_name, feature_value in features.items():
+                weight = self.weights.weights.get(feature_name, 0.0)
+                prediction += weight * feature_value
+
+        else:
+            raise MLModelException(f"Unsupported features type: {type(features)}. Expected dict or list.")
 
         # Apply physical limits: Clip to realistic hourly production range
         # Min: 0 kWh (no negative production)
@@ -96,18 +123,43 @@ class MLModelStrategy(PredictionStrategy):
     def is_available(self) -> bool:
         return self.weights is not None
     
-    def _calculate_confidence(self, features: Dict[str, float]) -> float:
+    def _calculate_confidence(self, features) -> float:
+        """Calculate confidence from features (dict or list)"""
         if not self.current_accuracy:
             return 0.5
-        
+
         base_confidence = self.current_accuracy
-        
-        if features.get("production_yesterday", 0.0) > 0:
+
+        # Try to get production_yesterday for confidence boost
+        production_yesterday = 0.0
+        if isinstance(features, dict):
+            production_yesterday = features.get("production_yesterday", 0.0)
+        elif isinstance(features, list) and hasattr(self.weights, 'feature_names'):
+            # Find production_yesterday in feature_names
+            try:
+                idx = self.weights.feature_names.index("production_yesterday")
+                if idx < len(features):
+                    production_yesterday = features[idx]
+            except (ValueError, AttributeError):
+                pass
+
+        if production_yesterday > 0:
             base_confidence *= 1.1
-        
-        weather_stability = features.get("weather_stability", 0.5)
+
+        # Try to get weather_stability
+        weather_stability = 0.5
+        if isinstance(features, dict):
+            weather_stability = features.get("weather_stability", 0.5)
+        elif isinstance(features, list) and hasattr(self.weights, 'feature_names'):
+            try:
+                idx = self.weights.feature_names.index("weather_stability")
+                if idx < len(features):
+                    weather_stability = features[idx]
+            except (ValueError, AttributeError):
+                pass
+
         base_confidence *= (0.8 + 0.2 * weather_stability)
-        
+
         return min(1.0, max(0.0, base_confidence))
 
 

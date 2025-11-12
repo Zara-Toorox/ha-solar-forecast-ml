@@ -1,6 +1,43 @@
 """
 ML Training Sample Collector
 
+═══════════════════════════════════════════════════════════════════════════════
+⚠️  CRITICAL COMPONENT - DO NOT MODIFY WITHOUT EXTENSIVE TESTING  ⚠️
+═══════════════════════════════════════════════════════════════════════════════
+
+This module handles the critical task of collecting training samples from
+Home Assistant's recorder database. This required EXTENSIVE debugging by Zara
+to handle all edge cases correctly.
+
+CRITICAL FEATURES THAT MUST NOT BE BROKEN:
+- Recorder availability checks (startup timing issues)
+- Power entity state validation (unavailable/unknown handling)
+- Hourly sample collection timing (target_datetime logic)
+- Weather forecast cache management
+- Sample lock to prevent concurrent collection
+- Historical data retrieval from recorder
+- Timezone handling (local vs UTC)
+
+BEFORE MODIFYING THIS FILE:
+1. Understand Home Assistant's recorder API completely
+2. Test during HA startup (recorder may not be ready)
+3. Test with unavailable sensors
+4. Verify sample timestamps are correct
+5. Check that no duplicate samples are created
+
+KNOWN CRITICAL BEHAVIOR:
+- Returns early if recorder not ready (normal during startup)
+- Returns early if power_entity is unavailable
+- Uses asyncio.Lock to prevent concurrent sample collection
+- Handles both forecast and actual weather data
+- Correctly maps weather conditions to numeric values
+
+Last major debugging session: November 2025
+Debugged by: Zara (@Zara-Toorox)
+
+TOUCH THIS AT YOUR OWN RISK! 🚨
+═══════════════════════════════════════════════════════════════════════════════
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the

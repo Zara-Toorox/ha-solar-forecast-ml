@@ -100,6 +100,7 @@ class BatteryChargePersistence:
         if date_str not in self.data['daily']:
             self.data['daily'][date_str] = {
                 'date': date_str,
+                # LEGACY v8.x fields (for backwards compatibility)
                 'grid_charge_kwh': 0.0,
                 'solar_charge_kwh': 0.0,
                 'grid_discharge_kwh': 0.0,
@@ -109,6 +110,16 @@ class BatteryChargePersistence:
                 'solar_savings_eur': 0.0,
                 'grid_arbitrage_profit_eur': 0.0,
                 'total_profit_eur': 0.0,
+                # NEW v9.0.0 energy flow tracking (kWh)
+                'solar_to_house_kwh': 0.0,
+                'solar_to_battery_kwh': 0.0,
+                'solar_to_grid_kwh': 0.0,
+                'grid_to_house_kwh': 0.0,
+                'grid_to_battery_kwh': 0.0,
+                'battery_to_house_kwh': 0.0,
+                'grid_import_today_kwh': 0.0,
+                'grid_export_today_kwh': 0.0,
+                # Events
                 'charge_events': [],
                 'discharge_events': [],
                 'summary': {
@@ -257,6 +268,47 @@ class BatteryChargePersistence:
             day_data['grid_charge_cost_eur']
         )
 
+    async def update_energy_flows_v9(
+        self,
+        timestamp: datetime,
+        energy_flows: Dict[str, float]
+    ):
+        """Update v9.0.0 energy flow data
+
+        Args:
+            timestamp: Current timestamp
+            energy_flows: Dictionary with energy flow values in kWh:
+                - solar_to_house_kwh
+                - solar_to_battery_kwh
+                - solar_to_grid_kwh
+                - grid_to_house_kwh
+                - grid_to_battery_kwh
+                - battery_to_house_kwh
+                - grid_import_kwh
+                - grid_export_kwh
+        """
+        date_str = timestamp.date().isoformat()
+        self._ensure_day_exists(date_str)
+
+        day_data = self.data['daily'][date_str]
+
+        # Update energy flows (accumulate)
+        day_data['solar_to_house_kwh'] += energy_flows.get('solar_to_house_kwh', 0.0)
+        day_data['solar_to_battery_kwh'] += energy_flows.get('solar_to_battery_kwh', 0.0)
+        day_data['solar_to_grid_kwh'] += energy_flows.get('solar_to_grid_kwh', 0.0)
+        day_data['grid_to_house_kwh'] += energy_flows.get('grid_to_house_kwh', 0.0)
+        day_data['grid_to_battery_kwh'] += energy_flows.get('grid_to_battery_kwh', 0.0)
+        day_data['battery_to_house_kwh'] += energy_flows.get('battery_to_house_kwh', 0.0)
+        day_data['grid_import_today_kwh'] += energy_flows.get('grid_import_kwh', 0.0)
+        day_data['grid_export_today_kwh'] += energy_flows.get('grid_export_kwh', 0.0)
+
+        _LOGGER.debug(
+            f"Updated v9.0.0 energy flows for {date_str}: "
+            f"Solar→House={day_data['solar_to_house_kwh']:.3f}, "
+            f"Solar→Battery={day_data['solar_to_battery_kwh']:.3f}, "
+            f"Grid→House={day_data['grid_to_house_kwh']:.3f}"
+        )
+
     def get_today_summary(self) -> Dict[str, Any]:
         """Get summary for today"""
         today = datetime.now().date().isoformat()
@@ -290,12 +342,22 @@ class BatteryChargePersistence:
             if year_month not in self.data['monthly']:
                 self.data['monthly'][year_month] = {
                     'year_month': year_month,
+                    # LEGACY v8.x
                     'grid_charge_kwh': 0.0,
                     'solar_charge_kwh': 0.0,
                     'grid_charge_cost_eur': 0.0,
                     'solar_savings_eur': 0.0,
                     'grid_arbitrage_profit_eur': 0.0,
                     'total_profit_eur': 0.0,
+                    # NEW v9.0.0
+                    'solar_to_house_kwh': 0.0,
+                    'solar_to_battery_kwh': 0.0,
+                    'solar_to_grid_kwh': 0.0,
+                    'grid_to_house_kwh': 0.0,
+                    'grid_to_battery_kwh': 0.0,
+                    'battery_to_house_kwh': 0.0,
+                    'grid_import_kwh': 0.0,
+                    'grid_export_kwh': 0.0,
                     'days_tracked': 0,
                 }
 
@@ -303,12 +365,22 @@ class BatteryChargePersistence:
             day_data = self.data['daily'][date_str]
             month_data = self.data['monthly'][year_month]
 
+            # LEGACY v8.x
             month_data['grid_charge_kwh'] += day_data['grid_charge_kwh']
             month_data['solar_charge_kwh'] += day_data['solar_charge_kwh']
             month_data['grid_charge_cost_eur'] += day_data['grid_charge_cost_eur']
             month_data['solar_savings_eur'] += day_data['solar_savings_eur']
             month_data['grid_arbitrage_profit_eur'] += day_data['grid_arbitrage_profit_eur']
             month_data['total_profit_eur'] += day_data['total_profit_eur']
+            # NEW v9.0.0
+            month_data['solar_to_house_kwh'] += day_data.get('solar_to_house_kwh', 0.0)
+            month_data['solar_to_battery_kwh'] += day_data.get('solar_to_battery_kwh', 0.0)
+            month_data['solar_to_grid_kwh'] += day_data.get('solar_to_grid_kwh', 0.0)
+            month_data['grid_to_house_kwh'] += day_data.get('grid_to_house_kwh', 0.0)
+            month_data['grid_to_battery_kwh'] += day_data.get('grid_to_battery_kwh', 0.0)
+            month_data['battery_to_house_kwh'] += day_data.get('battery_to_house_kwh', 0.0)
+            month_data['grid_import_kwh'] += day_data.get('grid_import_today_kwh', 0.0)
+            month_data['grid_export_kwh'] += day_data.get('grid_export_today_kwh', 0.0)
             month_data['days_tracked'] += 1
 
             _LOGGER.info(f"Rolled up {date_str} to monthly summary {year_month}")
@@ -330,12 +402,22 @@ class BatteryChargePersistence:
             if year_str not in self.data['yearly']:
                 self.data['yearly'][year_str] = {
                     'year': year,
+                    # LEGACY v8.x
                     'grid_charge_kwh': 0.0,
                     'solar_charge_kwh': 0.0,
                     'grid_charge_cost_eur': 0.0,
                     'solar_savings_eur': 0.0,
                     'grid_arbitrage_profit_eur': 0.0,
                     'total_profit_eur': 0.0,
+                    # NEW v9.0.0
+                    'solar_to_house_kwh': 0.0,
+                    'solar_to_battery_kwh': 0.0,
+                    'solar_to_grid_kwh': 0.0,
+                    'grid_to_house_kwh': 0.0,
+                    'grid_to_battery_kwh': 0.0,
+                    'battery_to_house_kwh': 0.0,
+                    'grid_import_kwh': 0.0,
+                    'grid_export_kwh': 0.0,
                     'months_tracked': 0,
                 }
 
@@ -343,12 +425,22 @@ class BatteryChargePersistence:
             month_data = self.data['monthly'][year_month]
             year_data = self.data['yearly'][year_str]
 
+            # LEGACY v8.x
             year_data['grid_charge_kwh'] += month_data['grid_charge_kwh']
             year_data['solar_charge_kwh'] += month_data['solar_charge_kwh']
             year_data['grid_charge_cost_eur'] += month_data['grid_charge_cost_eur']
             year_data['solar_savings_eur'] += month_data['solar_savings_eur']
             year_data['grid_arbitrage_profit_eur'] += month_data['grid_arbitrage_profit_eur']
             year_data['total_profit_eur'] += month_data['total_profit_eur']
+            # NEW v9.0.0
+            year_data['solar_to_house_kwh'] += month_data.get('solar_to_house_kwh', 0.0)
+            year_data['solar_to_battery_kwh'] += month_data.get('solar_to_battery_kwh', 0.0)
+            year_data['solar_to_grid_kwh'] += month_data.get('solar_to_grid_kwh', 0.0)
+            year_data['grid_to_house_kwh'] += month_data.get('grid_to_house_kwh', 0.0)
+            year_data['grid_to_battery_kwh'] += month_data.get('grid_to_battery_kwh', 0.0)
+            year_data['battery_to_house_kwh'] += month_data.get('battery_to_house_kwh', 0.0)
+            year_data['grid_import_kwh'] += month_data.get('grid_import_kwh', 0.0)
+            year_data['grid_export_kwh'] += month_data.get('grid_export_kwh', 0.0)
             year_data['months_tracked'] += 1
 
             _LOGGER.info(f"Rolled up {year_month} to yearly summary {year}")

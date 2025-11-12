@@ -43,10 +43,15 @@ from ..const import (
     UNIT_HOURS,
     BATTERY_SOC_SENSOR,
     BATTERY_POWER_SENSOR,
-    BATTERY_CHARGE_TODAY_SENSOR,
-    BATTERY_DISCHARGE_TODAY_SENSOR,
     BATTERY_RUNTIME_REMAINING_SENSOR,
     BATTERY_EFFICIENCY_SENSOR,
+    # v9.0.0 energy flow sensors
+    SOLAR_TO_HOUSE_SENSOR,
+    SOLAR_TO_BATTERY_SENSOR,
+    SOLAR_TO_GRID_SENSOR,
+    GRID_TO_HOUSE_SENSOR,
+    GRID_TO_BATTERY_SENSOR,
+    BATTERY_TO_HOUSE_SENSOR,
 )
 from ..coordinator import SolarForecastMLCoordinator
 
@@ -198,46 +203,6 @@ class BatteryPowerSensor(BaseBatterySensor):
             return ICON_BATTERY
 
 
-class BatteryChargeTodaySensor(BaseBatterySensor):
-    """Battery charged energy today (kWh)"""
-
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_icon = "mdi:battery-arrow-up"
-
-    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize charge today sensor"""
-        super().__init__(coordinator, entry, BATTERY_CHARGE_TODAY_SENSOR, "Charge Today")
-
-    @property
-    def native_value(self) -> Optional[float]:
-        """Return energy charged today"""
-        if not self.coordinator.battery_collector:
-            return None
-        return self.coordinator.battery_collector.get_charge_today()
-
-
-class BatteryDischargeTodaySensor(BaseBatterySensor):
-    """Battery discharged energy today (kWh)"""
-
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_icon = "mdi:battery-arrow-down"
-
-    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize discharge today sensor"""
-        super().__init__(coordinator, entry, BATTERY_DISCHARGE_TODAY_SENSOR, "Discharge Today")
-
-    @property
-    def native_value(self) -> Optional[float]:
-        """Return energy discharged today"""
-        if not self.coordinator.battery_collector:
-            return None
-        return self.coordinator.battery_collector.get_discharge_today()
-
-
 class BatteryRuntimeRemainingSensor(BaseBatterySensor):
     """Estimated battery runtime remaining (hours)"""
 
@@ -281,7 +246,7 @@ class BatteryRuntimeRemainingSensor(BaseBatterySensor):
 
 
 class BatteryEfficiencySensor(BaseBatterySensor):
-    """Battery efficiency sensor (%)"""
+    """Battery efficiency sensor (%) - v9.0.0 based on energy flows"""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = PERCENTAGE
@@ -291,41 +256,241 @@ class BatteryEfficiencySensor(BaseBatterySensor):
         """Initialize efficiency sensor"""
         super().__init__(coordinator, entry, BATTERY_EFFICIENCY_SENSOR, "Efficiency")
 
+    def _get_battery_coordinator(self):
+        """Get battery coordinator from hass data"""
+        battery_key = f"{self.entry.entry_id}_battery"
+        return self.coordinator.hass.data.get(DOMAIN, {}).get(battery_key)
+
     @property
     def native_value(self) -> Optional[float]:
-        """Return battery efficiency"""
-        if not self.coordinator.battery_collector:
+        """Return battery efficiency (discharge / charge * 100)"""
+        battery_coordinator = self._get_battery_coordinator()
+        if not battery_coordinator or not battery_coordinator.persistence:
             return None
 
-        charge_today = self.coordinator.battery_collector.get_charge_today()
-        discharge_today = self.coordinator.battery_collector.get_discharge_today()
+        summary = battery_coordinator.persistence.get_today_summary()
 
-        if charge_today <= 0:
+        # v9.0.0: Total battery charging (Solar + Grid)
+        total_charge = (
+            summary.get('solar_to_battery_kwh', 0.0) +
+            summary.get('grid_to_battery_kwh', 0.0)
+        )
+
+        # v9.0.0: Total battery discharging
+        total_discharge = summary.get('battery_to_house_kwh', 0.0)
+
+        if total_charge <= 0:
             return None
 
         # Efficiency = (Discharged / Charged) * 100
-        efficiency = (discharge_today / charge_today) * 100
+        efficiency = (total_discharge / total_charge) * 100
 
         return round(min(efficiency, 100.0), 1)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Return additional attributes"""
-        if not self.coordinator.battery_collector:
+        battery_coordinator = self._get_battery_coordinator()
+        if not battery_coordinator or not battery_coordinator.persistence:
             return {}
 
+        summary = battery_coordinator.persistence.get_today_summary()
+
+        total_charge = (
+            summary.get('solar_to_battery_kwh', 0.0) +
+            summary.get('grid_to_battery_kwh', 0.0)
+        )
+        total_discharge = summary.get('battery_to_house_kwh', 0.0)
+
         return {
-            "charge_today": self.coordinator.battery_collector.get_charge_today(),
-            "discharge_today": self.coordinator.battery_collector.get_discharge_today(),
+            "total_charge_today_kwh": round(total_charge, 3),
+            "total_discharge_today_kwh": round(total_discharge, 3),
+            "solar_charge_kwh": round(summary.get('solar_to_battery_kwh', 0.0), 3),
+            "grid_charge_kwh": round(summary.get('grid_to_battery_kwh', 0.0), 3),
         }
+
+
+# ============================================================================
+# NEW v9.0.0 Energy Flow Sensors
+# ============================================================================
+
+class BaseEnergyFlowSensor(BaseBatterySensor):
+    """Base class for v9.0.0 energy flow sensors"""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def __init__(
+        self,
+        coordinator: SolarForecastMLCoordinator,
+        entry: ConfigEntry,
+        sensor_key: str,
+        name: str,
+        icon: str,
+    ):
+        """Initialize energy flow sensor"""
+        super().__init__(coordinator, entry, sensor_key, name)
+        self._attr_icon = icon
+
+    def _get_battery_coordinator(self):
+        """Get battery coordinator from hass data"""
+        battery_key = f"{self.entry.entry_id}_battery"
+        return self.coordinator.hass.data.get(DOMAIN, {}).get(battery_key)
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available (only if using v9.0.0 config)"""
+        if not super().available:
+            return False
+
+        # Only available if using v9.0.0 configuration
+        battery_coordinator = self._get_battery_coordinator()
+        return (
+            battery_coordinator is not None
+            and hasattr(battery_coordinator, 'data_collector')
+            and battery_coordinator.data_collector.using_new_config
+        )
+
+
+class SolarToHouseSensor(BaseEnergyFlowSensor):
+    """Solar → House energy flow (kWh) - Direct solar consumption"""
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        super().__init__(
+            coordinator, entry,
+            SOLAR_TO_HOUSE_SENSOR,
+            "Solar to House",
+            "mdi:solar-power"
+        )
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return solar to house energy"""
+        battery_coordinator = self._get_battery_coordinator()
+        if not battery_coordinator or not battery_coordinator.persistence:
+            return None
+        summary = battery_coordinator.persistence.get_today_summary()
+        return summary.get('solar_to_house_kwh', 0.0)
+
+
+class SolarToBatterySensor(BaseEnergyFlowSensor):
+    """Solar → Battery energy flow (kWh) - Solar charging"""
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        super().__init__(
+            coordinator, entry,
+            SOLAR_TO_BATTERY_SENSOR,
+            "Solar to Battery",
+            "mdi:solar-power-variant"
+        )
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return solar to battery energy"""
+        battery_coordinator = self._get_battery_coordinator()
+        if not battery_coordinator or not battery_coordinator.persistence:
+            return None
+        summary = battery_coordinator.persistence.get_today_summary()
+        return summary.get('solar_to_battery_kwh', 0.0)
+
+
+class SolarToGridSensor(BaseEnergyFlowSensor):
+    """Solar → Grid energy flow (kWh) - Grid export"""
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        super().__init__(
+            coordinator, entry,
+            SOLAR_TO_GRID_SENSOR,
+            "Solar to Grid",
+            "mdi:transmission-tower-export"
+        )
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return solar to grid energy"""
+        battery_coordinator = self._get_battery_coordinator()
+        if not battery_coordinator or not battery_coordinator.persistence:
+            return None
+        summary = battery_coordinator.persistence.get_today_summary()
+        return summary.get('solar_to_grid_kwh', 0.0)
+
+
+class GridToHouseSensor(BaseEnergyFlowSensor):
+    """Grid → House energy flow (kWh) - Grid consumption"""
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        super().__init__(
+            coordinator, entry,
+            GRID_TO_HOUSE_SENSOR,
+            "Grid to House",
+            "mdi:transmission-tower-import"
+        )
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return grid to house energy"""
+        battery_coordinator = self._get_battery_coordinator()
+        if not battery_coordinator or not battery_coordinator.persistence:
+            return None
+        summary = battery_coordinator.persistence.get_today_summary()
+        return summary.get('grid_to_house_kwh', 0.0)
+
+
+class GridToBatterySensor(BaseEnergyFlowSensor):
+    """Grid → Battery energy flow (kWh) - Grid charging"""
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        super().__init__(
+            coordinator, entry,
+            GRID_TO_BATTERY_SENSOR,
+            "Grid to Battery",
+            "mdi:battery-charging-high"
+        )
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return grid to battery energy"""
+        battery_coordinator = self._get_battery_coordinator()
+        if not battery_coordinator or not battery_coordinator.persistence:
+            return None
+        summary = battery_coordinator.persistence.get_today_summary()
+        return summary.get('grid_to_battery_kwh', 0.0)
+
+
+class BatteryToHouseSensor(BaseEnergyFlowSensor):
+    """Battery → House energy flow (kWh) - Battery discharge"""
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        super().__init__(
+            coordinator, entry,
+            BATTERY_TO_HOUSE_SENSOR,
+            "Battery to House",
+            "mdi:battery-arrow-down"
+        )
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return battery to house energy"""
+        battery_coordinator = self._get_battery_coordinator()
+        if not battery_coordinator or not battery_coordinator.persistence:
+            return None
+        summary = battery_coordinator.persistence.get_today_summary()
+        return summary.get('battery_to_house_kwh', 0.0)
 
 
 # Export all battery sensors
 BATTERY_SENSORS = [
+    # Core battery sensors (always available)
     BatterySOCSensor,
     BatteryPowerSensor,
-    BatteryChargeTodaySensor,
-    BatteryDischargeTodaySensor,
     BatteryRuntimeRemainingSensor,
     BatteryEfficiencySensor,
+    # NEW v9.0.0 energy flow sensors (only available with v9.0.0 config)
+    SolarToHouseSensor,
+    SolarToBatterySensor,
+    SolarToGridSensor,
+    GridToHouseSensor,
+    GridToBatterySensor,
+    BatteryToHouseSensor,
 ]

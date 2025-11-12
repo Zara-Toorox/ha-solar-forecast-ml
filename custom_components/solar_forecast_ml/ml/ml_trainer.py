@@ -1,6 +1,39 @@
 """
 Machine Learning Model Trainer
 
+═══════════════════════════════════════════════════════════════════════════════
+⚠️  CRITICAL COMPONENT - DO NOT MODIFY WITHOUT EXTENSIVE TESTING  ⚠️
+═══════════════════════════════════════════════════════════════════════════════
+
+This module contains the core Ridge Regression training logic that required
+EXTENSIVE debugging and testing by Zara to get working correctly.
+
+CRITICAL FEATURES THAT MUST NOT BE BROKEN:
+- Adaptive Alpha Calculation (inversely proportional to sample count)
+- Bias Term Handling (column of ones for intercept)
+- Lambda/Alpha Hyperparameter Tuning
+- Cross-Validation Logic
+- NumPy Matrix Operations (ridge normal equations)
+
+BEFORE MODIFYING THIS FILE:
+1. Read the complete implementation and understand the math
+2. Create comprehensive unit tests for your changes
+3. Backup the current working version
+4. Test with real production data (minimum 50+ samples)
+5. Verify model accuracy doesn't degrade
+
+KNOWN ISSUES TO PRESERVE:
+- Adaptive alpha formula: max(0.01, min(1.0, 100.0 / len(y_train)))
+  This was calibrated through extensive testing
+- Minimum 5 samples required for training
+- Ridge normal equations with L2 regularization
+
+Last major debugging session: November 2025
+Debugged by: Zara (@Zara-Toorox)
+
+IF YOU BREAK THIS, YOU'RE BUYING ME COFFEE! ☕
+═══════════════════════════════════════════════════════════════════════════════
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the

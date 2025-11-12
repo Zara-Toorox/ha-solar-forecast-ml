@@ -39,6 +39,7 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..ml.ml_external_helpers import format_time_ago
 from ..const import UPDATE_INTERVAL, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR
 from ..ml.ml_predictor import ModelState
+from ..astronomy.astronomy_cache_manager import get_cache_manager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -294,9 +295,46 @@ class NextProductionStartSensor(BaseSolarSensor):
 
     @property
     def native_value(self) -> datetime | None:
-        """Return next production start time in LOCAL timezone"""
+        """
+        Return next production start time in LOCAL timezone from in-memory astronomy cache
+
+        Falls back to sun.sun entity if cache unavailable
+        """
         try:
-            # Get sun.sun entity
+            now_local = dt_util.now()
+            today = now_local.date()
+
+            # Try in-memory astronomy cache first (no I/O blocking!)
+            cache_manager = get_cache_manager()
+            if cache_manager.is_loaded():
+                # Check today first
+                date_str = today.isoformat()
+                day_data = cache_manager.get_day_data(date_str)
+
+                if day_data:
+                    window_start_str = day_data.get("production_window_start")
+                    if window_start_str:
+                        # Parse and keep timezone info (required for TIMESTAMP sensors)
+                        window_start = datetime.fromisoformat(window_start_str)
+
+                        # If production start is in the future today, return it
+                        if window_start > now_local:
+                            return window_start
+
+                # Otherwise get tomorrow's production window
+                tomorrow = today + timedelta(days=1)
+                tomorrow_str = tomorrow.isoformat()
+                tomorrow_data = cache_manager.get_day_data(tomorrow_str)
+
+                if tomorrow_data:
+                    window_start_str = tomorrow_data.get("production_window_start")
+                    if window_start_str:
+                        # Parse and keep timezone info (required for TIMESTAMP sensors)
+                        window_start = datetime.fromisoformat(window_start_str)
+                        return window_start
+
+            # Fallback to sun.sun entity if cache unavailable
+            _LOGGER.debug("Astronomy cache unavailable, falling back to sun.sun entity")
             sun_entity = self.hass.states.get('sun.sun')
             if not sun_entity:
                 _LOGGER.debug("sun.sun entity not available")
@@ -321,7 +359,6 @@ class NextProductionStartSensor(BaseSolarSensor):
             production_start = next_rising_local - timedelta(minutes=60)
 
             # Check if production has already started today
-            now_local = dt_util.now()
             if production_start.date() < now_local.date():
                 # Production start was in the past (yesterday or earlier)
                 # Get tomorrow's sunrise
@@ -357,7 +394,11 @@ class NextProductionStartSensor(BaseSolarSensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Provide additional context"""
+        """
+        Provide additional context from astronomy cache
+
+        Falls back to sun.sun entity if cache unavailable
+        """
         try:
             start_time = self.native_value
             if not start_time:
@@ -366,25 +407,50 @@ class NextProductionStartSensor(BaseSolarSensor):
             now = dt_util.now()
             time_until = start_time - now
 
-            # Get sun.sun for sunset info
-            sun_entity = self.hass.states.get('sun.sun')
-            next_setting_str = sun_entity.attributes.get('next_setting') if sun_entity else None
-
             end_time = None
             duration = None
-            if next_setting_str:
-                next_setting_utc = dt_util.parse_datetime(next_setting_str)
-                if next_setting_utc:
-                    next_setting_local = dt_util.as_local(next_setting_utc)
-                    # Production ends 60 minutes after sunset
-                    end_time = next_setting_local + timedelta(minutes=60)
 
-                    # Calculate duration
-                    if end_time and start_time:
-                        duration_td = end_time - start_time
-                        hours = int(duration_td.total_seconds() // 3600)
-                        minutes = int((duration_td.total_seconds() % 3600) // 60)
-                        duration = f"{hours}h {minutes}m"
+            # Try in-memory astronomy cache first (no I/O blocking!)
+            cache_manager = get_cache_manager()
+            if cache_manager.is_loaded():
+                # Get production end time from cache
+                # Check which day start_time is on
+                target_date = start_time.date()
+                date_str = target_date.isoformat()
+                day_data = cache_manager.get_day_data(date_str)
+
+                if day_data:
+                    window_end_str = day_data.get("production_window_end")
+                    if window_end_str:
+                        # Parse and keep timezone info
+                        end_time = datetime.fromisoformat(window_end_str)
+
+                        # Calculate duration
+                        if end_time and start_time:
+                            duration_td = end_time - start_time
+                            hours = int(duration_td.total_seconds() // 3600)
+                            minutes = int((duration_td.total_seconds() % 3600) // 60)
+                            duration = f"{hours}h {minutes}m"
+
+            # Fallback to sun.sun entity if cache unavailable
+            if not end_time:
+                _LOGGER.debug("Using sun.sun fallback for production end time")
+                sun_entity = self.hass.states.get('sun.sun')
+                next_setting_str = sun_entity.attributes.get('next_setting') if sun_entity else None
+
+                if next_setting_str:
+                    next_setting_utc = dt_util.parse_datetime(next_setting_str)
+                    if next_setting_utc:
+                        next_setting_local = dt_util.as_local(next_setting_utc)
+                        # Production ends 60 minutes after sunset
+                        end_time = next_setting_local + timedelta(minutes=60)
+
+                        # Calculate duration
+                        if end_time and start_time:
+                            duration_td = end_time - start_time
+                            hours = int(duration_td.total_seconds() // 3600)
+                            minutes = int((duration_td.total_seconds() % 3600) // 60)
+                            duration = f"{hours}h {minutes}m"
 
             # Format starts_in countdown
             total_seconds = int(time_until.total_seconds())
@@ -811,3 +877,156 @@ class DataFilesStatusSensor(BaseSolarSensor):
             "total_required": len(files_status),
             "data_directory": str(self._data_manager.data_dir)
         }
+
+
+class MLTrainingReadinessSensor(BaseSolarSensor):
+    """
+    Sensor showing ML Training Readiness status
+
+    Replaces confusing "Samples" counter with clear training readiness status.
+    Shows users if system is ready for training and provides guidance.
+    """
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:progress-check"
+
+    def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
+        """Initialize"""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_ml_training_readiness"
+        self._attr_translation_key = "training_readiness"
+        self._attr_name = "Training Readiness"
+
+    def _get_training_ready_count(self) -> int:
+        """
+        Count samples that are actually usable for V2 training
+
+        V2 Training uses hourly_predictions.json:
+        - Must have actual_kwh (measured production)
+        - Must have all core features (weather_forecast, sensor_actual, astronomy)
+        - Enriched with astronomy_cache.json data
+
+        NOTE: Uses cached value from coordinator to avoid blocking I/O
+        Coordinator updates this value during its regular update cycle
+        """
+        try:
+            # V2: Get cached count from coordinator (updated during refresh)
+            # This avoids blocking I/O in sensor property getter
+            training_ready_count = getattr(self.coordinator, '_v2_training_ready_count', None)
+
+            if training_ready_count is not None:
+                return training_ready_count
+
+            # Fallback: Return 0 if not yet initialized
+            # Coordinator will populate this value on next update
+            return 0
+
+        except Exception as e:
+            _LOGGER.debug(f"Error getting V2 training-ready samples: {e}")
+            return 0
+
+    def _get_status(self, ready: int) -> str:
+        """Get status category"""
+        if ready < 50:
+            return "collecting"
+        elif ready < 200:
+            return "early"
+        elif ready < 500:
+            return "ready"
+        else:
+            return "excellent"
+
+    def _get_status_label(self, ready: int) -> str:
+        """Get user-friendly status label"""
+        if ready < 50:
+            return f"Collecting ({ready}/50)"
+        elif ready < 200:
+            return f"Early Training ({ready}/200)"
+        elif ready < 500:
+            return f"Ready ({ready})"
+        else:
+            return f"Excellent ({ready})"
+
+    def _get_recommendation(self, ready: int) -> str:
+        """Get recommendation based on sample count"""
+        if ready < 50:
+            return "Sammle weiter Daten (mindestens 3-5 Tage)"
+        elif ready < 100:
+            return "Erstes experimentelles Training möglich"
+        elif ready < 200:
+            return "Training möglich - mehr Daten = bessere Ergebnisse"
+        elif ready < 500:
+            return "Optimale Basis für Training!"
+        else:
+            return "Perfekt! Du kannst jetzt ein sehr gutes Modell trainieren"
+
+    def _get_days_collecting(self) -> int:
+        """
+        Estimate days of data collection
+
+        NOTE: Simplified calculation based on sample count
+        Assumes ~12 production hours per day average
+        """
+        try:
+            ready = self._get_training_ready_count()
+            if ready == 0:
+                return 0
+
+            # Rough estimate: 12 production hours per day
+            estimated_days = max(1, ready // 12)
+            return estimated_days
+
+        except Exception:
+            return 0
+
+    @property
+    def native_value(self) -> str:
+        """Return training readiness status"""
+        ready = self._get_training_ready_count()
+        return self._get_status_label(ready)
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Provide detailed readiness information"""
+        ready = self._get_training_ready_count()
+
+        # Also get total samples for comparison
+        ml_predictor = self.coordinator.ml_predictor
+        total_samples = getattr(ml_predictor, 'training_samples', 0) if ml_predictor else 0
+
+        days_collecting = self._get_days_collecting()
+        status = self._get_status(ready)
+
+        # Estimated days to ready (assuming ~12 production hours per day)
+        estimated_days_to_ready = max(0, (200 - ready) / 12) if ready < 200 else 0
+
+        return {
+            "training_ready_samples": ready,
+            "total_samples": total_samples,
+            "minimum_required": 200,
+            "recommended": 500,
+            "readiness_percent": min(100, int(ready / 200 * 100)),
+            "status": status,
+            "days_collecting": days_collecting,
+            "estimated_days_to_ready": round(estimated_days_to_ready, 1),
+            "can_train": ready >= 50,
+            "recommendation": self._get_recommendation(ready),
+            "status_emoji": {
+                "collecting": "🔴",
+                "early": "🟡",
+                "ready": "🟢",
+                "excellent": "⭐"
+            }.get(status, "⚪"),
+        }
+
+    @property
+    def icon(self) -> str:
+        """Dynamic icon based on readiness"""
+        ready = self._get_training_ready_count()
+        status = self._get_status(ready)
+
+        return {
+            "collecting": "mdi:progress-clock",
+            "early": "mdi:progress-alert",
+            "ready": "mdi:progress-check",
+            "excellent": "mdi:progress-star"
+        }.get(status, "mdi:progress-question")

@@ -19,6 +19,7 @@ Copyright (C) 2025 Zara-Toorox
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import traceback
 from collections import defaultdict

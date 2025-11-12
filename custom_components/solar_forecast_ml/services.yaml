@@ -1,233 +1,321 @@
-# Solar Forecast ML Integration - Services
+# ============================================================================
+# Solar Forecast ML Integration - Service Definitions
+# ============================================================================
+# Service categories:
+# - ML Services: Model training and management
+# - Emergency Services: Manual day-end task execution
+# - Testing Services: Essential testing and simulation
+# - Collection & Cleanup: Data maintenance tasks
+# - Astronomy Services: Solar calculations and cache management
+# ============================================================================
+
+# ============================================================================
+# ML SERVICES - Machine Learning Model Management
+# ============================================================================
 
 force_retrain:
-  name: Retrain ML Model
+  name: Retrain ML Model (V2)
   description: >
-    Forces immediate retraining of the Machine Learning model using all available historical data.
-    Useful after significant data changes or to manually trigger an update.
-  fields: {} # No fields required
+    🚀 NEW V2 TRAINING - Uses hourly_predictions.json + astronomy_cache.json
+
+    Forces immediate retraining of the Machine Learning model with the new V2 data structure.
+
+    What's new in V2:
+    - 44 features (vs 31 before)
+    - 6 new astronomy features (clear_sky_radiation, theoretical_max, etc.)
+    - Time features (day_of_year, season, etc.)
+    - Better weather features (precipitation, dew_point, etc.)
+
+    Expected improvements:
+    - +10-20% accuracy (better astronomy + time features)
+    - +15% stability (more context)
+    - +25% realism (theoretical_max bounds)
+
+    Data sources:
+    - hourly_predictions.json (main source)
+    - astronomy_cache.json (critical astronomy features)
+    - hourly_samples.json (lag features only)
+
+    This will automatically use V2 training (use_v2_training=True).
+  fields: {}
 
 reset_model:
   name: Reset ML Model
   description: >
-    Resets the Machine Learning model to its initial state.
-    WARNING: This deletes all learned weights and requires the model to retrain from scratch.
-    Use with caution.
-  fields: {} # No fields required
+    ⚠️ WARNING: This deletes all learned weights and requires the model to retrain from scratch!
 
-# EMERGENCY SERVICES - Day-End Tasks
-finalize_day:
-  name: Finalize Current Day
-  description: >
-    EMERGENCY: Manually trigger day finalization (normally runs at 23:30).
-    Saves today's forecast and actual values before midnight.
+    Resets the Machine Learning model to its initial state.
+    Use with caution - this action cannot be undone.
   fields: {}
 
-move_to_history:
-  name: Move Day to History
+# ============================================================================
+# EMERGENCY SERVICES - Manual Day-End Task Execution
+# ============================================================================
+# Use these services if automated day-end tasks fail or need manual triggering
+
+run_all_day_end_tasks:
+  name: Run All Day-End Tasks
   description: >
-    EMERGENCY: Manually move finalized day to history (normally runs at 23:31).
-    Transfers current day data to historical records.
+    ⚠️ EMERGENCY SERVICE - Use only if automated tasks fail!
+
+    Execute complete day-end sequence: finalize → history → stats → cleanup.
+    Use before midnight to save today's data if automated routine failed!
   fields: {}
 
 calculate_stats:
   name: Calculate Statistics
   description: >
-    EMERGENCY: Manually calculate statistics (normally runs at 23:32).
+    ⚠️ EMERGENCY SERVICE - Use only if automated task fails!
+
+    Manually calculate statistics (normally runs at 23:32).
     Computes accuracy metrics from historical data.
+    Rate-limited to once per minute.
   fields: {}
 
-run_all_day_end_tasks:
-  name: Run All Day-End Tasks
+# ============================================================================
+# TESTING SERVICES - Essential Testing and Simulation
+# ============================================================================
+# These services replicate EXACTLY what happens at specific times.
+# ⚠️ WARNING: Create backup before use - these modify forecast data!
+# ============================================================================
+
+test_morning_routine:
+  name: "🧪 TEST: Analyze 6 AM Morning Predictions (Real Data)"
   description: >
-    EMERGENCY: Execute complete day-end sequence (finalize → history → stats).
-    Use before midnight to save today's data!
-  fields: {}
+    ⚠️ ANALYSIS SERVICE - No backup needed (read-only!)
 
-# ===========================================================================================
-# DEBUGGING SERVICES - Time-based Forecast Simulations (100% Code-Conformant)
-# ===========================================================================================
-# These services replicate EXACTLY what happens at specific times of day.
-# The code is the truth - these services follow the code 1:1 for debugging.
-# ===========================================================================================
+    Analyzes the ACTUAL data that was used at 6:00 AM today.
 
-debugging_6am_forecast:
-  name: "DEBUG: 6 AM - Lock Today's Forecast"
-  description: >
-    DEBUGGING SERVICE: Simulates EXACTLY what happens at 6:00 AM for TODAY's forecast.
-
-    Code Reference: coordinator.py:840-920 (set_expected_daily_production)
+    Code Reference: services/service_registry.py::_handle_test_morning_routine
 
     What this service does:
-    - Gets fresh forecast data for TODAY
-    - LOCKS today's forecast with FORCE OVERWRITE (overwrites midnight fallback locks)
-    - Saves to daily_forecasts.json with source "auto_6am"
-    - This is the morning baseline forecast
+    1. Loads stored predictions from hourly_predictions.json (created at 06:00)
+    2. Loads weather data from weather_cache.json (fetched at 06:00)
+    3. Analyzes predicted best hour vs actual best hour
+    4. Shows prediction accuracy and errors
+    5. Compares ML/Rule blending effectiveness
 
-    IMPORTANT: This service uses force_overwrite=True to override any existing locks
-    (e.g., from midnight fallback). Use this if the 6 AM task was blocked by a previous lock.
+    This service is READ-ONLY and uses REAL stored data from this morning's
+    06:00 routine. Perfect for debugging why a certain hour was predicted
+    as best.
 
-    Use this to test the 6 AM forecast lock behavior without waiting until 6 AM.
+    Use cases:
+    - Debug: Why was hour X predicted as best?
+    - Verify: Did the 06:00 routine work correctly?
+    - Compare: Predicted vs actual production
+    - Analyze: ML contribution and blending weights
+
+    Data sources:
+    - /stats/hourly_predictions.json (predictions created at 06:00)
+    - /data/weather_cache.json (weather forecast from 06:00)
   fields: {}
 
-lock_today_forecast:
-  name: "Manual Trigger: Lock Today's Forecast (6 AM Task)"
+test_best_hour:
+  name: "🧪 TEST: Calculate Best Production Hour"
   description: >
-    MANUAL SERVICE: Manually trigger the 6 AM forecast lock task.
+    ⚠️ TESTING SERVICE - Creates backup before use recommended!
 
-    This service does EXACTLY the same as the automatic 6 AM task:
-    - Gets the current forecast for TODAY
-    - LOCKS today's forecast with FORCE OVERWRITE
-    - Overwrites any existing locks (e.g., from midnight fallback)
-    - Saves to daily_forecasts.json with source "auto_6am"
+    Calculates which hour TODAY will have the highest solar production.
 
-    Use this service from Developer Tools to manually trigger the 6 AM task
-    if it failed or was blocked by an earlier lock.
+    Code Reference: ml/ml_best_hour_calculator_v2.py
 
-    Example use case: If the midnight fallback locked the forecast and blocked
-    the 6 AM update, use this service to force the correct 6 AM forecast.
+    Strategy (Hybrid V2 Algorithm):
+    1. BEST: Use ML hourly predictions (if available)
+    2. FALLBACK: Use historical profile data
+    3. EMERGENCY: Use solar noon calculation
+
+    All methods are SUN-AWARE:
+    - Integrates with sun.sun entity for sunrise/sunset
+    - Filters hours outside production window
+    - Adds 30-minute safety margins
+    - Prevents unrealistic selections (e.g., 18:00 in November)
+
+    This forecast helps with planning:
+    - When to run appliances
+    - When to charge batteries
+    - When to expect peak production
+
+    Result is saved to daily_forecasts.json and displayed in sensors.
   fields: {}
 
-debugging_best_hour:
-  name: "DEBUG: Calculate Best Hour (Today Forecast)"
+run_all_scheduled_tasks:
+  name: "🧪 TEST: Run All Scheduled Tasks"
   description: >
-    DEBUGGING SERVICE: Predicts which hour TODAY will have the highest production.
+    ⚠️ COMPREHENSIVE TESTING SERVICE - This runs ALL automated tasks!
 
-    Code Reference: ml/ml_best_hour_calculator.py + coordinator.py:738-753
+    Executes ALL scheduled tasks in chronological order to simulate
+    a complete day-night cycle for debugging.
 
-    What this service does:
-    - PAST hours today: Uses actual measured values
-    - FUTURE hours today: Uses weather forecast + historical profile
-    - Finds the hour with maximum expected production TODAY
-    - SAVES best hour to daily_forecasts.json
+    Task execution sequence (18 tasks total):
+    1. [23:05] ML Training Check (Daily)
+    2. [23:30] End-of-Day Workflow (Finalize + History + Stats + Cleanup)
+    3. [00:00] Reset Expected Production
+    4. [00:00:30] Midnight Forecast Rotation
+    5. [03:00] Weekly ML Retraining (Sunday only)
+    6. [06:00] Morning Forecast Update (includes best hour)
+    7-9. [06:15, 06:30, 06:45] Forecast Retry Attempts
+    10. [XX:00:05] Next Hour Forecast Update
+    11. [XX:02] Hourly Sample Collection
+    12-13. Battery Management Tasks (if enabled)
 
-    This is a FORECAST for planning (e.g., when to run appliances):
-    "At which hour should I expect peak production today?"
+    Use this to verify all tasks work correctly without waiting for
+    scheduled times. Perfect for integration testing.
 
-    Use this to test the best hour forecast logic.
+    ⚠️ This service takes several minutes to complete!
   fields: {}
 
-debugging_tomorrow_12pm:
-  name: "DEBUG: 12 PM - Lock Tomorrow's Forecast"
-  description: >
-    DEBUGGING SERVICE: Simulates EXACTLY what happens at 12:00 PM for TOMORROW's forecast.
-
-    Code Reference: coordinator.py:686-696 (_save_forecasts_to_storage, 12 PM block)
-
-    What this service does:
-    - Gets fresh forecast data for TOMORROW
-    - LOCKS tomorrow's forecast (lock=True)
-    - Prevents further updates until midnight rotation
-
-    Use this to test the 12 PM forecast lock behavior.
-  fields: {}
-
-debugging_day_after_tomorrow_6am:
-  name: "DEBUG: 6 AM - Save Day After Tomorrow (Unlocked)"
-  description: >
-    DEBUGGING SERVICE: Simulates EXACTLY what happens at 6:00 AM for DAY AFTER TOMORROW's forecast.
-
-    Code Reference: coordinator.py:649-657 + 661-708 (day_after_tomorrow at 6 AM)
-
-    What this service does:
-    - Gets fresh forecast data for DAY AFTER TOMORROW
-    - SAVES forecast but does NOT lock it (lock=False)
-    - Allows updates throughout the day until 18:00
-
-    IMPORTANT: At 6 AM, day after tomorrow is UNLOCKED (not locked until 18:00).
-    This is the key difference from the old service which incorrectly locked it.
-
-    Use this to test the 6 AM day after tomorrow forecast behavior.
-  fields: {}
-
-debugging_day_after_tomorrow_6pm:
-  name: "DEBUG: 18 PM - Lock Day After Tomorrow's Forecast"
-  description: >
-    DEBUGGING SERVICE: Simulates EXACTLY what happens at 18:00 PM for DAY AFTER TOMORROW's forecast.
-
-    Code Reference: coordinator.py:698-708 (_save_forecasts_to_storage, 18 PM block)
-
-    What this service does:
-    - Gets fresh forecast data for DAY AFTER TOMORROW
-    - LOCKS day after tomorrow's forecast (lock=True)
-    - Prevents further updates until midnight rotation
-
-    Use this to test the 18 PM forecast lock behavior.
-  fields: {}
+# ============================================================================
+# COLLECTION & CLEANUP SERVICES - Data Maintenance
+# ============================================================================
 
 collect_hourly_sample:
   name: Collect Hourly Sample
   description: >
     Manually triggers the collection of an hourly sample for ML training.
-    This will collect data for the previous full hour and save it to hourly_samples.json.
+
+    This will collect data for the PREVIOUS full hour:
+    - Solar production (kWh)
+    - Weather conditions (temperature, clouds, etc.)
+    - External sensor data (if configured)
+
+    The sample is saved to hourly_samples.json for ML model training.
+
+    Normally this runs automatically at XX:02 every hour.
+    Use this service to manually collect a sample if automatic collection failed.
   fields: {}
 
-# MANUAL TEST SERVICES - Daily Tasks
 night_cleanup:
   name: Night Cleanup
   description: >
-    MANUAL TEST: Trigger night cleanup task (normally runs at 02:00).
-    Removes duplicate samples and zero-production samples from the database.
-    Useful for testing data cleanup logic.
+    Manually trigger night cleanup task (normally runs at 02:00).
+
+    What this does:
+    - Removes duplicate samples from hourly_samples.json
+    - Removes zero-production samples (where solar production = 0 kWh)
+    - Optimizes database for better ML training
+
+    Useful for testing data cleanup logic or cleaning up corrupted data.
   fields: {}
 
-run_all_scheduled_tasks:
-  name: Run All Scheduled Tasks (Testing)
+reload_scheduled_tasks:
+  name: Reload Scheduled Tasks
   description: >
-    TESTING SERVICE: Execute ALL scheduled tasks in chronological order.
-    This simulates a complete day-night cycle for debugging.
+    Re-register all scheduled task listeners.
 
-    Task execution order:
-    1. 23:00 - Battery Daily Rollup
-    2. 23:15 - Fetch Electricity Prices (aWATTar)
-    3. 23:30 - Finalize Current Day
-    4. 23:31 - Move to History
-    5. 23:32 - Calculate Statistics
-    6. 23:45 - Reset Daily Data
-    7. 00:01 - Battery Midnight Reset
-    8. 02:00 - Night Cleanup (Remove duplicates & zero-production samples)
-    9. 03:00 - ML Training (if ML mode available)
-    10. 06:00 - Morning Prediction
+    Use this service if you suspect that automatic scheduled tasks
+    (hourly updates, morning forecast, end-of-day workflow) are not running.
 
-    Use this to verify all tasks work correctly without waiting for scheduled times.
+    This service will:
+    1. Cancel all existing scheduled task listeners
+    2. Re-register all scheduled tasks:
+       - 06:00 AM: Morning forecast update + hourly predictions creation
+       - Every hour at :05: Hourly actuals update
+       - 23:05 PM: ML training check
+       - 23:30 PM: End of day workflow
+
+    After running this service, scheduled tasks should resume automatically.
   fields: {}
 
-generate_chart:
-  name: Generate Forecast Chart
+# ============================================================================
+# ASTRONOMY SERVICES - Independent Solar Calculations
+# ============================================================================
+# These services manage the astronomy cache which provides sun positions,
+# solar radiation, and production windows independent of sun.sun entity.
+# ============================================================================
+
+build_astronomy_cache:
+  name: "🌞 Build Astronomy Cache"
   description: >
-    Generate a PNG chart visualizing forecast vs actual production data.
-    The chart is saved to /config/solar_forecast_ml/exports/pictures/
-    and can be displayed in Home Assistant using a local_file camera.
+    Build or rebuild the astronomy cache with solar position calculations.
 
-    Chart types:
-    - daily: Forecast vs Actual for a specific day (default: today)
-    - weekly: Weekly accuracy bar chart (last 7 days)
-    - production_weather: Production vs Weather conditions (dual-axis chart)
-    - monthly_heatmap: Monthly production heatmap showing daily patterns
-    - sensor_correlation: Correlation between weather sensors and forecast accuracy
+    This service creates a comprehensive cache of astronomical data including:
+    - Sun position (elevation, azimuth) for every hour (0-23)
+    - Clear sky solar radiation (W/m²) using atmospheric physics model
+    - Theoretical maximum PV output based on system capacity
+    - Production windows (sunrise - 1h to sunset + 1h)
+    - Solar noon, daylight hours, and day progress ratios
 
-    The daily and production_weather charts are automatically generated at day-end (23:30).
+    The cache is used for:
+    - ML feature engineering (8 new astronomy-based features)
+    - Production window validation (replaces sun.sun dependency)
+    - Realistic benchmarks (historical max vs theoretical max)
+    - Offline operation (works for 7 days without sun.sun entity)
 
-    The generated chart can be viewed in Lovelace using:
-    camera:
-      - platform: local_file
-        file_path: /config/solar_forecast_ml/exports/pictures/daily_forecast_YYYY-MM-DD.png
+    Default settings:
+    - days_back: 30 days (for historical analysis and debugging)
+    - days_ahead: 7 days (for forecast planning)
+    - system_capacity_kwp: from integration config
 
+    Build time: ~5 seconds for 30 days (96% faster than old 730-day default)
+    File size: ~250 KB for 30 days (95% smaller than old 5 MB)
+
+    Location data: Automatically from Home Assistant configuration
+    - Latitude, Longitude, Elevation, Timezone
+
+    Cache file: /config/solar_forecast_ml/stats/astronomy_cache.json
+
+    Use this service:
+    - On first setup (runs automatically)
+    - After changing location
+    - After updating system capacity
+    - To rebuild corrupted cache
+    - To extend history range
+
+    IMPORTANT: This service is I/O intensive. Avoid running during
+    active ML training or other heavy operations.
   fields:
-    chart_type:
-      description: Type of chart to generate
-      example: "daily"
-      default: "daily"
+    days_back:
+      description: "Days to calculate backwards from today (default: 30)"
+      example: 30
+      default: 30
       selector:
-        select:
-          options:
-            - "daily"
-            - "weekly"
-            - "production_weather"
-            - "monthly_heatmap"
-            - "sensor_correlation"
-    date:
-      description: Target date for daily/production_weather/monthly_heatmap chart (YYYY-MM-DD format). Default is today.
-      example: "2025-11-08"
+        number:
+          min: 1
+          max: 730
+          mode: box
+    days_ahead:
+      description: "Days to calculate ahead from today (default: 7)"
+      example: 7
+      default: 7
       selector:
-        text:
+        number:
+          min: 1
+          max: 30
+          mode: box
+
+refresh_cache_today:
+  name: "🔄 Refresh Cache for Today"
+  description: >
+    Refresh astronomy cache for today + next 7 days.
+
+    This service updates the astronomy cache with fresh calculations
+    for the current week. It's designed for daily maintenance.
+
+    What this does:
+    - Recalculates: Today + next 7 days
+    - Updates: Sun positions, solar radiation, production windows
+    - Preserves: Historical data (not recalculated)
+    - Maintains: Max peak records (not overwritten)
+
+    When this runs:
+    - Automatically at 6:00 AM daily (planned)
+    - Manually via this service call
+    - After Home Assistant restart
+
+    Why daily refresh:
+    - Ensures accurate production windows for today
+    - Updates forecast data for next week
+    - Accounts for seasonal changes (sunrise/sunset shifts)
+    - Maintains cache freshness
+
+    Processing time: ~1 second (only 8 days recalculated)
+
+    Use this service:
+    - To manually refresh current week data
+    - If automatic 6 AM task failed
+    - After system capacity changes
+    - To test cache refresh logic
+
+    NOTE: This service does NOT rebuild historical data.
+    Use build_astronomy_cache for full rebuilds.
+  fields: {}

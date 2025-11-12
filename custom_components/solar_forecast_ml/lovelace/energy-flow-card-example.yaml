@@ -1,0 +1,124 @@
+# ============================================================================
+# Solar Forecast ML - Energy Flow Card v9.0.0
+# Example Dashboard Configuration
+# ============================================================================
+
+# Minimal Configuration (Auto-Detection)
+# ============================================================================
+# The card automatically detects all Solar Forecast ML sensors
+# Just add this and you're done!
+
+type: custom:solar-forecast-ml-card
+
+# ============================================================================
+# Full Configuration (All Options)
+# ============================================================================
+
+type: custom:solar-forecast-ml-card
+title: Solar Forecast ML               # Card title
+show_solar: true                       # Show solar section
+show_battery: true                     # Show battery section
+show_grid: true                        # Show grid section
+show_energy_flows: true                # Show energy flow bars
+show_forecast: true                    # Show tomorrow's forecast
+show_price: true                       # Show electricity price
+compact_mode: false                    # Compact layout for small screens
+animation_speed: 1.0                   # Animation speed (0.5 - 2.0)
+language: de                           # Language: 'de' or 'en'
+
+# ============================================================================
+# Integration in Dashboard
+# ============================================================================
+
+# Example: Full Energy Dashboard
+views:
+  - title: Energie
+    path: energie
+    cards:
+      # Main Energy Flow Card
+      - type: custom:solar-forecast-ml-card
+        title: Live Energieflüsse
+
+      # Additional Stats
+      - type: horizontal-stack
+        cards:
+          - type: sensor
+            entity: sensor.battery_management_batterie_ladezustand
+            name: Akku
+            graph: line
+
+          - type: sensor
+            entity: sensor.solar_forecast_ml_forecast_tomorrow
+            name: Prognose Morgen
+            graph: none
+
+          - type: sensor
+            entity: sensor.battery_management_batterie_effizienz
+            name: Effizienz
+            graph: line
+
+# ============================================================================
+# Compact Mode (for Mobile)
+# ============================================================================
+
+type: custom:solar-forecast-ml-card
+compact_mode: true
+show_energy_flows: false               # Hide energy flow bars on mobile
+language: de
+
+# ============================================================================
+# English Version
+# ============================================================================
+
+type: custom:solar-forecast-ml-card
+title: Solar Forecast ML
+language: en
+show_forecast: true
+show_price: false
+
+# ============================================================================
+# Notes
+# ============================================================================
+#
+# Auto-Detection:
+# ----------------
+# The card automatically finds your Solar Forecast ML sensors by looking for:
+# - sensor.*solar_production*
+# - sensor.*battery_power*
+# - sensor.*battery_soc*
+# - sensor.*inverter_output*
+# - sensor.*grid_import*
+# - sensor.*grid_export*
+# - sensor.*house_consumption*
+# - sensor.*solar_to_house*
+# - sensor.*solar_to_battery*
+# - sensor.*solar_to_grid*
+# - sensor.*battery_to_house*
+# - sensor.*grid_to_house*
+# - sensor.*grid_to_battery*
+#
+# Features:
+# ---------
+# - Live power flow visualization
+# - 6 energy flow progress bars
+# - Battery status with SOC gauge
+# - Grid import/export display
+# - Solar forecast integration
+# - Electricity price display
+# - Responsive design (mobile + desktop)
+# - Automatic sensor detection
+# - Multilingual (DE/EN)
+# - Smooth animations
+#
+# Troubleshooting:
+# ----------------
+# If the card doesn't show up:
+# 1. Clear browser cache (Ctrl+F5)
+# 2. Check browser console for errors (F12)
+# 3. Verify card file exists: /www/solar-forecast-ml-card.js
+# 4. Restart Home Assistant
+#
+# For support, see:
+# https://github.com/Zara-Toorox/solar-forecast-ml
+#
+# ============================================================================
