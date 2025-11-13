@@ -188,8 +188,8 @@ class RidgeTrainer:
                         _LOGGER.warning(f"Linear algebra error during validation for lambda={lambda_val}. Skipping.")
                         continue # Try next lambda value
             else:
-                _LOGGER.warning(f"Validation set too small ({len(X_val_internal)} samples), "
-                                f"skipping lambda tuning. Using default lambda={best_lambda_found}.")
+                _LOGGER.debug(f"Validation set too small ({len(X_val_internal)} samples), "
+                              f"skipping lambda tuning. Using default lambda={best_lambda_found}.")
 
             # --- Final Training using Best Lambda on Full Dataset ---
             _LOGGER.info(f"Training final model on {len(y_array)} samples using lambda={best_lambda_found:.4f}...")

@@ -367,7 +367,9 @@ class DataSchemaValidator:
             data["training_samples"] = 0
             modified = True
 
-        if "current_accuracy" not in data or not (0.0 <= data["current_accuracy"] <= 1.0):
+        # Check for None first, then validate range (avoid TypeError with None)
+        current_acc = data.get("current_accuracy")
+        if current_acc is None or not isinstance(current_acc, (int, float)) or not (0.0 <= current_acc <= 1.0):
             data["current_accuracy"] = 0.0
             modified = True
 

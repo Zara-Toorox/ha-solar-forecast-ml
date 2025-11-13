@@ -525,11 +525,11 @@ class AstronomyCache:
         if self.data_manager:
             await self.data_manager._atomic_write_json(self.cache_file, cache_data)
         else:
-            # Fallback: direct write
+            # Fallback: direct write with proper encoding
             def _write_sync():
                 self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.cache_file, 'w') as f:
-                    json.dump(cache_data, f, indent=2, sort_keys=False)
+                with open(self.cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(cache_data, f, indent=2, sort_keys=False, ensure_ascii=False)
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _write_sync)

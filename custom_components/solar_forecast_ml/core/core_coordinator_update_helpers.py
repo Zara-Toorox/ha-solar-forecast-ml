@@ -72,7 +72,16 @@ class CoordinatorUpdateHelpers:
         if not forecast:
             raise UpdateFailed("Forecast generation failed")
 
-        _LOGGER.debug(f"Forecast data from orchestrator: {forecast}")
+        # Log summary instead of full data (hourly array can be huge)
+        hourly_count = len(forecast.get('hourly', []))
+        _LOGGER.debug(
+            f"Forecast data from orchestrator: "
+            f"today={forecast.get('today', 'N/A')} kWh, "
+            f"tomorrow={forecast.get('tomorrow', 'N/A')} kWh, "
+            f"day_after={forecast.get('day_after_tomorrow', 'N/A')} kWh, "
+            f"method={forecast.get('method', 'unknown')}, "
+            f"hourly_entries={hourly_count}"
+        )
         return forecast
 
     def build_coordinator_result(

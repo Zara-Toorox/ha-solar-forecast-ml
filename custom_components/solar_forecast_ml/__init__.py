@@ -93,7 +93,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         dependencies_ok=dependencies_ok
     )
 
-    # Setup Solar coordinator
+    # V7 Clean Slate Migration (runs once, BEFORE coordinator setup)
+    from .migration.migration_v7_clean_slate import V7CleanSlateMigration
+    from pathlib import Path
+    data_dir = Path(hass.config.path("solar_forecast_ml"))
+    migration = V7CleanSlateMigration(hass, data_dir, coordinator=coordinator)
+
+    if migration.should_run():
+        _LOGGER.warning("V7 Migration needed - running clean slate migration...")
+        migration_success = await migration.run()
+        if not migration_success:
+            _LOGGER.error("V7 Migration failed - continuing with setup anyway")
+        else:
+            _LOGGER.info("V7 Migration completed successfully")
+
+    # Setup Solar coordinator (AFTER migration)
     setup_ok = await coordinator.async_setup()
     if not setup_ok:
         _LOGGER.error("Failed to setup Solar Forecast coordinator")

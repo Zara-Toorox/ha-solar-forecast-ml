@@ -22,6 +22,8 @@ import json
 import logging
 import shutil
 import re
+import hashlib
+import time
 from datetime import datetime, date
 # --- IMPORT HIER ENTFERNT ---
 # import aiofiles (Wird in die Funktionen verschoben)
@@ -137,10 +139,25 @@ class DataManagerIO:
         parent_dir = file_path.parent
         await self._ensure_directory_exists(parent_dir)
 
-        # Create safe temp filename by sanitizing task name (remove invalid filename characters)
+        # Create safe temp filename with short hash + timestamp for uniqueness
+        # Old method used task name which could be very long causing FileNotFoundError
         task_name = asyncio.current_task().get_name()
-        safe_task_name = re.sub(r'[^\w\-_]', '_', task_name)[:50]  # Limit length and sanitize
-        temp_file = file_path.with_suffix(f'.tmp_{safe_task_name}') # Unique temp name
+        task_hash = hashlib.md5(task_name.encode()).hexdigest()[:8]  # Short 8-char hash
+        timestamp = str(int(time.time() * 1000))[-6:]  # Last 6 digits of millisecond timestamp
+
+        # Ensure uniqueness with counter if collision occurs (extremely rare)
+        counter = 0
+        while counter < 100:  # Safety limit
+            suffix = f'.tmp_{task_hash}_{timestamp}' if counter == 0 else f'.tmp_{task_hash}_{timestamp}_{counter}'
+            temp_file = file_path.parent / f"{file_path.stem}{suffix}"
+            if not temp_file.exists():
+                break
+            counter += 1
+        else:
+            # Fallback to random if somehow 100 collisions (should never happen)
+            import random
+            suffix = f'.tmp_{random.randint(100000, 999999)}'
+            temp_file = file_path.parent / f"{file_path.stem}{suffix}"
         try:
             # Asynchronously write JSON data to the temporary file
             async with aiofiles.open(temp_file, 'w', encoding='utf-8') as f:

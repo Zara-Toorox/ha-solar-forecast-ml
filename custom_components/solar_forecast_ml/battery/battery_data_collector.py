@@ -71,6 +71,9 @@ class BatteryDataCollector:
         # Get battery capacity
         self.battery_capacity = entry.options.get(CONF_BATTERY_CAPACITY) or entry.data.get(CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY)
 
+        # Cache for log throttling (only log when value changes)
+        self._last_logged_power = None
+
         # Determine if using new v9.0 config or legacy v8.x
         self.using_new_config = bool(self.battery_power_sensor and self.battery_soc_sensor
                                      and self.solar_production_sensor and self.inverter_output_sensor
@@ -240,7 +243,10 @@ class BatteryDataCollector:
 
         try:
             power = float(state.state)
-            _LOGGER.debug(f"Battery power from '{entity_id}': {power} W")
+            # Only log when value changes significantly (avoid spam)
+            if self._last_logged_power is None or abs(power - self._last_logged_power) > 5.0:
+                _LOGGER.debug(f"Battery power from '{entity_id}': {power} W")
+                self._last_logged_power = power
             return power
         except (ValueError, TypeError) as e:
             _LOGGER.warning(f"Invalid battery power state for '{entity_id}': {state.state} - Error: {e}")

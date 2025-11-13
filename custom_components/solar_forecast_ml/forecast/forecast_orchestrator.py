@@ -97,16 +97,10 @@ class ForecastOrchestrator:
 
                     # Check if target_dt is within production window
                     if window_start <= target_dt_naive <= window_end:
-                        _LOGGER.debug(
-                            f"Production check (cache): {target_dt_local.strftime('%Y-%m-%d %H:%M')} within "
-                            f"{window_start.strftime('%Y-%m-%d %H:%M')}-{window_end.strftime('%Y-%m-%d %H:%M')}"
-                        )
+                        # Removed verbose production check logging
                         return True
                     else:
-                        _LOGGER.debug(
-                            f"Production check (cache): {target_dt_local.strftime('%Y-%m-%d %H:%M')} outside "
-                            f"{window_start.strftime('%Y-%m-%d %H:%M')}-{window_end.strftime('%Y-%m-%d %H:%M')}"
-                        )
+                        # Removed verbose production check logging
                         return False
 
         except Exception as e:

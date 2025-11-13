@@ -183,10 +183,12 @@ class BatteryChargeTracker:
             )
             self._charge_events.append(event)
 
-            _LOGGER.debug(
-                f"Solar charging: {battery_power}W for {duration_minutes:.1f}min = "
-                f"{energy_kwh:.3f} kWh"
-            )
+            # Only log significant energy transfers (> 10 Wh)
+            if energy_kwh > 0.01:
+                _LOGGER.debug(
+                    f"Solar charging: {battery_power}W for {duration_minutes:.1f}min = "
+                    f"{energy_kwh:.3f} kWh"
+                )
 
         elif current_status == 'charging_grid':
             energy_kwh = (battery_power / 1000) * (duration_minutes / 60)
@@ -201,19 +203,23 @@ class BatteryChargeTracker:
             )
             self._charge_events.append(event)
 
-            _LOGGER.debug(
-                f"Grid charging: {battery_power}W for {duration_minutes:.1f}min = "
-                f"{energy_kwh:.3f} kWh"
-            )
+            # Only log significant energy transfers (> 10 Wh)
+            if energy_kwh > 0.01:
+                _LOGGER.debug(
+                    f"Grid charging: {battery_power}W for {duration_minutes:.1f}min = "
+                    f"{energy_kwh:.3f} kWh"
+                )
 
         elif current_status == 'discharging':
             energy_kwh = (abs(battery_power) / 1000) * (duration_minutes / 60)
             self._discharge_today_kwh += energy_kwh
 
-            _LOGGER.debug(
-                f"Discharging: {abs(battery_power)}W for {duration_minutes:.1f}min = "
-                f"{energy_kwh:.3f} kWh"
-            )
+            # Only log significant energy transfers (> 10 Wh)
+            if energy_kwh > 0.01:
+                _LOGGER.debug(
+                    f"Discharging: {abs(battery_power)}W for {duration_minutes:.1f}min = "
+                    f"{energy_kwh:.3f} kWh"
+                )
 
         # Update state
         self._last_update = now

@@ -17,10 +17,11 @@ class HourlyPredictionsHandler:
         self.data_dir = data_dir
         self.data_manager = data_manager
         self.hourly_file = data_dir / "stats" / "hourly_predictions.json"
-        self._ensure_file_exists()
+        # NOTE: File creation moved to async ensure method to avoid blocking I/O in __init__
+        # Will be called on first async access
 
-    def _ensure_file_exists(self):
-        """Create file with initial structure"""
+    async def ensure_file_exists(self):
+        """Create file with initial structure (async, non-blocking)"""
         if not self.hourly_file.exists():
             self.hourly_file.parent.mkdir(parents=True, exist_ok=True)
             initial_data = {
@@ -35,7 +36,7 @@ class HourlyPredictionsHandler:
                 },
                 "predictions": []
             }
-            self._write_json(initial_data)
+            await self._write_json_atomic(initial_data)
             _LOGGER.info("Created new hourly_predictions.json")
 
     async def create_daily_predictions(
@@ -480,11 +481,11 @@ class HourlyPredictionsHandler:
         return await loop.run_in_executor(None, _do_read)
 
     def _write_json(self, data: Dict):
-        """DEPRECATED: Fallback for init only - use _write_json_atomic instead"""
-        temp_file = self.hourly_file.with_suffix('.tmp')
-        with open(temp_file, 'w') as f:
-            json.dump(data, f, indent=2)
-        temp_file.replace(self.hourly_file)
+        """REMOVED: This method caused blocking I/O - use _write_json_atomic instead"""
+        raise RuntimeError(
+            "DEPRECATED: _write_json() removed to prevent blocking I/O. "
+            "Use _write_json_atomic() instead or call from executor."
+        )
 
     async def _write_json_atomic(self, data: Dict):
         """Write JSON atomically using DataManager's thread-safe method"""

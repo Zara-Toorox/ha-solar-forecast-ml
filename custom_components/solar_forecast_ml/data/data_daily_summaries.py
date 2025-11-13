@@ -17,10 +17,11 @@ class DailySummariesHandler:
         self.data_dir = data_dir
         self.data_manager = data_manager
         self.summaries_file = data_dir / "stats" / "daily_summaries.json"
-        self._ensure_file_exists()
+        # NOTE: File creation moved to async ensure method to avoid blocking I/O in __init__
+        # Will be called on first async access
 
-    def _ensure_file_exists(self):
-        """Create file with initial structure"""
+    async def ensure_file_exists(self):
+        """Create file with initial structure (async, non-blocking)"""
         if not self.summaries_file.exists():
             self.summaries_file.parent.mkdir(parents=True, exist_ok=True)
             initial_data = {
@@ -28,7 +29,7 @@ class DailySummariesHandler:
                 "last_updated": dt_util.now().isoformat(),
                 "summaries": []
             }
-            self._write_json(initial_data)
+            await self._write_json_atomic(initial_data)
             _LOGGER.info("Created new daily_summaries.json")
 
     async def create_daily_summary(
@@ -352,11 +353,11 @@ class DailySummariesHandler:
         return await loop.run_in_executor(None, _do_read)
 
     def _write_json(self, data: Dict):
-        """DEPRECATED: Fallback for init only - use _write_json_atomic instead"""
-        temp_file = self.summaries_file.with_suffix('.tmp')
-        with open(temp_file, 'w') as f:
-            json.dump(data, f, indent=2)
-        temp_file.replace(self.summaries_file)
+        """REMOVED: This method caused blocking I/O - use _write_json_atomic instead"""
+        raise RuntimeError(
+            "DEPRECATED: _write_json() removed to prevent blocking I/O. "
+            "Use _write_json_atomic() instead or call from executor."
+        )
 
     async def _write_json_atomic(self, data: Dict):
         """Write JSON atomically using DataManager's thread-safe method"""

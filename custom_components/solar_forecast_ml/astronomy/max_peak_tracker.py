@@ -158,7 +158,7 @@ class MaxPeakTracker:
                     _LOGGER.warning("Cache file not found, cannot update max peaks")
                     return False
 
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
                     cache = json.load(f)
 
                 # Update top-level pv_system (user-friendly)
@@ -189,10 +189,10 @@ class MaxPeakTracker:
 
                 cache["metadata"]["last_updated"] = datetime.now().isoformat()
 
-                # Write atomically (sort_keys=False preserves user-friendly order)
+                # Write atomically with proper encoding (prevents control character corruption)
                 temp_file = self.cache_file.with_suffix('.tmp')
-                with open(temp_file, 'w') as f:
-                    json.dump(cache, f, indent=2, sort_keys=False)
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump(cache, f, indent=2, sort_keys=False, ensure_ascii=False)
 
                 temp_file.replace(self.cache_file)
                 return True
@@ -228,7 +228,7 @@ class MaxPeakTracker:
                 if not self.cache_file.exists():
                     return False
 
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
                     cache = json.load(f)
 
                 # Get current max for this hour (try top-level first, fallback to metadata)
@@ -290,10 +290,10 @@ class MaxPeakTracker:
 
                 cache["metadata"]["last_updated"] = datetime.now().isoformat()
 
-                # Write atomically (sort_keys=False preserves user-friendly order)
+                # Write atomically with proper encoding (prevents control character corruption)
                 temp_file = self.cache_file.with_suffix('.tmp')
-                with open(temp_file, 'w') as f:
-                    json.dump(cache, f, indent=2, sort_keys=False)
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump(cache, f, indent=2, sort_keys=False, ensure_ascii=False)
 
                 temp_file.replace(self.cache_file)
 
@@ -326,7 +326,7 @@ class MaxPeakTracker:
                 if not self.cache_file.exists():
                     return None
 
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
                     cache = json.load(f)
 
                 hourly_max_peaks = cache.get("metadata", {}).get("pv_system", {}).get("hourly_max_peaks", {})

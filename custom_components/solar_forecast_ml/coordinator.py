@@ -357,6 +357,9 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 _LOGGER.error("Failed to initialize data manager")
                 return False
 
+            # Async initialization (non-blocking file creation)
+            await self.data_manager.async_initialize()
+
             # Initialize services first
             services_ok = await self._initialize_services()
             if not services_ok:
@@ -392,21 +395,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug(f"Failed to initialize hourly predictions cache: {cache_err}")
 
             # NOTE: Next hour forecast updates removed - sensor now reads directly from hourly_predictions.json
-
-            # Setup midnight forecast rotation (00:00:30)
-            @callback
-            def _scheduled_midnight_rotation(now: datetime) -> None:
-                """Callback for midnight forecast rotation - thread-safe"""
-                asyncio.create_task(self._rotate_forecasts_midnight())
-            
-            async_track_time_change(
-                self.hass,
-                _scheduled_midnight_rotation,
-                hour=0,
-                minute=0,
-                second=30
-            )
-            _LOGGER.info("Scheduled: midnight forecast rotation (00:00:30)")
+            # NOTE: Midnight forecast rotation (00:00:30) moved to production_scheduled_tasks.py
 
             # Setup weekly ML retraining (Sunday at 3 AM only)
             if self.ml_predictor:
@@ -695,10 +684,13 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             # Time-based saving and locking
             if 6 <= hour < 7:
                 if today_kwh is not None:
-                    await self.data_manager.save_forecast_today(
-                        prediction_kwh=today_kwh, source=source
+                    await self.data_manager.save_forecast_day(
+                        prediction_kwh=today_kwh,
+                        source=source,
+                        lock=True,
+                        force_overwrite=True  # Override any startup recovery locks
                     )
-                    _LOGGER.info(f"Saved today forecast: {today_kwh:.2f} kWh")
+                    _LOGGER.info(f"Saved today forecast: {today_kwh:.2f} kWh [MORNING UPDATE - force override]")
 
                 # --- BEST HOUR ---
                 # Calculate best hour using hybrid ML + sun-aware method
@@ -755,21 +747,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Failed to save forecasts to storage: {e}", exc_info=True)
 
     # REMOVED: _update_next_hour_forecast() - sensor now reads directly from hourly_predictions.json
-
-    async def _rotate_forecasts_midnight(self) -> None:
-        """Rotate forecasts at midnight"""
-        try:
-            _LOGGER.info("Starting midnight forecast rotation...")
-            
-            success = await self.data_manager.rotate_forecasts_at_midnight()
-            
-            if success:
-                _LOGGER.info("Midnight forecast rotation completed successfully")
-            else:
-                _LOGGER.error("Midnight forecast rotation failed")
-            
-        except Exception as e:
-            _LOGGER.error(f"Failed to rotate forecasts at midnight: {e}", exc_info=True)
+    # REMOVED: _rotate_forecasts_midnight() - moved to production_scheduled_tasks.py (00:00:30)
 
     @property
     def last_update_success_time(self) -> Optional[datetime]:

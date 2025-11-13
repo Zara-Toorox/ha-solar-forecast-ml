@@ -58,7 +58,7 @@ class AstronomyCacheManager:
 
         try:
             with self._lock:
-                with open(self._cache_file, 'r') as f:
+                with open(self._cache_file, 'r', encoding='utf-8') as f:
                     self._cache = json.load(f)
                 self._last_loaded = datetime.now()
 

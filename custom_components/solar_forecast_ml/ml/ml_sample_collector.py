@@ -715,7 +715,7 @@ class SampleCollector:
             while start_index_integration < len(states) and states[start_index_integration].last_updated <= start_time:
                 start_index_integration += 1
 
-            _LOGGER.debug(f"Riemann integration starts at index {start_index_integration} (time > {start_time})")
+            # Removed verbose start logging - only summary at end
 
             for state in states[start_index_integration:]:
                 try:
@@ -733,7 +733,7 @@ class SampleCollector:
                     time_diff_hours = time_diff_seconds / 3600.0
                     wh = prev_power * time_diff_hours
                     total_wh += wh
-                    _LOGGER.debug(f"Riemann step: from {prev_time.strftime('%H:%M:%S.%f')} to {current_end_time.strftime('%H:%M:%S.%f')} ({time_diff_seconds:.1f}s) with {prev_power:.1f}W -> {wh:.2f}Wh added (Total: {total_wh:.2f}Wh)")
+                    # Removed verbose step logging - only summary at end
 
                     prev_time = current_end_time
 
@@ -759,12 +759,11 @@ class SampleCollector:
                 time_diff_seconds = (end_time - prev_time).total_seconds()
                 if time_diff_seconds > 1e-6:
                     time_diff_hours = time_diff_seconds / 3600.0
-                    wh = prev_power * time_diff_hours 
+                    wh = prev_power * time_diff_hours
                     total_wh += wh
-                    _LOGGER.debug(f"Riemann completion: from {prev_time.strftime('%H:%M:%S.%f')} to {end_time.strftime('%H:%M:%S.%f')} ({time_diff_seconds:.1f}s) with {prev_power:.1f}W -> {wh:.2f}Wh added (Final Total: {total_wh:.2f}Wh)")
 
             kwh = max(0.0, total_wh / 1000.0)
-            _LOGGER.debug(f"Riemann sum result: {kwh:.4f} kWh")
+            _LOGGER.debug(f"Riemann integration completed: {kwh:.4f} kWh (from {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')})")
             return kwh
 
         except Exception as e:

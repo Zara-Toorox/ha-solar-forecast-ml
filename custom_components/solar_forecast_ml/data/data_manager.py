@@ -78,6 +78,12 @@ class DataManager(DataManagerIO):
 
         _LOGGER.info("DataManager Facade initialized with specialized handlers")
 
+    async def async_initialize(self) -> None:
+        """Async initialization - ensures all files exist (non-blocking)"""
+        await self.hourly_predictions.ensure_file_exists()
+        await self.daily_summaries.ensure_file_exists()
+        _LOGGER.debug("DataManager async initialization complete")
+
     async def initialize(self) -> bool:
         """Initialize data manager ensure directories exist and create default files"""
         try:

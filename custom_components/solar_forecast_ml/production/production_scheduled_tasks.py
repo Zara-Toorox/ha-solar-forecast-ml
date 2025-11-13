@@ -1169,8 +1169,21 @@ class ScheduledTasksManager:
             production_window = self._get_production_window_from_sun_entity(current_time)
 
             if not production_window:
-                _LOGGER.warning("⏰ Skipping hourly update - production window unavailable (cache and sun.sun failed)")
-                return
+                # Last resort fallback: Use conservative default window based on season
+                month = current_time.month
+                # Northern hemisphere assumption - adjust for latitude if needed
+                if 4 <= month <= 9:  # Summer (April-September): 05:00-21:00
+                    default_start = current_time.replace(hour=5, minute=0, second=0, microsecond=0, tzinfo=None)
+                    default_end = current_time.replace(hour=21, minute=0, second=0, microsecond=0, tzinfo=None)
+                else:  # Winter (October-March): 06:30-17:30
+                    default_start = current_time.replace(hour=6, minute=30, second=0, microsecond=0, tzinfo=None)
+                    default_end = current_time.replace(hour=17, minute=30, second=0, microsecond=0, tzinfo=None)
+
+                production_window = (default_start, default_end)
+                _LOGGER.warning(
+                    f"⏰ Using fallback production window (cache and sun.sun unavailable): "
+                    f"{default_start.strftime('%H:%M')} - {default_end.strftime('%H:%M')}"
+                )
 
         production_start, production_end = production_window
         current_time_naive = current_time.replace(tzinfo=None)
