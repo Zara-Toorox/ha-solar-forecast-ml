@@ -18,12 +18,13 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # Lazy import NumPy
 _np: Optional[Any] = None
 
 _LOGGER = logging.getLogger(__name__)
+
 
 def _ensure_numpy() -> Any:
     """Lazily imports and returns the NumPy module raising ImportError if unavailable"""
@@ -31,12 +32,16 @@ def _ensure_numpy() -> Any:
     if _np is None:
         try:
             import numpy as np
+
             _np = np
             # Log only once on successful import
             # _LOGGER.info("NumPy library loaded successfully for StandardScaler.")
         except ImportError as e:
-            _LOGGER.error("NumPy is required for StandardScaler but could not be imported. "
-                          "Please ensure it is installed. Error: %s", e)
+            _LOGGER.error(
+                "NumPy is required for StandardScaler but could not be imported. "
+                "Please ensure it is installed. Error: %s",
+                e,
+            )
             raise ImportError(f"NumPy library is required but could not be imported: {e}") from e
     return _np
 
@@ -46,30 +51,34 @@ class StandardScaler:
 
     def __init__(self):
         """Initializes the StandardScaler"""
-        self.means: Dict[str, float] = {}       # Stores mean for each feature name
-        self.stds: Dict[str, float] = {}        # Stores standard deviation for each feature name
-        self.is_fitted: bool = False            # Flag indicating if scaler has been fitted
-        self._feature_names_order: List[str] = [] # Stores the order of features during fit
+        self.means: Dict[str, float] = {}  # Stores mean for each feature name
+        self.stds: Dict[str, float] = {}  # Stores standard deviation for each feature name
+        self.is_fitted: bool = False  # Flag indicating if scaler has been fitted
+        self._feature_names_order: List[str] = []  # Stores the order of features during fit
 
     def fit(self, X: List[List[float]], feature_names: List[str]) -> None:
         """Compute the mean and standard deviation to be used for later scaling"""
         np = _ensure_numpy()
-        _LOGGER.debug("Fitting StandardScaler with %d samples and %d features.", len(X), len(feature_names))
+        _LOGGER.debug(
+            "Fitting StandardScaler with %d samples and %d features.", len(X), len(feature_names)
+        )
 
         if not X or not isinstance(X, list) or not isinstance(X[0], list):
-             raise ValueError("Input X must be a non-empty list of lists (feature vectors).")
+            raise ValueError("Input X must be a non-empty list of lists (feature vectors).")
         if len(X[0]) != len(feature_names):
-            raise ValueError(f"Number of features in X ({len(X[0])}) does not match "
-                             f"number of feature names ({len(feature_names)}).")
+            raise ValueError(
+                f"Number of features in X ({len(X[0])}) does not match "
+                f"number of feature names ({len(feature_names)})."
+            )
 
         try:
-            X_array = np.array(X, dtype=float) # Ensure float type
+            X_array = np.array(X, dtype=float)  # Ensure float type
             if X_array.ndim != 2:
-                 raise ValueError("Input X must be a 2D array-like structure.")
+                raise ValueError("Input X must be a 2D array-like structure.")
 
             self.means = {}
             self.stds = {}
-            self._feature_names_order = feature_names # Store the order
+            self._feature_names_order = feature_names  # Store the order
 
             # Calculate mean and std deviation for each feature column
             for i, name in enumerate(feature_names):
@@ -77,7 +86,7 @@ class StandardScaler:
                 mean_val = float(np.mean(col))
                 std_val = float(np.std(col))
 
-                # CRITICAL FIX 2: Always include all features to maintain dimension consistency
+                # Always include all features to maintain dimension consistency
                 # For zero/low-variance features, use std=1.0 to avoid division by zero
                 if std_val < 0.01:
                     _LOGGER.debug(
@@ -94,7 +103,7 @@ class StandardScaler:
 
         except Exception as e:
             _LOGGER.error("Error during StandardScaler fitting: %s", e, exc_info=True)
-            self.is_fitted = False # Mark as not fitted on error
+            self.is_fitted = False  # Mark as not fitted on error
             # Re-raise or wrap in a custom exception if needed
             raise ValueError(f"Failed to fit StandardScaler: {e}") from e
 
@@ -104,22 +113,25 @@ class StandardScaler:
         if not self.is_fitted:
             raise ValueError("StandardScaler must be fitted before calling transform.")
         if not X or not isinstance(X, list) or not isinstance(X[0], list):
-             raise ValueError("Input X for transform must be a non-empty list of lists.")
+            raise ValueError("Input X for transform must be a non-empty list of lists.")
         if len(X[0]) != len(feature_names):
-            raise ValueError(f"Number of features in X ({len(X[0])}) does not match "
-                             f"number of feature names ({len(feature_names)}).")
+            raise ValueError(
+                f"Number of features in X ({len(X[0])}) does not match "
+                f"number of feature names ({len(feature_names)})."
+            )
         # Ensure the feature names provided match those used during fit
         if feature_names != self._feature_names_order:
-             # This check can be strict or relaxed depending on requirements
-             _LOGGER.warning("Feature names or order in transform differ from fit. "
-                           "Ensure columns correspond correctly.")
-             # Reorder columns if needed? For now, assume order matches or is intended.
-
+            # This check can be strict or relaxed depending on requirements
+            _LOGGER.warning(
+                "Feature names or order in transform differ from fit. "
+                "Ensure columns correspond correctly."
+            )
+            # Reorder columns if needed? For now, assume order matches or is intended.
 
         try:
             X_array = np.array(X, dtype=float)
             if X_array.ndim != 2:
-                 raise ValueError("Input X for transform must be 2D array-like.")
+                raise ValueError("Input X for transform must be 2D array-like.")
 
             # HIGH PRIORITY FIX: Use vectorized operations instead of loop for better performance
             X_scaled = np.zeros_like(X_array)
@@ -136,7 +148,9 @@ class StandardScaler:
             # Check for missing features
             for i, name in enumerate(feature_names):
                 if name not in self.means:
-                    _LOGGER.warning(f"Feature '{name}' was not present during fitting. Leaving it unscaled.")
+                    _LOGGER.warning(
+                        f"Feature '{name}' was not present during fitting. Leaving it unscaled."
+                    )
                     X_scaled[:, i] = X_array[:, i]
 
             return X_scaled.tolist()  # Convert back to list of lists only once at the end
@@ -154,25 +168,29 @@ class StandardScaler:
         """Transform a single sample provided as a dictionary or list
 
         Args:
-            features: Either Dict[str, float] (V1) or List[float] (V2)
+            features: Either Dict[str, float] or List[float] (V2 uses List)
 
         Returns:
             Same type as input - Dict or List with scaled values
         """
         if not self.is_fitted:
             _LOGGER.debug("Scaler not fitted, returning original features for single transform.")
-            return features # Return original if scaler hasn't been trained
+            return features  # Return original if scaler hasn't been trained
 
-        # V2: Handle list-based features (ordered by feature_names_order)
+        # Handle list-based features (V2 - ordered by feature_names_order)
         if isinstance(features, list):
             if not self._feature_names_order:
-                _LOGGER.warning("Cannot scale list-based features: feature_names_order not available")
+                _LOGGER.warning(
+                    "Cannot scale list-based features: feature_names_order not available"
+                )
                 return features
 
             scaled_features = []
             for i, value in enumerate(features):
                 if i >= len(self._feature_names_order):
-                    _LOGGER.warning(f"Feature index {i} exceeds feature_names_order length, keeping original")
+                    _LOGGER.warning(
+                        f"Feature index {i} exceeds feature_names_order length, keeping original"
+                    )
                     scaled_features.append(value)
                     continue
 
@@ -189,7 +207,7 @@ class StandardScaler:
 
             return scaled_features
 
-        # V1: Handle dict-based features
+        # Handle dict-based features (legacy compatibility)
         elif isinstance(features, dict):
             scaled_features: Dict[str, float] = {}
             for name, value in features.items():
@@ -202,7 +220,9 @@ class StandardScaler:
                     scaled_features[name] = scaled_value
                 else:
                     # Keep features not seen during fit unscaled
-                    _LOGGER.debug(f"Feature '{name}' not seen during fit, keeping original value in single transform.")
+                    _LOGGER.debug(
+                        f"Feature '{name}' not seen during fit, keeping original value in single transform."
+                    )
                     scaled_features[name] = value
 
             return scaled_features
@@ -214,33 +234,39 @@ class StandardScaler:
     def get_state(self) -> Dict[str, Any]:
         """Get the internal state of the scaler means stds fitted status for serialization"""
         return {
-            'means': self.means,
-            'stds': self.stds,
-            'is_fitted': self.is_fitted,
-            'feature_names_order': self._feature_names_order # Include feature order
+            "means": self.means,
+            "stds": self.stds,
+            "is_fitted": self.is_fitted,
+            "feature_names_order": self._feature_names_order,  # Include feature order
         }
 
     def set_state(self, state: Dict[str, Any]) -> None:
         """Load the internal state of the scaler from a dictionary eg loaded from file"""
         _LOGGER.debug("Setting StandardScaler state.")
         try:
-            self.means = state.get('means', {})
-            self.stds = state.get('stds', {})
-            self.is_fitted = state.get('is_fitted', False)
-            self._feature_names_order = state.get('feature_names_order', []) # Load feature order
+            self.means = state.get("means", {})
+            self.stds = state.get("stds", {})
+            self.is_fitted = state.get("is_fitted", False)
+            self._feature_names_order = state.get("feature_names_order", [])  # Load feature order
 
             # Basic validation after loading state
             if self.is_fitted and (not self.means or not self.stds):
-                 _LOGGER.warning("Scaler state loaded as 'fitted' but means or stds are missing. Resetting to not fitted.")
-                 self.is_fitted = False
-                 self.means = {}
-                 self.stds = {}
-                 self._feature_names_order = []
+                _LOGGER.warning(
+                    "Scaler state loaded as 'fitted' but means or stds are missing. Resetting to not fitted."
+                )
+                self.is_fitted = False
+                self.means = {}
+                self.stds = {}
+                self._feature_names_order = []
             elif self.is_fitted:
-                 _LOGGER.info("StandardScaler state loaded successfully (%d features).", len(self.means))
+                _LOGGER.info(
+                    "StandardScaler state loaded successfully (%d features).", len(self.means)
+                )
 
         except Exception as e:
-            _LOGGER.error("Failed to set StandardScaler state: %s. Resetting state.", e, exc_info=True)
+            _LOGGER.error(
+                "Failed to set StandardScaler state: %s. Resetting state.", e, exc_info=True
+            )
             # Reset to default state on error
             self.means = {}
             self.stds = {}

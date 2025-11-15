@@ -18,19 +18,29 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from dataclasses import dataclass
 
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from ..const import (
-    DOMAIN, CONF_SOLAR_CAPACITY, CONF_UPDATE_INTERVAL, CONF_WEATHER_ENTITY,
-    CONF_LEARNING_ENABLED, CONF_HOURLY, CONF_POWER_ENTITY, CONF_SOLAR_YIELD_TODAY,
-    CONF_TOTAL_CONSUMPTION_TODAY, DEFAULT_SOLAR_CAPACITY, UPDATE_INTERVAL,
-    CONF_BATTERY_ENABLED, CONF_ELECTRICITY_ENABLED, CONF_ELECTRICITY_COUNTRY,
+    CONF_BATTERY_ENABLED,
+    CONF_ELECTRICITY_COUNTRY,
+    CONF_ELECTRICITY_ENABLED,
+    CONF_HOURLY,
+    CONF_LEARNING_ENABLED,
+    CONF_POWER_ENTITY,
+    CONF_SOLAR_CAPACITY,
+    CONF_SOLAR_YIELD_TODAY,
+    CONF_TOTAL_CONSUMPTION_TODAY,
+    CONF_UPDATE_INTERVAL,
+    CONF_WEATHER_ENTITY,
     DEFAULT_ELECTRICITY_COUNTRY,
+    DEFAULT_SOLAR_CAPACITY,
+    DOMAIN,
+    UPDATE_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,6 +49,7 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass
 class CoordinatorConfiguration:
     """Configuration data extracted from ConfigEntry"""
+
     # Solar Configuration
     solar_capacity: float
     learning_enabled: bool
@@ -83,8 +94,8 @@ class CoordinatorInitHelpers:
             total_consumption_today=entry.data.get(CONF_TOTAL_CONSUMPTION_TODAY),
             battery_enabled=entry.options.get(CONF_BATTERY_ENABLED, False),
             electricity_enabled=entry.options.get(CONF_ELECTRICITY_ENABLED, False),
-            electricity_country=entry.options.get(CONF_ELECTRICITY_COUNTRY) or
-                              entry.data.get(CONF_ELECTRICITY_COUNTRY, DEFAULT_ELECTRICITY_COUNTRY),
+            electricity_country=entry.options.get(CONF_ELECTRICITY_COUNTRY)
+            or entry.data.get(CONF_ELECTRICITY_COUNTRY, DEFAULT_ELECTRICITY_COUNTRY),
         )
 
     @staticmethod
@@ -95,6 +106,7 @@ class CoordinatorInitHelpers:
 
         try:
             from ..battery.battery_data_collector import BatteryDataCollector
+
             collector = BatteryDataCollector(hass, entry)
             _LOGGER.info("BatteryDataCollector initialized successfully")
             return collector
@@ -110,6 +122,7 @@ class CoordinatorInitHelpers:
 
         try:
             from ..battery.electricity_price_service import ElectricityPriceService
+
             service = ElectricityPriceService(country=country)
             _LOGGER.info(
                 f"ElectricityPriceService initialized for {country} "

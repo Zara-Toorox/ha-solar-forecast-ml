@@ -13,29 +13,28 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Optional, Dict, Any
 from datetime import datetime
-from homeassistant.core import HomeAssistant, State
-from homeassistant.config_entries import ConfigEntry
+from typing import Any, Dict, Optional
 
-from ..const import (
-    # NEW v9.0.0 constants
-    CONF_BATTERY_POWER_SENSOR,
-    CONF_BATTERY_SOC_SENSOR,
-    CONF_SOLAR_PRODUCTION_SENSOR,
-    CONF_INVERTER_OUTPUT_SENSOR,
-    CONF_HOUSE_CONSUMPTION_SENSOR,
-    CONF_GRID_IMPORT_SENSOR,
-    CONF_GRID_EXPORT_SENSOR,
-    CONF_GRID_CHARGE_POWER_SENSOR,
-    CONF_BATTERY_TEMPERATURE_SENSOR,
-    # LEGACY v8.x constants
-    CONF_BATTERY_SOC_ENTITY,
-    CONF_BATTERY_POWER_ENTITY,
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, State
+
+from ..const import (  # NEW v9.0.0 constants; LEGACY v8.x constants
+    CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CHARGE_TODAY_ENTITY,
     CONF_BATTERY_DISCHARGE_TODAY_ENTITY,
+    CONF_BATTERY_POWER_ENTITY,
+    CONF_BATTERY_POWER_SENSOR,
+    CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_SOC_SENSOR,
     CONF_BATTERY_TEMPERATURE_ENTITY,
-    CONF_BATTERY_CAPACITY,
+    CONF_BATTERY_TEMPERATURE_SENSOR,
+    CONF_GRID_CHARGE_POWER_SENSOR,
+    CONF_GRID_EXPORT_SENSOR,
+    CONF_GRID_IMPORT_SENSOR,
+    CONF_HOUSE_CONSUMPTION_SENSOR,
+    CONF_INVERTER_OUTPUT_SENSOR,
+    CONF_SOLAR_PRODUCTION_SENSOR,
     DEFAULT_BATTERY_CAPACITY,
 )
 
@@ -51,34 +50,69 @@ class BatteryDataCollector:
         self.entry = entry
 
         # NEW v9.0.0: Watt-based sensors (preferred)
-        self.battery_power_sensor = entry.options.get(CONF_BATTERY_POWER_SENSOR) or entry.data.get(CONF_BATTERY_POWER_SENSOR)
-        self.battery_soc_sensor = entry.options.get(CONF_BATTERY_SOC_SENSOR) or entry.data.get(CONF_BATTERY_SOC_SENSOR)
-        self.solar_production_sensor = entry.options.get(CONF_SOLAR_PRODUCTION_SENSOR) or entry.data.get(CONF_SOLAR_PRODUCTION_SENSOR)
-        self.inverter_output_sensor = entry.options.get(CONF_INVERTER_OUTPUT_SENSOR) or entry.data.get(CONF_INVERTER_OUTPUT_SENSOR)
-        self.house_consumption_sensor = entry.options.get(CONF_HOUSE_CONSUMPTION_SENSOR) or entry.data.get(CONF_HOUSE_CONSUMPTION_SENSOR)
-        self.grid_import_sensor = entry.options.get(CONF_GRID_IMPORT_SENSOR) or entry.data.get(CONF_GRID_IMPORT_SENSOR)
-        self.grid_export_sensor = entry.options.get(CONF_GRID_EXPORT_SENSOR) or entry.data.get(CONF_GRID_EXPORT_SENSOR)
-        self.grid_charge_power_sensor = entry.options.get(CONF_GRID_CHARGE_POWER_SENSOR) or entry.data.get(CONF_GRID_CHARGE_POWER_SENSOR)
-        self.battery_temperature_sensor = entry.options.get(CONF_BATTERY_TEMPERATURE_SENSOR) or entry.data.get(CONF_BATTERY_TEMPERATURE_SENSOR)
+        self.battery_power_sensor = entry.options.get(CONF_BATTERY_POWER_SENSOR) or entry.data.get(
+            CONF_BATTERY_POWER_SENSOR
+        )
+        self.battery_soc_sensor = entry.options.get(CONF_BATTERY_SOC_SENSOR) or entry.data.get(
+            CONF_BATTERY_SOC_SENSOR
+        )
+        self.solar_production_sensor = entry.options.get(
+            CONF_SOLAR_PRODUCTION_SENSOR
+        ) or entry.data.get(CONF_SOLAR_PRODUCTION_SENSOR)
+        self.inverter_output_sensor = entry.options.get(
+            CONF_INVERTER_OUTPUT_SENSOR
+        ) or entry.data.get(CONF_INVERTER_OUTPUT_SENSOR)
+        self.house_consumption_sensor = entry.options.get(
+            CONF_HOUSE_CONSUMPTION_SENSOR
+        ) or entry.data.get(CONF_HOUSE_CONSUMPTION_SENSOR)
+        self.grid_import_sensor = entry.options.get(CONF_GRID_IMPORT_SENSOR) or entry.data.get(
+            CONF_GRID_IMPORT_SENSOR
+        )
+        self.grid_export_sensor = entry.options.get(CONF_GRID_EXPORT_SENSOR) or entry.data.get(
+            CONF_GRID_EXPORT_SENSOR
+        )
+        self.grid_charge_power_sensor = entry.options.get(
+            CONF_GRID_CHARGE_POWER_SENSOR
+        ) or entry.data.get(CONF_GRID_CHARGE_POWER_SENSOR)
+        self.battery_temperature_sensor = entry.options.get(
+            CONF_BATTERY_TEMPERATURE_SENSOR
+        ) or entry.data.get(CONF_BATTERY_TEMPERATURE_SENSOR)
 
         # LEGACY v8.x: Old entity configuration (fallback for backwards compatibility)
-        self.soc_entity = entry.options.get(CONF_BATTERY_SOC_ENTITY) or entry.data.get(CONF_BATTERY_SOC_ENTITY)
-        self.power_entity = entry.options.get(CONF_BATTERY_POWER_ENTITY) or entry.data.get(CONF_BATTERY_POWER_ENTITY)
-        self.charge_today_entity = entry.options.get(CONF_BATTERY_CHARGE_TODAY_ENTITY) or entry.data.get(CONF_BATTERY_CHARGE_TODAY_ENTITY)
-        self.discharge_today_entity = entry.options.get(CONF_BATTERY_DISCHARGE_TODAY_ENTITY) or entry.data.get(CONF_BATTERY_DISCHARGE_TODAY_ENTITY)
-        self.temperature_entity = entry.options.get(CONF_BATTERY_TEMPERATURE_ENTITY) or entry.data.get(CONF_BATTERY_TEMPERATURE_ENTITY)
+        self.soc_entity = entry.options.get(CONF_BATTERY_SOC_ENTITY) or entry.data.get(
+            CONF_BATTERY_SOC_ENTITY
+        )
+        self.power_entity = entry.options.get(CONF_BATTERY_POWER_ENTITY) or entry.data.get(
+            CONF_BATTERY_POWER_ENTITY
+        )
+        self.charge_today_entity = entry.options.get(
+            CONF_BATTERY_CHARGE_TODAY_ENTITY
+        ) or entry.data.get(CONF_BATTERY_CHARGE_TODAY_ENTITY)
+        self.discharge_today_entity = entry.options.get(
+            CONF_BATTERY_DISCHARGE_TODAY_ENTITY
+        ) or entry.data.get(CONF_BATTERY_DISCHARGE_TODAY_ENTITY)
+        self.temperature_entity = entry.options.get(
+            CONF_BATTERY_TEMPERATURE_ENTITY
+        ) or entry.data.get(CONF_BATTERY_TEMPERATURE_ENTITY)
 
         # Get battery capacity
-        self.battery_capacity = entry.options.get(CONF_BATTERY_CAPACITY) or entry.data.get(CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY)
+        self.battery_capacity = entry.options.get(CONF_BATTERY_CAPACITY) or entry.data.get(
+            CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY
+        )
 
         # Cache for log throttling (only log when value changes)
         self._last_logged_power = None
 
         # Determine if using new v9.0 config or legacy v8.x
-        self.using_new_config = bool(self.battery_power_sensor and self.battery_soc_sensor
-                                     and self.solar_production_sensor and self.inverter_output_sensor
-                                     and self.house_consumption_sensor and self.grid_import_sensor
-                                     and self.grid_export_sensor)
+        self.using_new_config = bool(
+            self.battery_power_sensor
+            and self.battery_soc_sensor
+            and self.solar_production_sensor
+            and self.inverter_output_sensor
+            and self.house_consumption_sensor
+            and self.grid_import_sensor
+            and self.grid_export_sensor
+        )
 
         if self.using_new_config:
             _LOGGER.info(
@@ -115,7 +149,7 @@ class BatteryDataCollector:
             return None
 
         # Check if state is unavailable or unknown
-        if state.state in ('unavailable', 'unknown', 'none', 'None'):
+        if state.state in ("unavailable", "unknown", "none", "None"):
             _LOGGER.debug(
                 f"Battery entity '{entity_id}' state is '{state.state}'. "
                 f"Entity may not be ready yet or device is offline."
@@ -133,7 +167,9 @@ class BatteryDataCollector:
         try:
             return float(state.state)
         except (ValueError, TypeError):
-            _LOGGER.debug(f"Invalid numeric state for {entity_id}: {state.state} - using default {default}")
+            _LOGGER.debug(
+                f"Invalid numeric state for {entity_id}: {state.state} - using default {default}"
+            )
             return default
 
     def _convert_to_kwh(self, value: float, entity_id: Optional[str]) -> float:
@@ -160,10 +196,10 @@ class BatteryDataCollector:
             return value
 
         # Get unit from entity attributes
-        unit = state.attributes.get('unit_of_measurement', '').lower()
+        unit = state.attributes.get("unit_of_measurement", "").lower()
 
         # If unit explicitly says Wh or W·h, convert to kWh
-        if unit in ['wh', 'w·h', 'watthour', 'watthours']:
+        if unit in ["wh", "w·h", "watthour", "watthours"]:
             converted = value / 1000.0
             _LOGGER.debug(f"Converted {entity_id} from {value} Wh to {converted} kWh")
             return converted
@@ -174,7 +210,7 @@ class BatteryDataCollector:
         if value > 100.0:
             converted = value / 1000.0
 
-            if unit in ['kwh', 'kw·h', 'kilowatthour', 'kilowatthours']:
+            if unit in ["kwh", "kw·h", "kilowatthour", "kilowatthours"]:
                 _LOGGER.warning(
                     f"Sensor {entity_id} has unit='{unit}' but value={value:.2f} seems too high for kWh. "
                     f"Auto-converting to {converted:.3f} kWh. "
@@ -237,7 +273,7 @@ class BatteryDataCollector:
             _LOGGER.warning(f"Battery power sensor '{entity_id}' not found or unavailable")
             return None
 
-        if state.state in ('unknown', 'unavailable', 'none', 'None'):
+        if state.state in ("unknown", "unavailable", "none", "None"):
             _LOGGER.debug(f"Battery power sensor '{entity_id}' state is: {state.state}")
             return None
 
@@ -249,7 +285,9 @@ class BatteryDataCollector:
                 self._last_logged_power = power
             return power
         except (ValueError, TypeError) as e:
-            _LOGGER.warning(f"Invalid battery power state for '{entity_id}': {state.state} - Error: {e}")
+            _LOGGER.warning(
+                f"Invalid battery power state for '{entity_id}': {state.state} - Error: {e}"
+            )
             return None
 
     def get_charge_today(self) -> float:
@@ -333,19 +371,19 @@ class BatteryDataCollector:
         power = self.get_battery_power()
 
         return {
-            'soc': soc,
-            'soc_percent': soc,
-            'power': power,
-            'power_w': power,
-            'charge_today': self.get_charge_today(),
-            'discharge_today': self.get_discharge_today(),
-            'temperature': self.get_battery_temperature(),
-            'capacity': self.battery_capacity,
-            'remaining_capacity': self.get_remaining_capacity(),
-            'empty_capacity': self.get_empty_capacity(),
-            'is_charging': self.is_charging(),
-            'is_discharging': self.is_discharging(),
-            'timestamp': datetime.now().isoformat(),
+            "soc": soc,
+            "soc_percent": soc,
+            "power": power,
+            "power_w": power,
+            "charge_today": self.get_charge_today(),
+            "discharge_today": self.get_discharge_today(),
+            "temperature": self.get_battery_temperature(),
+            "capacity": self.battery_capacity,
+            "remaining_capacity": self.get_remaining_capacity(),
+            "empty_capacity": self.get_empty_capacity(),
+            "is_charging": self.is_charging(),
+            "is_discharging": self.is_discharging(),
+            "timestamp": datetime.now().isoformat(),
         }
 
     def is_configured(self) -> bool:
@@ -365,42 +403,46 @@ class BatteryDataCollector:
     def validate_entities(self) -> Dict[str, bool]:
         """Validate all configured entities exist Returns: Dictionary with entity validation results"""
         return {
-            'soc': self._get_entity_state(self.soc_entity) is not None,
-            'power': self._get_entity_state(self.power_entity) is not None,
-            'charge_today': self._get_entity_state(self.charge_today_entity) is not None,
-            'discharge_today': self._get_entity_state(self.discharge_today_entity) is not None,
-            'temperature': self._get_entity_state(self.temperature_entity) is not None if self.temperature_entity else True,
+            "soc": self._get_entity_state(self.soc_entity) is not None,
+            "power": self._get_entity_state(self.power_entity) is not None,
+            "charge_today": self._get_entity_state(self.charge_today_entity) is not None,
+            "discharge_today": self._get_entity_state(self.discharge_today_entity) is not None,
+            "temperature": (
+                self._get_entity_state(self.temperature_entity) is not None
+                if self.temperature_entity
+                else True
+            ),
         }
 
     def get_diagnostic_info(self) -> Dict[str, Any]:
         """Get diagnostic information for troubleshooting Returns: Dictionary with diagnostic data"""
         info = {
-            'configured_entities': {
-                'soc_entity': self.soc_entity,
-                'power_entity': self.power_entity,
-                'charge_today_entity': self.charge_today_entity,
-                'discharge_today_entity': self.discharge_today_entity,
-                'temperature_entity': self.temperature_entity,
+            "configured_entities": {
+                "soc_entity": self.soc_entity,
+                "power_entity": self.power_entity,
+                "charge_today_entity": self.charge_today_entity,
+                "discharge_today_entity": self.discharge_today_entity,
+                "temperature_entity": self.temperature_entity,
             },
-            'entity_states': {},
-            'entity_validation': self.validate_entities(),
-            'battery_capacity': self.battery_capacity,
+            "entity_states": {},
+            "entity_validation": self.validate_entities(),
+            "battery_capacity": self.battery_capacity,
         }
 
         # Get raw states
-        for key, entity_id in info['configured_entities'].items():
+        for key, entity_id in info["configured_entities"].items():
             if entity_id:
                 state = self._get_entity_state(entity_id)
                 if state:
-                    info['entity_states'][key] = {
-                        'state': state.state,
-                        'attributes': dict(state.attributes),
-                        'last_changed': state.last_changed.isoformat(),
+                    info["entity_states"][key] = {
+                        "state": state.state,
+                        "attributes": dict(state.attributes),
+                        "last_changed": state.last_changed.isoformat(),
                     }
                 else:
-                    info['entity_states'][key] = 'NOT_FOUND'
+                    info["entity_states"][key] = "NOT_FOUND"
             else:
-                info['entity_states'][key] = 'NOT_CONFIGURED'
+                info["entity_states"][key] = "NOT_CONFIGURED"
 
         return info
 
@@ -480,14 +522,14 @@ class BatteryDataCollector:
             Dictionary with all power values in Watts
         """
         return {
-            'battery_power_w': self.get_battery_power() or 0.0,
-            'soc_percent': self.get_state_of_charge() or 0.0,
-            'solar_production_w': self.get_solar_production(),
-            'inverter_output_w': self.get_inverter_output(),
-            'grid_import_w': self.get_grid_import(),
-            'grid_export_w': self.get_grid_export(),
-            'house_consumption_w': self.get_house_consumption(),
-            'grid_charge_power_w': self.get_grid_charge_power(),
-            'temperature_c': self.get_battery_temperature(),
-            'timestamp': datetime.now().isoformat(),
+            "battery_power_w": self.get_battery_power() or 0.0,
+            "soc_percent": self.get_state_of_charge() or 0.0,
+            "solar_production_w": self.get_solar_production(),
+            "inverter_output_w": self.get_inverter_output(),
+            "grid_import_w": self.get_grid_import(),
+            "grid_export_w": self.get_grid_export(),
+            "house_consumption_w": self.get_house_consumption(),
+            "grid_charge_power_w": self.get_grid_charge_power(),
+            "temperature_c": self.get_battery_temperature(),
+            "timestamp": datetime.now().isoformat(),
         }

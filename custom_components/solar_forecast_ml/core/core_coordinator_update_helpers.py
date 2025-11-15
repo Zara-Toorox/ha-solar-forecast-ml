@@ -18,7 +18,7 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Dict, Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -42,7 +42,9 @@ class CoordinatorUpdateHelpers:
         if self.coordinator.weather_service:
             try:
                 current_weather = await self.coordinator.weather_service.get_current_weather()
-                hourly_forecast = await self.coordinator.weather_service.get_processed_hourly_forecast()
+                hourly_forecast = (
+                    await self.coordinator.weather_service.get_processed_hourly_forecast()
+                )
                 self.coordinator._last_weather_update = dt_util.now()
 
                 if not hourly_forecast or len(hourly_forecast) == 0:
@@ -57,7 +59,7 @@ class CoordinatorUpdateHelpers:
         self,
         current_weather: Optional[Dict],
         hourly_forecast: Optional[list],
-        external_sensors: Dict[str, Any]
+        external_sensors: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Generate forecast using orchestrator"""
         forecast = await self.coordinator.forecast_orchestrator.orchestrate_forecast(
@@ -66,14 +68,14 @@ class CoordinatorUpdateHelpers:
             external_sensors=external_sensors,
             ml_prediction_today=None,
             ml_prediction_tomorrow=None,
-            correction_factor=self.coordinator.learned_correction_factor
+            correction_factor=self.coordinator.learned_correction_factor,
         )
 
         if not forecast:
             raise UpdateFailed("Forecast generation failed")
 
         # Log summary instead of full data (hourly array can be huge)
-        hourly_count = len(forecast.get('hourly', []))
+        hourly_count = len(forecast.get("hourly", []))
         _LOGGER.debug(
             f"Forecast data from orchestrator: "
             f"today={forecast.get('today', 'N/A')} kWh, "
@@ -88,7 +90,7 @@ class CoordinatorUpdateHelpers:
         self,
         forecast: Dict[str, Any],
         current_weather: Optional[Dict],
-        external_sensors: Dict[str, Any]
+        external_sensors: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Build coordinator result dictionary"""
         result = {
@@ -103,24 +105,20 @@ class CoordinatorUpdateHelpers:
                 "active": self.coordinator.production_time_calculator.is_active,
                 "duration_seconds": self.coordinator.production_time_calculator.total_seconds,
                 "start_time": self.coordinator.production_time_calculator.start_time,
-                "end_time": self.coordinator.production_time_calculator.end_time
+                "end_time": self.coordinator.production_time_calculator.end_time,
             },
             "peak_today": {
-                "power_w": getattr(self.coordinator, '_peak_power_today', 0.0),
-                "at": getattr(self.coordinator, '_peak_time_today', None)
+                "power_w": getattr(self.coordinator, "_peak_power_today", 0.0),
+                "at": getattr(self.coordinator, "_peak_time_today", None),
             },
             "yield_today": {
                 "kwh": external_sensors.get("solar_yield_today"),
-                "sensor": self.coordinator.solar_yield_today
-            }
+                "sensor": self.coordinator.solar_yield_today,
+            },
         }
         return result
 
-    async def save_forecasts(
-        self,
-        forecast_data: Dict[str, Any],
-        hourly_forecast: list
-    ) -> None:
+    async def save_forecasts(self, forecast_data: Dict[str, Any], hourly_forecast: list) -> None:
         """Save forecasts to storage"""
         await self.coordinator._save_forecasts_to_storage(
             forecast_data={
@@ -153,7 +151,9 @@ class CoordinatorUpdateHelpers:
                 _LOGGER.debug("Fetching electricity prices from ENTSO-E...")
                 prices = await self.coordinator.electricity_service.fetch_day_ahead_prices()
                 if prices:
-                    _LOGGER.info(f"Electricity prices updated successfully: {len(prices.get('prices', []))} price points")
+                    _LOGGER.info(
+                        f"Electricity prices updated successfully: {len(prices.get('prices', []))} price points"
+                    )
                 else:
                     _LOGGER.warning("Failed to fetch electricity prices")
 
@@ -168,8 +168,7 @@ class CoordinatorUpdateHelpers:
         if not today_forecast or not today_forecast.get("forecast_day", {}).get("locked"):
             if now_local.hour < 12:
                 _LOGGER.warning(
-                    "System started without locked forecast (before 12:00) - "
-                    "initiating recovery"
+                    "System started without locked forecast (before 12:00) - " "initiating recovery"
                 )
                 await self.coordinator._recovery_forecast_process(source="startup_recovery")
             else:
@@ -181,7 +180,7 @@ class CoordinatorUpdateHelpers:
                     forecast_value = self.coordinator.data.get("forecast_today")
                     await self.coordinator.data_manager.save_daily_forecast(
                         prediction_kwh=forecast_value,
-                        source=f"late_startup_{now_local.hour:02d}:{now_local.minute:02d}"
+                        source=f"late_startup_{now_local.hour:02d}:{now_local.minute:02d}",
                     )
                     _LOGGER.warning(
                         f"Set forecast to current value: {forecast_value:.2f} kWh "
@@ -190,7 +189,10 @@ class CoordinatorUpdateHelpers:
 
     async def check_weather_service_health(self) -> None:
         """Check and recover weather service if unhealthy"""
-        if self.coordinator.weather_service and not self.coordinator.weather_service.get_health_status().get('healthy'):
+        if (
+            self.coordinator.weather_service
+            and not self.coordinator.weather_service.get_health_status().get("healthy")
+        ):
             _LOGGER.warning("Weather service unhealthy, attempting recovery...")
             try:
                 await self.coordinator.weather_service.force_update()

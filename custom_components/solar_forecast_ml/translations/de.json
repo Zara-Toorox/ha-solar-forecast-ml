@@ -147,7 +147,7 @@
           "electricity_enabled": "Strompreise aktivieren (aWATTar)"
         },
         "data_description": {
-          "update_interval": "Prognose-Update-Intervall (300-86400s, Standard: 1800)",
+          "update_interval": "Prognose-Update-Intervall (300-86400s, Standard: 3600)",
           "diagnostic": "Diagnose-Sensoren zur Überwachung aktivieren",
           "hourly": "Nächste-Stunde-Prognose Sensor aktivieren",
           "notify_startup": "Benachrichtigung beim Start anzeigen",

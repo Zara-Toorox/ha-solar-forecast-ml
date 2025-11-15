@@ -112,6 +112,10 @@
           "battery_temperature_sensor": "[v9.0.0 Optional] Battery temperature in °C - For advanced analysis",
           "electricity_country": "Country for electricity prices - Germany (DE) or Austria (AT) (Optional)"
         }
+      },
+      "weather_warning": {
+        "title": "⚠️ Warnung: Wetter-Integration",
+        "description": "{warning_message}"
       }
     },
     "error": {
@@ -149,7 +153,7 @@
           "electricity_enabled": "Enable Electricity Prices (aWATTar)"
         },
         "data_description": {
-          "update_interval": "Forecast update interval (300-86400s, default: 1800)",
+          "update_interval": "Forecast update interval (300-86400s, default: 3600)",
           "diagnostic": "Enable diagnostic sensors for monitoring",
           "hourly": "Enable next hour forecast sensor",
           "notify_startup": "Show notification on startup",

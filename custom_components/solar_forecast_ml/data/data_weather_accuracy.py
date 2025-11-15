@@ -13,13 +13,14 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from homeassistant.core import HomeAssistant
 
-from .data_io import DataManagerIO
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from .data_io import DataManagerIO
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,21 +37,14 @@ class WeatherAccuracyTracker(DataManagerIO):
             "retention_days": 30,
             "entries": [],  # List of accuracy measurements
             "statistics": {
-                "last_7_days": {
-                    "avg_cloud_error": None,
-                    "avg_temp_error": None,
-                    "sample_count": 0
-                },
+                "last_7_days": {"avg_cloud_error": None, "avg_temp_error": None, "sample_count": 0},
                 "last_30_days": {
                     "avg_cloud_error": None,
                     "avg_temp_error": None,
-                    "sample_count": 0
-                }
+                    "sample_count": 0,
+                },
             },
-            "metadata": {
-                "last_update": None,
-                "total_entries": 0
-            }
+            "metadata": {"last_update": None, "total_entries": 0},
         }
 
     async def ensure_file(self) -> None:
@@ -63,7 +57,7 @@ class WeatherAccuracyTracker(DataManagerIO):
         self,
         forecast_datetime: datetime,
         predicted_data: Dict[str, Any],
-        actual_data: Dict[str, Any]
+        actual_data: Dict[str, Any],
     ) -> bool:
         """Record a comparison between predicted and actual weather
 
@@ -106,7 +100,7 @@ class WeatherAccuracyTracker(DataManagerIO):
                 "errors": {
                     "cloud_cover_abs": cloud_error,
                     "temperature_abs": temp_error,
-                }
+                },
             }
 
             # Add to entries
@@ -117,8 +111,7 @@ class WeatherAccuracyTracker(DataManagerIO):
             cutoff = dt_util.now() - timedelta(days=retention_days)
 
             data["entries"] = [
-                e for e in data["entries"]
-                if dt_util.parse_datetime(e["recorded_at"]) >= cutoff
+                e for e in data["entries"] if dt_util.parse_datetime(e["recorded_at"]) >= cutoff
             ]
 
             # Update statistics
@@ -147,8 +140,7 @@ class WeatherAccuracyTracker(DataManagerIO):
             cutoff = now - timedelta(days=days)
 
             relevant_entries = [
-                e for e in data["entries"]
-                if dt_util.parse_datetime(e["recorded_at"]) >= cutoff
+                e for e in data["entries"] if dt_util.parse_datetime(e["recorded_at"]) >= cutoff
             ]
 
             if relevant_entries:
@@ -165,15 +157,19 @@ class WeatherAccuracyTracker(DataManagerIO):
                 ]
 
                 data["statistics"][period_name] = {
-                    "avg_cloud_error": round(sum(cloud_errors) / len(cloud_errors), 1) if cloud_errors else None,
-                    "avg_temp_error": round(sum(temp_errors) / len(temp_errors), 1) if temp_errors else None,
-                    "sample_count": len(relevant_entries)
+                    "avg_cloud_error": (
+                        round(sum(cloud_errors) / len(cloud_errors), 1) if cloud_errors else None
+                    ),
+                    "avg_temp_error": (
+                        round(sum(temp_errors) / len(temp_errors), 1) if temp_errors else None
+                    ),
+                    "sample_count": len(relevant_entries),
                 }
             else:
                 data["statistics"][period_name] = {
                     "avg_cloud_error": None,
                     "avg_temp_error": None,
-                    "sample_count": 0
+                    "sample_count": 0,
                 }
 
     async def get_statistics(self) -> Optional[Dict[str, Any]]:
@@ -203,7 +199,8 @@ class WeatherAccuracyTracker(DataManagerIO):
             cutoff = dt_util.now() - timedelta(days=days)
 
             return [
-                e for e in data.get("entries", [])
+                e
+                for e in data.get("entries", [])
                 if dt_util.parse_datetime(e["recorded_at"]) >= cutoff
             ]
         except Exception as e:

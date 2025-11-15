@@ -18,8 +18,8 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Optional, Any, Callable
 from abc import ABC, abstractmethod
+from typing import Any, Callable, Optional
 
 from homeassistant.core import callback
 
@@ -43,9 +43,7 @@ class FileBasedSensorMixin(ABC):
         """Setup sensor with file loading"""
         await super().async_added_to_hass()
         await self._load_from_file()
-        self.async_on_remove(
-            self._coordinator.async_add_listener(self._handle_coordinator_update)
-        )
+        self.async_on_remove(self._coordinator.async_add_listener(self._handle_coordinator_update))
         self.async_write_ha_state()
 
     @callback
@@ -92,9 +90,11 @@ class CoordinatorPropertySensorMixin(ABC):
     @property
     def available(self) -> bool:
         """Sensor availability"""
-        return (self.coordinator.last_update_success and
-                self.coordinator.data is not None and
-                self.native_value is not None)
+        return (
+            self.coordinator.last_update_success
+            and self.coordinator.data is not None
+            and self.native_value is not None
+        )
 
     @property
     def native_value(self) -> Any:
@@ -120,19 +120,16 @@ class LiveSensorMixin(ABC):
         await super().async_added_to_hass()
 
         # Listen to coordinator updates
-        self.async_on_remove(
-            self._coordinator.async_add_listener(self._handle_coordinator_update)
-        )
+        self.async_on_remove(self._coordinator.async_add_listener(self._handle_coordinator_update))
 
         # Listen to entity changes
         from homeassistant.helpers.event import async_track_state_change_event
+
         tracked_entities = self.get_tracked_entities()
         for entity_id in tracked_entities:
             if entity_id:
                 self.async_on_remove(
-                    async_track_state_change_event(
-                        self.hass, entity_id, self._handle_sensor_change
-                    )
+                    async_track_state_change_event(self.hass, entity_id, self._handle_sensor_change)
                 )
 
         self.async_write_ha_state()

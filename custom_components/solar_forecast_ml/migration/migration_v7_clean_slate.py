@@ -12,11 +12,11 @@ This migration:
 User configuration is preserved in Home Assistant (not in data directory)
 """
 
+import json
 import logging
 import shutil
-import json
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from homeassistant.core import HomeAssistant
@@ -109,6 +109,7 @@ class V7CleanSlateMigration:
 
     async def _clean_data_directory(self):
         """Delete all files and subdirectories in data directory"""
+
         def _clean_sync():
             if not self.data_dir.exists():
                 _LOGGER.warning(f"Data directory does not exist: {self.data_dir}")
@@ -133,6 +134,7 @@ class V7CleanSlateMigration:
 
     async def _rebuild_directory_structure(self):
         """Rebuild clean directory structure"""
+
         def _rebuild_sync():
             # Create all required directories
             directories = [
@@ -160,12 +162,13 @@ class V7CleanSlateMigration:
 
     async def _create_fresh_json_files(self):
         """Create fresh JSON files with clean defaults"""
+
         def _create_sync():
             # Version info
             versinfo = {
                 "version": "7.0.0",
                 "migration_date": dt_util.now().isoformat(),
-                "description": "V7 Clean Slate - Fresh start with bug fixes"
+                "description": "V7 Clean Slate - Fresh start with bug fixes",
             }
             self._write_json_sync(self.data_dir / "versinfo.json", versinfo)
 
@@ -181,9 +184,9 @@ class V7CleanSlateMigration:
                     "system_id": "solar_system_001",
                     "location": {},
                     "system_specs": {},
-                    "sensor_config": {}
+                    "sensor_config": {},
                 },
-                "predictions": []
+                "predictions": [],
             }
             self._write_json_sync(stats_dir / "hourly_predictions.json", hourly_predictions)
 
@@ -200,21 +203,18 @@ class V7CleanSlateMigration:
                     "last_7_days": {},
                     "last_30_days": {},
                     "last_365_days": {},
-                    "all_time_peak": {}
+                    "all_time_peak": {},
                 },
                 "metadata": {
                     "history_entries": 0,
                     "last_update": dt_util.now().isoformat(),
-                    "retention_days": 730
-                }
+                    "retention_days": 730,
+                },
             }
             self._write_json_sync(stats_dir / "daily_forecasts.json", daily_forecasts)
 
             # daily_summaries.json
-            daily_summaries = {
-                "version": "1.0",
-                "summaries": []
-            }
+            daily_summaries = {"version": "1.0", "summaries": []}
             self._write_json_sync(stats_dir / "daily_summaries.json", daily_summaries)
 
             # ML files
@@ -226,7 +226,7 @@ class V7CleanSlateMigration:
                 "current_accuracy": 0.0,
                 "training_samples": 0,
                 "last_training": None,
-                "version": "2.0"
+                "version": "2.0",
             }
             self._write_json_sync(ml_dir / "model_state.json", model_state)
 
@@ -235,7 +235,7 @@ class V7CleanSlateMigration:
                 "version": "1.0",
                 "hourly_averages": {},
                 "sample_count": 0,
-                "last_updated": None
+                "last_updated": None,
             }
             self._write_json_sync(ml_dir / "hourly_profile.json", hourly_profile)
 
@@ -246,7 +246,7 @@ class V7CleanSlateMigration:
             coordinator_state = {
                 "expected_daily_production": None,
                 "last_collected_hour": None,
-                "last_update": dt_util.now().isoformat()
+                "last_update": dt_util.now().isoformat(),
             }
             self._write_json_sync(data_dir / "coordinator_state.json", coordinator_state)
 
@@ -255,7 +255,7 @@ class V7CleanSlateMigration:
                 "is_active": False,
                 "accumulated_hours": 0.0,
                 "start_time": None,
-                "last_update": dt_util.now().isoformat()
+                "last_update": dt_util.now().isoformat(),
             }
             self._write_json_sync(data_dir / "production_time_state.json", production_time_state)
 
@@ -265,11 +265,12 @@ class V7CleanSlateMigration:
 
     def _write_json_sync(self, file_path: Path, data: dict):
         """Write JSON file synchronously with UTF-8 encoding"""
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     async def _deploy_documentation(self):
         """Deploy documentation files from component docs/ to data docs/"""
+
         def _deploy_sync():
             target_docs_dir = self.data_dir / "docs"
 
@@ -297,6 +298,7 @@ class V7CleanSlateMigration:
 
     async def _mark_migration_complete(self):
         """Create migration flag file"""
+
         def _mark_sync():
             flag_data = {
                 "version": self.MIGRATION_VERSION,
@@ -304,11 +306,11 @@ class V7CleanSlateMigration:
                 "ml_reset": True,
                 "directory_cleaned": True,
                 "structure_rebuilt": True,
-                "docs_deployed": True
+                "docs_deployed": True,
             }
 
             flag_file = self.data_dir / self.MIGRATION_FLAG
-            with open(flag_file, 'w', encoding='utf-8') as f:
+            with open(flag_file, "w", encoding="utf-8") as f:
                 json.dump(flag_data, f, indent=2)
 
             _LOGGER.info(f"✓ Migration flag created: {self.MIGRATION_FLAG}")

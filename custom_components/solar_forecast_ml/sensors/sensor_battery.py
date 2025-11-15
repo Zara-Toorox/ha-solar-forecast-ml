@@ -13,11 +13,11 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
+    SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -31,27 +31,26 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ..const import (
+from ..const import (  # v9.0.0 energy flow sensors
+    BATTERY_EFFICIENCY_SENSOR,
+    BATTERY_POWER_SENSOR,
+    BATTERY_RUNTIME_REMAINING_SENSOR,
+    BATTERY_SOC_SENSOR,
+    BATTERY_TO_HOUSE_SENSOR,
     DOMAIN,
-    INTEGRATION_MODEL,
-    SOFTWARE_VERSION,
+    GRID_TO_BATTERY_SENSOR,
+    GRID_TO_HOUSE_SENSOR,
     ICON_BATTERY,
     ICON_BATTERY_CHARGING,
     ICON_BATTERY_DISCHARGING,
-    UNIT_KWH,
-    UNIT_WATT,
-    UNIT_HOURS,
-    BATTERY_SOC_SENSOR,
-    BATTERY_POWER_SENSOR,
-    BATTERY_RUNTIME_REMAINING_SENSOR,
-    BATTERY_EFFICIENCY_SENSOR,
-    # v9.0.0 energy flow sensors
-    SOLAR_TO_HOUSE_SENSOR,
+    INTEGRATION_MODEL,
+    SOFTWARE_VERSION,
     SOLAR_TO_BATTERY_SENSOR,
     SOLAR_TO_GRID_SENSOR,
-    GRID_TO_HOUSE_SENSOR,
-    GRID_TO_BATTERY_SENSOR,
-    BATTERY_TO_HOUSE_SENSOR,
+    SOLAR_TO_HOUSE_SENSOR,
+    UNIT_HOURS,
+    UNIT_KWH,
+    UNIT_WATT,
 )
 from ..coordinator import SolarForecastMLCoordinator
 
@@ -222,7 +221,9 @@ class BatteryRuntimeRemainingSensor(BaseBatterySensor):
             return None
 
         # Get current consumption (if available)
-        consumption = self.coordinator.data.get("current_consumption", 0) if self.coordinator.data else 0
+        consumption = (
+            self.coordinator.data.get("current_consumption", 0) if self.coordinator.data else 0
+        )
 
         if consumption <= 0:
             return None
@@ -241,7 +242,9 @@ class BatteryRuntimeRemainingSensor(BaseBatterySensor):
 
         return {
             "remaining_capacity_kwh": self.coordinator.battery_collector.get_remaining_capacity(),
-            "current_consumption_w": self.coordinator.data.get("current_consumption", 0) if self.coordinator.data else 0,
+            "current_consumption_w": (
+                self.coordinator.data.get("current_consumption", 0) if self.coordinator.data else 0
+            ),
         }
 
 
@@ -271,13 +274,12 @@ class BatteryEfficiencySensor(BaseBatterySensor):
         summary = battery_coordinator.persistence.get_today_summary()
 
         # v9.0.0: Total battery charging (Solar + Grid)
-        total_charge = (
-            summary.get('solar_to_battery_kwh', 0.0) +
-            summary.get('grid_to_battery_kwh', 0.0)
+        total_charge = summary.get("solar_to_battery_kwh", 0.0) + summary.get(
+            "grid_to_battery_kwh", 0.0
         )
 
         # v9.0.0: Total battery discharging
-        total_discharge = summary.get('battery_to_house_kwh', 0.0)
+        total_discharge = summary.get("battery_to_house_kwh", 0.0)
 
         if total_charge <= 0:
             return None
@@ -296,23 +298,23 @@ class BatteryEfficiencySensor(BaseBatterySensor):
 
         summary = battery_coordinator.persistence.get_today_summary()
 
-        total_charge = (
-            summary.get('solar_to_battery_kwh', 0.0) +
-            summary.get('grid_to_battery_kwh', 0.0)
+        total_charge = summary.get("solar_to_battery_kwh", 0.0) + summary.get(
+            "grid_to_battery_kwh", 0.0
         )
-        total_discharge = summary.get('battery_to_house_kwh', 0.0)
+        total_discharge = summary.get("battery_to_house_kwh", 0.0)
 
         return {
             "total_charge_today_kwh": round(total_charge, 3),
             "total_discharge_today_kwh": round(total_discharge, 3),
-            "solar_charge_kwh": round(summary.get('solar_to_battery_kwh', 0.0), 3),
-            "grid_charge_kwh": round(summary.get('grid_to_battery_kwh', 0.0), 3),
+            "solar_charge_kwh": round(summary.get("solar_to_battery_kwh", 0.0), 3),
+            "grid_charge_kwh": round(summary.get("grid_to_battery_kwh", 0.0), 3),
         }
 
 
 # ============================================================================
 # NEW v9.0.0 Energy Flow Sensors
 # ============================================================================
+
 
 class BaseEnergyFlowSensor(BaseBatterySensor):
     """Base class for v9.0.0 energy flow sensors"""
@@ -348,7 +350,7 @@ class BaseEnergyFlowSensor(BaseBatterySensor):
         battery_coordinator = self._get_battery_coordinator()
         return (
             battery_coordinator is not None
-            and hasattr(battery_coordinator, 'data_collector')
+            and hasattr(battery_coordinator, "data_collector")
             and battery_coordinator.data_collector.using_new_config
         )
 
@@ -358,10 +360,7 @@ class SolarToHouseSensor(BaseEnergyFlowSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         super().__init__(
-            coordinator, entry,
-            SOLAR_TO_HOUSE_SENSOR,
-            "Solar to House",
-            "mdi:solar-power"
+            coordinator, entry, SOLAR_TO_HOUSE_SENSOR, "Solar to House", "mdi:solar-power"
         )
 
     @property
@@ -371,7 +370,7 @@ class SolarToHouseSensor(BaseEnergyFlowSensor):
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
-        return summary.get('solar_to_house_kwh', 0.0)
+        return summary.get("solar_to_house_kwh", 0.0)
 
 
 class SolarToBatterySensor(BaseEnergyFlowSensor):
@@ -379,10 +378,11 @@ class SolarToBatterySensor(BaseEnergyFlowSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         super().__init__(
-            coordinator, entry,
+            coordinator,
+            entry,
             SOLAR_TO_BATTERY_SENSOR,
             "Solar to Battery",
-            "mdi:solar-power-variant"
+            "mdi:solar-power-variant",
         )
 
     @property
@@ -392,7 +392,7 @@ class SolarToBatterySensor(BaseEnergyFlowSensor):
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
-        return summary.get('solar_to_battery_kwh', 0.0)
+        return summary.get("solar_to_battery_kwh", 0.0)
 
 
 class SolarToGridSensor(BaseEnergyFlowSensor):
@@ -400,10 +400,11 @@ class SolarToGridSensor(BaseEnergyFlowSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         super().__init__(
-            coordinator, entry,
+            coordinator,
+            entry,
             SOLAR_TO_GRID_SENSOR,
             "Solar to Grid",
-            "mdi:transmission-tower-export"
+            "mdi:transmission-tower-export",
         )
 
     @property
@@ -413,7 +414,7 @@ class SolarToGridSensor(BaseEnergyFlowSensor):
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
-        return summary.get('solar_to_grid_kwh', 0.0)
+        return summary.get("solar_to_grid_kwh", 0.0)
 
 
 class GridToHouseSensor(BaseEnergyFlowSensor):
@@ -421,10 +422,11 @@ class GridToHouseSensor(BaseEnergyFlowSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         super().__init__(
-            coordinator, entry,
+            coordinator,
+            entry,
             GRID_TO_HOUSE_SENSOR,
             "Grid to House",
-            "mdi:transmission-tower-import"
+            "mdi:transmission-tower-import",
         )
 
     @property
@@ -434,7 +436,7 @@ class GridToHouseSensor(BaseEnergyFlowSensor):
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
-        return summary.get('grid_to_house_kwh', 0.0)
+        return summary.get("grid_to_house_kwh", 0.0)
 
 
 class GridToBatterySensor(BaseEnergyFlowSensor):
@@ -442,10 +444,11 @@ class GridToBatterySensor(BaseEnergyFlowSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         super().__init__(
-            coordinator, entry,
+            coordinator,
+            entry,
             GRID_TO_BATTERY_SENSOR,
             "Grid to Battery",
-            "mdi:battery-charging-high"
+            "mdi:battery-charging-high",
         )
 
     @property
@@ -455,7 +458,7 @@ class GridToBatterySensor(BaseEnergyFlowSensor):
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
-        return summary.get('grid_to_battery_kwh', 0.0)
+        return summary.get("grid_to_battery_kwh", 0.0)
 
 
 class BatteryToHouseSensor(BaseEnergyFlowSensor):
@@ -463,10 +466,11 @@ class BatteryToHouseSensor(BaseEnergyFlowSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         super().__init__(
-            coordinator, entry,
+            coordinator,
+            entry,
             BATTERY_TO_HOUSE_SENSOR,
             "Battery to House",
-            "mdi:battery-arrow-down"
+            "mdi:battery-arrow-down",
         )
 
     @property
@@ -476,7 +480,7 @@ class BatteryToHouseSensor(BaseEnergyFlowSensor):
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
-        return summary.get('battery_to_house_kwh', 0.0)
+        return summary.get("battery_to_house_kwh", 0.0)
 
 
 # Export all battery sensors

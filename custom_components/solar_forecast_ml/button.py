@@ -27,7 +27,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 # Use constants for domain and potentially device info
-from .const import DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, ML_VERSION
+from .const import DOMAIN, INTEGRATION_MODEL, ML_VERSION, SOFTWARE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 

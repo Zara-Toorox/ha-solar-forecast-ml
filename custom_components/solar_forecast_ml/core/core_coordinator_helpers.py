@@ -19,7 +19,7 @@ Copyright (C) 2025 Zara-Toorox
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from .core_helpers import SafeDateTimeUtil as dt_util
 
@@ -28,56 +28,49 @@ _LOGGER = logging.getLogger(__name__)
 
 class CoordinatorHelpers:
     """Helper functions for the data update coordinator"""
-    
+
     @staticmethod
     def calculate_next_update_time(
-        last_update: Optional[datetime],
-        interval_minutes: int = 15
+        last_update: Optional[datetime], interval_minutes: int = 15
     ) -> datetime:
         """Calculate the next scheduled update time"""
         if last_update is None:
             return dt_util.now()
-        
+
         next_update = last_update + timedelta(minutes=interval_minutes)
-        
+
         # If next update is in the past, use current time
         if next_update < dt_util.now():
             return dt_util.now()
-        
+
         return next_update
-    
+
     @staticmethod
-    def should_force_update(
-        last_update: Optional[datetime],
-        max_age_hours: int = 24
-    ) -> bool:
+    def should_force_update(last_update: Optional[datetime], max_age_hours: int = 24) -> bool:
         """Check if data should be force-updated due to age"""
         if last_update is None:
             return True
-        
+
         age = dt_util.now() - last_update
         return age.total_seconds() > max_age_hours * 3600
-    
+
     @staticmethod
     def validate_coordinator_data(data: Dict[str, Any]) -> bool:
         """Validate coordinator data structure"""
         required_keys = ["last_update", "forecasts"]
-        
+
         for key in required_keys:
             if key not in data:
                 _LOGGER.error(f"Missing required key in coordinator data: {key}")
                 return False
-        
+
         return True
-    
+
     @staticmethod
-    def merge_forecast_data(
-        old_data: Dict[str, Any],
-        new_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def merge_forecast_data(old_data: Dict[str, Any], new_data: Dict[str, Any]) -> Dict[str, Any]:
         """Merge new forecast data with existing data"""
         merged = old_data.copy()
-        
+
         # Update with new data
         for key, value in new_data.items():
             if key == "forecasts" and key in merged:
@@ -85,12 +78,12 @@ class CoordinatorHelpers:
                 merged[key].update(value)
             else:
                 merged[key] = value
-        
+
         # Update timestamp
         merged["last_update"] = dt_util.now().isoformat()
-        
+
         return merged
-    
+
     @staticmethod
     def calculate_data_staleness(last_update: Optional[datetime]) -> Dict[str, Any]:
         """Calculate data staleness metrics"""
@@ -99,12 +92,12 @@ class CoordinatorHelpers:
                 "stale": True,
                 "age_seconds": None,
                 "age_human": "Never updated",
-                "status": "no_data"
+                "status": "no_data",
             }
-        
+
         age = dt_util.now() - last_update
         age_seconds = age.total_seconds()
-        
+
         # Determine staleness status
         if age_seconds < 900:  # 15 minutes
             status = "fresh"
@@ -118,7 +111,7 @@ class CoordinatorHelpers:
         else:
             status = "very_stale"
             stale = True
-        
+
         # Human-readable age
         if age_seconds < 60:
             age_human = f"{int(age_seconds)} seconds ago"
@@ -128,21 +121,21 @@ class CoordinatorHelpers:
             age_human = f"{int(age_seconds / 3600)} hours ago"
         else:
             age_human = f"{int(age_seconds / 86400)} days ago"
-        
+
         return {
             "stale": stale,
             "age_seconds": age_seconds,
             "age_human": age_human,
-            "status": status
+            "status": status,
         }
-    
+
     @staticmethod
     def format_update_summary(update_results: Dict[str, bool]) -> str:
         """Format update results into a readable summary"""
         total = len(update_results)
         successful = sum(1 for v in update_results.values() if v)
         failed = total - successful
-        
+
         if failed == 0:
             return f"All {total} components updated successfully"
         elif successful == 0:

@@ -13,8 +13,9 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
 from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,12 +52,12 @@ class ChargeEvent:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage"""
         return {
-            'timestamp': self.timestamp.isoformat(),
-            'hour': self.timestamp.hour,
-            'source': self.source,
-            'power': self.power,
-            'duration_minutes': self.duration_minutes,
-            'energy_kwh': round(self.energy_kwh, 4),
+            "timestamp": self.timestamp.isoformat(),
+            "hour": self.timestamp.hour,
+            "source": self.source,
+            "power": self.power,
+            "duration_minutes": self.duration_minutes,
+            "energy_kwh": round(self.energy_kwh, 4),
         }
 
 
@@ -100,7 +101,7 @@ class BatteryChargeTracker:
 
         # State tracking
         self._last_update: Optional[datetime] = None
-        self._last_status: str = 'idle'
+        self._last_status: str = "idle"
 
         # Daily reset tracking
         self._last_reset_date: Optional[str] = None
@@ -159,7 +160,7 @@ class BatteryChargeTracker:
                 duration_minutes=duration_minutes,
             )
             self._update_energy_flows_v9(energy_flows)
-            current_status = energy_flows['status']
+            current_status = energy_flows["status"]
         else:
             # LEGACY: Old v8.x flow analysis
             status_info = self._analyze_power_flow(
@@ -167,17 +168,17 @@ class BatteryChargeTracker:
                 solar_power=solar_power,
                 output_power=output_power,
             )
-            current_status = status_info['status']
+            current_status = status_info["status"]
 
         # Track charging/discharging energy
-        if current_status == 'charging_solar':
+        if current_status == "charging_solar":
             energy_kwh = (battery_power / 1000) * (duration_minutes / 60)
             self._solar_charge_today_kwh += energy_kwh
 
             # Record event
             event = ChargeEvent(
                 timestamp=now,
-                source='solar',
+                source="solar",
                 power=battery_power,
                 duration_minutes=duration_minutes,
             )
@@ -190,14 +191,14 @@ class BatteryChargeTracker:
                     f"{energy_kwh:.3f} kWh"
                 )
 
-        elif current_status == 'charging_grid':
+        elif current_status == "charging_grid":
             energy_kwh = (battery_power / 1000) * (duration_minutes / 60)
             self._grid_charge_today_kwh += energy_kwh
 
             # Record event
             event = ChargeEvent(
                 timestamp=now,
-                source='grid',
+                source="grid",
                 power=battery_power,
                 duration_minutes=duration_minutes,
             )
@@ -210,7 +211,7 @@ class BatteryChargeTracker:
                     f"{energy_kwh:.3f} kWh"
                 )
 
-        elif current_status == 'discharging':
+        elif current_status == "discharging":
             energy_kwh = (abs(battery_power) / 1000) * (duration_minutes / 60)
             self._discharge_today_kwh += energy_kwh
 
@@ -237,10 +238,10 @@ class BatteryChargeTracker:
         # Discharging
         if battery_power < -POWER_TOLERANCE:
             return {
-                'status': 'discharging',
-                'discharge_power': abs(battery_power),
-                'grid_charge_power': 0,
-                'solar_charge_power': 0,
+                "status": "discharging",
+                "discharge_power": abs(battery_power),
+                "grid_charge_power": 0,
+                "solar_charge_power": 0,
             }
 
         # Charging
@@ -254,30 +255,30 @@ class BatteryChargeTracker:
 
             if solar_power >= (total_demand - tolerance):
                 return {
-                    'status': 'charging_solar',
-                    'solar_charge_power': battery_power,
-                    'grid_charge_power': 0,
-                    'discharge_power': 0,
-                    'solar_available': solar_power,
-                    'demand': total_demand,
+                    "status": "charging_solar",
+                    "solar_charge_power": battery_power,
+                    "grid_charge_power": 0,
+                    "discharge_power": 0,
+                    "solar_available": solar_power,
+                    "demand": total_demand,
                 }
             else:
                 return {
-                    'status': 'charging_grid',
-                    'grid_charge_power': battery_power,
-                    'solar_charge_power': 0,
-                    'discharge_power': 0,
-                    'solar_available': solar_power,
-                    'demand': total_demand,
+                    "status": "charging_grid",
+                    "grid_charge_power": battery_power,
+                    "solar_charge_power": 0,
+                    "discharge_power": 0,
+                    "solar_available": solar_power,
+                    "demand": total_demand,
                 }
 
         # Idle (between -POWER_TOLERANCE and +POWER_TOLERANCE)
         else:
             return {
-                'status': 'idle',
-                'discharge_power': 0,
-                'grid_charge_power': 0,
-                'solar_charge_power': 0,
+                "status": "idle",
+                "discharge_power": 0,
+                "grid_charge_power": 0,
+                "solar_charge_power": 0,
             }
 
     def _check_daily_reset(self, now: datetime):
@@ -327,67 +328,61 @@ class BatteryChargeTracker:
 
     def get_grid_charge_events(self) -> List[Dict[str, Any]]:
         """Get all grid charging events today Returns: List of charge event dictionaries with hour and energy"""
-        return [
-            event.to_dict()
-            for event in self._charge_events
-            if event.source == 'grid'
-        ]
+        return [event.to_dict() for event in self._charge_events if event.source == "grid"]
 
     def get_solar_charge_events(self) -> List[Dict[str, Any]]:
         """Get all solar charging events today Returns: List of charge event dictionaries with hour and energy"""
-        return [
-            event.to_dict()
-            for event in self._charge_events
-            if event.source == 'solar'
-        ]
+        return [event.to_dict() for event in self._charge_events if event.source == "solar"]
 
     def get_summary(self) -> Dict[str, Any]:
         """Get complete tracking summary Returns: Dictionary with all current values"""
         return {
-            'grid_charge_today_kwh': self.get_grid_charge_today(),
-            'solar_charge_today_kwh': self.get_solar_charge_today(),
-            'discharge_today_kwh': self.get_discharge_today(),
-            'total_charge_today_kwh': round(
+            "grid_charge_today_kwh": self.get_grid_charge_today(),
+            "solar_charge_today_kwh": self.get_solar_charge_today(),
+            "discharge_today_kwh": self.get_discharge_today(),
+            "total_charge_today_kwh": round(
                 self._grid_charge_today_kwh + self._solar_charge_today_kwh, 3
             ),
-            'grid_charge_events_count': len([e for e in self._charge_events if e.source == 'grid']),
-            'solar_charge_events_count': len([e for e in self._charge_events if e.source == 'solar']),
-            'last_update': self._last_update.isoformat() if self._last_update else None,
-            'last_status': self._last_status,
+            "grid_charge_events_count": len([e for e in self._charge_events if e.source == "grid"]),
+            "solar_charge_events_count": len(
+                [e for e in self._charge_events if e.source == "solar"]
+            ),
+            "last_update": self._last_update.isoformat() if self._last_update else None,
+            "last_status": self._last_status,
         }
 
     def get_state_dict(self) -> Dict[str, Any]:
         """Get complete state for persistence Returns: Dictionary with all state data"""
         return {
-            'grid_charge_today_kwh': self._grid_charge_today_kwh,
-            'solar_charge_today_kwh': self._solar_charge_today_kwh,
-            'discharge_today_kwh': self._discharge_today_kwh,
-            'charge_events': [event.to_dict() for event in self._charge_events],
-            'last_update': self._last_update.isoformat() if self._last_update else None,
-            'last_status': self._last_status,
-            'last_reset_date': self._last_reset_date,
+            "grid_charge_today_kwh": self._grid_charge_today_kwh,
+            "solar_charge_today_kwh": self._solar_charge_today_kwh,
+            "discharge_today_kwh": self._discharge_today_kwh,
+            "charge_events": [event.to_dict() for event in self._charge_events],
+            "last_update": self._last_update.isoformat() if self._last_update else None,
+            "last_status": self._last_status,
+            "last_reset_date": self._last_reset_date,
         }
 
     def restore_state(self, state: Dict[str, Any]):
         """Restore state from persistence Args: state: State dictionary from get_state_dict()"""
         try:
-            self._grid_charge_today_kwh = state.get('grid_charge_today_kwh', 0.0)
-            self._solar_charge_today_kwh = state.get('solar_charge_today_kwh', 0.0)
-            self._discharge_today_kwh = state.get('discharge_today_kwh', 0.0)
-            self._last_status = state.get('last_status', 'idle')
-            self._last_reset_date = state.get('last_reset_date')
+            self._grid_charge_today_kwh = state.get("grid_charge_today_kwh", 0.0)
+            self._solar_charge_today_kwh = state.get("solar_charge_today_kwh", 0.0)
+            self._discharge_today_kwh = state.get("discharge_today_kwh", 0.0)
+            self._last_status = state.get("last_status", "idle")
+            self._last_reset_date = state.get("last_reset_date")
 
-            if state.get('last_update'):
-                self._last_update = datetime.fromisoformat(state['last_update'])
+            if state.get("last_update"):
+                self._last_update = datetime.fromisoformat(state["last_update"])
 
             # Restore events
             self._charge_events = []
-            for event_data in state.get('charge_events', []):
+            for event_data in state.get("charge_events", []):
                 event = ChargeEvent(
-                    timestamp=datetime.fromisoformat(event_data['timestamp']),
-                    source=event_data['source'],
-                    power=event_data['power'],
-                    duration_minutes=event_data['duration_minutes'],
+                    timestamp=datetime.fromisoformat(event_data["timestamp"]),
+                    source=event_data["source"],
+                    power=event_data["power"],
+                    duration_minutes=event_data["duration_minutes"],
                 )
                 self._charge_events.append(event)
 
@@ -439,15 +434,15 @@ class BatteryChargeTracker:
 
         # Initialize flows
         flows = {
-            'solar_to_house_w': 0.0,
-            'solar_to_battery_w': 0.0,
-            'solar_to_grid_w': 0.0,
-            'grid_to_house_w': 0.0,
-            'grid_to_battery_w': 0.0,
-            'battery_to_house_w': 0.0,
-            'grid_import_w': grid_import,
-            'grid_export_w': grid_export,
-            'status': 'idle',
+            "solar_to_house_w": 0.0,
+            "solar_to_battery_w": 0.0,
+            "solar_to_grid_w": 0.0,
+            "grid_to_house_w": 0.0,
+            "grid_to_battery_w": 0.0,
+            "battery_to_house_w": 0.0,
+            "grid_import_w": grid_import,
+            "grid_export_w": grid_export,
+            "status": "idle",
         }
 
         # 1. Battery flows
@@ -456,43 +451,49 @@ class BatteryChargeTracker:
 
         if battery_discharge_w > POWER_TOLERANCE:
             # Battery is discharging → goes to house
-            flows['battery_to_house_w'] = battery_discharge_w
-            flows['status'] = 'discharging'
+            flows["battery_to_house_w"] = battery_discharge_w
+            flows["status"] = "discharging"
 
         elif battery_charge_w > POWER_TOLERANCE:
             # Battery is charging → determine source
             if grid_charge_power > POWER_TOLERANCE:
                 # Grid charging (known from sensor)
-                flows['grid_to_battery_w'] = grid_charge_power
-                flows['solar_to_battery_w'] = max(0.0, battery_charge_w - grid_charge_power)
-                flows['status'] = 'charging_grid' if grid_charge_power > flows['solar_to_battery_w'] else 'charging_solar'
+                flows["grid_to_battery_w"] = grid_charge_power
+                flows["solar_to_battery_w"] = max(0.0, battery_charge_w - grid_charge_power)
+                flows["status"] = (
+                    "charging_grid"
+                    if grid_charge_power > flows["solar_to_battery_w"]
+                    else "charging_solar"
+                )
             else:
                 # Assume solar charging
-                flows['solar_to_battery_w'] = battery_charge_w
-                flows['status'] = 'charging_solar'
+                flows["solar_to_battery_w"] = battery_charge_w
+                flows["status"] = "charging_solar"
 
         # 2. Solar flows
         if solar_power > POWER_TOLERANCE:
             # Solar → Grid (export)
-            flows['solar_to_grid_w'] = grid_export
+            flows["solar_to_grid_w"] = grid_export
 
             # Solar → Battery (already calculated above)
-            solar_to_battery = flows['solar_to_battery_w']
+            solar_to_battery = flows["solar_to_battery_w"]
 
             # Solar → House (remainder)
-            flows['solar_to_house_w'] = max(0.0, solar_power - solar_to_battery - flows['solar_to_grid_w'])
+            flows["solar_to_house_w"] = max(
+                0.0, solar_power - solar_to_battery - flows["solar_to_grid_w"]
+            )
 
         # 3. Grid flows
         if grid_import > POWER_TOLERANCE:
             # Importing from grid → House and/or Battery
-            grid_to_battery = flows['grid_to_battery_w']
-            flows['grid_to_house_w'] = max(0.0, grid_import - grid_to_battery)
+            grid_to_battery = flows["grid_to_battery_w"]
+            flows["grid_to_house_w"] = max(0.0, grid_import - grid_to_battery)
 
         # Convert flows to energy (kWh)
         energy_flows = {}
         for key, power_w in flows.items():
-            if key.endswith('_w'):
-                energy_key = key.replace('_w', '_kwh')
+            if key.endswith("_w"):
+                energy_key = key.replace("_w", "_kwh")
                 energy_flows[energy_key] = (power_w / 1000.0) * duration_hours
             else:
                 energy_flows[key] = power_w
@@ -501,19 +502,19 @@ class BatteryChargeTracker:
 
     def _update_energy_flows_v9(self, energy_flows: Dict[str, Any]):
         """Update accumulated energy flows (v9.0.0)"""
-        self._solar_to_house_kwh += energy_flows.get('solar_to_house_kwh', 0.0)
-        self._solar_to_battery_kwh += energy_flows.get('solar_to_battery_kwh', 0.0)
-        self._solar_to_grid_kwh += energy_flows.get('solar_to_grid_kwh', 0.0)
-        self._grid_to_house_kwh += energy_flows.get('grid_to_house_kwh', 0.0)
-        self._grid_to_battery_kwh += energy_flows.get('grid_to_battery_kwh', 0.0)
-        self._battery_to_house_kwh += energy_flows.get('battery_to_house_kwh', 0.0)
-        self._grid_import_today_kwh += energy_flows.get('grid_import_kwh', 0.0)
-        self._grid_export_today_kwh += energy_flows.get('grid_export_kwh', 0.0)
+        self._solar_to_house_kwh += energy_flows.get("solar_to_house_kwh", 0.0)
+        self._solar_to_battery_kwh += energy_flows.get("solar_to_battery_kwh", 0.0)
+        self._solar_to_grid_kwh += energy_flows.get("solar_to_grid_kwh", 0.0)
+        self._grid_to_house_kwh += energy_flows.get("grid_to_house_kwh", 0.0)
+        self._grid_to_battery_kwh += energy_flows.get("grid_to_battery_kwh", 0.0)
+        self._battery_to_house_kwh += energy_flows.get("battery_to_house_kwh", 0.0)
+        self._grid_import_today_kwh += energy_flows.get("grid_import_kwh", 0.0)
+        self._grid_export_today_kwh += energy_flows.get("grid_export_kwh", 0.0)
 
         # Also update legacy trackers
-        self._solar_charge_today_kwh += energy_flows.get('solar_to_battery_kwh', 0.0)
-        self._grid_charge_today_kwh += energy_flows.get('grid_to_battery_kwh', 0.0)
-        self._discharge_today_kwh += energy_flows.get('battery_to_house_kwh', 0.0)
+        self._solar_charge_today_kwh += energy_flows.get("solar_to_battery_kwh", 0.0)
+        self._grid_charge_today_kwh += energy_flows.get("grid_to_battery_kwh", 0.0)
+        self._discharge_today_kwh += energy_flows.get("battery_to_house_kwh", 0.0)
 
     def get_energy_flows_v9(self) -> Dict[str, float]:
         """Get all energy flows (v9.0.0)
@@ -522,12 +523,12 @@ class BatteryChargeTracker:
             Dictionary with all energy flows in kWh
         """
         return {
-            'solar_to_house_kwh': round(self._solar_to_house_kwh, 3),
-            'solar_to_battery_kwh': round(self._solar_to_battery_kwh, 3),
-            'solar_to_grid_kwh': round(self._solar_to_grid_kwh, 3),
-            'grid_to_house_kwh': round(self._grid_to_house_kwh, 3),
-            'grid_to_battery_kwh': round(self._grid_to_battery_kwh, 3),
-            'battery_to_house_kwh': round(self._battery_to_house_kwh, 3),
-            'grid_import_today_kwh': round(self._grid_import_today_kwh, 3),
-            'grid_export_today_kwh': round(self._grid_export_today_kwh, 3),
+            "solar_to_house_kwh": round(self._solar_to_house_kwh, 3),
+            "solar_to_battery_kwh": round(self._solar_to_battery_kwh, 3),
+            "solar_to_grid_kwh": round(self._solar_to_grid_kwh, 3),
+            "grid_to_house_kwh": round(self._grid_to_house_kwh, 3),
+            "grid_to_battery_kwh": round(self._grid_to_battery_kwh, 3),
+            "battery_to_house_kwh": round(self._battery_to_house_kwh, 3),
+            "grid_import_today_kwh": round(self._grid_import_today_kwh, 3),
+            "grid_export_today_kwh": round(self._grid_export_today_kwh, 3),
         }

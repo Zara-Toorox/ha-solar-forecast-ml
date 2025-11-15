@@ -18,6 +18,7 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -26,28 +27,26 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    CONF_BATTERY_ENABLED,
     DOMAIN,
     PLATFORMS,
-    SERVICE_RETRAIN_MODEL,
-    SERVICE_RESET_LEARNING_DATA,
-    SERVICE_FINALIZE_DAY,
-    SERVICE_MOVE_TO_HISTORY,
     SERVICE_CALCULATE_STATS,
-    SERVICE_RUN_ALL_DAY_END_TASKS,
-    SERVICE_TEST_MORNING_ROUTINE,
-    SERVICE_TEST_BEST_HOUR,
-    SERVICE_TEST_TOMORROW_LOCK,
-    SERVICE_TEST_DAY_AFTER_SAVE,
-    SERVICE_TEST_DAY_AFTER_LOCK,
-    SERVICE_FORCE_TODAY_LOCK,
     SERVICE_COLLECT_HOURLY_SAMPLE,
+    SERVICE_FINALIZE_DAY,
+    SERVICE_FORCE_TODAY_LOCK,
+    SERVICE_MOVE_TO_HISTORY,
     SERVICE_NIGHT_CLEANUP,
+    SERVICE_RESET_LEARNING_DATA,
+    SERVICE_RETRAIN_MODEL,
+    SERVICE_RUN_ALL_DAY_END_TASKS,
     SERVICE_RUN_ALL_SCHEDULED_TASKS,
-    CONF_BATTERY_ENABLED,
+    SERVICE_TEST_BEST_HOUR,
+    SERVICE_TEST_DAY_AFTER_LOCK,
+    SERVICE_TEST_DAY_AFTER_SAVE,
+    SERVICE_TEST_MORNING_ROUTINE,
+    SERVICE_TEST_TOMORROW_LOCK,
 )
-
 from .core.core_helpers import SafeDateTimeUtil as dt_util
-from datetime import timedelta
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,11 +61,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Solar Forecast ML from a config entry"""
     # Deferring imports to avoid blocking the event loop during component loading
+    from .battery.battery_coordinator import BatteryCoordinator
+    from .const import CONF_BATTERY_ENABLED
     from .coordinator import SolarForecastMLCoordinator
     from .core.core_dependency_handler import DependencyHandler
     from .services.service_notification import create_notification_service
-    from .battery.battery_coordinator import BatteryCoordinator
-    from .const import CONF_BATTERY_ENABLED
 
     # Check dependencies
     dependency_handler = DependencyHandler()
@@ -87,27 +86,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.warning("NotificationService could not be created")
 
     # Create Solar Forecast coordinator
-    coordinator = SolarForecastMLCoordinator(
-        hass,
-        entry,
-        dependencies_ok=dependencies_ok
-    )
+    coordinator = SolarForecastMLCoordinator(hass, entry, dependencies_ok=dependencies_ok)
 
     # V7 Clean Slate Migration (runs once, BEFORE coordinator setup)
-    from .migration.migration_v7_clean_slate import V7CleanSlateMigration
     from pathlib import Path
-    data_dir = Path(hass.config.path("solar_forecast_ml"))
-    migration = V7CleanSlateMigration(hass, data_dir, coordinator=coordinator)
 
-    if migration.should_run():
+    from .migration.migration_v7_clean_slate import V7CleanSlateMigration
+
+    data_dir = Path(hass.config.path("solar_forecast_ml"))
+    migration_v7 = V7CleanSlateMigration(hass, data_dir, coordinator=coordinator)
+
+    if migration_v7.should_run():
         _LOGGER.warning("V7 Migration needed - running clean slate migration...")
-        migration_success = await migration.run()
+        migration_success = await migration_v7.run()
         if not migration_success:
             _LOGGER.error("V7 Migration failed - continuing with setup anyway")
         else:
             _LOGGER.info("V7 Migration completed successfully")
 
-    # Setup Solar coordinator (AFTER migration)
+    # V8.6.2 RC-2 Clean Slate Migration (runs once, AFTER V7 migration, BEFORE coordinator setup)
+    from .migration.migration_v862_rc2_clean_slate import V862RC2CleanSlateMigration
+
+    migration_rc2 = V862RC2CleanSlateMigration(hass, data_dir, coordinator=coordinator)
+
+    if migration_rc2.should_run():
+        _LOGGER.warning("V8.6.2 RC-2 Migration needed - running clean slate migration...")
+        migration_success = await migration_rc2.run()
+        if not migration_success:
+            _LOGGER.error("V8.6.2 RC-2 Migration failed - continuing with setup anyway")
+        else:
+            _LOGGER.info("V8.6.2 RC-2 Migration completed successfully")
+
+    # Setup Solar coordinator (AFTER all migrations)
     setup_ok = await coordinator.async_setup()
     if not setup_ok:
         _LOGGER.error("Failed to setup Solar Forecast coordinator")
@@ -121,7 +131,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Setup Battery coordinator (separate, optional)
     battery_coordinator = None
-    battery_enabled = entry.options.get(CONF_BATTERY_ENABLED, entry.data.get(CONF_BATTERY_ENABLED, False))
+    battery_enabled = entry.options.get(
+        CONF_BATTERY_ENABLED, entry.data.get(CONF_BATTERY_ENABLED, False)
+    )
 
     if battery_enabled:
         try:
@@ -135,7 +147,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 hass.data[DOMAIN][f"{entry.entry_id}_battery"] = battery_coordinator
                 _LOGGER.info("BatteryCoordinator initialized successfully")
             else:
-                _LOGGER.warning("BatteryCoordinator setup failed, continuing without battery features")
+                _LOGGER.warning(
+                    "BatteryCoordinator setup failed, continuing without battery features"
+                )
                 battery_coordinator = None
         except Exception as e:
             _LOGGER.error(f"Error setting up BatteryCoordinator: {e}", exc_info=True)
@@ -163,7 +177,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await notification_service.show_startup_success(
                 ml_mode=dependencies_ok,
                 installed_packages=installed_packages,
-                missing_packages=missing_packages
+                missing_packages=missing_packages,
             )
             _LOGGER.debug("Startup notification triggered")
         except Exception as e:
@@ -174,12 +188,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     battery_str = "Enabled" if battery_coordinator else "Disabled"
 
     _LOGGER.info(
-        "="*70 + "\n"
-        "Solar Forecast ML v8 \"Sarpeidon\" 🌟 - Setup Complete! ✓\n"
+        "=" * 70 + "\n"
+        'Solar Forecast ML v8 "Sarpeidon" 🌟 - Setup Complete! ✓\n'
         f"Mode: {mode_str} | Battery Management: {battery_str}\n"
-        "\"The future is not set in stone, but with data we illuminate the path.\"\n"
-        "Author: Zara-Toorox | Live long and prosper! 🖖\n" +
-        "="*70
+        '"The future is not set in stone, but with data we illuminate the path."\n'
+        "Author: Zara-Toorox | Live long and prosper! 🖖\n" + "=" * 70
     )
 
     return True
@@ -197,7 +210,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = hass.data[DOMAIN].pop(entry.entry_id)
 
         # Cleanup Solar coordinator
-        if hasattr(coordinator, 'scheduled_tasks'):
+        if hasattr(coordinator, "scheduled_tasks"):
             coordinator.scheduled_tasks.cancel_listeners()
 
         # Remove Battery coordinator if exists (separate cleanup)
@@ -216,9 +229,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_register_services(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    coordinator: "SolarForecastMLCoordinator"
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: "SolarForecastMLCoordinator"
 ) -> None:
     """Register integration services using Service Registry"""
     from .services.service_registry import ServiceRegistry

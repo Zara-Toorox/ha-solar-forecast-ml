@@ -18,24 +18,22 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import asyncio
+import hashlib
 import json
 import logging
-import shutil
 import re
-import hashlib
+import shutil
 import time
-from datetime import datetime, date
-# --- IMPORT HIER ENTFERNT ---
-# import aiofiles (Wird in die Funktionen verschoben)
-# --- ENDE ENTFERNUNG ---
-from pathlib import Path
-from typing import Dict, Any
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any, Dict
 
 from homeassistant.core import HomeAssistant
 
 # Use constants for versioning, accessible by inheriting classes
 from ..const import DATA_VERSION
+
 # Import specific exception types
 from ..core.core_exceptions import DataIntegrityException, create_context
 
@@ -44,20 +42,24 @@ _LOGGER = logging.getLogger(__name__)
 
 class DateTimeEncoder(json.JSONEncoder):
     """Custom JSON Encoder that converts datetime and date objects to ISO format str..."""
+
     def default(self, obj):
         if isinstance(obj, (datetime, date)):
             if isinstance(obj, datetime):
-                # CRITICAL FIX: Force all datetimes to LOCAL timezone
+                # Force all datetimes to LOCAL timezone
                 try:
                     from ..core.core_helpers import SafeDateTimeUtil as dt_util
+
                     obj = dt_util.ensure_local(obj)
                     # Converting datetime to local timezone (debug log removed)
                 except Exception as e:
-                    _LOGGER.warning(f"Failed to convert datetime to local timezone: {e}, using original")
+                    _LOGGER.warning(
+                        f"Failed to convert datetime to local timezone: {e}, using original"
+                    )
             return obj.isoformat()
 
         # Handle numpy types and other non-JSON-serializable types
-        if hasattr(obj, 'item'):  # numpy scalar types
+        if hasattr(obj, "item"):  # numpy scalar types
             return obj.item()
         if isinstance(obj, (bool, type(True), type(False))):  # Ensure standard Python bool
             return bool(obj)
@@ -71,7 +73,7 @@ class DataManagerIO:
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         """Initialize the IO manager"""
         self.hass = hass
-        self.data_dir = Path(data_dir) # Ensure it's a Path object
+        self.data_dir = Path(data_dir)  # Ensure it's a Path object
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="DataManagerIO")
         # Per-file locks: Each file gets its own lock to prevent unnecessary blocking
         self._file_locks: Dict[str, asyncio.Lock] = {}
@@ -101,7 +103,7 @@ class DataManagerIO:
         except Exception as e:
             raise DataIntegrityException(
                 f"Failed to ensure directory exists: {directory}",
-                context=create_context(directory=str(directory), error=str(e))
+                context=create_context(directory=str(directory), error=str(e)),
             )
 
     async def _get_file_size(self, file_path: Path) -> int:
@@ -148,7 +150,11 @@ class DataManagerIO:
         # Ensure uniqueness with counter if collision occurs (extremely rare)
         counter = 0
         while counter < 100:  # Safety limit
-            suffix = f'.tmp_{task_hash}_{timestamp}' if counter == 0 else f'.tmp_{task_hash}_{timestamp}_{counter}'
+            suffix = (
+                f".tmp_{task_hash}_{timestamp}"
+                if counter == 0
+                else f".tmp_{task_hash}_{timestamp}_{counter}"
+            )
             temp_file = file_path.parent / f"{file_path.stem}{suffix}"
             if not temp_file.exists():
                 break
@@ -156,22 +162,23 @@ class DataManagerIO:
         else:
             # Fallback to random if somehow 100 collisions (should never happen)
             import random
-            suffix = f'.tmp_{random.randint(100000, 999999)}'
+
+            suffix = f".tmp_{random.randint(100000, 999999)}"
             temp_file = file_path.parent / f"{file_path.stem}{suffix}"
         try:
             # Asynchronously write JSON data to the temporary file
-            async with aiofiles.open(temp_file, 'w', encoding='utf-8') as f:
+            async with aiofiles.open(temp_file, "w", encoding="utf-8") as f:
                 # Use DateTimeEncoder to handle datetime objects automatically
                 # CRITICAL: DateTimeEncoder now forces all datetimes to LOCAL timezone
                 # sort_keys=False preserves insertion order for user-friendly JSON structure
-                json_data = json.dumps(data, cls=DateTimeEncoder, indent=2, ensure_ascii=False, sort_keys=False)
+                json_data = json.dumps(
+                    data, cls=DateTimeEncoder, indent=2, ensure_ascii=False, sort_keys=False
+                )
                 await f.write(json_data)
-                await f.flush() # Ensure data is written before moving
+                await f.flush()  # Ensure data is written before moving
 
             # Atomically replace the target file with the temporary file (blocking operation)
-            await self.hass.async_add_executor_job(
-                shutil.move, str(temp_file), str(file_path)
-            )
+            await self.hass.async_add_executor_job(shutil.move, str(temp_file), str(file_path))
             # Atomic write successful (debug log removed)
 
         except Exception as e:
@@ -186,7 +193,7 @@ class DataManagerIO:
             # Re-raise the original exception wrapped in DataIntegrityException
             raise DataIntegrityException(
                 f"Failed atomic write to {file_path.name}: {str(e)}",
-                context=create_context(file=str(file_path), error=str(e), temp_file=str(temp_file))
+                context=create_context(file=str(file_path), error=str(e), temp_file=str(temp_file)),
             )
         finally:
             # Ensure temp file is removed even if move fails unexpectedly (belt-and-suspenders)
@@ -196,7 +203,6 @@ class DataManagerIO:
                 except Exception as e:
                     # Could not remove temp file (debug log removed)
                     pass
-
 
     async def _atomic_write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Public thread-safe method for atomically writing JSON data to a file"""
@@ -218,69 +224,84 @@ class DataManagerIO:
             )
             raise DataIntegrityException(
                 f"Failed to acquire file lock for {file_path.name} - timeout after 15s",
-                context=create_context(file=str(file_path))
+                context=create_context(file=str(file_path)),
             )
 
-    async def _read_json_file(self, file_path: Path, default_structure: Dict | None = None) -> Dict[str, Any]:
+    async def _read_json_file(
+        self, file_path: Path, default_structure: Dict | None = None
+    ) -> Dict[str, Any]:
         """Reads JSON data from a file asynchronously Non-blocking file read"""
-        
+
         # +++ IMPORT HIER EINGEF +++
         try:
             import aiofiles
         except ImportError:
             _LOGGER.error("AIOFiles ist nicht installiert. Dateilesen fehlgeschlagen.")
-            if default_structure is None: return {}
+            if default_structure is None:
+                return {}
             return default_structure
         # +++ ENDE EINF +++
 
         if default_structure is None:
-            default_structure = {} # Default to empty dict if not specified
+            default_structure = {}  # Default to empty dict if not specified
 
         try:
             # Check existence using non-blocking helper
             if not await self._file_exists(file_path):
                 # File not found, returning default (debug log removed)
-                return default_structure # Return default if file doesn't exist
+                return default_structure  # Return default if file doesn't exist
 
             # Read file content asynchronously
-            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
 
                 # Handle empty file
                 if not content:
-                     _LOGGER.warning("File %s is empty, returning default structure.", file_path.name)
-                     return default_structure # Return default if file is empty
+                    _LOGGER.warning(
+                        "File %s is empty, returning default structure.", file_path.name
+                    )
+                    return default_structure  # Return default if file is empty
 
             # Decode JSON content (potentially blocking for large files, run in executor)
             try:
                 data = await self.hass.async_add_executor_job(json.loads, content)
                 # Allow both dict and list (list for weather_cache backward compatibility)
                 if not isinstance(data, (dict, list)):
-                     _LOGGER.warning("JSON content in %s is neither dict nor list, returning default.", file_path.name)
-                     return default_structure
+                    _LOGGER.warning(
+                        "JSON content in %s is neither dict nor list, returning default.",
+                        file_path.name,
+                    )
+                    return default_structure
                 return data
             except json.JSONDecodeError as e:
-                _LOGGER.error("Invalid JSON content in %s: %s. Returning default structure.", file_path.name, e)
-                return default_structure # Return default on decode error
+                _LOGGER.error(
+                    "Invalid JSON content in %s: %s. Returning default structure.",
+                    file_path.name,
+                    e,
+                )
+                return default_structure  # Return default on decode error
 
         except FileNotFoundError:
-             # Should be caught by _file_exists, but handle defensively
-             _LOGGER.warning("File %s not found during read attempt, returning default.", file_path.name)
-             return default_structure
+            # Should be caught by _file_exists, but handle defensively
+            _LOGGER.warning(
+                "File %s not found during read attempt, returning default.", file_path.name
+            )
+            return default_structure
         except Exception as e:
             # Catch other potential I/O or unexpected errors
             _LOGGER.error("Failed to read JSON file %s: %s", file_path.name, e, exc_info=True)
             # Wrap in DataIntegrityException? Maybe too harsh, return default for resilience.
             # raise DataIntegrityException(f"Failed to read {file_path.name}: {str(e)}")
-            return default_structure # Return default on other errors
-
+            return default_structure  # Return default on other errors
 
     async def cleanup(self) -> None:
         """Cleans up resources specifically shutting down the ThreadPoolExecutor"""
         try:
             _LOGGER.info("Shutting down DataManagerIO Executor...")
             # Use executor job to run the blocking shutdown method
-            await self.hass.async_add_executor_job(self._executor.shutdown, True) # True waits for tasks
+            await self.hass.async_add_executor_job(
+                self._executor.shutdown, True
+            )  # True waits for tasks
             _LOGGER.info("DataManagerIO Executor shut down successfully.")
         except Exception as e:
             _LOGGER.error("Error during DataManagerIO cleanup: %s", e, exc_info=True)

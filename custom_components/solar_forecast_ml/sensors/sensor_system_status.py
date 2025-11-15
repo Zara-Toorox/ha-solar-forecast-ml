@@ -18,16 +18,16 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from datetime import datetime
-from typing import Any, Dict, Optional, List
 from collections import deque
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ..coordinator import SolarForecastMLCoordinator
 from ..const import DOMAIN
+from ..coordinator import SolarForecastMLCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,10 +99,14 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         ml_next_check = None
 
         if ml_predictor:
-            ml_status = ml_predictor.model_state.value if hasattr(ml_predictor, 'model_state') else "unknown"
-            ml_samples = getattr(ml_predictor, 'training_samples', 0)
-            ml_accuracy = getattr(ml_predictor, 'current_accuracy', None)
-            ml_last_training = getattr(ml_predictor, 'last_training_time', None)
+            ml_status = (
+                ml_predictor.model_state.value
+                if hasattr(ml_predictor, "model_state")
+                else "unknown"
+            )
+            ml_samples = getattr(ml_predictor, "training_samples", 0)
+            ml_accuracy = getattr(ml_predictor, "current_accuracy", None)
+            ml_last_training = getattr(ml_predictor, "last_training_time", None)
 
         # Convert datetime to ISO format
         last_event_time_str = None
@@ -117,8 +121,8 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         recent_events = []
         for event in self._recent_events:
             event_copy = event.copy()
-            if 'time' in event_copy and isinstance(event_copy['time'], datetime):
-                event_copy['time'] = event_copy['time'].isoformat()
+            if "time" in event_copy and isinstance(event_copy["time"], datetime):
+                event_copy["time"] = event_copy["time"].isoformat()
             recent_events.append(event_copy)
 
         # Get hourly forecast data if available
@@ -133,27 +137,22 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
             "last_event_status": self._last_event_status,
             "last_event_summary": self._last_event_summary,
             "last_event_details": self._last_event_details,
-
             # ==================== SYSTEM HEALTH ====================
             "ml_model_status": ml_status,
             "ml_samples_total": ml_samples,
             "ml_model_accuracy": round(ml_accuracy * 100, 1) if ml_accuracy else None,
             "ml_last_training": ml_last_training_str,
             "ml_next_training_check": ml_next_check,
-
             "forecast_source": self._get_forecast_source(),
             "yesterday_accuracy": self.coordinator.yesterday_accuracy,
             "yesterday_deviation_kwh": self.coordinator.last_day_error_kwh,
-
             # ==================== HOURLY FORECASTS ====================
             "hourly_forecast_today": hourly_today,
             "hourly_forecast_tomorrow": hourly_tomorrow,
             "hourly_forecast_day_after_tomorrow": hourly_day_after,
-
             # ==================== WARNINGS ====================
             "warnings": self._warnings,
             "warnings_count": len(self._warnings),
-
             # ==================== EVENT HISTORY ====================
             "recent_events": recent_events,
             "recent_events_count": len(self._recent_events),
@@ -161,10 +160,13 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
 
     def _get_forecast_source(self) -> str:
         """Determine current forecast source"""
-        if hasattr(self.coordinator, 'forecast_orchestrator'):
+        if hasattr(self.coordinator, "forecast_orchestrator"):
             orchestrator = self.coordinator.forecast_orchestrator
-            if hasattr(orchestrator, 'ml_strategy') and orchestrator.ml_strategy:
-                if hasattr(orchestrator.ml_strategy, 'is_available') and orchestrator.ml_strategy.is_available():
+            if hasattr(orchestrator, "ml_strategy") and orchestrator.ml_strategy:
+                if (
+                    hasattr(orchestrator.ml_strategy, "is_available")
+                    and orchestrator.ml_strategy.is_available()
+                ):
                     return "ml"
         return "weather"
 
@@ -174,7 +176,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         event_status: str,
         event_summary: str,
         event_details: Optional[Dict[str, Any]] = None,
-        warnings: Optional[List[str]] = None
+        warnings: Optional[List[str]] = None,
     ) -> None:
         """Update sensor with new event information"""
         from ..core.core_helpers import SafeDateTimeUtil as dt_util
@@ -197,7 +199,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
             "type": event_type,
             "time": now,
             "status": event_status,
-            "summary": event_summary
+            "summary": event_summary,
         }
         self._recent_events.append(event_record)
 
@@ -231,7 +233,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
 
         # Warning wenn ML degraded
         ml_predictor = self.coordinator.ml_predictor
-        if ml_predictor and hasattr(ml_predictor, 'model_state'):
+        if ml_predictor and hasattr(ml_predictor, "model_state"):
             ml_state = ml_predictor.model_state.value
             if ml_state in ["degraded", "error"]:
                 return "warning"
@@ -251,7 +253,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         self.update_status(
             event_type="initialization",
             event_status="success",
-            event_summary="Solar Forecast ML erfolgreich initialisiert"
+            event_summary="Solar Forecast ML erfolgreich initialisiert",
         )
 
         _LOGGER.info("System Status Sensor successfully added to Home Assistant")
@@ -272,24 +274,29 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         ml_predictor = self.coordinator.ml_predictor
         if ml_predictor:
             # Check training age
-            if hasattr(ml_predictor, 'last_training_time') and ml_predictor.last_training_time:
-                from ..core.core_helpers import SafeDateTimeUtil as dt_util
+            if hasattr(ml_predictor, "last_training_time") and ml_predictor.last_training_time:
                 from datetime import timedelta
+
+                from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
                 training_age = dt_util.now() - ml_predictor.last_training_time
                 if training_age > timedelta(days=14):
                     warnings.append(f"Letztes ML Training vor {training_age.days} Tagen")
 
             # Check sample count
-            if hasattr(ml_predictor, 'training_samples'):
+            if hasattr(ml_predictor, "training_samples"):
                 from ..const import MIN_TRAINING_DATA_POINTS
+
                 if ml_predictor.training_samples < MIN_TRAINING_DATA_POINTS:
                     warnings.append(
                         f"Nicht genug Samples für Training: {ml_predictor.training_samples}/{MIN_TRAINING_DATA_POINTS}"
                     )
 
         # Check weather service
-        if hasattr(self.coordinator, 'weather_fallback_active') and self.coordinator.weather_fallback_active:
+        if (
+            hasattr(self.coordinator, "weather_fallback_active")
+            and self.coordinator.weather_fallback_active
+        ):
             warnings.append("Wetter-Service im Fallback-Modus")
 
         return warnings
@@ -303,8 +310,9 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         Returns:
             List of dicts with hour and production_kwh, or empty list if not available
         """
-        from ..core.core_helpers import SafeDateTimeUtil as dt_util
         from datetime import timedelta
+
+        from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
         try:
             # Get coordinator data
@@ -343,11 +351,13 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
 
                     # Check if this hour belongs to target date
                     if hour_dt.date() == target_date:
-                        result.append({
-                            "hour": hour_dt.hour,
-                            "datetime": hour_dt.isoformat(),
-                            "production_kwh": round(hour_data.get("production_kwh", 0.0), 3)
-                        })
+                        result.append(
+                            {
+                                "hour": hour_dt.hour,
+                                "datetime": hour_dt.isoformat(),
+                                "production_kwh": round(hour_data.get("production_kwh", 0.0), 3),
+                            }
+                        )
 
                 except Exception as e:
                     _LOGGER.debug(f"Error processing hourly data entry: {e}")

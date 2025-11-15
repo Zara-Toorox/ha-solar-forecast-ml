@@ -34,18 +34,19 @@ REQUIRED_DEPENDENCIES = {
 
 class DependencyHandler:
     """Handler for dependency checks"""
-    
+
     def __init__(self) -> None:
         """Initialize dependency handler"""
         self._checked = False
         self._all_satisfied = False
         self._package_status = {}
-    
+
     def _check_package_sync(self, package: str) -> bool:
         """Synchronous check if a package is installed and functional"""
         try:
             if package == "numpy":
                 import numpy as np
+
                 # Test basic functionality
                 test_array = np.array([1, 2, 3])
                 _ = test_array.mean()
@@ -53,6 +54,7 @@ class DependencyHandler:
                 return True
             elif package == "aiofiles":
                 import aiofiles
+
                 _LOGGER.debug(f"[OK] {package} is functional")
                 return True
             else:
@@ -60,50 +62,48 @@ class DependencyHandler:
                 __import__(package)
                 _LOGGER.debug(f"[OK] {package} is installed")
                 return True
-                
+
         except Exception as e:
             _LOGGER.warning(f"[FAIL] {package} is not available: {e}")
             return False
-    
+
     async def check_dependencies(self, hass=None) -> bool:
         """Check all dependencies asynchronously if hass provided or synchronously"""
         if self._checked:
             _LOGGER.debug(f"Dependencies already checked: {self._all_satisfied}")
             return self._all_satisfied
-        
+
         _LOGGER.info("Checking dependencies...")
-        
+
         missing_deps = []
-        
+
         for package in REQUIRED_DEPENDENCIES.keys():
             if hass:
                 # Async mode: Use executor for blocking check
-                is_ok = await hass.async_add_executor_job(
-                    self._check_package_sync, package
-                )
+                is_ok = await hass.async_add_executor_job(self._check_package_sync, package)
             else:
                 # Sync fallback: Direct blocking check (safe outside HA async loop)
                 is_ok = self._check_package_sync(package)
-            
+
             self._package_status[package] = is_ok
             if not is_ok:
                 missing_deps.append(package)
-        
+
         if not missing_deps:
             _LOGGER.info("[OK] All dependencies are present")
             self._checked = True
             self._all_satisfied = True
             return True
-        
+
         _LOGGER.warning(f"[WARN] Missing dependencies: {', '.join(missing_deps)}")
         _LOGGER.info("Home Assistant should install these automatically on the next restart")
         self._checked = True
         self._all_satisfied = False
         return False
-    
+
     def _get_package_version_sync(self, package: str) -> str:
         """Blocking function to get the package version"""
-        
+
         # Import here - executed after HA has installed dependencies
         try:
             from importlib.metadata import version as get_version
@@ -122,11 +122,12 @@ class DependencyHandler:
             if package == "numpy":
                 try:
                     import numpy as np
+
                     return np.__version__
                 except Exception as e:
                     _LOGGER.debug(f"Could not get numpy version: {e}")
             return "unknown"
-    
+
     async def get_dependency_status(self, hass=None) -> dict[str, Any]:
         """Get the status of all dependencies"""
         status = {}
@@ -147,9 +148,7 @@ class DependencyHandler:
 
             # Get version
             if hass:
-                version = await hass.async_add_executor_job(
-                    self._get_package_version_sync, package
-                )
+                version = await hass.async_add_executor_job(self._get_package_version_sync, package)
             else:
                 # Fallback without hass (e.g., tests)
                 version = self._get_package_version_sync(package)

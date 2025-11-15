@@ -39,19 +39,17 @@ class ProductionCalculator:
         self.data_manager = data_manager
         _LOGGER.info("ProductionCalculator initialized (Recorder-free mode)")
 
-    async def async_get_peak_production_time(
-        self,
-        power_entity: Optional[str] = None
-    ) -> str:
+    async def async_get_peak_production_time(self, power_entity: Optional[str] = None) -> str:
         """Calculate peak production time using ML data"""
         _LOGGER.debug("Peak time calculation: Using ML-based approach (no Recorder)")
-        
+
         try:
             today = dt_util.now().date()
             hourly_samples = await self.data_manager.get_hourly_samples()
 
             today_samples = [
-                s for s in hourly_samples
+                s
+                for s in hourly_samples
                 if dt_util.parse_datetime(s.get("timestamp")).date() == today
             ]
 
@@ -81,13 +79,13 @@ class ProductionCalculator:
         try:
             yesterday_str = (dt_util.now() - timedelta(days=1)).date().isoformat()
             prediction = await self.data_manager.get_prediction_for_date(yesterday_str)
-            
+
             if prediction and "actual_kwh" in prediction:
                 return prediction["actual_kwh"]
-            
+
             _LOGGER.debug("No actual kWh found for yesterday in prediction history.")
             return 0.0
-            
+
         except Exception as e:
             _LOGGER.error(f"Error calculating yesterday's yield from history: {e}")
             return 0.0
@@ -112,10 +110,7 @@ class ProductionCalculator:
             _LOGGER.error(f"Error calculating 7-day average yield: {e}")
             return 0.0
 
-    async def get_monthly_production_statistics(
-        self,
-        yield_entity: str
-    ) -> dict:
+    async def get_monthly_production_statistics(self, yield_entity: str) -> dict:
         """Get monthly production statistics from prediction history"""
         try:
             start_of_month = dt_util.now().replace(day=1).date().isoformat()
@@ -129,7 +124,7 @@ class ProductionCalculator:
                     "average_daily_kwh": 0.0,
                     "best_day_kwh": 0.0,
                     "worst_day_kwh": 0.0,
-                    "days_with_data": 0
+                    "days_with_data": 0,
                 }
 
             total_kwh = sum(actuals)
@@ -143,7 +138,7 @@ class ProductionCalculator:
                 "average_daily_kwh": round(average_daily_kwh, 2),
                 "best_day_kwh": round(best_day_kwh, 2),
                 "worst_day_kwh": round(worst_day_kwh, 2),
-                "days_with_data": days_with_data
+                "days_with_data": days_with_data,
             }
 
         except Exception as e:
@@ -153,7 +148,7 @@ class ProductionCalculator:
                 "average_daily_kwh": 0.0,
                 "best_day_kwh": 0.0,
                 "worst_day_kwh": 0.0,
-                "days_with_data": 0
+                "days_with_data": 0,
             }
 
     async def get_historical_average(self) -> Optional[float]:

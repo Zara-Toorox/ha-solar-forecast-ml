@@ -109,7 +109,7 @@
           "electricity_enabled": "Enable Electricity Prices (aWATTar)"
         },
         "data_description": {
-          "update_interval": "Forecast update interval (300-86400s, default: 1800)",
+          "update_interval": "Forecast update interval (300-86400s, default: 3600)",
           "diagnostic": "Enable diagnostic sensors for monitoring",
           "hourly": "Enable next hour forecast sensor",
           "notify_startup": "Show notification on startup",

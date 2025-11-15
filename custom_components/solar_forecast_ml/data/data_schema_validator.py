@@ -19,17 +19,20 @@ Copyright (C) 2025 Zara-Toorox
 
 import logging
 import math
-from pathlib import Path
-from typing import Dict, Any, Optional, List
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..const import (
-    DATA_VERSION, ML_MODEL_VERSION, CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX,
-    MAX_PREDICTION_HISTORY
+    CORRECTION_FACTOR_MAX,
+    CORRECTION_FACTOR_MIN,
+    DATA_VERSION,
+    MAX_PREDICTION_HISTORY,
+    ML_MODEL_VERSION,
 )
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,13 +90,14 @@ class DataSchemaValidator:
     async def _read_json(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """Read JSON file async"""
         try:
-            import aiofiles
             import json
+
+            import aiofiles
 
             if not file_path.exists():
                 return None
 
-            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
                 return json.loads(content)
         except Exception as e:
@@ -103,15 +107,16 @@ class DataSchemaValidator:
     async def _write_json(self, file_path: Path, data: Dict[str, Any]) -> bool:
         """Write JSON file async atomically"""
         try:
-            import aiofiles
             import json
+
+            import aiofiles
 
             # Ensure directory exists
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Write to temp file first
-            temp_file = file_path.with_suffix('.tmp')
-            async with aiofiles.open(temp_file, 'w', encoding='utf-8') as f:
+            temp_file = file_path.with_suffix(".tmp")
+            async with aiofiles.open(temp_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(data, indent=2, ensure_ascii=False))
 
             # Atomic rename
@@ -132,27 +137,30 @@ class DataSchemaValidator:
 
         data = await self._read_json(file_path)
         if data is None:
-            # CRITICAL FIX: Do NOT create V1 learned_weights when file is missing
-            # This prevents V2 training from working after a reset
-            # Training will create the correct version (V1 or V2) based on available data
-            self._log_migration("learned_weights.json: File missing - will be created by training (V1 or V2)")
+            # File missing - will be created by V2 training (44 features)
+            self._log_migration(
+                "learned_weights.json: File missing - will be created by V2 training (44 features)"
+            )
             return True  # Return success without creating the file
 
         modified = False
 
-        # CRITICAL FIX: Do NOT force V1 feature_names!
-        # Model can be V1 (27 features) OR V2 (44 features)
-        # Let training set the correct feature_names based on the version
-        # Only validate that feature_names exists and is a list
+        # Validate feature_names exists and is a list (V2 expects 44 features)
         if not data.get("feature_names") or not isinstance(data["feature_names"], list):
-            self._log_migration(f"learned_weights.json: Missing feature_names, will be set by training")
-            # Don't set it here - let training do it
-            # data["feature_names"] = []  # Don't even set empty list
+            self._log_migration(
+                f"learned_weights.json: Missing feature_names, will be set by V2 training"
+            )
         else:
             # Feature names exist - log what we found
             feature_count = len(data["feature_names"])
-            self._log_migration(f"learned_weights.json: Found {feature_count} features ({'V1' if feature_count == 27 else 'V2' if feature_count == 44 else 'Unknown'})")
-            # Don't modify it!
+            if feature_count == 44:
+                self._log_migration(
+                    f"learned_weights.json: Found {feature_count} features (V2 - correct)"
+                )
+            else:
+                self._log_migration(
+                    f"learned_weights.json: Found {feature_count} features (expected 44 for V2, needs retraining)"
+                )
 
         # Ensure all required fields exist
         if "weights" not in data or not isinstance(data["weights"], dict):
@@ -174,7 +182,9 @@ class DataSchemaValidator:
         # Validate accuracy range
         if "accuracy" not in data or not (0.0 <= data["accuracy"] <= 1.0):
             if "accuracy" in data:
-                self._log_migration(f"learned_weights.json: Clamping accuracy from {data['accuracy']} to valid range")
+                self._log_migration(
+                    f"learned_weights.json: Clamping accuracy from {data['accuracy']} to valid range"
+                )
             data["accuracy"] = max(0.0, min(1.0, data.get("accuracy", 0.0)))
             modified = True
 
@@ -193,7 +203,9 @@ class DataSchemaValidator:
         # Validate correction_factor range
         cf = data.get("correction_factor", 1.0)
         if not (CORRECTION_FACTOR_MIN <= cf <= CORRECTION_FACTOR_MAX):
-            self._log_migration(f"learned_weights.json: Clamping correction_factor from {cf} to valid range")
+            self._log_migration(
+                f"learned_weights.json: Clamping correction_factor from {cf} to valid range"
+            )
             data["correction_factor"] = max(CORRECTION_FACTOR_MIN, min(CORRECTION_FACTOR_MAX, cf))
             modified = True
 
@@ -218,17 +230,35 @@ class DataSchemaValidator:
         """Get the 27 expected feature names"""
         features = [
             # Base features (18)
-            "temperature", "humidity", "cloudiness", "wind_speed",
-            "hour_of_day", "seasonal_factor", "weather_trend",
-            "production_yesterday", "production_same_hour_yesterday",
-            "cloudiness_primary", "cloud_impact", "sunshine_factor",
-            "rain", "uv_index", "lux",
-            "cloudiness_trend_1h", "cloudiness_trend_3h", "cloudiness_volatility",
+            "temperature",
+            "humidity",
+            "cloudiness",
+            "wind_speed",
+            "hour_of_day",
+            "seasonal_factor",
+            "weather_trend",
+            "production_yesterday",
+            "production_same_hour_yesterday",
+            "cloudiness_primary",
+            "cloud_impact",
+            "sunshine_factor",
+            "rain",
+            "uv_index",
+            "lux",
+            "cloudiness_trend_1h",
+            "cloudiness_trend_3h",
+            "cloudiness_volatility",
             # Polynomial features (4)
-            "temperature_sq", "cloudiness_sq", "hour_of_day_sq", "seasonal_factor_sq",
+            "temperature_sq",
+            "cloudiness_sq",
+            "hour_of_day_sq",
+            "seasonal_factor_sq",
             # Interaction features (5)
-            "cloudiness_x_hour", "temperature_x_seasonal", "humidity_x_cloudiness",
-            "wind_x_hour", "weather_trend_x_seasonal"
+            "cloudiness_x_hour",
+            "temperature_x_seasonal",
+            "humidity_x_cloudiness",
+            "wind_x_hour",
+            "weather_trend_x_seasonal",
         ]
         return features
 
@@ -247,7 +277,7 @@ class DataSchemaValidator:
             "correction_factor": 1.0,
             "weather_weights": {},
             "seasonal_factors": {},
-            "feature_importance": {}
+            "feature_importance": {},
         }
 
     # =================================================================
@@ -332,7 +362,7 @@ class DataSchemaValidator:
             "last_updated": dt_util.now().isoformat(),
             "confidence": 0.1,
             "hourly_factors": {},
-            "seasonal_adjustment": {}
+            "seasonal_adjustment": {},
         }
 
     # =================================================================
@@ -369,11 +399,20 @@ class DataSchemaValidator:
 
         # Check for None first, then validate range (avoid TypeError with None)
         current_acc = data.get("current_accuracy")
-        if current_acc is None or not isinstance(current_acc, (int, float)) or not (0.0 <= current_acc <= 1.0):
+        if (
+            current_acc is None
+            or not isinstance(current_acc, (int, float))
+            or not (0.0 <= current_acc <= 1.0)
+        ):
             data["current_accuracy"] = 0.0
             modified = True
 
-        if "status" not in data or data["status"] not in ["uninitialized", "ready", "training", "error"]:
+        if "status" not in data or data["status"] not in [
+            "uninitialized",
+            "ready",
+            "training",
+            "error",
+        ]:
             data["status"] = "uninitialized"
             modified = True
 
@@ -391,7 +430,7 @@ class DataSchemaValidator:
             "last_training": None,
             "training_samples": 0,
             "current_accuracy": 0.0,
-            "status": "uninitialized"
+            "status": "uninitialized",
         }
 
     # =================================================================
@@ -430,7 +469,9 @@ class DataSchemaValidator:
 
         # Enforce 10000 sample limit
         if len(data["samples"]) > 10000:
-            self._log_migration(f"hourly_samples.json: Trimming {len(data['samples']) - 10000} old samples")
+            self._log_migration(
+                f"hourly_samples.json: Trimming {len(data['samples']) - 10000} old samples"
+            )
             data["samples"] = data["samples"][-10000:]
             data["count"] = len(data["samples"])
             modified = True
@@ -443,12 +484,7 @@ class DataSchemaValidator:
 
     def _create_default_hourly_samples(self) -> Dict[str, Any]:
         """Create default hourly samples structure"""
-        return {
-            "version": DATA_VERSION,
-            "samples": [],
-            "count": 0,
-            "last_updated": None
-        }
+        return {"version": DATA_VERSION, "samples": [], "count": 0, "last_updated": None}
 
     # =================================================================
     # DAILY FORECASTS VALIDATION (MOST COMPLEX)
@@ -468,7 +504,9 @@ class DataSchemaValidator:
 
         # Check for old structure and migrate
         if "current_day" in data or "forecasts" in data:
-            self._log_migration("daily_forecasts.json: Migrating from OLD structure to NEW structure")
+            self._log_migration(
+                "daily_forecasts.json: Migrating from OLD structure to NEW structure"
+            )
             data = self._create_default_daily_forecasts()
             modified = True
 
@@ -503,7 +541,7 @@ class DataSchemaValidator:
             data["metadata"] = {
                 "retention_days": 730,
                 "history_entries": len(data.get("history", [])),
-                "last_update": None
+                "last_update": None,
             }
             modified = True
 
@@ -534,7 +572,7 @@ class DataSchemaValidator:
             ("yield_today", self._create_default_yield_today),
             ("consumption_today", self._create_default_consumption_today),
             ("autarky", self._create_default_autarky),
-            ("finalized", self._create_default_finalized)
+            ("finalized", self._create_default_finalized),
         ]
 
         for block_name, create_func in sub_blocks:
@@ -554,7 +592,7 @@ class DataSchemaValidator:
             ("current_month", self._create_default_current_month),
             ("last_7_days", self._create_default_last_7_days),
             ("last_30_days", self._create_default_last_30_days),
-            ("last_365_days", self._create_default_last_365_days)
+            ("last_365_days", self._create_default_last_365_days),
         ]
 
         for block_name, create_func in stat_blocks:
@@ -571,11 +609,7 @@ class DataSchemaValidator:
             "today": self._create_default_today_block(),
             "statistics": self._create_default_statistics_block(),
             "history": [],
-            "metadata": {
-                "retention_days": 730,
-                "history_entries": 0,
-                "last_update": None
-            }
+            "metadata": {"retention_days": 730, "history_entries": 0, "last_update": None},
         }
 
     def _create_default_today_block(self) -> Dict[str, Any]:
@@ -593,17 +627,12 @@ class DataSchemaValidator:
             "yield_today": self._create_default_yield_today(),
             "consumption_today": self._create_default_consumption_today(),
             "autarky": self._create_default_autarky(),
-            "finalized": self._create_default_finalized()
+            "finalized": self._create_default_finalized(),
         }
 
     def _create_default_forecast_day(self) -> Dict[str, Any]:
         """Create default forecast_day block"""
-        return {
-            "prediction_kwh": None,
-            "locked": False,
-            "locked_at": None,
-            "source": None
-        }
+        return {"prediction_kwh": None, "locked": False, "locked_at": None, "source": None}
 
     def _create_default_forecast_tomorrow(self) -> Dict[str, Any]:
         """Create default forecast_tomorrow block"""
@@ -613,7 +642,7 @@ class DataSchemaValidator:
             "locked": False,
             "locked_at": None,
             "source": None,
-            "updates": []
+            "updates": [],
         }
 
     def _create_default_forecast_day_after(self) -> Dict[str, Any]:
@@ -624,7 +653,7 @@ class DataSchemaValidator:
             "locked": False,
             "next_update": None,
             "source": None,
-            "updates": []
+            "updates": [],
         }
 
     def _create_default_forecast_best_hour(self) -> Dict[str, Any]:
@@ -634,25 +663,16 @@ class DataSchemaValidator:
             "prediction_kwh": None,
             "locked": False,
             "locked_at": None,
-            "source": None
+            "source": None,
         }
 
     def _create_default_actual_best_hour(self) -> Dict[str, Any]:
         """Create default actual_best_hour block"""
-        return {
-            "hour": None,
-            "actual_kwh": None,
-            "saved_at": None
-        }
+        return {"hour": None, "actual_kwh": None, "saved_at": None}
 
     def _create_default_forecast_next_hour(self) -> Dict[str, Any]:
         """Create default forecast_next_hour block"""
-        return {
-            "period": None,
-            "prediction_kwh": None,
-            "updated_at": None,
-            "source": None
-        }
+        return {"period": None, "prediction_kwh": None, "updated_at": None, "source": None}
 
     def _create_default_production_time(self) -> Dict[str, Any]:
         """Create default production_time block"""
@@ -662,36 +682,24 @@ class DataSchemaValidator:
             "start_time": None,
             "end_time": None,
             "last_power_above_10w": None,
-            "zero_power_since": None
+            "zero_power_since": None,
         }
 
     def _create_default_peak_today(self) -> Dict[str, Any]:
         """Create default peak_today block"""
-        return {
-            "power_w": 0.0,
-            "at": None
-        }
+        return {"power_w": 0.0, "at": None}
 
     def _create_default_yield_today(self) -> Dict[str, Any]:
         """Create default yield_today block"""
-        return {
-            "kwh": None,
-            "sensor": None
-        }
+        return {"kwh": None, "sensor": None}
 
     def _create_default_consumption_today(self) -> Dict[str, Any]:
         """Create default consumption_today block"""
-        return {
-            "kwh": None,
-            "sensor": None
-        }
+        return {"kwh": None, "sensor": None}
 
     def _create_default_autarky(self) -> Dict[str, Any]:
         """Create default autarky block"""
-        return {
-            "percent": None,
-            "calculated_at": None
-        }
+        return {"percent": None, "calculated_at": None}
 
     def _create_default_finalized(self) -> Dict[str, Any]:
         """Create default finalized block"""
@@ -700,7 +708,7 @@ class DataSchemaValidator:
             "consumption_kwh": None,
             "production_hours": None,
             "accuracy_percent": None,
-            "at": None
+            "at": None,
         }
 
     def _create_default_statistics_block(self) -> Dict[str, Any]:
@@ -711,16 +719,12 @@ class DataSchemaValidator:
             "current_month": self._create_default_current_month(),
             "last_7_days": self._create_default_last_7_days(),
             "last_30_days": self._create_default_last_30_days(),
-            "last_365_days": self._create_default_last_365_days()
+            "last_365_days": self._create_default_last_365_days(),
         }
 
     def _create_default_all_time_peak(self) -> Dict[str, Any]:
         """Create default all_time_peak block"""
-        return {
-            "power_w": 0.0,
-            "date": None,
-            "at": None
-        }
+        return {"power_w": 0.0, "date": None, "at": None}
 
     def _create_default_current_week(self) -> Dict[str, Any]:
         """Create default current_week block"""
@@ -730,7 +734,7 @@ class DataSchemaValidator:
             "yield_kwh": 0.0,
             "consumption_kwh": 0.0,
             "days": 0,
-            "updated_at": None
+            "updated_at": None,
         }
 
     def _create_default_current_month(self) -> Dict[str, Any]:
@@ -741,7 +745,7 @@ class DataSchemaValidator:
             "consumption_kwh": 0.0,
             "avg_autarky": 0.0,
             "days": 0,
-            "updated_at": None
+            "updated_at": None,
         }
 
     def _create_default_last_7_days(self) -> Dict[str, Any]:
@@ -750,7 +754,7 @@ class DataSchemaValidator:
             "avg_yield_kwh": 0.0,
             "avg_accuracy": 0.0,
             "total_yield_kwh": 0.0,
-            "calculated_at": None
+            "calculated_at": None,
         }
 
     def _create_default_last_30_days(self) -> Dict[str, Any]:
@@ -759,16 +763,12 @@ class DataSchemaValidator:
             "avg_yield_kwh": 0.0,
             "avg_accuracy": 0.0,
             "total_yield_kwh": 0.0,
-            "calculated_at": None
+            "calculated_at": None,
         }
 
     def _create_default_last_365_days(self) -> Dict[str, Any]:
         """Create default last_365_days block"""
-        return {
-            "avg_yield_kwh": 0.0,
-            "total_yield_kwh": 0.0,
-            "calculated_at": None
-        }
+        return {"avg_yield_kwh": 0.0, "total_yield_kwh": 0.0, "calculated_at": None}
 
     # =================================================================
     # PREDICTION HISTORY VALIDATION
@@ -801,7 +801,9 @@ class DataSchemaValidator:
 
         # Enforce MAX_PREDICTION_HISTORY limit
         if len(data["predictions"]) > MAX_PREDICTION_HISTORY:
-            self._log_migration(f"prediction_history.json: Trimming {len(data['predictions']) - MAX_PREDICTION_HISTORY} old predictions")
+            self._log_migration(
+                f"prediction_history.json: Trimming {len(data['predictions']) - MAX_PREDICTION_HISTORY} old predictions"
+            )
             data["predictions"] = data["predictions"][-MAX_PREDICTION_HISTORY:]
             modified = True
 
@@ -832,11 +834,7 @@ class DataSchemaValidator:
 
     def _create_default_prediction_history(self) -> Dict[str, Any]:
         """Create default prediction_history structure"""
-        return {
-            "version": DATA_VERSION,
-            "predictions": [],
-            "last_updated": None
-        }
+        return {"version": DATA_VERSION, "predictions": [], "last_updated": None}
 
     # =================================================================
     # COORDINATOR STATE VALIDATION
@@ -887,5 +885,5 @@ class DataSchemaValidator:
             "expected_daily_production": None,
             "last_set_date": None,
             "last_updated": None,
-            "last_collected_hour": None
+            "last_collected_hour": None,
         }

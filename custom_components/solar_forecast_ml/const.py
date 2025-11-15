@@ -18,14 +18,15 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 from datetime import timedelta
+
 from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "8.6.1"
-RELEASE_VERSION = "8.6.1"
-SOFTWARE_VERSION = "8.6.1"
-INTEGRATION_MODEL = "v8.6.1"
+VERSION = "8.6.2"
+RELEASE_VERSION = "8.6.2"
+SOFTWARE_VERSION = "8.6.2"
+INTEGRATION_MODEL = "v8.6.2"
 ML_VERSION = "8.6.0"
 
 PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
@@ -34,7 +35,7 @@ PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 CONF_WEATHER_ENTITY = "weather_entity"
 CONF_POWER_ENTITY = "power_entity"
 CONF_SOLAR_YIELD_TODAY = "solar_yield_today"
-CONF_SOLAR_CAPACITY = "solar_capacity" # Changed from plant_kwp
+CONF_SOLAR_CAPACITY = "solar_capacity"  # Changed from plant_kwp
 
 # --- Optional Configuration Keys ---
 CONF_TOTAL_CONSUMPTION_TODAY = "total_consumption_today"
@@ -50,12 +51,12 @@ CONF_HUMIDITY_SENSOR = "humidity_sensor"
 # --- External Sensor Mapping (Single Source of Truth) ---
 # Maps internal keys to config entry keys for centralized sensor handling
 EXTERNAL_SENSOR_MAPPING = {
-    'temperature': CONF_TEMP_SENSOR,
-    'humidity': CONF_HUMIDITY_SENSOR,
-    'wind_speed': CONF_WIND_SENSOR,
-    'rain': CONF_RAIN_SENSOR,
-    'uv_index': CONF_UV_SENSOR,
-    'lux': CONF_LUX_SENSOR,
+    "temperature": CONF_TEMP_SENSOR,
+    "humidity": CONF_HUMIDITY_SENSOR,
+    "wind_speed": CONF_WIND_SENSOR,
+    "rain": CONF_RAIN_SENSOR,
+    "uv_index": CONF_UV_SENSOR,
+    "lux": CONF_LUX_SENSOR,
 }
 
 # --- Removed Configuration Keys (Dead Ends) ---
@@ -65,15 +66,15 @@ EXTERNAL_SENSOR_MAPPING = {
 
 # --- Weather Preference (Keep for potential future use or remove if definitely unused) ---
 CONF_WEATHER_PREFERENCE = "weather_preference"
-CONF_FALLBACK_ENTITY = "fallback_weather_entity" # Check if still used
+CONF_FALLBACK_ENTITY = "fallback_weather_entity"  # Check if still used
 WEATHER_PREFERENCE_DWD = "dwd"
 WEATHER_PREFERENCE_GENERIC = "generic"
-WEATHER_FALLBACK_DEFAULT = "weather.home" # Default fallback weather entity
+WEATHER_FALLBACK_DEFAULT = "weather.home"  # Default fallback weather entity
 
 # --- Options Flow Keys ---
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_DIAGNOSTIC = "diagnostic"
-CONF_HOURLY = "hourly" # Renamed from enable_hourly
+CONF_HOURLY = "hourly"  # Renamed from enable_hourly
 CONF_NOTIFY_STARTUP = "notify_startup"
 CONF_NOTIFY_FORECAST = "notify_forecast"
 CONF_NOTIFY_LEARNING = "notify_learning"
@@ -86,11 +87,11 @@ CONF_LEARNING_ENABLED = "learning_enabled"
 # CONF_TILT = "tilt"
 
 # --- Default Values ---
-DEFAULT_SOLAR_CAPACITY = 5.0 # kWp
+DEFAULT_SOLAR_CAPACITY = 5.0  # kWp
 # DEFAULT_PANEL_EFFICIENCY = 0.18 # Removed defaults for deprecated keys unless needed for migration
 # DEFAULT_AZIMUTH = 180.0
 # DEFAULT_TILT = 30.0
-UPDATE_INTERVAL = timedelta(minutes=30) # Default Coordinator update interval
+UPDATE_INTERVAL = timedelta(minutes=60)  # Default Coordinator update interval (realistic for weather updates)
 
 # --- Physical Limits and Units ---
 PEAK_POWER_UNIT = "kW"  # System-wide unit for peak power
@@ -101,21 +102,21 @@ HOURLY_PRODUCTION_SAFETY_MARGIN = 1.2
 DEFAULT_MAX_HOURLY_KWH = 3.0
 
 # --- Scheduling Constants ---
-DAILY_UPDATE_HOUR = 6      # Hour for morning forecast update
-DAILY_VERIFICATION_HOUR = 21 # Hour for evening verification
+DAILY_UPDATE_HOUR = 6  # Hour for morning forecast update
+DAILY_VERIFICATION_HOUR = 21  # Hour for evening verification
 
 # --- Directory Structure (Hierarchical) ---
 BASE_DATA_DIR = f"/config/{DOMAIN}"  # Base directory for all integration data
 
 # Subdirectories
-ML_DIR = "ml"                    # Machine Learning models, weights, profiles
-STATS_DIR = "stats"              # Statistics & forecast history
-DATA_DIR = "data"                # Runtime state files
-IMPORTS_DIR = "imports"          # User imports (external forecasts)
-EXPORTS_DIR = "exports"          # User exports (reports, pictures, statistics)
-BACKUPS_DIR = "backups"          # Automatic and manual backups
-ASSETS_DIR = "assets"            # Internal assets (logos, icons)
-DOCS_DIR = "docs"                # Documentation files
+ML_DIR = "ml"  # Machine Learning models, weights, profiles
+STATS_DIR = "stats"  # Statistics & forecast history
+DATA_DIR = "data"  # Runtime state files
+IMPORTS_DIR = "imports"  # User imports (external forecasts)
+EXPORTS_DIR = "exports"  # User exports (reports, pictures, statistics)
+BACKUPS_DIR = "backups"  # Automatic and manual backups
+ASSETS_DIR = "assets"  # Internal assets (logos, icons)
+DOCS_DIR = "docs"  # Documentation files
 
 # Exports subdirectories
 EXPORTS_REPORTS_DIR = "reports"
@@ -142,19 +143,19 @@ COORDINATOR_STATE_FILE = "coordinator_state.json"
 PRODUCTION_TIME_STATE_FILE = "production_time_state.json"  # NEW: For production time persistence
 
 # --- Data Management Constants ---
-DATA_VERSION = "1.0" # Version for the data format within JSON files
-MAX_PREDICTION_HISTORY = 365 # Max days of prediction records to keep
-MAX_HOURLY_SAMPLES = 1440 # Max hourly samples (e.g., 60 days * 24 hours)
+DATA_VERSION = "1.0"  # Version for the data format within JSON files
+MAX_PREDICTION_HISTORY = 365  # Max days of prediction records to keep
+MAX_HOURLY_SAMPLES = 1440  # Max hourly samples (e.g., 60 days * 24 hours)
 MIN_TRAINING_DATA_POINTS = 10  # Minimum samples for stable training (lowered for V2 testing)
-BACKUP_RETENTION_DAYS = 30 # How long to keep backups (if implemented)
-MAX_BACKUP_FILES = 10      # Max number of backup files (if implemented)
+BACKUP_RETENTION_DAYS = 30  # How long to keep backups (if implemented)
+MAX_BACKUP_FILES = 10  # Max number of backup files (if implemented)
 
 # --- ML Model Constants ---
-ML_MODEL_VERSION = "1.0" # Internal version of the ML model logic/features
-MODEL_ACCURACY_THRESHOLD = 0.75 # Target accuracy threshold for retraining checks
-PREDICTION_CONFIDENCE_THRESHOLD = 0.6 # Minimum confidence for certain actions (if used)
-CORRECTION_FACTOR_MIN = 0.5 # Min value for learned fallback correction factor
-CORRECTION_FACTOR_MAX = 1.5 # Max value for learned fallback correction factor
+ML_MODEL_VERSION = "1.0"  # Internal version of the ML model logic/features
+MODEL_ACCURACY_THRESHOLD = 0.75  # Target accuracy threshold for retraining checks
+PREDICTION_CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for certain actions (if used)
+CORRECTION_FACTOR_MIN = 0.5  # Min value for learned fallback correction factor
+CORRECTION_FACTOR_MAX = 1.5  # Max value for learned fallback correction factor
 
 # --- Weather Calculation Constants (Example, might be in weather_calculator) ---
 WEATHER_TEMP_MIN = -50.0
@@ -167,7 +168,7 @@ WEATHER_CLOUDS_MAX = 100.0
 
 # --- Circuit Breaker Constants (Used by error_handling_service) ---
 CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
-CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60 # seconds
+CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60  # seconds
 CIRCUIT_BREAKER_SUCCESS_THRESHOLD = 3
 
 # --- Attribute Names (Used in sensor states) ---
@@ -178,42 +179,64 @@ ATTR_LEARNING_STATUS = "learning_status"
 ATTR_LAST_LEARNING = "last_learning"
 ATTR_MODEL_ACCURACY = "model_accuracy"
 ATTR_WEATHER_SOURCE = "weather_source"
-ATTR_RETRY_COUNT = "retry_count" # Check if used
-ATTR_FALLBACK_ACTIVE = "fallback_active" # Check if used
+ATTR_RETRY_COUNT = "retry_count"  # Check if used
+ATTR_FALLBACK_ACTIVE = "fallback_active"  # Check if used
 
 # --- Button Keys (Used in button platform) ---
-BUTTON_MANUAL_LEARNING = "manual_learning" # Changed from retrain_model for consistency
+BUTTON_MANUAL_LEARNING = "manual_learning"  # Changed from retrain_model for consistency
 # BUTTON_RESET_DATA = "reset_data" # Removed? Check services.yaml
 
 # --- Service Names (Used for service registration) ---
-SERVICE_RETRAIN_MODEL = "force_retrain" # Match services.yaml
-SERVICE_RESET_LEARNING_DATA = "reset_model" # Match services.yaml
-SERVICE_FINALIZE_DAY = "finalize_day" # Emergency day-end service
-SERVICE_MOVE_TO_HISTORY = "move_to_history" # Emergency history service
-SERVICE_CALCULATE_STATS = "calculate_stats" # Emergency statistics service
-SERVICE_RUN_ALL_DAY_END_TASKS = "run_all_day_end_tasks" # Emergency complete day-end
+SERVICE_RETRAIN_MODEL = "force_retrain"  # Match services.yaml
+SERVICE_RESET_LEARNING_DATA = "reset_model"  # Match services.yaml
+SERVICE_FINALIZE_DAY = "finalize_day"  # Emergency day-end service
+SERVICE_MOVE_TO_HISTORY = "move_to_history"  # Emergency history service
+SERVICE_CALCULATE_STATS = "calculate_stats"  # Emergency statistics service
+SERVICE_RUN_ALL_DAY_END_TASKS = "run_all_day_end_tasks"  # Emergency complete day-end
 
 # TESTING SERVICES - Simulate scheduled tasks for debugging (100% code-accurate replicas)
-SERVICE_TEST_MORNING_ROUTINE = "test_morning_routine"  # Test: Complete 6 AM routine (weather + forecast + best hour)
-SERVICE_TEST_BEST_HOUR = "test_best_hour"  # Test: Calculate best production hour using V2 sun-aware algorithm
+SERVICE_TEST_MORNING_ROUTINE = (
+    "test_morning_routine"  # Test: Complete 6 AM routine (weather + forecast + best hour)
+)
+SERVICE_TEST_BEST_HOUR = (
+    "test_best_hour"  # Test: Calculate best production hour using V2 sun-aware algorithm
+)
 SERVICE_TEST_TOMORROW_LOCK = "test_tomorrow_lock"  # Test: Simulate 12 PM tomorrow forecast lock
-SERVICE_TEST_DAY_AFTER_SAVE = "test_day_after_save"  # Test: Simulate 6 AM day after tomorrow save (unlocked)
+SERVICE_TEST_DAY_AFTER_SAVE = (
+    "test_day_after_save"  # Test: Simulate 6 AM day after tomorrow save (unlocked)
+)
 SERVICE_TEST_DAY_AFTER_LOCK = "test_day_after_lock"  # Test: Simulate 18 PM day after tomorrow lock
-SERVICE_TEST_HOURLY_UPDATE = "test_hourly_update"  # Test: Trigger hourly actual update task (runs every hour at :05)
+SERVICE_TEST_HOURLY_UPDATE = (
+    "test_hourly_update"  # Test: Trigger hourly actual update task (runs every hour at :05)
+)
 
 # MANUAL CONTROL SERVICES - Direct user control (use with caution!)
-SERVICE_FORCE_TODAY_LOCK = "force_today_lock"  # Force: Override today's forecast lock (6 AM task with overwrite)
+SERVICE_FORCE_TODAY_LOCK = (
+    "force_today_lock"  # Force: Override today's forecast lock (6 AM task with overwrite)
+)
 
 SERVICE_COLLECT_HOURLY_SAMPLE = "collect_hourly_sample"
-SERVICE_NIGHT_CLEANUP = "night_cleanup" # Manual night cleanup (remove duplicates and zero-production samples)
-SERVICE_RUN_ALL_SCHEDULED_TASKS = "run_all_scheduled_tasks" # Testing: Run all scheduled tasks in sequence
-SERVICE_GENERATE_CHART = "generate_chart" # Generate forecast vs actual chart
-SERVICE_RELOAD_SCHEDULED_TASKS = "reload_scheduled_tasks"  # Reload: Re-register all scheduled task listeners
+SERVICE_NIGHT_CLEANUP = (
+    "night_cleanup"  # Manual night cleanup (remove duplicates and zero-production samples)
+)
+SERVICE_RUN_ALL_SCHEDULED_TASKS = (
+    "run_all_scheduled_tasks"  # Testing: Run all scheduled tasks in sequence
+)
+SERVICE_GENERATE_CHART = "generate_chart"  # Generate forecast vs actual chart
+SERVICE_RELOAD_SCHEDULED_TASKS = (
+    "reload_scheduled_tasks"  # Reload: Re-register all scheduled task listeners
+)
 
 # NEW: ML-Optimized Data Structure Debug Services
-SERVICE_DEBUG_CREATE_HOURLY_PREDICTIONS = "debug_create_hourly_predictions"  # Debug: Manually create hourly predictions
-SERVICE_DEBUG_UPDATE_HOURLY_ACTUAL = "debug_update_hourly_actual"  # Debug: Manually update actual value for specific hour
-SERVICE_DEBUG_CREATE_DAILY_SUMMARY = "debug_create_daily_summary"  # Debug: Manually create daily summary
+SERVICE_DEBUG_CREATE_HOURLY_PREDICTIONS = (
+    "debug_create_hourly_predictions"  # Debug: Manually create hourly predictions
+)
+SERVICE_DEBUG_UPDATE_HOURLY_ACTUAL = (
+    "debug_update_hourly_actual"  # Debug: Manually update actual value for specific hour
+)
+SERVICE_DEBUG_CREATE_DAILY_SUMMARY = (
+    "debug_create_daily_summary"  # Debug: Manually create daily summary
+)
 SERVICE_DEBUG_SHOW_PREDICTION = "debug_show_prediction"  # Debug: Show detailed prediction info
 SERVICE_MIGRATE_DATA = "migrate_data"  # Migration: Migrate from old prediction_history.json
 SERVICE_VALIDATE_DATA = "validate_data"  # Validation: Validate data integrity
@@ -232,24 +255,24 @@ ICON_BUTTON = "mdi:play-circle-outline"
 UNIT_KWH = "kWh"
 UNIT_PERCENTAGE = "%"
 
-LOGGER_NAME = f"custom_components.{DOMAIN}" # For consistency in logging
+LOGGER_NAME = f"custom_components.{DOMAIN}"  # For consistency in logging
 
 FILE_ENCODING = "utf-8"
 JSON_INDENT = 2
-ATOMIC_WRITE_ENABLED = True # Flag if atomic writes are used (they are)
+ATOMIC_WRITE_ENABLED = True  # Flag if atomic writes are used (they are)
 
 # --- Timing / Intervals ---
-COORDINATOR_UPDATE_INTERVAL = timedelta(minutes=30) # Default update interval
-LEARNING_UPDATE_INTERVAL = timedelta(hours=1) # How often samples are collected
-CLEANUP_INTERVAL = timedelta(days=1) # How often cleanup tasks might run
+COORDINATOR_UPDATE_INTERVAL = timedelta(minutes=60)  # Default update interval (realistic for weather updates)
+LEARNING_UPDATE_INTERVAL = timedelta(hours=1)  # How often samples are collected
+CLEANUP_INTERVAL = timedelta(days=1)  # How often cleanup tasks might run
 
 # --- Performance / Limits ---
-MAX_CONCURRENT_OPERATIONS = 3 # Example limit for concurrent tasks
-THREAD_POOL_SIZE = 2 # For blocking operations in executor
+MAX_CONCURRENT_OPERATIONS = 3  # Example limit for concurrent tasks
+THREAD_POOL_SIZE = 2  # For blocking operations in executor
 
 # --- Validation Ranges ---
 MIN_SOLAR_CAPACITY = 0.1
-MAX_SOLAR_CAPACITY = 1000.0 # Increased upper limit from 100.0
+MAX_SOLAR_CAPACITY = 1000.0  # Increased upper limit from 100.0
 # MIN_TEMPERATURE = -50 # Defined above
 # MAX_TEMPERATURE = 60
 # MIN_HUMIDITY = 0
@@ -263,7 +286,7 @@ STATUS_READY = "ready"
 STATUS_LEARNING = "learning"
 STATUS_FORECASTING = "forecasting"
 STATUS_ERROR = "error"
-STATUS_OFFLINE = "offline" # Or unavailable?
+STATUS_OFFLINE = "offline"  # Or unavailable?
 
 # --- Device Info ---
 DEVICE_MANUFACTURER = "Zara-Toorox"
@@ -307,9 +330,15 @@ CONF_BATTERY_ENABLED = "battery_enabled"
 CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"  # DEPRECATED: use CONF_BATTERY_SOC_SENSOR
 CONF_BATTERY_POWER_ENTITY = "battery_power_entity"  # DEPRECATED: use CONF_BATTERY_POWER_SENSOR
 CONF_BATTERY_GRID_CHARGE_POWER_ENTITY = "battery_grid_charge_power_entity"  # DEPRECATED
-CONF_BATTERY_CHARGE_TODAY_ENTITY = "battery_charge_today_entity"  # DEPRECATED: calculated from power
-CONF_BATTERY_DISCHARGE_TODAY_ENTITY = "battery_discharge_today_entity"  # DEPRECATED: calculated from power
-CONF_BATTERY_TEMPERATURE_ENTITY = "battery_temperature_entity"  # DEPRECATED: use CONF_BATTERY_TEMPERATURE_SENSOR
+CONF_BATTERY_CHARGE_TODAY_ENTITY = (
+    "battery_charge_today_entity"  # DEPRECATED: calculated from power
+)
+CONF_BATTERY_DISCHARGE_TODAY_ENTITY = (
+    "battery_discharge_today_entity"  # DEPRECATED: calculated from power
+)
+CONF_BATTERY_TEMPERATURE_ENTITY = (
+    "battery_temperature_entity"  # DEPRECATED: use CONF_BATTERY_TEMPERATURE_SENSOR
+)
 
 # --- Electricity Price Configuration ---
 CONF_ELECTRICITY_COUNTRY = "electricity_country"  # Country for electricity prices (DE/AT)

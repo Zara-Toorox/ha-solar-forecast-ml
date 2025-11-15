@@ -8,11 +8,11 @@ Handles:
 """
 
 import logging
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 from typing import Optional
 
-from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, ServiceCall
 
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
@@ -23,10 +23,7 @@ class AstronomyServiceHandler:
     """Handle astronomy cache services"""
 
     def __init__(
-        self,
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        coordinator: "SolarForecastMLCoordinator"
+        self, hass: HomeAssistant, entry: ConfigEntry, coordinator: "SolarForecastMLCoordinator"
     ):
         """Initialize astronomy service handler"""
         self.hass = hass
@@ -44,8 +41,7 @@ class AstronomyServiceHandler:
 
         # Create astronomy cache
         self.astronomy_cache = AstronomyCache(
-            self.coordinator.data_manager.data_dir,
-            self.coordinator.data_manager
+            self.coordinator.data_manager.data_dir, self.coordinator.data_manager
         )
 
         # Get location from Home Assistant
@@ -55,12 +51,7 @@ class AstronomyServiceHandler:
         elevation_m = self.hass.config.elevation or 0
 
         # Initialize with location
-        self.astronomy_cache.initialize_location(
-            latitude,
-            longitude,
-            timezone_str,
-            elevation_m
-        )
+        self.astronomy_cache.initialize_location(latitude, longitude, timezone_str, elevation_m)
 
         # Create max peak tracker
         self.max_peak_tracker = MaxPeakTracker(self.astronomy_cache)
@@ -77,10 +68,12 @@ class AstronomyServiceHandler:
         cache_manager = get_cache_manager()
         cache_file = self.astronomy_cache.cache_file
         if cache_file.exists():
+
             def _load_sync():
                 return cache_manager.initialize(cache_file)
 
             import asyncio
+
             loop = asyncio.get_running_loop()
             success = await loop.run_in_executor(None, _load_sync)
             if success:
@@ -119,7 +112,7 @@ class AstronomyServiceHandler:
                 start_date=None,  # Today
                 days_back=days_back,
                 days_ahead=days_ahead,
-                system_capacity_kwp=system_capacity_kwp
+                system_capacity_kwp=system_capacity_kwp,
             )
 
             _LOGGER.info(
@@ -129,19 +122,24 @@ class AstronomyServiceHandler:
 
             # Reload cache into memory
             from ..astronomy.astronomy_cache_manager import get_cache_manager
+
             cache_manager = get_cache_manager()
 
             def _reload_sync():
                 return cache_manager.reload()
 
             import asyncio
+
             loop = asyncio.get_running_loop()
             reload_success = await loop.run_in_executor(None, _reload_sync)
             if reload_success:
                 _LOGGER.info("✅ Astronomy cache reloaded into memory")
 
             # Show notification
-            if hasattr(self.coordinator, 'notification_service') and self.coordinator.notification_service:
+            if (
+                hasattr(self.coordinator, "notification_service")
+                and self.coordinator.notification_service
+            ):
                 await self.coordinator.notification_service.create_notification(
                     title="Astronomy Cache Built",
                     message=(
@@ -149,16 +147,19 @@ class AstronomyServiceHandler:
                         f"({days_back} days back + {days_ahead} days ahead). "
                         f"Cache file: {result['cache_file']}"
                     ),
-                    notification_id="astronomy_cache_built"
+                    notification_id="astronomy_cache_built",
                 )
 
         except Exception as e:
             _LOGGER.error(f"Error building astronomy cache: {e}", exc_info=True)
-            if hasattr(self.coordinator, 'notification_service') and self.coordinator.notification_service:
+            if (
+                hasattr(self.coordinator, "notification_service")
+                and self.coordinator.notification_service
+            ):
                 await self.coordinator.notification_service.create_notification(
                     title="Astronomy Cache Error",
                     message=f"Failed to build astronomy cache: {str(e)}",
-                    notification_id="astronomy_cache_error"
+                    notification_id="astronomy_cache_error",
                 )
 
     async def handle_extract_max_peaks(self, call: ServiceCall) -> None:
@@ -175,9 +176,7 @@ class AstronomyServiceHandler:
 
         try:
             hourly_predictions_file = (
-                self.coordinator.data_manager.data_dir /
-                "stats" /
-                "hourly_predictions.json"
+                self.coordinator.data_manager.data_dir / "stats" / "hourly_predictions.json"
             )
 
             result = await self.max_peak_tracker.extract_max_peaks_from_history(
@@ -195,7 +194,10 @@ class AstronomyServiceHandler:
             )
 
             # Show notification
-            if hasattr(self.coordinator, 'notification_service') and self.coordinator.notification_service:
+            if (
+                hasattr(self.coordinator, "notification_service")
+                and self.coordinator.notification_service
+            ):
                 await self.coordinator.notification_service.create_notification(
                     title="Max Peak Records Extracted",
                     message=(
@@ -203,16 +205,19 @@ class AstronomyServiceHandler:
                         f"Updated records for {result['updated_hours']} hours. "
                         f"Global max: {result['global_max']['kwh']} kWh at hour {result['global_max']['hour']}."
                     ),
-                    notification_id="max_peaks_extracted"
+                    notification_id="max_peaks_extracted",
                 )
 
         except Exception as e:
             _LOGGER.error(f"Error extracting max peaks: {e}", exc_info=True)
-            if hasattr(self.coordinator, 'notification_service') and self.coordinator.notification_service:
+            if (
+                hasattr(self.coordinator, "notification_service")
+                and self.coordinator.notification_service
+            ):
                 await self.coordinator.notification_service.create_notification(
                     title="Max Peak Extraction Error",
                     message=f"Failed to extract max peaks: {str(e)}",
-                    notification_id="max_peaks_error"
+                    notification_id="max_peaks_error",
                 )
 
     async def handle_refresh_cache_today(self, call: ServiceCall) -> None:
@@ -237,21 +242,21 @@ class AstronomyServiceHandler:
                 start_date=dt_util.now().date(),
                 days_back=0,
                 days_ahead=7,
-                system_capacity_kwp=system_capacity_kwp
+                system_capacity_kwp=system_capacity_kwp,
             )
 
-            _LOGGER.info(
-                f"Astronomy cache refreshed: {result['success_count']} days updated"
-            )
+            _LOGGER.info(f"Astronomy cache refreshed: {result['success_count']} days updated")
 
             # Reload cache into memory
             from ..astronomy.astronomy_cache_manager import get_cache_manager
+
             cache_manager = get_cache_manager()
 
             def _reload_sync():
                 return cache_manager.reload()
 
             import asyncio
+
             loop = asyncio.get_running_loop()
             reload_success = await loop.run_in_executor(None, _reload_sync)
             if reload_success:
@@ -284,10 +289,7 @@ class AstronomyServiceHandler:
 
             # Build cache: 30 days back + 7 days ahead
             result = await self.astronomy_cache.rebuild_cache(
-                start_date=None,
-                days_back=30,
-                days_ahead=7,
-                system_capacity_kwp=system_capacity_kwp
+                start_date=None, days_back=30, days_ahead=7, system_capacity_kwp=system_capacity_kwp
             )
 
             _LOGGER.info(
@@ -299,14 +301,17 @@ class AstronomyServiceHandler:
             await self._auto_extract_max_peaks_if_needed()
 
             # Show notification
-            if hasattr(self.coordinator, 'notification_service') and self.coordinator.notification_service:
+            if (
+                hasattr(self.coordinator, "notification_service")
+                and self.coordinator.notification_service
+            ):
                 await self.coordinator.notification_service.create_notification(
                     title="Astronomy Cache Ready",
                     message=(
                         f"Astronomy cache automatically built for {result['success_count']} days. "
                         f"The system is now fully operational and independent of sun.sun entity."
                     ),
-                    notification_id="astronomy_cache_auto_built"
+                    notification_id="astronomy_cache_auto_built",
                 )
 
         except Exception as e:
@@ -322,11 +327,14 @@ class AstronomyServiceHandler:
                         return False
 
                     import json
-                    with open(self.astronomy_cache.cache_file, 'r') as f:
+
+                    with open(self.astronomy_cache.cache_file, "r") as f:
                         cache = json.load(f)
 
                     # Check if hourly_max_peaks exists and is populated
-                    hourly_max_peaks = cache.get("metadata", {}).get("pv_system", {}).get("hourly_max_peaks", {})
+                    hourly_max_peaks = (
+                        cache.get("metadata", {}).get("pv_system", {}).get("hourly_max_peaks", {})
+                    )
                     if not hourly_max_peaks:
                         return False
 
@@ -341,6 +349,7 @@ class AstronomyServiceHandler:
                     return False
 
             import asyncio
+
             loop = asyncio.get_running_loop()
             has_max_peaks = await loop.run_in_executor(None, _check_sync)
 
@@ -351,13 +360,13 @@ class AstronomyServiceHandler:
             _LOGGER.info("Max peaks not found - auto-extracting from history...")
 
             hourly_predictions_file = (
-                self.coordinator.data_manager.data_dir /
-                "stats" /
-                "hourly_predictions.json"
+                self.coordinator.data_manager.data_dir / "stats" / "hourly_predictions.json"
             )
 
             if not hourly_predictions_file.exists():
-                _LOGGER.info("No hourly_predictions.json found - max peaks will be populated as data is collected")
+                _LOGGER.info(
+                    "No hourly_predictions.json found - max peaks will be populated as data is collected"
+                )
                 return
 
             result = await self.max_peak_tracker.extract_max_peaks_from_history(
@@ -380,9 +389,7 @@ class AstronomyServiceHandler:
         """Import all_time_peak from daily_forecasts.json to astronomy cache"""
         try:
             daily_forecasts_file = (
-                self.coordinator.data_manager.data_dir /
-                "stats" /
-                "daily_forecasts.json"
+                self.coordinator.data_manager.data_dir / "stats" / "daily_forecasts.json"
             )
 
             if not daily_forecasts_file.exists():
@@ -393,7 +400,7 @@ class AstronomyServiceHandler:
                     import json
 
                     # Read daily_forecasts.json
-                    with open(daily_forecasts_file, 'r') as f:
+                    with open(daily_forecasts_file, "r") as f:
                         forecasts = json.load(f)
 
                     all_time_peak = forecasts.get("statistics", {}).get("all_time_peak", {})
@@ -411,7 +418,7 @@ class AstronomyServiceHandler:
                     if not self.astronomy_cache.cache_file.exists():
                         return None
 
-                    with open(self.astronomy_cache.cache_file, 'r') as f:
+                    with open(self.astronomy_cache.cache_file, "r") as f:
                         cache = json.load(f)
 
                     # Note: all_time_peak is W (power), but we store kWh (energy per hour)
@@ -442,8 +449,8 @@ class AstronomyServiceHandler:
                     cache["metadata"]["last_updated"] = datetime.now().isoformat()
 
                     # Write atomically (sort_keys=False preserves user-friendly order)
-                    temp_file = self.astronomy_cache.cache_file.with_suffix('.tmp')
-                    with open(temp_file, 'w') as f:
+                    temp_file = self.astronomy_cache.cache_file.with_suffix(".tmp")
+                    with open(temp_file, "w") as f:
                         json.dump(cache, f, indent=2, sort_keys=False)
 
                     temp_file.replace(self.astronomy_cache.cache_file)
@@ -455,6 +462,7 @@ class AstronomyServiceHandler:
                     return None
 
             import asyncio
+
             loop = asyncio.get_running_loop()
             power_kw = await loop.run_in_executor(None, _import_sync)
 

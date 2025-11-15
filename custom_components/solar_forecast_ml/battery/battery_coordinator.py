@@ -13,41 +13,38 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from ..const import (
-    DOMAIN,
+from ..const import (  # LEGACY v8.x; NEW v9.0.0; Common
     BASE_DATA_DIR,
-    DATA_DIR,
-    # LEGACY v8.x
-    CONF_BATTERY_SOC_ENTITY,
-    CONF_BATTERY_POWER_ENTITY,
-    CONF_BATTERY_GRID_CHARGE_POWER_ENTITY,
-    # NEW v9.0.0
-    CONF_BATTERY_POWER_SENSOR,
-    CONF_BATTERY_SOC_SENSOR,
-    CONF_SOLAR_PRODUCTION_SENSOR,
-    CONF_INVERTER_OUTPUT_SENSOR,
-    CONF_GRID_IMPORT_SENSOR,
-    CONF_GRID_EXPORT_SENSOR,
-    CONF_HOUSE_CONSUMPTION_SENSOR,
-    CONF_GRID_CHARGE_POWER_SENSOR,
-    CONF_BATTERY_TEMPERATURE_SENSOR,
-    # Common
     CONF_BATTERY_CAPACITY,
-    DEFAULT_BATTERY_CAPACITY,
+    CONF_BATTERY_GRID_CHARGE_POWER_ENTITY,
+    CONF_BATTERY_POWER_ENTITY,
+    CONF_BATTERY_POWER_SENSOR,
+    CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_SOC_SENSOR,
+    CONF_BATTERY_TEMPERATURE_SENSOR,
     CONF_ELECTRICITY_COUNTRY,
+    CONF_GRID_CHARGE_POWER_SENSOR,
+    CONF_GRID_EXPORT_SENSOR,
+    CONF_GRID_IMPORT_SENSOR,
+    CONF_HOUSE_CONSUMPTION_SENSOR,
+    CONF_INVERTER_OUTPUT_SENSOR,
+    CONF_SOLAR_PRODUCTION_SENSOR,
+    DATA_DIR,
+    DEFAULT_BATTERY_CAPACITY,
     DEFAULT_ELECTRICITY_COUNTRY,
+    DOMAIN,
 )
+from .battery_charge_tracker import BatteryChargeTracker
+from .battery_data_collector import BatteryDataCollector
 from .battery_persistence import BatteryChargePersistence
 from .electricity_price_service import ElectricityPriceService
-from .battery_data_collector import BatteryDataCollector
-from .battery_charge_tracker import BatteryChargeTracker
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,12 +69,11 @@ class BatteryCoordinator(DataUpdateCoordinator):
 
         # Get configuration
         self.battery_capacity = entry.options.get(
-            CONF_BATTERY_CAPACITY,
-            entry.data.get(CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY)
+            CONF_BATTERY_CAPACITY, entry.data.get(CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY)
         )
         self.electricity_country = entry.options.get(
             CONF_ELECTRICITY_COUNTRY,
-            entry.data.get(CONF_ELECTRICITY_COUNTRY, DEFAULT_ELECTRICITY_COUNTRY)
+            entry.data.get(CONF_ELECTRICITY_COUNTRY, DEFAULT_ELECTRICITY_COUNTRY),
         )
 
         # Initialize v9.0.0 components
@@ -107,9 +103,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
             await self.persistence.load()
 
             # Initialize electricity price service
-            self.electricity_service = ElectricityPriceService(
-                country=self.electricity_country
-            )
+            self.electricity_service = ElectricityPriceService(country=self.electricity_country)
 
             # Fetch initial prices
             await self.electricity_service.fetch_day_ahead_prices()
@@ -169,16 +163,18 @@ class BatteryCoordinator(DataUpdateCoordinator):
         # Get all power sensor values
         power_sensors = self.data_collector.get_all_power_sensors()
 
-        battery_power_w = power_sensors['battery_power_w']
-        solar_production_w = power_sensors['solar_production_w']
-        inverter_output_w = power_sensors['inverter_output_w']
-        grid_import_w = power_sensors['grid_import_w']
-        grid_export_w = power_sensors['grid_export_w']
-        house_consumption_w = power_sensors['house_consumption_w']
-        grid_charge_power_w = power_sensors['grid_charge_power_w']
+        battery_power_w = power_sensors["battery_power_w"]
+        solar_production_w = power_sensors["solar_production_w"]
+        inverter_output_w = power_sensors["inverter_output_w"]
+        grid_import_w = power_sensors["grid_import_w"]
+        grid_export_w = power_sensors["grid_export_w"]
+        house_consumption_w = power_sensors["house_consumption_w"]
+        grid_charge_power_w = power_sensors["grid_charge_power_w"]
 
         # Get current electricity price
-        current_price = self.electricity_service.get_current_price() if self.electricity_service else 0.0
+        current_price = (
+            self.electricity_service.get_current_price() if self.electricity_service else 0.0
+        )
 
         # Update charge tracker (calculates energy flows)
         tracker_data = self.charge_tracker.update(
@@ -197,26 +193,25 @@ class BatteryCoordinator(DataUpdateCoordinator):
         # Update persistence with v9.0.0 energy flows
         if self.persistence:
             await self.persistence.update_energy_flows_v9(
-                timestamp=datetime.now(),
-                energy_flows=energy_flows
+                timestamp=datetime.now(), energy_flows=energy_flows
             )
 
         # Return current state
         summary = self.persistence.get_today_summary() if self.persistence else {}
         return {
-            'battery_power_w': battery_power_w,
-            'solar_production_w': solar_production_w,
-            'inverter_output_w': inverter_output_w,
-            'grid_import_w': grid_import_w,
-            'grid_export_w': grid_export_w,
-            'house_consumption_w': house_consumption_w,
-            'grid_charge_power_w': grid_charge_power_w,
-            'current_price': current_price,
-            'energy_flows': energy_flows,
-            'tracker_data': tracker_data,
-            'summary': summary,
-            'last_update': datetime.now().isoformat(),
-            'version': 'v9.0.0',
+            "battery_power_w": battery_power_w,
+            "solar_production_w": solar_production_w,
+            "inverter_output_w": inverter_output_w,
+            "grid_import_w": grid_import_w,
+            "grid_export_w": grid_export_w,
+            "house_consumption_w": house_consumption_w,
+            "grid_charge_power_w": grid_charge_power_w,
+            "current_price": current_price,
+            "energy_flows": energy_flows,
+            "tracker_data": tracker_data,
+            "summary": summary,
+            "last_update": datetime.now().isoformat(),
+            "version": "v9.0.0",
         }
 
     async def _update_legacy(self):
@@ -237,14 +232,16 @@ class BatteryCoordinator(DataUpdateCoordinator):
             solar_power = 0.0
 
         # Get current electricity price
-        current_price = self.electricity_service.get_current_price() if self.electricity_service else 0.0
+        current_price = (
+            self.electricity_service.get_current_price() if self.electricity_service else 0.0
+        )
 
         # Track charging/discharging events (LEGACY)
         if battery_power > 50:  # Charging (with tolerance)
             if grid_charge_power > 50:  # Grid charging
                 await self.persistence.add_charge_event(
                     timestamp=datetime.now(),
-                    source='grid',
+                    source="grid",
                     power_w=grid_charge_power,
                     duration_min=UPDATE_INTERVAL.total_seconds() / 60,
                     kwh=(grid_charge_power / 1000) * (UPDATE_INTERVAL.total_seconds() / 3600),
@@ -255,7 +252,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
             if solar_power > 50:
                 await self.persistence.add_charge_event(
                     timestamp=datetime.now(),
-                    source='solar',
+                    source="solar",
                     power_w=solar_power,
                     duration_min=UPDATE_INTERVAL.total_seconds() / 60,
                     kwh=(solar_power / 1000) * (UPDATE_INTERVAL.total_seconds() / 3600),
@@ -268,13 +265,13 @@ class BatteryCoordinator(DataUpdateCoordinator):
 
             # Calculate solar ratio
             today_summary = self.persistence.get_today_summary()
-            total_charged = (
-                today_summary.get('grid_charge_kwh', 0) +
-                today_summary.get('solar_charge_kwh', 0)
+            total_charged = today_summary.get("grid_charge_kwh", 0) + today_summary.get(
+                "solar_charge_kwh", 0
             )
             solar_ratio = (
-                today_summary.get('solar_charge_kwh', 0) / total_charged
-                if total_charged > 0 else 0.0
+                today_summary.get("solar_charge_kwh", 0) / total_charged
+                if total_charged > 0
+                else 0.0
             )
 
             await self.persistence.add_discharge_event(
@@ -289,13 +286,13 @@ class BatteryCoordinator(DataUpdateCoordinator):
         # Return current state
         summary = self.persistence.get_today_summary() if self.persistence else {}
         return {
-            'battery_power': battery_power,
-            'grid_charge_power': grid_charge_power,
-            'solar_power': solar_power,
-            'current_price': current_price,
-            'summary': summary,
-            'last_update': datetime.now().isoformat(),
-            'version': 'LEGACY v8.x',
+            "battery_power": battery_power,
+            "grid_charge_power": grid_charge_power,
+            "solar_power": solar_power,
+            "current_price": current_price,
+            "summary": summary,
+            "last_update": datetime.now().isoformat(),
+            "version": "LEGACY v8.x",
         }
 
     async def async_refresh_prices(self):

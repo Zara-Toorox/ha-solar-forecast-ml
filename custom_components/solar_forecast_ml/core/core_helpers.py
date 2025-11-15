@@ -21,9 +21,10 @@ import asyncio
 import importlib.util
 import logging
 import sys
-from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from datetime import datetime, timezone, tzinfo
+from typing import Dict, List, Optional, Tuple
+
 from homeassistant.core import HomeAssistant
 
 # --- IMPORT REMOVED ---
@@ -38,6 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 # --- Safe Datetime Utility ---
 try:
     from homeassistant.util import dt as ha_dt_util
+
     _HAS_HA_DT = True
     _LOGGER.debug("Using Home Assistant dt util for timezone handling.")
 except (ImportError, AttributeError):
@@ -118,7 +120,7 @@ class SafeDateTimeUtil:
         try:
             if _HAS_HA_DT:
                 return ha_dt_util.parse_datetime(dt_str)
-            dt_str_adj = dt_str.replace('Z', '+00:00')
+            dt_str_adj = dt_str.replace("Z", "+00:00")
             dt = datetime.fromisoformat(dt_str_adj)
             if dt.tzinfo is None:
                 return dt.replace(tzinfo=timezone.utc)
@@ -155,6 +157,7 @@ class SafeDateTimeUtil:
 @dataclass
 class DependencyStatus:
     """Represents the status of a checked Python dependency"""
+
     name: str
     required_version: str
     installed: bool
@@ -165,36 +168,39 @@ class DependencyStatus:
 class DependencyChecker:
     """Checks required Python dependencies without performing installation"""
 
-    REQUIRED_PACKAGES = [
-        ("numpy", "1.21.0"),
-        ("aiofiles", "23.0.0")
-    ]
+    REQUIRED_PACKAGES = [("numpy", "1.21.0"), ("aiofiles", "23.0.0")]
 
     def __init__(self):
         self._last_check_results: Optional[Dict[str, DependencyStatus]] = None
         self._check_lock = asyncio.Lock()
 
     async def check_package_installed_async(
-        self,
-        package_name: str
+        self, package_name: str
     ) -> Tuple[bool, Optional[str], Optional[str]]:
         """Asynchronously checks if a package is installed and gets its version"""
+
         def _sync_check() -> Tuple[bool, Optional[str], Optional[str]]:
-            
+
             # +++ IMPORT HIER EINGEF +++
             # Wird erst importiert, wenn diese (ungenutzte) Funktion aufgerufen wird.
             # Verhindert den globalen Import-Crash.
             try:
-                from importlib.metadata import version as get_version, PackageNotFoundError
+                from importlib.metadata import PackageNotFoundError
+                from importlib.metadata import version as get_version
             except ImportError:
                 try:
-                    from importlib_metadata import version as get_version, PackageNotFoundError # type: ignore
+                    from importlib_metadata import PackageNotFoundError
+                    from importlib_metadata import version as get_version  # type: ignore
                 except ImportError:
-                    _LOGGER.error("Konnte weder 'importlib.metadata' noch 'importlib_metadata' importieren.")
-                    def get_version(_): # type: ignore
+                    _LOGGER.error(
+                        "Konnte weder 'importlib.metadata' noch 'importlib_metadata' importieren."
+                    )
+
+                    def get_version(_):  # type: ignore
                         raise PackageNotFoundError
+
             # +++ ENDE EINF +++
-            
+
             try:
                 spec = importlib.util.find_spec(package_name)
                 if spec is None:
@@ -210,7 +216,9 @@ class DependencyChecker:
                 _LOGGER.debug(f"Package '{package_name}' check failed: {e}")
                 return False, None, str(e)
             except Exception as e:
-                _LOGGER.warning(f"Unexpected error during check of '{package_name}': {e}", exc_info=True)
+                _LOGGER.warning(
+                    f"Unexpected error during check of '{package_name}': {e}", exc_info=True
+                )
                 return False, None, f"Unexpected error: {e}"
 
         try:
@@ -223,7 +231,9 @@ class DependencyChecker:
             _LOGGER.error(f"Async check task for '{package_name}' failed: {e}", exc_info=True)
             return False, None, f"Async execution error: {e}"
 
-    async def check_all_dependencies_async(self, hass: HomeAssistant) -> Dict[str, DependencyStatus]:
+    async def check_all_dependencies_async(
+        self, hass: HomeAssistant
+    ) -> Dict[str, DependencyStatus]:
         """Checks all required dependencies asynchronously and caches the result"""
         async with self._check_lock:
             if self._last_check_results is not None:
@@ -238,22 +248,30 @@ class DependencyChecker:
                 task = self.check_package_installed_async(package_name)
                 check_tasks.append((package_name, min_version, task))
 
-            check_outcomes = await asyncio.gather(*(task for _, _, task in check_tasks), return_exceptions=True)
+            check_outcomes = await asyncio.gather(
+                *(task for _, _, task in check_tasks), return_exceptions=True
+            )
 
             for i, (package_name, min_version, _) in enumerate(check_tasks):
                 outcome = check_outcomes[i]
                 if isinstance(outcome, Exception):
-                    _LOGGER.error(f"Error checking dependency '{package_name}': {outcome}", exc_info=outcome)
+                    _LOGGER.error(
+                        f"Error checking dependency '{package_name}': {outcome}", exc_info=outcome
+                    )
                     status = DependencyStatus(
-                        name=package_name, required_version=min_version,
-                        installed=False, error_message=f"Check failed: {outcome}"
+                        name=package_name,
+                        required_version=min_version,
+                        installed=False,
+                        error_message=f"Check failed: {outcome}",
                     )
                 else:
                     installed, version, error_msg = outcome
                     status = DependencyStatus(
-                        name=package_name, required_version=min_version,
-                        installed=installed, installed_version=version,
-                        error_message=error_msg if not installed else None
+                        name=package_name,
+                        required_version=min_version,
+                        installed=installed,
+                        installed_version=version,
+                        error_message=error_msg if not installed else None,
                     )
 
                 results[package_name] = status
@@ -261,11 +279,15 @@ class DependencyChecker:
                 if installed:
                     _LOGGER.debug(f"Dependency '{package_name}': Installed (Version: {version})")
                 else:
-                    _LOGGER.warning(f"Dependency '{package_name}': Missing (Required: >={min_version}, Error: {status.error_message})")
+                    _LOGGER.warning(
+                        f"Dependency '{package_name}': Missing (Required: >={min_version}, Error: {status.error_message})"
+                    )
 
             self._last_check_results = results
             num_installed = sum(1 for s in results.values() if s.installed)
-            _LOGGER.info(f"Dependency check completed: {num_installed}/{len(results)} required packages installed.")
+            _LOGGER.info(
+                f"Dependency check completed: {num_installed}/{len(results)} required packages installed."
+            )
             return results
 
     def get_missing_packages(self) -> List[str]:
@@ -278,7 +300,9 @@ class DependencyChecker:
     def are_all_dependencies_installed(self) -> bool:
         """Checks if all required dependencies were found during the last check"""
         if self._last_check_results is None:
-            _LOGGER.warning("Cannot determine if all dependencies are installed: check not performed.")
+            _LOGGER.warning(
+                "Cannot determine if all dependencies are installed: check not performed."
+            )
             return False
         return all(status.installed for status in self._last_check_results.values())
 
@@ -286,6 +310,7 @@ class DependencyChecker:
 # --- Singleton Pattern for Checker ---
 _global_checker_instance: Optional[DependencyChecker] = None
 _global_checker_lock = asyncio.Lock()
+
 
 async def get_dependency_checker_instance() -> DependencyChecker:
     """Returns the singleton instance of the DependencyChecker creating it if necessary"""

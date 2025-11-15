@@ -1,10 +1,12 @@
 """Handler for hourly prediction data - ML optimized structure"""
-from pathlib import Path
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+
+import asyncio
 import json
 import logging
-import asyncio
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,9 +34,9 @@ class HourlyPredictionsHandler:
                     "system_id": "solar_system_001",
                     "location": {},
                     "system_specs": {},
-                    "sensor_config": {}
+                    "sensor_config": {},
                 },
-                "predictions": []
+                "predictions": [],
             }
             await self._write_json_atomic(initial_data)
             _LOGGER.info("Created new hourly_predictions.json")
@@ -45,7 +47,7 @@ class HourlyPredictionsHandler:
         hourly_forecast: List[Dict[str, Any]],
         weather_forecast: List[Dict[str, Any]],
         astronomy_data: Dict[str, Any],
-        sensor_config: Dict[str, bool]
+        sensor_config: Dict[str, bool],
     ) -> bool:
         """
         Create all hourly predictions for a day (called at 6:00 AM)
@@ -64,13 +66,28 @@ class HourlyPredictionsHandler:
             data = await self._read_json_async()
             prediction_created_at = dt_util.now()
 
-            # Remove old predictions for this date (if exists)
-            data["predictions"] = [
-                p for p in data["predictions"]
-                if p.get("target_date") != date
-            ]
+            # BULLETPROOF: Build set of existing IDs BEFORE any modifications
+            existing_ids = {p["id"] for p in data["predictions"] if "id" in p}
+            _LOGGER.debug(f"Existing prediction IDs in DB: {len(existing_ids)}")
 
-            _LOGGER.debug(f"Creating hourly predictions for {date}, got {len(hourly_forecast)} hours")
+            # Remove old predictions for this date (if exists)
+            predictions_before = len(data["predictions"])
+            data["predictions"] = [p for p in data["predictions"] if p.get("target_date") != date]
+            removed_count = predictions_before - len(data["predictions"])
+
+            if removed_count > 0:
+                _LOGGER.info(
+                    f"✓ Removed {removed_count} existing predictions for {date} before creating new ones"
+                )
+
+            _LOGGER.debug(
+                f"Creating hourly predictions for {date}, got {len(hourly_forecast)} hours"
+            )
+
+            # Track hours processed in THIS execution (prevent intra-loop duplicates)
+            processed_hours = set()
+            created_count = 0
+            skipped_duplicates = 0
 
             # Create prediction for each hour
             for hour_data in hourly_forecast:
@@ -80,6 +97,30 @@ class HourlyPredictionsHandler:
                 if hour is None or hour_datetime is None:
                     _LOGGER.warning(f"Skipping hour with missing data: {hour_data}")
                     continue
+
+                # CRITICAL: Build prediction ID first
+                prediction_id = f"{date}_{hour}"
+
+                # BULLETPROOF DUPLICATE PREVENTION (2 checks):
+                # 1. Check if ID already exists in database (inter-execution)
+                if prediction_id in existing_ids:
+                    skipped_duplicates += 1
+                    _LOGGER.warning(
+                        f"✗ DUPLICATE PREVENTION: Prediction {prediction_id} already exists in DB - SKIPPING"
+                    )
+                    continue
+
+                # 2. Check if hour already processed in this loop (intra-execution)
+                if hour in processed_hours:
+                    skipped_duplicates += 1
+                    _LOGGER.warning(
+                        f"✗ DUPLICATE PREVENTION: Hour {hour} already processed in this execution - SKIPPING"
+                    )
+                    continue
+
+                processed_hours.add(hour)
+                existing_ids.add(prediction_id)  # Track for subsequent iterations
+                created_count += 1
 
                 # Find matching weather data
                 weather = self._find_weather_for_hour(weather_forecast, hour)
@@ -99,46 +140,36 @@ class HourlyPredictionsHandler:
                     "target_day_of_year": datetime.fromisoformat(date).timetuple().tm_yday,
                     "target_month": datetime.fromisoformat(date).month,
                     "target_season": self._get_season(datetime.fromisoformat(date).month),
-
                     # Prediction
                     "predicted_kwh": hour_data.get("production_kwh", 0.0),
                     "prediction_method": "blended",
                     "ml_contribution_percent": 0,
                     "model_version": "1.0",
                     "confidence": 75.0,
-
                     # Actual values (filled later)
                     "actual_kwh": None,
                     "actual_measured_at": None,
                     "accuracy_percent": None,
                     "error_kwh": None,
                     "error_percent": None,
-
                     # Weather forecast
                     "weather_forecast": weather,
-
                     # Weather actual (filled later)
                     "weather_actual": None,
-
                     # Sensor data (filled later)
                     "sensor_actual": self._init_sensor_data(sensor_config),
-
                     # Astronomy
                     "astronomy": astro,
-
                     # Error analysis (filled later)
                     "error_analysis": None,
-
                     # Historical context (filled later)
                     "historical_context": None,
-
                     # Production metrics (filled later with actual data)
                     "production_metrics": {
                         "peak_power_today_kwh": None,
                         "production_hours_today": None,
-                        "cumulative_today_kwh": None
+                        "cumulative_today_kwh": None,
                     },
-
                     # Flags
                     "flags": {
                         "is_production_hour": hour_data.get("production_kwh", 0) > 0,
@@ -148,19 +179,29 @@ class HourlyPredictionsHandler:
                         "has_sensor_data": False,
                         "sensor_data_complete": False,
                         "weather_forecast_updated": False,
-                        "manual_override": False
+                        "manual_override": False,
                     },
-
                     # Quality
                     "quality": {
                         "prediction_confidence": self._get_confidence_level(75.0),
                         "weather_forecast_age_hours": 0,
                         "sensor_data_quality": "unknown",
-                        "data_completeness_percent": 100.0
-                    }
+                        "data_completeness_percent": 100.0,
+                    },
                 }
 
                 data["predictions"].append(prediction)
+
+            # BULLETPROOF: Final integrity check before writing
+            final_ids = [p["id"] for p in data["predictions"]]
+            duplicate_ids = [id for id in final_ids if final_ids.count(id) > 1]
+
+            if duplicate_ids:
+                _LOGGER.error(
+                    f"✗ CRITICAL: Duplicate IDs detected after creation: {set(duplicate_ids)}\n"
+                    f"   This should NEVER happen! Aborting write to prevent corruption..."
+                )
+                return False
 
             # Mark peak hour and save best_hour_today
             best_hour_str = self._mark_peak_hour_and_get_best(data["predictions"], date)
@@ -169,7 +210,13 @@ class HourlyPredictionsHandler:
             data["last_updated"] = dt_util.now().isoformat()
             await self._write_json_atomic(data)
 
-            _LOGGER.info(f"Created {len(hourly_forecast)} hourly predictions for {date} - Best hour: {best_hour_str}")
+            _LOGGER.info(
+                f"✓ Created {created_count} hourly predictions for {date}\n"
+                f"   → Skipped {skipped_duplicates} duplicates\n"
+                f"   → Best hour: {best_hour_str}\n"
+                f"   → Total predictions in DB: {len(data['predictions'])}\n"
+                f"   → Integrity check: PASSED (no duplicates)"
+            )
             return True
 
         except Exception as e:
@@ -183,7 +230,7 @@ class HourlyPredictionsHandler:
         actual_kwh: float,
         sensor_data: Dict[str, Any],
         weather_actual: Optional[Dict[str, Any]] = None,
-        astronomy_update: Optional[Dict[str, Any]] = None
+        astronomy_update: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Update actual values for a specific hour
@@ -196,8 +243,7 @@ class HourlyPredictionsHandler:
 
             # Find the prediction
             prediction = next(
-                (p for p in data["predictions"] if p.get("id") == prediction_id),
-                None
+                (p for p in data["predictions"] if p.get("id") == prediction_id), None
             )
 
             if not prediction:
@@ -213,7 +259,9 @@ class HourlyPredictionsHandler:
                 # Calculate error
                 prediction["error_kwh"] = round(actual_kwh - prediction["predicted_kwh"], 3)
                 prediction["error_percent"] = round(
-                    ((actual_kwh - prediction["predicted_kwh"]) / prediction["predicted_kwh"]) * 100, 1
+                    ((actual_kwh - prediction["predicted_kwh"]) / prediction["predicted_kwh"])
+                    * 100,
+                    1,
                 )
 
                 # Calculate accuracy: 100% - abs(error_percent), capped at 0-100%
@@ -235,7 +283,9 @@ class HourlyPredictionsHandler:
             # Update sensor data
             prediction["sensor_actual"] = sensor_data
             prediction["flags"]["has_sensor_data"] = True
-            prediction["flags"]["sensor_data_complete"] = self._check_sensor_completeness(sensor_data)
+            prediction["flags"]["sensor_data_complete"] = self._check_sensor_completeness(
+                sensor_data
+            )
 
             # Update weather actual
             if weather_actual:
@@ -264,10 +314,7 @@ class HourlyPredictionsHandler:
     def get_prediction_by_id(self, prediction_id: str) -> Optional[Dict[str, Any]]:
         """Get specific prediction by ID (e.g. '2025-11-10_12')"""
         data = self._read_json()
-        return next(
-            (p for p in data["predictions"] if p.get("id") == prediction_id),
-            None
-        )
+        return next((p for p in data["predictions"] if p.get("id") == prediction_id), None)
 
     async def get_predictions_for_date(self, date: str) -> List[Dict[str, Any]]:
         """Get all predictions for a specific date"""
@@ -300,35 +347,92 @@ class HourlyPredictionsHandler:
         """Find weather data for specific hour"""
         for w in weather_forecast:
             if w.get("local_hour") == hour:
+                temp = w.get("temperature")
+                humidity = w.get("humidity")
+
+                # Calculate dew point if temperature and humidity available
+                dew_point = None
+                if temp is not None and humidity is not None:
+                    try:
+                        # Magnus formula for dew point calculation
+                        import math
+
+                        a = 17.27
+                        b = 237.7
+                        alpha = ((a * temp) / (b + temp)) + math.log(humidity / 100.0)
+                        dew_point = (b * alpha) / (a - alpha)
+                    except:
+                        dew_point = None
+
                 return {
                     "source": "met.no",
-                    "temperature_c": w.get("temperature"),
-                    "feels_like_c": w.get("temperature"),
+                    "temperature_c": temp,
+                    "feels_like_c": temp,  # Use temperature as approximation (met.no doesn't provide feels_like)
                     "cloud_cover_percent": w.get("cloud_cover"),
                     "condition": w.get("condition"),
-                    "humidity_percent": w.get("humidity"),
+                    "humidity_percent": humidity,
                     "wind_speed_ms": w.get("wind_speed"),
-                    "wind_direction": w.get("wind_direction"),
+                    "wind_direction": w.get("wind_direction"),  # Now correctly extracted
                     "precipitation_mm": w.get("precipitation"),
                     "pressure_hpa": w.get("pressure"),
-                    "solar_radiation_wm2": None,
-                    "uv_index": None,
-                    "visibility_km": None,
-                    "dew_point_c": None
+                    "solar_radiation_wm2": None,  # Not available from met.no - could use astronomy clear_sky_radiation
+                    "uv_index": None,  # Not available from met.no
+                    "visibility_km": None,  # Not available from met.no
+                    "dew_point_c": round(dew_point, 1) if dew_point is not None else None,
                 }
         return {}
 
     def _get_astronomy_for_hour(self, astro_data: Dict, hour: int) -> Dict:
-        """Get astronomy data for specific hour"""
+        """Get astronomy data for specific hour from astronomy_cache"""
+        # Extract hourly astronomy data if available (from astronomy_cache.json)
+        hourly_astro = astro_data.get("hourly", {}).get(str(hour), {})
+
+        # Calculate hours after sunrise and before sunset
+        sunrise = astro_data.get("sunrise")
+        sunset = astro_data.get("sunset")
+        solar_noon = astro_data.get("solar_noon")
+
+        hours_after_sunrise = None
+        hours_before_sunset = None
+
+        if sunrise and sunset:
+            try:
+                from datetime import datetime
+
+                # Parse ISO format times
+                sunrise_time = (
+                    datetime.fromisoformat(sunrise) if isinstance(sunrise, str) else sunrise
+                )
+                sunset_time = datetime.fromisoformat(sunset) if isinstance(sunset, str) else sunset
+
+                # Calculate hour time (middle of hour)
+                if hasattr(sunrise_time, "date"):
+                    hour_time = sunrise_time.replace(hour=hour, minute=30, second=0, microsecond=0)
+                    hours_after_sunrise = (hour_time - sunrise_time).total_seconds() / 3600.0
+                    hours_before_sunset = (sunset_time - hour_time).total_seconds() / 3600.0
+            except Exception as e:
+                _LOGGER.debug(f"Could not calculate sunrise/sunset hours: {e}")
+
         return {
-            "sunrise": astro_data.get("sunrise"),
-            "sunset": astro_data.get("sunset"),
-            "solar_noon": astro_data.get("solar_noon"),
+            # Basic times
+            "sunrise": sunrise,
+            "sunset": sunset,
+            "solar_noon": solar_noon,
             "daylight_hours": astro_data.get("daylight_hours"),
-            "sun_elevation_deg": None,
-            "sun_azimuth_deg": None,
-            "hours_after_sunrise": None,
-            "hours_before_sunset": None
+            # Hourly position data from astronomy_cache (CRITICAL for V2 training!)
+            "sun_elevation_deg": hourly_astro.get("elevation_deg"),
+            "sun_azimuth_deg": hourly_astro.get("azimuth_deg"),
+            "clear_sky_radiation_wm2": hourly_astro.get("clear_sky_solar_radiation_wm2"),
+            "theoretical_max_kwh": hourly_astro.get("theoretical_max_pv_kwh"),
+            "hours_since_solar_noon": hourly_astro.get("hours_since_solar_noon"),
+            "day_progress_ratio": hourly_astro.get("day_progress_ratio"),
+            # Calculated relative times
+            "hours_after_sunrise": (
+                round(hours_after_sunrise, 2) if hours_after_sunrise is not None else None
+            ),
+            "hours_before_sunset": (
+                round(hours_before_sunset, 2) if hours_before_sunset is not None else None
+            ),
         }
 
     def _init_sensor_data(self, sensor_config: Dict[str, bool]) -> Dict:
@@ -341,7 +445,7 @@ class HourlyPredictionsHandler:
             "uv_index": None,
             "wind_speed_ms": None,
             "current_power_w": None,
-            "current_yield_kwh": None
+            "current_yield_kwh": None,
         }
 
     def _get_season(self, month: int) -> str:
@@ -369,7 +473,9 @@ class HourlyPredictionsHandler:
         non_null_count = sum(1 for v in sensor_data.values() if v is not None)
         return non_null_count >= 3  # At least 3 sensors have data
 
-    def _get_historical_context(self, all_predictions: List[Dict], current_date: str, current_hour: int) -> Dict[str, float]:
+    def _get_historical_context(
+        self, all_predictions: List[Dict], current_date: str, current_hour: int
+    ) -> Dict[str, float]:
         """Get historical context for ML training"""
         try:
             current_dt = datetime.fromisoformat(current_date)
@@ -377,8 +483,12 @@ class HourlyPredictionsHandler:
             yesterday = (current_dt - timedelta(days=1)).isoformat()
             yesterday_id = f"{yesterday}_{current_hour}"
             yesterday_pred = next(
-                (p for p in all_predictions if p.get("id") == yesterday_id and p.get("actual_kwh") is not None),
-                None
+                (
+                    p
+                    for p in all_predictions
+                    if p.get("id") == yesterday_id and p.get("actual_kwh") is not None
+                ),
+                None,
             )
             yesterday_kwh = yesterday_pred.get("actual_kwh", 0.0) if yesterday_pred else 0.0
 
@@ -387,8 +497,12 @@ class HourlyPredictionsHandler:
                 past_date = (current_dt - timedelta(days=days_back)).isoformat()
                 past_id = f"{past_date}_{current_hour}"
                 past_pred = next(
-                    (p for p in all_predictions if p.get("id") == past_id and p.get("actual_kwh") is not None),
-                    None
+                    (
+                        p
+                        for p in all_predictions
+                        if p.get("id") == past_id and p.get("actual_kwh") is not None
+                    ),
+                    None,
                 )
                 if past_pred:
                     last_7_days_kwh.append(past_pred.get("actual_kwh", 0.0))
@@ -397,21 +511,21 @@ class HourlyPredictionsHandler:
 
             return {
                 "yesterday_same_hour": round(yesterday_kwh, 3),
-                "same_hour_avg_7days": round(avg_7days, 3)
+                "same_hour_avg_7days": round(avg_7days, 3),
             }
 
         except Exception as e:
             _LOGGER.debug(f"Failed to get historical context: {e}")
-            return {
-                "yesterday_same_hour": 0.0,
-                "same_hour_avg_7days": 0.0
-            }
+            return {"yesterday_same_hour": 0.0, "same_hour_avg_7days": 0.0}
 
-    def _calculate_production_metrics(self, all_predictions: List[Dict], current_date: str, sensor_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _calculate_production_metrics(
+        self, all_predictions: List[Dict], current_date: str, sensor_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Calculate daily production metrics"""
         try:
             today_predictions = [
-                p for p in all_predictions
+                p
+                for p in all_predictions
                 if p.get("target_date") == current_date and p.get("actual_kwh") is not None
             ]
 
@@ -419,7 +533,7 @@ class HourlyPredictionsHandler:
                 return {
                     "peak_power_today_kwh": None,
                     "production_hours_today": None,
-                    "cumulative_today_kwh": None
+                    "cumulative_today_kwh": None,
                 }
 
             # Find peak hour (highest actual_kwh)
@@ -434,7 +548,9 @@ class HourlyPredictionsHandler:
             return {
                 "peak_power_today_kwh": round(peak_kwh, 3),
                 "production_hours_today": production_hours,
-                "cumulative_today_kwh": round(cumulative_kwh, 3) if cumulative_kwh is not None else None
+                "cumulative_today_kwh": (
+                    round(cumulative_kwh, 3) if cumulative_kwh is not None else None
+                ),
             }
 
         except Exception as e:
@@ -442,7 +558,7 @@ class HourlyPredictionsHandler:
             return {
                 "peak_power_today_kwh": None,
                 "production_hours_today": None,
-                "cumulative_today_kwh": None
+                "cumulative_today_kwh": None,
             }
 
     def _mark_peak_hour_and_get_best(self, predictions: List[Dict], date: str) -> Optional[str]:
@@ -459,22 +575,23 @@ class HourlyPredictionsHandler:
     def _read_json(self) -> Dict:
         """Read JSON file (blocking - use in sync context only)"""
         try:
-            with open(self.hourly_file, 'r') as f:
+            with open(self.hourly_file, "r") as f:
                 return json.load(f)
         except FileNotFoundError:
             self._ensure_file_exists()
-            with open(self.hourly_file, 'r') as f:
+            with open(self.hourly_file, "r") as f:
                 return json.load(f)
 
     async def _read_json_async(self) -> Dict:
         """Read JSON file (non-blocking - use in async context)"""
+
         def _do_read():
             try:
-                with open(self.hourly_file, 'r') as f:
+                with open(self.hourly_file, "r") as f:
                     return json.load(f)
             except FileNotFoundError:
                 self._ensure_file_exists()
-                with open(self.hourly_file, 'r') as f:
+                with open(self.hourly_file, "r") as f:
                     return json.load(f)
 
         loop = asyncio.get_running_loop()
@@ -494,9 +611,10 @@ class HourlyPredictionsHandler:
         else:
             # Fallback during init (no data_manager yet)
             def _do_write():
-                temp_file = self.hourly_file.with_suffix('.tmp')
-                with open(temp_file, 'w') as f:
+                temp_file = self.hourly_file.with_suffix(".tmp")
+                with open(temp_file, "w") as f:
                     json.dump(data, f, indent=2)
                 temp_file.replace(self.hourly_file)
+
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _do_write)

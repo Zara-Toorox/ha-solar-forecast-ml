@@ -17,13 +17,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Copyright (C) 2025 Zara-Toorox
 """
 
-import math
 import logging
+import math
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
 from dataclasses import dataclass
-from ..ml.ml_types import LearnedWeights, HourlyProfile
+from typing import Dict, Optional
+
 from ..core.core_exceptions import MLModelException
+from ..ml.ml_types import HourlyProfile, LearnedWeights
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,11 +39,11 @@ class PredictionResult:
 
 
 class PredictionStrategy(ABC):
-    
+
     @abstractmethod
     async def predict(self, features: Dict[str, float]) -> PredictionResult:
         pass
-    
+
     @abstractmethod
     def is_available(self) -> bool:
         pass
@@ -50,23 +51,28 @@ class PredictionStrategy(ABC):
 
 class MLModelStrategy(PredictionStrategy):
     """ML Model-based prediction strategy using learned weights"""
-    
-    def __init__(self, weights: LearnedWeights, current_accuracy: float, peak_power_kw: float = 0.0):
+
+    def __init__(
+        self, weights: LearnedWeights, current_accuracy: float, peak_power_kw: float = 0.0
+    ):
         self.weights = weights
         self.current_accuracy = current_accuracy
         # Peak power in kW - used to calculate max hourly production in kWh
         self.peak_power_kw = float(peak_power_kw) if peak_power_kw else 0.0
-        
+
         # Calculate max hourly production in kWh
         # Under perfect conditions: 1 kWp ≈ 1 kWh per hour
         # Apply safety margin (20%) for theoretical peak conditions
-        from ..const import HOURLY_PRODUCTION_SAFETY_MARGIN, DEFAULT_MAX_HOURLY_KWH
+        from ..const import DEFAULT_MAX_HOURLY_KWH, HOURLY_PRODUCTION_SAFETY_MARGIN
+
         if self.peak_power_kw > 0:
             self.max_hourly_kwh = self.peak_power_kw * HOURLY_PRODUCTION_SAFETY_MARGIN
         else:
             self.max_hourly_kwh = DEFAULT_MAX_HOURLY_KWH  # Fallback if not configured
-            _LOGGER.warning(f"Peak power not configured, using fallback max hourly: {self.max_hourly_kwh} kWh")
-    
+            _LOGGER.warning(
+                f"Peak power not configured, using fallback max hourly: {self.max_hourly_kwh} kWh"
+            )
+
     async def predict(self, features) -> PredictionResult:
         """Make prediction from features (dict or list)
 
@@ -82,10 +88,19 @@ class MLModelStrategy(PredictionStrategy):
         # Linear prediction: prediction = bias + sum(weight_i * feature_i)
         prediction = self.weights.bias
 
+        # DEBUG BUG #13: Log initial bias
+        _LOGGER.debug(f"🔍 ML Prediction DEBUG: Starting with bias={prediction:.6f}")
+
         # V2: Handle list-based features (ordered by feature_names)
         if isinstance(features, list):
-            if not hasattr(self.weights, 'feature_names') or not self.weights.feature_names:
-                raise MLModelException("Cannot predict with list features: feature_names not available in weights")
+            if not hasattr(self.weights, "feature_names") or not self.weights.feature_names:
+                raise MLModelException(
+                    "Cannot predict with list features: feature_names not available in weights"
+                )
+
+            # DEBUG BUG #13: Track contribution
+            total_contribution = 0.0
+            max_contributors = []
 
             for i, feature_value in enumerate(features):
                 if i >= len(self.weights.feature_names):
@@ -94,7 +109,19 @@ class MLModelStrategy(PredictionStrategy):
 
                 feature_name = self.weights.feature_names[i]
                 weight = self.weights.weights.get(feature_name, 0.0)
-                prediction += weight * feature_value
+                contribution = weight * feature_value
+                prediction += contribution
+                total_contribution += contribution
+
+                # Track top 5 contributors
+                max_contributors.append((feature_name, feature_value, weight, contribution))
+
+            # DEBUG BUG #13: Log top contributors
+            max_contributors.sort(key=lambda x: abs(x[3]), reverse=True)
+            _LOGGER.debug(f"🔍 ML Prediction DEBUG: Total contribution from {len(features)} features: {total_contribution:.6f}")
+            _LOGGER.debug(f"🔍 Top 5 contributors:")
+            for fname, fval, w, contrib in max_contributors[:5]:
+                _LOGGER.debug(f"   {fname}: value={fval:.4f} × weight={w:.6f} = {contrib:.6f}")
 
         # V1: Handle dict-based features
         elif isinstance(features, dict):
@@ -103,12 +130,20 @@ class MLModelStrategy(PredictionStrategy):
                 prediction += weight * feature_value
 
         else:
-            raise MLModelException(f"Unsupported features type: {type(features)}. Expected dict or list.")
+            raise MLModelException(
+                f"Unsupported features type: {type(features)}. Expected dict or list."
+            )
+
+        # DEBUG BUG #13: Log before clipping
+        _LOGGER.debug(f"🔍 ML Prediction DEBUG: Before clipping: {prediction:.6f} kWh (max_hourly={self.max_hourly_kwh:.2f})")
 
         # Apply physical limits: Clip to realistic hourly production range
         # Min: 0 kWh (no negative production)
         # Max: peak_power_kw * safety_margin (theoretical maximum under perfect conditions)
         prediction = max(0.0, min(prediction, self.max_hourly_kwh))
+
+        # DEBUG BUG #13: Log final result
+        _LOGGER.debug(f"🔍 ML Prediction DEBUG: FINAL prediction={prediction:.6f} kWh")
 
         confidence = self._calculate_confidence(features)
 
@@ -117,12 +152,12 @@ class MLModelStrategy(PredictionStrategy):
             confidence=confidence,
             method="ml_model",
             features_used=features,
-            model_accuracy=self.current_accuracy
+            model_accuracy=self.current_accuracy,
         )
-    
+
     def is_available(self) -> bool:
         return self.weights is not None
-    
+
     def _calculate_confidence(self, features) -> float:
         """Calculate confidence from features (dict or list)"""
         if not self.current_accuracy:
@@ -134,7 +169,7 @@ class MLModelStrategy(PredictionStrategy):
         production_yesterday = 0.0
         if isinstance(features, dict):
             production_yesterday = features.get("production_yesterday", 0.0)
-        elif isinstance(features, list) and hasattr(self.weights, 'feature_names'):
+        elif isinstance(features, list) and hasattr(self.weights, "feature_names"):
             # Find production_yesterday in feature_names
             try:
                 idx = self.weights.feature_names.index("production_yesterday")
@@ -150,7 +185,7 @@ class MLModelStrategy(PredictionStrategy):
         weather_stability = 0.5
         if isinstance(features, dict):
             weather_stability = features.get("weather_stability", 0.5)
-        elif isinstance(features, list) and hasattr(self.weights, 'feature_names'):
+        elif isinstance(features, list) and hasattr(self.weights, "feature_names"):
             try:
                 idx = self.weights.feature_names.index("weather_stability")
                 if idx < len(features):
@@ -158,7 +193,7 @@ class MLModelStrategy(PredictionStrategy):
             except (ValueError, AttributeError):
                 pass
 
-        base_confidence *= (0.8 + 0.2 * weather_stability)
+        base_confidence *= 0.8 + 0.2 * weather_stability
 
         return min(1.0, max(0.0, base_confidence))
 
@@ -172,40 +207,43 @@ class ProfileStrategy(PredictionStrategy):
 
         # Calculate max hourly production based on system capacity
         from ..const import DEFAULT_MAX_HOURLY_KWH, HOURLY_PRODUCTION_SAFETY_MARGIN
+
         if self.peak_power_kw > 0:
             # Use configured capacity with safety margin (same as ML and Fallback)
             self.max_hourly_kwh = self.peak_power_kw * HOURLY_PRODUCTION_SAFETY_MARGIN
         else:
             # Fallback to default if not configured
             self.max_hourly_kwh = DEFAULT_MAX_HOURLY_KWH * 2.0  # 6.0 kWh default
-            _LOGGER.warning(f"ProfileStrategy: peak_power_kw not configured, using default {self.max_hourly_kwh} kWh")
-    
+            _LOGGER.warning(
+                f"ProfileStrategy: peak_power_kw not configured, using default {self.max_hourly_kwh} kWh"
+            )
+
     async def predict(self, features: Dict[str, float]) -> PredictionResult:
         if not self.profile:
             raise MLModelException("No hourly profile available")
-        
+
         hour = int(features.get("hour_of_day", 12))
         base_prediction = self.profile.hourly_averages.get(str(hour), 0.0)
-        
+
         cloudiness = features.get("cloudiness", 50.0)
         cloud_factor = (100 - cloudiness) / 100.0
-        
+
         seasonal_factor = features.get("seasonal_factor", 0.5)
-        
+
         adjusted_prediction = base_prediction * cloud_factor * (0.5 + seasonal_factor)
         # Clip to reasonable range (profile-based, so use generous max)
         prediction = max(0.0, min(adjusted_prediction, self.max_hourly_kwh))
-        
+
         confidence = 0.6
-        
+
         return PredictionResult(
             prediction=prediction,
             confidence=confidence,
             method="hourly_profile",
             features_used=features,
-            model_accuracy=None
+            model_accuracy=None,
         )
-    
+
     def is_available(self) -> bool:
         return self.profile is not None and self.profile.samples_count > 10
 
@@ -215,19 +253,39 @@ class FallbackStrategy(PredictionStrategy):
 
     def __init__(self, peak_power_kw: float = 0.0):
         """Initialize fallback strategy with system capacity"""
-        from ..const import HOURLY_PRODUCTION_SAFETY_MARGIN, DEFAULT_MAX_HOURLY_KWH
+        from ..const import DEFAULT_MAX_HOURLY_KWH, HOURLY_PRODUCTION_SAFETY_MARGIN
+
         if peak_power_kw > 0:
             # Use configured capacity with safety margin
             self.base_peak_kwh = peak_power_kw * HOURLY_PRODUCTION_SAFETY_MARGIN
         else:
             # Fallback to default if not configured
             self.base_peak_kwh = DEFAULT_MAX_HOURLY_KWH
-            _LOGGER.warning(f"FallbackStrategy: solar_capacity not configured, using default {self.base_peak_kwh} kWh")
+            _LOGGER.warning(
+                f"FallbackStrategy: solar_capacity not configured, using default {self.base_peak_kwh} kWh"
+            )
 
-    async def predict(self, features: Dict[str, float]) -> PredictionResult:
-        hour_of_day = features.get("hour_of_day", 12.0)
-        cloudiness = features.get("cloudiness", 50.0)
-        seasonal_factor = features.get("seasonal_factor", 0.5)
+    async def predict(self, features) -> PredictionResult:
+        """Make prediction from features (dict or list)
+
+        Args:
+            features: Either Dict[str, float] (V1) or List[float] (V2)
+
+        Returns:
+            PredictionResult with simple physics-based prediction
+        """
+        # Handle both dict and list inputs
+        if isinstance(features, dict):
+            hour_of_day = features.get("hour_of_day", 12.0)
+            cloudiness = features.get("cloudiness", 50.0)
+            seasonal_factor = features.get("seasonal_factor", 0.5)
+            features_dict = features
+        else:
+            # List input: Use reasonable defaults (can't extract from scaled features)
+            hour_of_day = 12.0  # Noon as default
+            cloudiness = 50.0   # Moderate clouds
+            seasonal_factor = 0.5  # Mid-season
+            features_dict = {}  # Empty dict for features_used
 
         if hour_of_day < 6 or hour_of_day > 20:
             prediction = 0.0
@@ -243,8 +301,8 @@ class FallbackStrategy(PredictionStrategy):
             prediction=prediction,
             confidence=0.3,
             method="simple_fallback",
-            features_used=features,
-            model_accuracy=None
+            features_used=features_dict,
+            model_accuracy=None,
         )
 
     def is_available(self) -> bool:
@@ -272,13 +330,13 @@ class PredictionOrchestrator:
         # WARNING FIX 5: Use stored peak_power_kw for emergency fallback
         fallback = FallbackStrategy(self.peak_power_kw)
         return await fallback.predict(features)
-    
+
     def update_strategies(
         self,
         weights: Optional[LearnedWeights] = None,
         profile: Optional[HourlyProfile] = None,
         accuracy: float = 0.0,
-        peak_power_kw: float = 0.0  # Peak power in kW
+        peak_power_kw: float = 0.0,  # Peak power in kW
     ) -> None:
         """Update available prediction strategies with new data"""
         self.strategies.clear()
@@ -288,7 +346,7 @@ class PredictionOrchestrator:
             self.strategies.append(MLModelStrategy(weights, accuracy, peak_power_kw))
 
         if profile:
-            # CRITICAL FIX: Pass peak_power_kw to ProfileStrategy for correct max values
+            # Pass peak_power_kw to ProfileStrategy for correct max values
             self.strategies.append(ProfileStrategy(profile, peak_power_kw))
 
         # WARNING FIX 5: Pass peak_power_kw to FallbackStrategy

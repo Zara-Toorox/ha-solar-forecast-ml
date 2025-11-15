@@ -13,14 +13,14 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Optional, Tuple, Dict, Any, List
-from datetime import datetime, date
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 _LOGGER = logging.getLogger(__name__)
 
 # Configuration for solar production hours
 SOLAR_PRODUCTION_START_HOUR = 7  # Start of potential solar production
-SOLAR_PRODUCTION_END_HOUR = 19   # End of potential solar production (exclusive)
+SOLAR_PRODUCTION_END_HOUR = 19  # End of potential solar production (exclusive)
 
 
 class BestHourCalculator:
@@ -63,7 +63,7 @@ class BestHourCalculator:
         try:
             profile_data = await self.data_manager.load_hourly_profile()
 
-            if not profile_data or not hasattr(profile_data, 'hourly_averages'):
+            if not profile_data or not hasattr(profile_data, "hourly_averages"):
                 _LOGGER.debug("No hourly profile data available for fallback.")
                 return None, None
 
@@ -75,11 +75,12 @@ class BestHourCalculator:
             # Find hour with maximum production in the solar window
             best_hour_str = max(
                 (
-                    hour_str for hour_str in hourly_averages
+                    hour_str
+                    for hour_str in hourly_averages
                     if SOLAR_PRODUCTION_START_HOUR <= int(hour_str) < SOLAR_PRODUCTION_END_HOUR
                 ),
                 key=lambda h: hourly_averages.get(h, 0),
-                default=None
+                default=None,
             )
 
             if best_hour_str is None:
@@ -102,11 +103,11 @@ class BestHourCalculator:
         """Calculate best hour using ONLY weather forecast data. Analyzes hours with available weather data within the solar production window, calculates a weather quality score (0-100), and returns the hour with the best score. Returns: Tuple of (best_hour, weather_score) or (None, None) if insufficient data."""
         try:
             weather_cache = await self.data_manager.load_weather_cache()
-            if not weather_cache or 'forecast_hours' not in weather_cache:
+            if not weather_cache or "forecast_hours" not in weather_cache:
                 _LOGGER.debug("No weather cache available - will use profile fallback.")
                 return None, None
 
-            forecast_hours = weather_cache.get('forecast_hours', [])
+            forecast_hours = weather_cache.get("forecast_hours", [])
             if not forecast_hours:
                 _LOGGER.debug("Weather cache empty - will use profile fallback.")
                 return None, None
@@ -115,28 +116,34 @@ class BestHourCalculator:
             valid_hours = []
             for hour_data in forecast_hours:
                 try:
-                    hour_dt_str = hour_data.get('local_datetime')
+                    hour_dt_str = hour_data.get("local_datetime")
                     if not hour_dt_str:
                         continue
 
-                    hour_dt = datetime.fromisoformat(hour_dt_str.replace('Z', '+00:00'))
+                    hour_dt = datetime.fromisoformat(hour_dt_str.replace("Z", "+00:00"))
 
-                    if (hour_dt.date() == today and
-                        SOLAR_PRODUCTION_START_HOUR <= hour_dt.hour < SOLAR_PRODUCTION_END_HOUR):
+                    if (
+                        hour_dt.date() == today
+                        and SOLAR_PRODUCTION_START_HOUR <= hour_dt.hour < SOLAR_PRODUCTION_END_HOUR
+                    ):
                         if self._is_weather_data_valid(hour_data):
-                            valid_hours.append({'hour': hour_dt.hour, 'data': hour_data})
+                            valid_hours.append({"hour": hour_dt.hour, "data": hour_data})
                         else:
-                            _LOGGER.debug(f"Skipping hour {hour_dt.hour}:00 - invalid weather data.")
+                            _LOGGER.debug(
+                                f"Skipping hour {hour_dt.hour}:00 - invalid weather data."
+                            )
                 except Exception as e:
                     _LOGGER.debug(f"Could not parse hour datetime: {e}")
                     continue
 
             if not valid_hours:
-                _LOGGER.debug("No valid weather data for solar hours today - using profile fallback.")
+                _LOGGER.debug(
+                    "No valid weather data for solar hours today - using profile fallback."
+                )
                 return None, None
 
             hour_scores = {
-                hour_info['hour']: self._calculate_weather_score(hour_info['data'])
+                hour_info["hour"]: self._calculate_weather_score(hour_info["data"])
                 for hour_info in valid_hours
             }
 
@@ -146,7 +153,9 @@ class BestHourCalculator:
             best_hour = max(hour_scores, key=hour_scores.get)
             best_score = hour_scores[best_hour]
 
-            _LOGGER.debug(f"Weather analysis complete: Best hour is {best_hour:02d}:00 with score {best_score:.1f}/100.")
+            _LOGGER.debug(
+                f"Weather analysis complete: Best hour is {best_hour:02d}:00 with score {best_score:.1f}/100."
+            )
             return best_hour, best_score
 
         except Exception as e:
@@ -158,16 +167,18 @@ class BestHourCalculator:
         Validate weather data plausibility.
         """
         try:
-            cloud_cover = weather_data.get('cloud_cover')
+            cloud_cover = weather_data.get("cloud_cover")
             if not isinstance(cloud_cover, (int, float)) or not (0 <= cloud_cover <= 100):
                 return False
 
-            ghi = weather_data.get('ghi')
+            ghi = weather_data.get("ghi")
             if ghi is not None and (not isinstance(ghi, (int, float)) or not (0 <= ghi <= 1500)):
                 return False
 
-            precip = weather_data.get('precipitation_probability')
-            if precip is not None and (not isinstance(precip, (int, float)) or not (0 <= precip <= 100)):
+            precip = weather_data.get("precipitation_probability")
+            if precip is not None and (
+                not isinstance(precip, (int, float)) or not (0 <= precip <= 100)
+            ):
                 return False
 
             return True
@@ -178,15 +189,15 @@ class BestHourCalculator:
         """
         Calculate weather quality score (0-100) for solar production.
         """
-        cloud_cover = weather_data.get('cloud_cover', 50)
+        cloud_cover = weather_data.get("cloud_cover", 50)
         base_score = 100 - cloud_cover
 
-        ghi = weather_data.get('ghi')
+        ghi = weather_data.get("ghi")
         ghi_bonus = 0.0
         if ghi is not None and ghi > 0:
             ghi_bonus = min(20.0, (ghi / 800.0) * 20.0)
 
-        precip = weather_data.get('precipitation_probability', 0)
+        precip = weather_data.get("precipitation_probability", 0)
         precip_penalty = (precip / 100.0) * 20.0
 
         final_score = max(0.0, min(100.0, base_score + ghi_bonus - precip_penalty))

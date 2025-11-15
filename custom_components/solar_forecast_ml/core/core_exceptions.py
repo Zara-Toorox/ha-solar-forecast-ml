@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any, Optional, Dict # Use Dict instead of dict
+from typing import Any, Dict, Optional  # Use Dict instead of dict
 
 # Use SafeDateTimeUtil for consistent timestamps
 from .core_helpers import SafeDateTimeUtil as dt_util
@@ -32,10 +32,11 @@ _LOGGER = logging.getLogger(__name__)
 # --- Severity Enum ---
 class ErrorSeverity(Enum):
     """Defines severity levels for exceptions"""
-    LOW = "low"         # Informational or minor issue
-    MEDIUM = "medium"   # Warning, potentially recoverable
-    HIGH = "high"       # Error, likely requires attention
-    CRITICAL = "critical" # Critical failure, may stop functionality
+
+    LOW = "low"  # Informational or minor issue
+    MEDIUM = "medium"  # Warning, potentially recoverable
+    HIGH = "high"  # Error, likely requires attention
+    CRITICAL = "critical"  # Critical failure, may stop functionality
 
 
 # --- Base Exception ---
@@ -46,13 +47,13 @@ class SolarForecastMLException(Exception):
         self,
         message: str,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ):
         """Initialize the base exception"""
         super().__init__(message)
         self.message = message
         self.severity = severity
-        self.context = context or {} # Ensure context is always a dict
+        self.context = context or {}  # Ensure context is always a dict
 
         # Logging is typically handled by the code catching the exception,
         # providing more specific context there. Avoid duplicate logging here.
@@ -62,7 +63,6 @@ class SolarForecastMLException(Exception):
         # except SolarForecastMLException as e:
         #     _LOGGER.log(e.severity_to_loglevel(), "%s - Context: %s", e, e.context)
 
-
     def severity_to_loglevel(self) -> int:
         """Map error severity to standard logging levels"""
         if self.severity == ErrorSeverity.CRITICAL:
@@ -71,41 +71,45 @@ class SolarForecastMLException(Exception):
             return logging.ERROR
         elif self.severity == ErrorSeverity.MEDIUM:
             return logging.WARNING
-        else: # LOW
+        else:  # LOW
             return logging.INFO
 
 
 # --- Specific Exception Types ---
 
+
 class ConfigurationException(SolarForecastMLException):
     """Exception raised for errors in the integrations configuration"""
+
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH, # Config errors are usually high severity
-        context: Optional[Dict[str, Any]] = None
+        severity: ErrorSeverity = ErrorSeverity.HIGH,  # Config errors are usually high severity
+        context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Configuration Error: {message}", severity, context)
 
 
 class DependencyException(SolarForecastMLException):
     """Exception raised for missing or incompatible Python dependencies"""
+
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.CRITICAL, # Missing dependencies are critical
-        context: Optional[Dict[str, Any]] = None
+        severity: ErrorSeverity = ErrorSeverity.CRITICAL,  # Missing dependencies are critical
+        context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Dependency Error: {message}", severity, context)
 
 
 class WeatherAPIException(SolarForecastMLException):
     """Exception raised for errors interacting with the weather data source API or e..."""
+
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH, # Failure to get weather is high severity
-        context: Optional[Dict[str, Any]] = None
+        severity: ErrorSeverity = ErrorSeverity.HIGH,  # Failure to get weather is high severity
+        context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Weather Data Error: {message}", severity, context)
 
@@ -117,22 +121,24 @@ class WeatherAPIException(SolarForecastMLException):
 
 class DataIntegrityException(SolarForecastMLException):
     """Exception raised for issues with data storage files corruption IO errors"""
+
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH, # Data loss potential is high severity
-        context: Optional[Dict[str, Any]] = None
+        severity: ErrorSeverity = ErrorSeverity.HIGH,  # Data loss potential is high severity
+        context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Data Integrity Error: {message}", severity, context)
 
 
 class DataValidationException(SolarForecastMLException):
     """Exception raised when loaded data fails validation checks"""
+
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.MEDIUM, # Invalid data is a warning initially
-        context: Optional[Dict[str, Any]] = None
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,  # Invalid data is a warning initially
+        context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Data Validation Error: {message}", severity, context)
 
@@ -143,11 +149,12 @@ class DataValidationException(SolarForecastMLException):
 
 class MLModelException(SolarForecastMLException):
     """Exception related to the Machine Learning model training prediction"""
+
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH, # ML failures are usually high severity
-        context: Optional[Dict[str, Any]] = None
+        severity: ErrorSeverity = ErrorSeverity.HIGH,  # ML failures are usually high severity
+        context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"ML Model Error: {message}", severity, context)
 
@@ -166,24 +173,28 @@ class MLModelException(SolarForecastMLException):
 
 class CircuitBreakerOpenException(SolarForecastMLException):
     """Exception raised when an operation is blocked by an open circuit breaker"""
+
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH, # Blocking is a high severity event
-        context: Optional[Dict[str, Any]] = None
+        severity: ErrorSeverity = ErrorSeverity.HIGH,  # Blocking is a high severity event
+        context: Optional[Dict[str, Any]] = None,
     ):
         # Message usually includes breaker name, don't prepend 'Circuit Breaker Open' if already there
-        prefix = "Circuit Breaker Open: " if not message.lower().startswith("circuit breaker") else ""
+        prefix = (
+            "Circuit Breaker Open: " if not message.lower().startswith("circuit breaker") else ""
+        )
         super().__init__(f"{prefix}{message}", severity, context)
 
 
 # --- Helper Functions ---
 
+
 def create_context(**kwargs) -> Dict[str, Any]:
     """Creates a standardized context dictionary adding a timestamp"""
     context = {
-        "timestamp": dt_util.now().isoformat(), # Use LOCAL timestamp
-        **kwargs # Add other context details
+        "timestamp": dt_util.now().isoformat(),  # Use LOCAL timestamp
+        **kwargs,  # Add other context details
     }
     return context
 

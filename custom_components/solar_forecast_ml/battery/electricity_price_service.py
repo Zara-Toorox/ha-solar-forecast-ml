@@ -14,9 +14,10 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-import aiohttp
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
+
+import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,15 +47,15 @@ class ElectricityPriceService:
         _LOGGER.info(f"ElectricityPriceService initialized for {self.country} using aWATTar API")
 
     async def fetch_day_ahead_prices(
-        self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
     ) -> Optional[Dict[str, List[Dict]]]:
         """Fetch day-ahead prices from aWATTar API Args: start_date: Start date (defaults to today 00:00 UTC) end_date: End date (defaults to tomorrow 23:59 UTC) Returns: Dictionary with price data or None on error Format: { 'prices': [ {'timestamp': datetime, 'price': float, 'hour': int}, ... ], 'currency': 'EUR', 'unit': 'Cent/kWh', 'country': 'DE' }"""
         try:
             # Default to today and tomorrow
             if start_date is None:
-                start_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                start_date = datetime.now(timezone.utc).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
             if end_date is None:
                 end_date = start_date + timedelta(days=2)
 
@@ -65,7 +66,9 @@ class ElectricityPriceService:
             # Build request URL
             url = f"{self.api_url}?start={start_ts}&end={end_ts}"
 
-            _LOGGER.debug(f"Fetching aWATTar prices for {self.country} from {start_date} to {end_date}")
+            _LOGGER.debug(
+                f"Fetching aWATTar prices for {self.country} from {start_date} to {end_date}"
+            )
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
@@ -84,10 +87,10 @@ class ElectricityPriceService:
 
                     # Cache the prices
                     result = {
-                        'prices': prices,
-                        'currency': 'EUR',
-                        'unit': 'Cent/kWh',
-                        'country': self.country,
+                        "prices": prices,
+                        "currency": "EUR",
+                        "unit": "Cent/kWh",
+                        "country": self.country,
                     }
 
                     self._price_cache[self.country] = result
@@ -108,30 +111,29 @@ class ElectricityPriceService:
         prices = []
 
         try:
-            if 'data' not in data:
+            if "data" not in data:
                 _LOGGER.error("Invalid aWATTar response: missing 'data' field")
                 return prices
 
-            for entry in data['data']:
+            for entry in data["data"]:
                 # aWATTar returns epoch milliseconds
-                timestamp = datetime.fromtimestamp(
-                    entry['start_timestamp'] / 1000,
-                    tz=timezone.utc
-                )
+                timestamp = datetime.fromtimestamp(entry["start_timestamp"] / 1000, tz=timezone.utc)
 
                 # Convert EUR/MWh to Cent/kWh
                 # 1 EUR/MWh = 0.1 Cent/kWh
-                price_eur_mwh = entry['marketprice']
+                price_eur_mwh = entry["marketprice"]
                 price_cent_kwh = price_eur_mwh / 10
 
-                prices.append({
-                    'timestamp': timestamp,
-                    'price': round(price_cent_kwh, 2),
-                    'hour': timestamp.hour,
-                })
+                prices.append(
+                    {
+                        "timestamp": timestamp,
+                        "price": round(price_cent_kwh, 2),
+                        "hour": timestamp.hour,
+                    }
+                )
 
             # Sort by timestamp
-            prices.sort(key=lambda x: x['timestamp'])
+            prices.sort(key=lambda x: x["timestamp"])
 
         except Exception as e:
             _LOGGER.error(f"Error parsing aWATTar response: {e}")
@@ -146,13 +148,13 @@ class ElectricityPriceService:
         # Use UTC for internal comparison since aWATTar timestamps are UTC
         now = datetime.now(timezone.utc)
 
-        prices = self._price_cache[self.country].get('prices', [])
+        prices = self._price_cache[self.country].get("prices", [])
 
         for price_entry in prices:
-            price_time = price_entry['timestamp']
+            price_time = price_entry["timestamp"]
             # Match the exact hour in UTC (aWATTar provides hourly prices)
             if price_time <= now < price_time + timedelta(hours=1):
-                return price_entry['price']
+                return price_entry["price"]
 
         return None
 
@@ -170,14 +172,14 @@ class ElectricityPriceService:
         local_offset = datetime.now() - datetime.utcnow()
         target_utc = target_local - local_offset
 
-        prices = self._price_cache[self.country].get('prices', [])
+        prices = self._price_cache[self.country].get("prices", [])
 
         for price_entry in prices:
-            price_time = price_entry['timestamp'].replace(tzinfo=None)  # Compare as naive
+            price_time = price_entry["timestamp"].replace(tzinfo=None)  # Compare as naive
             target_utc_naive = target_utc.replace(tzinfo=None)
             # Match the hour slot
             if price_time <= target_utc_naive < price_time + timedelta(hours=1):
-                return price_entry['price']
+                return price_entry["price"]
 
         return None
 
@@ -192,12 +194,13 @@ class ElectricityPriceService:
         # Calculate offset to convert UTC to local
         local_offset = datetime.now() - datetime.utcnow()
 
-        prices = self._price_cache[self.country].get('prices', [])
+        prices = self._price_cache[self.country].get("prices", [])
 
         today_prices = [
-            p['price'] for p in prices
+            p["price"]
+            for p in prices
             # Convert UTC timestamp to local date for comparison
-            if (p['timestamp'].replace(tzinfo=None) + local_offset).date() == today_local
+            if (p["timestamp"].replace(tzinfo=None) + local_offset).date() == today_local
         ]
 
         if not today_prices:
@@ -214,12 +217,9 @@ class ElectricityPriceService:
         week_start = now - timedelta(days=now.weekday())
         week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        prices = self._price_cache[self.country].get('prices', [])
+        prices = self._price_cache[self.country].get("prices", [])
 
-        week_prices = [
-            p['price'] for p in prices
-            if p['timestamp'] >= week_start
-        ]
+        week_prices = [p["price"] for p in prices if p["timestamp"] >= week_start]
 
         if not week_prices:
             return None
@@ -237,16 +237,16 @@ class ElectricityPriceService:
         # Calculate offset to convert UTC to local
         local_offset = datetime.now() - datetime.utcnow()
 
-        prices = self._price_cache[self.country].get('prices', [])
+        prices = self._price_cache[self.country].get("prices", [])
 
         today_prices = [
             (
-                (p['timestamp'].replace(tzinfo=None) + local_offset).hour,  # Convert to local hour
-                p['price']
+                (p["timestamp"].replace(tzinfo=None) + local_offset).hour,  # Convert to local hour
+                p["price"],
             )
             for p in prices
             # Convert UTC timestamp to local date for comparison
-            if (p['timestamp'].replace(tzinfo=None) + local_offset).date() == today_local
+            if (p["timestamp"].replace(tzinfo=None) + local_offset).date() == today_local
         ]
 
         if not today_prices:
@@ -267,16 +267,16 @@ class ElectricityPriceService:
         # Calculate offset to convert UTC to local
         local_offset = datetime.now() - datetime.utcnow()
 
-        prices = self._price_cache[self.country].get('prices', [])
+        prices = self._price_cache[self.country].get("prices", [])
 
         today_prices = [
             (
-                (p['timestamp'].replace(tzinfo=None) + local_offset).hour,  # Convert to local hour
-                p['price']
+                (p["timestamp"].replace(tzinfo=None) + local_offset).hour,  # Convert to local hour
+                p["price"],
             )
             for p in prices
             # Convert UTC timestamp to local date for comparison
-            if (p['timestamp'].replace(tzinfo=None) + local_offset).date() == today_local
+            if (p["timestamp"].replace(tzinfo=None) + local_offset).date() == today_local
         ]
 
         if not today_prices:

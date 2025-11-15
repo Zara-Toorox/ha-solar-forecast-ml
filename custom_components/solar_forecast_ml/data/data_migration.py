@@ -1,10 +1,12 @@
 """Migration utilities for converting old prediction_history.json to new structure"""
-from pathlib import Path
-from typing import Dict, List, Any, Optional
+
+import asyncio
 import json
 import logging
-import asyncio
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,9 +37,9 @@ class DataMigration:
         Returns:
             Migration report with statistics
         """
-        _LOGGER.info("="*80)
+        _LOGGER.info("=" * 80)
         _LOGGER.info("DATA MIGRATION: prediction_history.json → new structure")
-        _LOGGER.info("="*80)
+        _LOGGER.info("=" * 80)
         _LOGGER.info(f"Mode: {'DRY RUN (no files written)' if dry_run else 'LIVE MIGRATION'}")
         _LOGGER.info("")
 
@@ -50,7 +52,7 @@ class DataMigration:
             "converted_dates": [],
             "skipped_dates": [],
             "errors": [],
-            "warnings": []
+            "warnings": [],
         }
 
         try:
@@ -67,7 +69,7 @@ class DataMigration:
             _LOGGER.info("Step 1/6: Loading old prediction_history.json...")
 
             def _load_old():
-                with open(self.old_prediction_history, 'r') as f:
+                with open(self.old_prediction_history, "r") as f:
                     return json.load(f)
 
             # Run in executor to avoid blocking
@@ -84,8 +86,12 @@ class DataMigration:
 
             report["old_dates_count"] = len(analysis["dates"])
             _LOGGER.info(f"  Found {len(analysis['dates'])} unique dates")
-            _LOGGER.info(f"  Date range: {analysis['date_range']['min']} to {analysis['date_range']['max']}")
-            _LOGGER.info(f"  Average predictions per day: {analysis['avg_predictions_per_day']:.1f}")
+            _LOGGER.info(
+                f"  Date range: {analysis['date_range']['min']} to {analysis['date_range']['max']}"
+            )
+            _LOGGER.info(
+                f"  Average predictions per day: {analysis['avg_predictions_per_day']:.1f}"
+            )
             _LOGGER.info(f"  Duplicates detected: {analysis['duplicates_count']}")
 
             # Step 4: Group by date and deduplicate
@@ -100,8 +106,12 @@ class DataMigration:
             report["converted_dates"] = conversion_results["converted_dates"]
             report["skipped_dates"] = conversion_results["skipped_dates"]
 
-            _LOGGER.info(f"  Successfully converted: {len(conversion_results['converted_dates'])} days")
-            _LOGGER.info(f"  Skipped (insufficient data): {len(conversion_results['skipped_dates'])} days")
+            _LOGGER.info(
+                f"  Successfully converted: {len(conversion_results['converted_dates'])} days"
+            )
+            _LOGGER.info(
+                f"  Skipped (insufficient data): {len(conversion_results['skipped_dates'])} days"
+            )
 
             # Step 6: Write new files
             if not dry_run:
@@ -110,6 +120,7 @@ class DataMigration:
                 # Create backup before deletion
                 _LOGGER.info(f"  Creating backup: {self.old_prediction_history_backup.name}")
                 import shutil
+
                 shutil.copy2(self.old_prediction_history, self.old_prediction_history_backup)
 
                 # Write daily summaries from converted data
@@ -130,9 +141,9 @@ class DataMigration:
             report["success"] = True
 
             _LOGGER.info("")
-            _LOGGER.info("="*80)
+            _LOGGER.info("=" * 80)
             _LOGGER.info("MIGRATION COMPLETED SUCCESSFULLY")
-            _LOGGER.info("="*80)
+            _LOGGER.info("=" * 80)
 
             return report
 
@@ -156,6 +167,7 @@ class DataMigration:
 
         # Count duplicates
         from collections import Counter
+
         date_counts = Counter(dates_list)
         duplicates = sum(1 for count in date_counts.values() if count > 1)
 
@@ -163,10 +175,10 @@ class DataMigration:
             "dates": dates_sorted,
             "date_range": {
                 "min": dates_sorted[0] if dates_sorted else None,
-                "max": dates_sorted[-1] if dates_sorted else None
+                "max": dates_sorted[-1] if dates_sorted else None,
             },
             "avg_predictions_per_day": len(predictions) / len(dates) if dates else 0,
-            "duplicates_count": duplicates
+            "duplicates_count": duplicates,
         }
 
     def _group_by_date(self, predictions: List[Dict]) -> Dict[str, List[Dict]]:
@@ -216,7 +228,7 @@ class DataMigration:
         return {
             "converted_dates": converted_dates,
             "skipped_dates": skipped_dates,
-            "daily_summaries": daily_summaries
+            "daily_summaries": daily_summaries,
         }
 
     def _pick_best_prediction(self, predictions: List[Dict]) -> Optional[Dict]:
@@ -272,7 +284,7 @@ class DataMigration:
             # Calculate accuracy
             accuracy = 0.0
             if predicted_total > 0 and actual_total is not None:
-                accuracy = (actual_total / predicted_total * 100)
+                accuracy = actual_total / predicted_total * 100
 
             error = (actual_total - predicted_total) if actual_total is not None else None
 
@@ -283,38 +295,40 @@ class DataMigration:
                 "month": dt.month,
                 "season": self._get_season(dt.month),
                 "week_of_year": dt.isocalendar()[1],
-
                 "overall": {
                     "predicted_total_kwh": round(predicted_total, 2),
-                    "actual_total_kwh": round(actual_total, 2) if actual_total is not None else None,
+                    "actual_total_kwh": (
+                        round(actual_total, 2) if actual_total is not None else None
+                    ),
                     "accuracy_percent": round(accuracy, 1),
                     "error_kwh": round(error, 2) if error is not None else None,
-                    "error_percent": round((error / predicted_total * 100), 1) if predicted_total > 0 and error is not None else None,
+                    "error_percent": (
+                        round((error / predicted_total * 100), 1)
+                        if predicted_total > 0 and error is not None
+                        else None
+                    ),
                     "production_hours": None,
                     "peak_power_w": None,
                     "peak_hour": None,
-                    "peak_kwh": None
+                    "peak_kwh": None,
                 },
-
                 "hourly_stats": {
                     "total_hours_predicted": 0,
                     "hours_with_actual_data": 0,
                     "best_hour": None,
                     "worst_hour": None,
                     "mean_hourly_accuracy": None,
-                    "std_hourly_accuracy": None
+                    "std_hourly_accuracy": None,
                 },
-
                 "time_windows": {},
                 "weather_analysis": {},
                 "patterns": [],
                 "ml_metrics": {},
                 "recommendations": [],
                 "comparison": {},
-
                 "_migrated_from_v1": True,
                 "_original_timestamp": prediction.get("timestamp"),
-                "_original_source": prediction.get("source")
+                "_original_source": prediction.get("source"),
             }
 
             return summary
@@ -336,15 +350,11 @@ class DataMigration:
 
     def _write_daily_summaries(self, summaries: List[Dict]):
         """Write daily summaries to file"""
-        data = {
-            "version": "2.0",
-            "last_updated": dt_util.now().isoformat(),
-            "summaries": summaries
-        }
+        data = {"version": "2.0", "last_updated": dt_util.now().isoformat(), "summaries": summaries}
 
         def _do_write():
-            temp_file = self.new_daily_summaries.with_suffix('.tmp')
-            with open(temp_file, 'w') as f:
+            temp_file = self.new_daily_summaries.with_suffix(".tmp")
+            with open(temp_file, "w") as f:
                 json.dump(data, f, indent=2)
             temp_file.replace(self.new_daily_summaries)
 
@@ -369,16 +379,11 @@ class DataValidator:
 
     async def validate(self) -> Dict[str, Any]:
         """Validate data files"""
-        _LOGGER.info("="*80)
+        _LOGGER.info("=" * 80)
         _LOGGER.info("DATA VALIDATION")
-        _LOGGER.info("="*80)
+        _LOGGER.info("=" * 80)
 
-        report = {
-            "valid": True,
-            "files_checked": [],
-            "errors": [],
-            "warnings": []
-        }
+        report = {"valid": True, "files_checked": [], "errors": [], "warnings": []}
 
         # Check hourly_predictions.json
         hourly_file = self.stats_dir / "hourly_predictions.json"
@@ -419,9 +424,9 @@ class DataValidator:
         else:
             _LOGGER.info("daily_summaries.json not found (will be created at end of day)")
 
-        _LOGGER.info("="*80)
+        _LOGGER.info("=" * 80)
         _LOGGER.info(f"VALIDATION {'PASSED' if report['valid'] else 'FAILED'}")
-        _LOGGER.info("="*80)
+        _LOGGER.info("=" * 80)
 
         return report
 
@@ -432,12 +437,13 @@ class DataValidator:
             "errors": [],
             "warnings": [],
             "predictions_count": 0,
-            "dates_count": 0
+            "dates_count": 0,
         }
 
         try:
+
             def _load_file():
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     return json.load(f)
 
             loop = asyncio.get_running_loop()
@@ -463,8 +469,12 @@ class DataValidator:
             # Validate sample predictions
             if predictions:
                 required_fields = [
-                    "id", "target_date", "target_hour", "predicted_kwh",
-                    "weather_forecast", "flags"
+                    "id",
+                    "target_date",
+                    "target_hour",
+                    "predicted_kwh",
+                    "weather_forecast",
+                    "flags",
                 ]
 
                 sample = predictions[0]
@@ -489,16 +499,12 @@ class DataValidator:
 
     async def _validate_daily_summaries(self, file_path: Path) -> Dict[str, Any]:
         """Validate daily_summaries.json structure"""
-        result = {
-            "valid": True,
-            "errors": [],
-            "warnings": [],
-            "summaries_count": 0
-        }
+        result = {"valid": True, "errors": [], "warnings": [], "summaries_count": 0}
 
         try:
+
             def _load_file():
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     return json.load(f)
 
             loop = asyncio.get_running_loop()

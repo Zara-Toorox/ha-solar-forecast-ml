@@ -17,16 +17,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Copyright (C) 2025 Zara-Toorox
 """
 
-import logging
 import asyncio
-from typing import Optional, List
-from homeassistant.core import HomeAssistant
+import logging
+from typing import List, Optional
+
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from ..const import (
-    CONF_NOTIFY_STARTUP,
     CONF_NOTIFY_FORECAST,
     CONF_NOTIFY_LEARNING,
+    CONF_NOTIFY_STARTUP,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
 )
 
@@ -64,7 +65,7 @@ class NotificationService:
                     return True
 
                 # Check if persistent_notification component is loaded
-                if 'persistent_notification' not in self.hass.config.components:
+                if "persistent_notification" not in self.hass.config.components:
                     _LOGGER.warning(
                         "[!] persistent_notification not available - "
                         "Notifications will not be displayed"
@@ -78,8 +79,7 @@ class NotificationService:
 
         except Exception as e:
             _LOGGER.error(
-                f"[X] Error during NotificationService initialization: {e}",
-                exc_info=True
+                f"[X] Error during NotificationService initialization: {e}", exc_info=True
             )
             return False
 
@@ -97,10 +97,7 @@ class NotificationService:
         return enabled
 
     async def _safe_create_notification(
-        self,
-        message: str,
-        title: str,
-        notification_id: str
+        self, message: str, title: str, notification_id: str
     ) -> bool:
         """Create notification with error handling"""
         if not self._initialized:
@@ -126,8 +123,7 @@ class NotificationService:
 
         except Exception as e:
             _LOGGER.error(
-                f"[X] Error creating notification '{notification_id}': {e}",
-                exc_info=True
+                f"[X] Error creating notification '{notification_id}': {e}", exc_info=True
             )
             return False
 
@@ -149,16 +145,14 @@ class NotificationService:
             return True
 
         except Exception as e:
-            _LOGGER.warning(
-                f"[!] Error dismissing notification '{notification_id}': {e}"
-            )
+            _LOGGER.warning(f"[!] Error dismissing notification '{notification_id}': {e}")
             return False
 
     async def show_startup_success(
         self,
         ml_mode: bool = True,
         installed_packages: Optional[List[str]] = None,
-        missing_packages: Optional[List[str]] = None
+        missing_packages: Optional[List[str]] = None,
     ) -> bool:
         """Show startup notification with integration status"""
         if not self._should_notify(CONF_NOTIFY_STARTUP):
@@ -224,7 +218,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             await self._safe_create_notification(
                 message=message,
                 title="🌤️ Solar Forecast ML Started",
-                notification_id=NOTIFICATION_ID_STARTUP
+                notification_id=NOTIFICATION_ID_STARTUP,
             )
 
             return True
@@ -234,9 +228,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def show_forecast_update(
-        self,
-        forecast_energy: float,
-        confidence: Optional[float] = None
+        self, forecast_energy: float, confidence: Optional[float] = None
     ) -> bool:
         """Show forecast update notification"""
         if not self._should_notify(CONF_NOTIFY_FORECAST):
@@ -250,9 +242,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             message = f"""Solar Forecast Updated"""
 
             await self._safe_create_notification(
-                message=message,
-                title="Forecast Updated",
-                notification_id=NOTIFICATION_ID_FORECAST
+                message=message, title="Forecast Updated", notification_id=NOTIFICATION_ID_FORECAST
             )
 
             return True
@@ -270,9 +260,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             message = f"""ML Training Started"""
 
             await self._safe_create_notification(
-                message=message,
-                title="Training Started",
-                notification_id=NOTIFICATION_ID_LEARNING
+                message=message, title="Training Started", notification_id=NOTIFICATION_ID_LEARNING
             )
 
             return True
@@ -282,10 +270,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def show_training_complete(
-        self,
-        success: bool,
-        accuracy: Optional[float] = None,
-        sample_count: Optional[int] = None
+        self, success: bool, accuracy: Optional[float] = None, sample_count: Optional[int] = None
     ) -> bool:
         """Show notification when ML training completes"""
         if not self._should_notify(CONF_NOTIFY_SUCCESSFUL_LEARNING):
@@ -308,9 +293,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
             await self._safe_create_notification(
-                message=message,
-                title="Training Complete",
-                notification_id=NOTIFICATION_ID_LEARNING
+                message=message, title="Training Complete", notification_id=NOTIFICATION_ID_LEARNING
             )
 
             return True
@@ -335,7 +318,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
         self,
         reason: str = "unknown",
         old_features: Optional[int] = None,
-        new_features: Optional[int] = None
+        new_features: Optional[int] = None,
     ) -> bool:
         """Show notification when ML model needs retraining"""
         try:
@@ -369,7 +352,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             await self._safe_create_notification(
                 message=message,
                 title="🔄 ML-Modell Neutraining",
-                notification_id=NOTIFICATION_ID_RETRAINING
+                notification_id=NOTIFICATION_ID_RETRAINING,
             )
 
             return True
@@ -384,8 +367,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
 
 
 async def create_notification_service(
-    hass: HomeAssistant,
-    entry: ConfigEntry
+    hass: HomeAssistant, entry: ConfigEntry
 ) -> Optional[NotificationService]:
     """Factory function to create and initialize NotificationService"""
     try:
@@ -399,8 +381,5 @@ async def create_notification_service(
             return service
 
     except Exception as e:
-        _LOGGER.error(
-            f"[X] Failed to create NotificationService: {e}",
-            exc_info=True
-        )
+        _LOGGER.error(f"[X] Failed to create NotificationService: {e}", exc_info=True)
         return None

@@ -19,18 +19,20 @@ Copyright (C) 2025 Zara-Toorox
 
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from .data_io import DataManagerIO
-from .data_adapter import TypedDataAdapter
-from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..const import DATA_VERSION
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..ml.ml_types import (
-    LearnedWeights, HourlyProfile,
-    create_default_learned_weights, create_default_hourly_profile
+    HourlyProfile,
+    LearnedWeights,
+    create_default_hourly_profile,
+    create_default_learned_weights,
 )
+from .data_adapter import TypedDataAdapter
+from .data_io import DataManagerIO
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,15 +42,15 @@ class DataMLHandler(DataManagerIO):
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
-        
+
         self.data_adapter = TypedDataAdapter()
-        
+
         # ML files
         self.learned_weights_file = self.data_dir / "ml" / "learned_weights.json"
         self.hourly_profile_file = self.data_dir / "ml" / "hourly_profile.json"
         self.model_state_file = self.data_dir / "ml" / "model_state.json"
         self.hourly_samples_file = self.data_dir / "ml" / "hourly_samples.json"
-        
+
         # Defaults
         self._model_state_default = {
             "version": DATA_VERSION,
@@ -58,29 +60,30 @@ class DataMLHandler(DataManagerIO):
             "current_accuracy": 0.0,
             "status": "uninitialized",
         }
-        
+
         self._hourly_samples_default = {
             "version": DATA_VERSION,
             "samples": [],
             "count": 0,
-            "last_updated": None
+            "last_updated": None,
         }
 
     async def ensure_ml_files(self) -> None:
         """Ensure ML files exist with defaults"""
         # IMPORTANT: Do NOT create learned_weights.json if it doesn't exist
-        # Training will create the correct version (V1 or V2) based on available data
-        # Creating V1 defaults here prevents V2 training from working after a reset
+        # V2 training will create it with 44 features when training starts
         if not self.learned_weights_file.exists():
-            _LOGGER.info("learned_weights.json does not exist - will be created by training")
-        
+            _LOGGER.info(
+                "learned_weights.json does not exist - will be created by V2 training (44 features)"
+            )
+
         if not self.hourly_profile_file.exists():
             default_profile = create_default_hourly_profile()
             await self.save_hourly_profile(default_profile)
-        
+
         if not self.model_state_file.exists():
             await self._atomic_write_json(self.model_state_file, self._model_state_default)
-        
+
         if not self.hourly_samples_file.exists():
             await self._atomic_write_json(self.hourly_samples_file, self._hourly_samples_default)
 
@@ -103,6 +106,7 @@ class DataMLHandler(DataManagerIO):
 
             # Copy current weights to backup
             import shutil
+
             await self.hass.async_add_executor_job(
                 shutil.copy2, str(self.learned_weights_file), str(backup_file)
             )
@@ -129,9 +133,11 @@ class DataMLHandler(DataManagerIO):
             weights_dict = self.data_adapter.learned_weights_to_dict(weights)
             await self._ensure_directory_exists(self.learned_weights_file.parent)
             await self._atomic_write_json(self.learned_weights_file, weights_dict)
-            _LOGGER.info("Learned weights saved successfully (accuracy: {:.1f}%, samples: {})".format(
-                weights.accuracy * 100, weights.training_samples
-            ))
+            _LOGGER.info(
+                "Learned weights saved successfully (accuracy: {:.1f}%, samples: {})".format(
+                    weights.accuracy * 100, weights.training_samples
+                )
+            )
             return True
         except Exception as e:
             _LOGGER.error(f"Failed to save learned weights: {e}")
@@ -141,7 +147,7 @@ class DataMLHandler(DataManagerIO):
         """Load learned weights from file"""
         try:
             # Don't pass default_structure - return None if file doesn't exist
-            # This prevents V1 fallback when file is missing after reset
+            # V2 training will create the file when needed
             if not self.learned_weights_file.exists():
                 _LOGGER.debug("learned_weights.json does not exist - returning None")
                 return None
@@ -192,8 +198,7 @@ class DataMLHandler(DataManagerIO):
         """Load hourly profile from file"""
         try:
             data = await self._read_json_file(
-                self.hourly_profile_file,
-                create_default_hourly_profile()
+                self.hourly_profile_file, create_default_hourly_profile()
             )
             if data:
                 return self.data_adapter.dict_to_hourly_profile(data)
@@ -223,10 +228,7 @@ class DataMLHandler(DataManagerIO):
     async def load_model_state(self) -> Dict[str, Any]:
         """Load model state from file"""
         try:
-            return await self._read_json_file(
-                self.model_state_file,
-                self._model_state_default
-            )
+            return await self._read_json_file(self.model_state_file, self._model_state_default)
         except Exception as e:
             _LOGGER.error(f"Failed to load model state: {e}")
             return self._model_state_default
@@ -241,12 +243,12 @@ class DataMLHandler(DataManagerIO):
         last_training: Optional[str] = None,
         training_samples: Optional[int] = None,
         current_accuracy: Optional[float] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
     ) -> bool:
         """Update model state partially"""
         try:
             state = await self.load_model_state()
-            
+
             if model_loaded is not None:
                 state["model_loaded"] = model_loaded
             if last_training is not None:
@@ -257,9 +259,9 @@ class DataMLHandler(DataManagerIO):
                 state["current_accuracy"] = round(float(current_accuracy), 2)
             if status is not None:
                 state["status"] = status
-            
+
             return await self.save_model_state(state)
-            
+
         except Exception as e:
             _LOGGER.error(f"Failed to update model state: {e}")
             return False
@@ -276,8 +278,7 @@ class DataMLHandler(DataManagerIO):
 
             async with file_lock:
                 data = await self._read_json_file(
-                    self.hourly_samples_file,
-                    self._hourly_samples_default
+                    self.hourly_samples_file, self._hourly_samples_default
                 )
 
                 if "samples" not in data:
@@ -310,17 +311,16 @@ class DataMLHandler(DataManagerIO):
         self,
         limit: Optional[int] = None,
         start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+        end_date: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get hourly samples with optional filtering"""
         try:
             data = await self._read_json_file(
-                self.hourly_samples_file,
-                self._hourly_samples_default
+                self.hourly_samples_file, self._hourly_samples_default
             )
-            
+
             samples = data.get("samples", [])
-            
+
             # Filter by date range if provided
             if start_date or end_date:
                 filtered = []
@@ -332,13 +332,13 @@ class DataMLHandler(DataManagerIO):
                         continue
                     filtered.append(sample)
                 samples = filtered
-            
+
             # Apply limit
             if limit:
                 samples = samples[-limit:]
-            
+
             return samples
-            
+
         except Exception as e:
             _LOGGER.error(f"Failed to get hourly samples: {e}")
             return []
@@ -348,11 +348,11 @@ class DataMLHandler(DataManagerIO):
         try:
             data = self._hourly_samples_default.copy()
             data["last_updated"] = dt_util.now().isoformat()
-            
+
             await self._atomic_write_json(self.hourly_samples_file, data)
             _LOGGER.info("Hourly samples cleared")
             return True
-            
+
         except Exception as e:
             _LOGGER.error(f"Failed to clear hourly samples: {e}")
             return False
@@ -361,8 +361,7 @@ class DataMLHandler(DataManagerIO):
         """Get count of hourly samples"""
         try:
             data = await self._read_json_file(
-                self.hourly_samples_file,
-                self._hourly_samples_default
+                self.hourly_samples_file, self._hourly_samples_default
             )
             return data.get("count", 0)
         except Exception:
@@ -376,8 +375,7 @@ class DataMLHandler(DataManagerIO):
 
             async with file_lock:
                 data = await self._read_json_file(
-                    self.hourly_samples_file,
-                    self._hourly_samples_default
+                    self.hourly_samples_file, self._hourly_samples_default
                 )
 
                 samples = data.get("samples", [])
@@ -401,12 +399,11 @@ class DataMLHandler(DataManagerIO):
                 await self._atomic_write_json_unlocked(self.hourly_samples_file, data)
 
                 removed = initial_count - len(unique_samples)
-                _LOGGER.info(f"Cleanup: Removed {removed} duplicate samples, {len(unique_samples)} remaining")
+                _LOGGER.info(
+                    f"Cleanup: Removed {removed} duplicate samples, {len(unique_samples)} remaining"
+                )
 
-                return {
-                    "removed": removed,
-                    "remaining": len(unique_samples)
-                }
+                return {"removed": removed, "remaining": len(unique_samples)}
 
         except Exception as e:
             _LOGGER.error(f"Failed to cleanup duplicate samples: {e}", exc_info=True)
@@ -420,8 +417,7 @@ class DataMLHandler(DataManagerIO):
 
             async with file_lock:
                 data = await self._read_json_file(
-                    self.hourly_samples_file,
-                    self._hourly_samples_default
+                    self.hourly_samples_file, self._hourly_samples_default
                 )
 
                 samples = data.get("samples", [])
@@ -429,7 +425,8 @@ class DataMLHandler(DataManagerIO):
 
                 # Remove zero production samples
                 valid_samples = [
-                    sample for sample in samples
+                    sample
+                    for sample in samples
                     if sample.get("actual_kwh") is not None and sample.get("actual_kwh") > 0
                 ]
 
@@ -441,12 +438,11 @@ class DataMLHandler(DataManagerIO):
                 await self._atomic_write_json_unlocked(self.hourly_samples_file, data)
 
                 removed = initial_count - len(valid_samples)
-                _LOGGER.info(f"Cleanup: Removed {removed} zero-production samples, {len(valid_samples)} remaining")
+                _LOGGER.info(
+                    f"Cleanup: Removed {removed} zero-production samples, {len(valid_samples)} remaining"
+                )
 
-                return {
-                    "removed": removed,
-                    "remaining": len(valid_samples)
-                }
+                return {"removed": removed, "remaining": len(valid_samples)}
 
         except Exception as e:
             _LOGGER.error(f"Failed to cleanup zero-production samples: {e}", exc_info=True)

@@ -18,54 +18,66 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, CONF_DIAGNOSTIC, CONF_HOURLY, CONF_BATTERY_ENABLED, CONF_ELECTRICITY_ENABLED
+from .const import (
+    CONF_BATTERY_ENABLED,
+    CONF_DIAGNOSTIC,
+    CONF_ELECTRICITY_ENABLED,
+    CONF_HOURLY,
+    DOMAIN,
+)
 
 # Import core sensors from sensors module
 from .sensors.sensor_base import (
-    SolarForecastSensor,
-    PeakProductionHourSensor,
-    ProductionTimeSensor,
-    AverageYieldSensor,
     AutarkySensor,
-    NextHourSensor,
-    ExpectedDailyProductionSensor,
-    MaxPeakTodaySensor,
-    MaxPeakAllTimeSensor,
-    ForecastDayAfterTomorrowSensor,
-    MonthlyYieldSensor,
-    MonthlyConsumptionSensor,
-    WeeklyYieldSensor,
-    WeeklyConsumptionSensor,
+    AverageAccuracy30DaysSensor,
+    AverageAutarkyMonthSensor,
     AverageYield7DaysSensor,
     AverageYield30DaysSensor,
-    AverageAutarkyMonthSensor,
-    AverageAccuracy30DaysSensor,
+    AverageYieldSensor,
+    ExpectedDailyProductionSensor,
+    ForecastDayAfterTomorrowSensor,
+    MaxPeakAllTimeSensor,
+    MaxPeakTodaySensor,
+    MonthlyConsumptionSensor,
+    MonthlyYieldSensor,
+    NextHourSensor,
+    PeakProductionHourSensor,
+    ProductionTimeSensor,
+    SolarForecastSensor,
+    WeeklyConsumptionSensor,
+    WeeklyYieldSensor,
 )
 
-# Import system status sensor
-from .sensors.sensor_system_status import SystemStatusSensor
+# ========================================================================
+# BATTERY MANAGEMENT SENSORS (v8.3.0) - Completely separate from Solar
+# ========================================================================
+from .sensors.sensor_battery import BATTERY_SENSORS
+from .sensors.sensor_battery_cost import BATTERY_COST_SENSORS
+from .sensors.sensor_battery_forecast import BATTERY_FORECAST_SENSORS
 
 # Import diagnostic sensors
 from .sensors.sensor_diagnostic import (
-    DiagnosticStatusSensor,
-    YesterdayDeviationSensor,
-    LastCoordinatorUpdateSensor,
-    LastMLTrainingSensor,
-    NextScheduledUpdateSensor,
-    MLServiceStatusSensor,
-    MLMetricsSensor,
-    CoordinatorHealthSensor,
-    DataFilesStatusSensor,
     CloudinessTrend1hSensor,
     CloudinessTrend3hSensor,
     CloudinessVolatilitySensor,
-    NextProductionStartSensor,
+    CoordinatorHealthSensor,
+    DataFilesStatusSensor,
+    DiagnosticStatusSensor,
+    LastCoordinatorUpdateSensor,
+    LastMLTrainingSensor,
+    MLMetricsSensor,
+    MLServiceStatusSensor,
     MLTrainingReadinessSensor,
+    NextProductionStartSensor,
+    NextScheduledUpdateSensor,
+    YesterdayDeviationSensor,
 )
+from .sensors.sensor_electricity_price import ELECTRICITY_PRICE_SENSORS
 
 # Import state sensors
 from .sensors.sensor_states import (
@@ -74,13 +86,8 @@ from .sensors.sensor_states import (
     YieldSensorStateSensor,
 )
 
-# ========================================================================
-# BATTERY MANAGEMENT SENSORS (v8.3.0) - Completely separate from Solar
-# ========================================================================
-from .sensors.sensor_battery import BATTERY_SENSORS
-from .sensors.sensor_electricity_price import ELECTRICITY_PRICE_SENSORS
-from .sensors.sensor_battery_forecast import BATTERY_FORECAST_SENSORS
-from .sensors.sensor_battery_cost import BATTERY_COST_SENSORS
+# Import system status sensor
+from .sensors.sensor_system_status import SystemStatusSensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -92,16 +99,16 @@ async def async_setup_entry(
 ) -> bool:
     """Set up Solar Forecast ML sensors from config entry"""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    
+
     # Determine which sensor sets to add based on options
     diagnostic_mode_enabled = entry.options.get(CONF_DIAGNOSTIC, True)
     enable_hourly = entry.options.get(CONF_HOURLY, False)
-    
+
     _LOGGER.info(
         f"Setting up sensors: Diagnostic Mode={'Enabled' if diagnostic_mode_enabled else 'Disabled'}, "
         f"Hourly Sensor={'Enabled' if enable_hourly else 'Disabled'}"
     )
-    
+
     # Core sensors are always added
     # System Status Sensor (always added)
     system_status_sensor = SystemStatusSensor(coordinator, entry.entry_id)
@@ -131,9 +138,9 @@ async def async_setup_entry(
         AverageAutarkyMonthSensor(coordinator, entry),
         AverageAccuracy30DaysSensor(coordinator, entry),
     ]
-    
+
     entities_to_add = core_entities
-    
+
     # Add diagnostic sensors if enabled
     if diagnostic_mode_enabled:
         diagnostic_entities = [
@@ -168,7 +175,7 @@ async def async_setup_entry(
         ]
         entities_to_add.extend(state_entities)
         _LOGGER.debug(f"Diagnostic mode disabled. Adding {len(state_entities)} state sensors.")
-    
+
     # Add hourly sensor if enabled
     if enable_hourly:
         entities_to_add.append(NextHourSensor(coordinator, entry))
@@ -187,11 +194,17 @@ async def async_setup_entry(
 
         if battery_coordinator:
             # Battery sensors use Solar coordinator (legacy)
-            battery_entities = [sensor_class(coordinator, entry) for sensor_class in BATTERY_SENSORS]
-            battery_forecast_entities = [sensor_class(coordinator, entry) for sensor_class in BATTERY_FORECAST_SENSORS]
+            battery_entities = [
+                sensor_class(coordinator, entry) for sensor_class in BATTERY_SENSORS
+            ]
+            battery_forecast_entities = [
+                sensor_class(coordinator, entry) for sensor_class in BATTERY_FORECAST_SENSORS
+            ]
 
             # Battery COST sensors use BatteryCoordinator (new)
-            battery_cost_entities = [sensor_class(battery_coordinator, entry) for sensor_class in BATTERY_COST_SENSORS]
+            battery_cost_entities = [
+                sensor_class(battery_coordinator, entry) for sensor_class in BATTERY_COST_SENSORS
+            ]
 
             entities_to_add.extend(battery_entities)
             entities_to_add.extend(battery_forecast_entities)
@@ -203,17 +216,25 @@ async def async_setup_entry(
                 f"{len(battery_cost_entities)} cost sensors"
             )
         else:
-            _LOGGER.warning("Battery enabled but BatteryCoordinator not found - skipping battery sensors")
+            _LOGGER.warning(
+                "Battery enabled but BatteryCoordinator not found - skipping battery sensors"
+            )
 
     if electricity_enabled:
-        electricity_entities = [sensor_class(coordinator, entry) for sensor_class in ELECTRICITY_PRICE_SENSORS]
+        electricity_entities = [
+            sensor_class(coordinator, entry) for sensor_class in ELECTRICITY_PRICE_SENSORS
+        ]
         entities_to_add.extend(electricity_entities)
-        _LOGGER.info(f"Electricity Prices enabled - Adding {len(electricity_entities)} electricity price sensors")
+        _LOGGER.info(
+            f"Electricity Prices enabled - Adding {len(electricity_entities)} electricity price sensors"
+        )
 
     # ========================================================================
 
     # Register all selected entities
     async_add_entities(entities_to_add, True)
-    _LOGGER.info(f"Successfully added {len(entities_to_add)} total sensors (Solar + Battery Management).")
+    _LOGGER.info(
+        f"Successfully added {len(entities_to_add)} total sensors (Solar + Battery Management)."
+    )
 
     return True

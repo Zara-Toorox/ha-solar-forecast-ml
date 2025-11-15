@@ -17,10 +17,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Copyright (C) 2025 Zara-Toorox
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field # Import field
-from typing import Any, Dict, Optional, List
 import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field  # Import field
+from typing import Any, Dict, List, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,41 +28,48 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass
 class ForecastResult:
     """Standardized result object returned by all forecast strategies"""
+
     # Core forecast values
-    forecast_today: float        # Predicted energy for today (e.g., kWh)
-    forecast_tomorrow: float     # Predicted energy for tomorrow (e.g., kWh)
+    forecast_today: float  # Predicted energy for today (e.g., kWh)
+    forecast_tomorrow: float  # Predicted energy for tomorrow (e.g., kWh)
     forecast_day_after_tomorrow: float  # Predicted energy for day after tomorrow (e.g., kWh)
-    confidence_today: float    # Confidence score for today's forecast (percentage, 0-100)
-    confidence_tomorrow: float # Confidence score for tomorrow's forecast (percentage, 0-100)
-    confidence_day_after: float # Confidence score for day after tomorrow's forecast (percentage, 0-100)
+    confidence_today: float  # Confidence score for today's forecast (percentage, 0-100)
+    confidence_tomorrow: float  # Confidence score for tomorrow's forecast (percentage, 0-100)
+    confidence_day_after: (
+        float  # Confidence score for day after tomorrow's forecast (percentage, 0-100)
+    )
 
     # Metadata about the forecast generation
-    method: str                # Identifier for the strategy used (e.g., "ml_model", "rule_based")
-    calibrated: bool           # Indicates if the forecast includes learned adjustments (like correction factor)
+    method: str  # Identifier for the strategy used (e.g., "ml_model", "rule_based")
+    calibrated: (
+        bool  # Indicates if the forecast includes learned adjustments (like correction factor)
+    )
 
     # Optional metadata (can be added by specific strategies)
-    base_capacity: Optional[float] = None     # Base solar capacity used in calculation (kWp)
-    correction_factor: Optional[float] = None # Fallback correction factor applied (if rule-based)
-    features_used: Optional[int] = None       # Number of features used by the model (if ML)
-    model_accuracy: Optional[float] = None    # Accuracy score of the ML model used (0.0-1.0)
+    base_capacity: Optional[float] = None  # Base solar capacity used in calculation (kWp)
+    correction_factor: Optional[float] = None  # Fallback correction factor applied (if rule-based)
+    features_used: Optional[int] = None  # Number of features used by the model (if ML)
+    model_accuracy: Optional[float] = None  # Accuracy score of the ML model used (0.0-1.0)
 
     # Best production hour for today (0-23)
-    best_hour_today: Optional[int] = None          # Hour with highest predicted production (0-23)
+    best_hour_today: Optional[int] = None  # Hour with highest predicted production (0-23)
     best_hour_production_kwh: Optional[float] = None  # Predicted production in that hour (kWh)
 
     # Hourly forecast values (optional - for detailed hourly breakdown)
-    hourly_values: Optional[List[Dict[str, Any]]] = None  # List of {hour, datetime, production_kwh, date}
+    hourly_values: Optional[List[Dict[str, Any]]] = (
+        None  # List of {hour, datetime, production_kwh, date}
+    )
 
     def __post_init__(self):
-         """Validate values after initialization"""
-         # Ensure forecasts are non-negative
-         self.forecast_today = max(0.0, self.forecast_today)
-         self.forecast_tomorrow = max(0.0, self.forecast_tomorrow)
-         self.forecast_day_after_tomorrow = max(0.0, self.forecast_day_after_tomorrow)
-         # Clamp confidence to 0-100 range
-         self.confidence_today = max(0.0, min(100.0, self.confidence_today))
-         self.confidence_tomorrow = max(0.0, min(100.0, self.confidence_tomorrow))
-         self.confidence_day_after = max(0.0, min(100.0, self.confidence_day_after))
+        """Validate values after initialization"""
+        # Ensure forecasts are non-negative
+        self.forecast_today = max(0.0, self.forecast_today)
+        self.forecast_tomorrow = max(0.0, self.forecast_tomorrow)
+        self.forecast_day_after_tomorrow = max(0.0, self.forecast_day_after_tomorrow)
+        # Clamp confidence to 0-100 range
+        self.confidence_today = max(0.0, min(100.0, self.confidence_today))
+        self.confidence_tomorrow = max(0.0, min(100.0, self.confidence_tomorrow))
+        self.confidence_day_after = max(0.0, min(100.0, self.confidence_day_after))
 
     def to_dict(self) -> Dict[str, Any]:
         """Converts the ForecastResult into a dictionary format suitable for"""
@@ -84,9 +91,9 @@ class ForecastResult:
         if self.correction_factor is not None:
             result["_correction_factor"] = round(self.correction_factor, 3)
         if self.features_used is not None:
-            result["_features_used_count"] = self.features_used # Renamed key slightly
+            result["_features_used_count"] = self.features_used  # Renamed key slightly
         if self.model_accuracy is not None:
-            result["_ml_model_accuracy"] = round(self.model_accuracy, 4) # More precision
+            result["_ml_model_accuracy"] = round(self.model_accuracy, 4)  # More precision
         if self.hourly_values is not None:
             result["hourly"] = self.hourly_values  # Include hourly breakdown
 
@@ -105,10 +112,7 @@ class ForecastStrategy(ABC):
 
     @abstractmethod
     async def calculate_forecast(
-        self,
-        weather_data: Dict[str, Any],
-        sensor_data: Dict[str, Any],
-        correction_factor: float
+        self, weather_data: Dict[str, Any], sensor_data: Dict[str, Any], correction_factor: float
     ) -> ForecastResult:
         """Abstract method to calculate the solar forecast"""
         pass
@@ -126,12 +130,13 @@ class ForecastStrategy(ABC):
     def _apply_bounds(self, value: float, min_val: float, max_val: float) -> float:
         """Utility method to clamp a float value between a minimum and maximum"""
         if max_val < min_val:
-             self._logger.warning(f"Invalid bounds provided: min_val ({min_val}) > max_val ({max_val}).")
-             # Handle invalid bounds gracefully, e.g., return min_val or original value
-             return max(min_val, value) # Ensure at least min_val
+            self._logger.warning(
+                f"Invalid bounds provided: min_val ({min_val}) > max_val ({max_val})."
+            )
+            # Handle invalid bounds gracefully, e.g., return min_val or original value
+            return max(min_val, value)  # Ensure at least min_val
 
         return max(min_val, min(value, max_val))
-
 
     def _log_calculation(self, result: ForecastResult, details: str = "") -> None:
         """Helper method for consistent logging of forecast calculation results"""

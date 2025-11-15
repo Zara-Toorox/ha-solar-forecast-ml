@@ -9,10 +9,10 @@ The cache is loaded once at startup and refreshed periodically.
 
 import json
 import logging
-from pathlib import Path
-from typing import Dict, Optional, Any
-from threading import Lock
 from datetime import datetime
+from pathlib import Path
+from threading import Lock
+from typing import Any, Dict, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,13 +58,12 @@ class AstronomyCacheManager:
 
         try:
             with self._lock:
-                with open(self._cache_file, 'r', encoding='utf-8') as f:
+                with open(self._cache_file, "r", encoding="utf-8") as f:
                     self._cache = json.load(f)
                 self._last_loaded = datetime.now()
 
             _LOGGER.debug(
-                f"Astronomy cache loaded into memory: "
-                f"{len(self._cache.get('days', {}))} days"
+                f"Astronomy cache loaded into memory: " f"{len(self._cache.get('days', {}))} days"
             )
             return True
 
@@ -151,11 +150,7 @@ class AstronomyCacheManager:
             Dict with cache info
         """
         if not self._cache:
-            return {
-                "loaded": False,
-                "last_loaded": None,
-                "total_days": 0
-            }
+            return {"loaded": False, "last_loaded": None, "total_days": 0}
 
         with self._lock:
             cache_info = self._cache.get("cache_info", {})
@@ -164,7 +159,7 @@ class AstronomyCacheManager:
                 "last_loaded": self._last_loaded.isoformat() if self._last_loaded else None,
                 "total_days": cache_info.get("total_days", 0),
                 "date_range_start": cache_info.get("date_range_start"),
-                "date_range_end": cache_info.get("date_range_end")
+                "date_range_end": cache_info.get("date_range_end"),
             }
 
     def clear(self):

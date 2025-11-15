@@ -10,9 +10,9 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Dict, Any, List, Tuple
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 try:
     from ..const import MIN_TRAINING_DATA_POINTS
@@ -21,6 +21,7 @@ except ImportError:
     # Fallback for standalone testing
     import sys
     from pathlib import Path
+
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from const import MIN_TRAINING_DATA_POINTS
     from core.core_helpers import SafeDateTimeUtil as dt_util
@@ -45,9 +46,7 @@ class MLTrainingHelpersV2:
 
             # Run in executor to avoid blocking I/O
             records, count = await self.predictor.hass.async_add_executor_job(
-                loader.load_training_data,
-                10,  # min_samples
-                True  # exclude_outliers
+                loader.load_training_data, 10, True  # min_samples  # exclude_outliers
             )
 
             _LOGGER.info(f"Loaded {count} training records from V2 data structure")
@@ -80,8 +79,7 @@ class MLTrainingHelpersV2:
         return True, "", valid_records_count
 
     async def prepare_training_features_v2(
-        self,
-        training_records: List[Dict]
+        self, training_records: List[Dict]
     ) -> Tuple[List[List[float]], List[float]]:
         """Extract features and labels from training records using V2 feature engineering"""
         from .ml_feature_engineering_v2 import FeatureEngineerV2
@@ -94,11 +92,13 @@ class MLTrainingHelpersV2:
             # Extract features
             features = feature_eng.extract_features(record)
             if features is None:
-                _LOGGER.debug(f"Skipping record, feature extraction failed: {record.get('timestamp')}")
+                _LOGGER.debug(
+                    f"Skipping record, feature extraction failed: {record.get('timestamp')}"
+                )
                 continue
 
             # Get target
-            actual_kwh = record.get('actual_kwh')
+            actual_kwh = record.get("actual_kwh")
             if actual_kwh is None:
                 _LOGGER.debug(f"Skipping record without actual_kwh: {record.get('timestamp')}")
                 continue
@@ -106,13 +106,13 @@ class MLTrainingHelpersV2:
             X_train_raw.append(features)
             y_train.append(actual_kwh)
 
-        _LOGGER.info(f"Feature extraction complete: {len(X_train_raw)} samples with {len(features)} features each")
+        _LOGGER.info(
+            f"Feature extraction complete: {len(X_train_raw)} samples with {len(features)} features each"
+        )
         return X_train_raw, y_train
 
     async def scale_and_train(
-        self,
-        X_train_raw: List[List[float]],
-        y_train: List[float]
+        self, X_train_raw: List[List[float]], y_train: List[float]
     ) -> Tuple[Dict, float, float, float, "FeatureEngineerV2"]:
         """Scale features and train model
 
@@ -125,16 +125,14 @@ class MLTrainingHelpersV2:
         feature_names = feature_eng.feature_names
 
         X_train_scaled_list = await self.predictor.hass.async_add_executor_job(
-            self.predictor.scaler.fit_transform,
-            X_train_raw,
-            feature_names
+            self.predictor.scaler.fit_transform, X_train_raw, feature_names
         )
-        _LOGGER.info(
-            f"Scaler fitted and training data transformed ({len(feature_names)} features)"
-        )
+        _LOGGER.info(f"Scaler fitted and training data transformed ({len(feature_names)} features)")
 
-        weights_dict_raw, bias, accuracy, best_lambda = await self.predictor.hass.async_add_executor_job(
-            self.predictor.trainer.train, X_train_scaled_list, y_train
+        weights_dict_raw, bias, accuracy, best_lambda = (
+            await self.predictor.hass.async_add_executor_job(
+                self.predictor.trainer.train, X_train_scaled_list, y_train
+            )
         )
         _LOGGER.info(
             f"Ridge training complete. Accuracy (R-squared): {accuracy:.4f}, Best Lambda: {best_lambda:.4f}"
@@ -149,7 +147,7 @@ class MLTrainingHelpersV2:
         accuracy: float,
         samples_used: int,
         training_start_time: datetime,
-        feature_engineer_v2: "FeatureEngineerV2"
+        feature_engineer_v2: "FeatureEngineerV2",
     ) -> Any:
         """Create learned weights structure
 
@@ -164,21 +162,20 @@ class MLTrainingHelpersV2:
         Returns:
             LearnedWeights object
         """
+        from ..const import CORRECTION_FACTOR_MAX, CORRECTION_FACTOR_MIN, ML_MODEL_VERSION
         from ..ml.ml_types import LearnedWeights
-        from ..const import ML_MODEL_VERSION, CORRECTION_FACTOR_MIN, CORRECTION_FACTOR_MAX
 
         # Map raw weights to V2 feature names
         mapped_weights = self.predictor.trainer.map_weights_to_features(
             weights_dict_raw,
-            feature_engineer_v2.feature_names  # Use V2 feature names (44 features)
+            feature_engineer_v2.feature_names,  # Use V2 feature names (44 features)
         )
 
         # Preserve correction factor from old weights
         old_weights = await self.predictor.data_manager.get_learned_weights()
-        current_correction_factor = getattr(old_weights, 'correction_factor', 1.0)
+        current_correction_factor = getattr(old_weights, "correction_factor", 1.0)
         current_correction_factor = max(
-            CORRECTION_FACTOR_MIN,
-            min(CORRECTION_FACTOR_MAX, current_correction_factor)
+            CORRECTION_FACTOR_MIN, min(CORRECTION_FACTOR_MAX, current_correction_factor)
         )
 
         return LearnedWeights(
@@ -191,7 +188,7 @@ class MLTrainingHelpersV2:
             feature_names=feature_engineer_v2.feature_names,  # V2 feature names (44)
             feature_means=self.predictor.scaler.means,  # Fitted with V2 features
             feature_stds=self.predictor.scaler.stds,  # Fitted with V2 features
-            correction_factor=current_correction_factor
+            correction_factor=current_correction_factor,
         )
 
     async def finalize_training(
@@ -200,7 +197,7 @@ class MLTrainingHelpersV2:
         accuracy: float,
         samples_used: int,
         training_records: List[Dict],
-        training_start_time: datetime
+        training_start_time: datetime,
     ) -> None:
         """Finalize training - save weights, update state"""
         from ..const import MODEL_ACCURACY_THRESHOLD
@@ -215,18 +212,14 @@ class MLTrainingHelpersV2:
         self.predictor.current_accuracy = accuracy  # CRITICAL: Set accuracy for model_state.json
         self.predictor.training_samples = samples_used  # CRITICAL: Set samples for model_state.json
         self.predictor.model_state = (
-            ModelState.READY if accuracy >= MODEL_ACCURACY_THRESHOLD
-            else ModelState.DEGRADED
+            ModelState.READY if accuracy >= MODEL_ACCURACY_THRESHOLD else ModelState.DEGRADED
         )
         self.predictor.last_training = training_start_time
 
         await self.predictor._update_model_state_file()
 
     async def send_training_notifications(
-        self,
-        success: bool,
-        accuracy: float = None,
-        samples_used: int = 0
+        self, success: bool, accuracy: float = None, samples_used: int = 0
     ) -> None:
         """Send training completion notifications"""
         if not self.predictor.notification_service:
@@ -235,8 +228,7 @@ class MLTrainingHelpersV2:
         try:
             if success and accuracy:
                 await self.predictor.notification_service.send_ml_training_notification(
-                    accuracy=accuracy,
-                    samples_used=samples_used
+                    accuracy=accuracy, samples_used=samples_used
                 )
         except Exception as e:
             _LOGGER.debug(f"Failed to send training notification: {e}")

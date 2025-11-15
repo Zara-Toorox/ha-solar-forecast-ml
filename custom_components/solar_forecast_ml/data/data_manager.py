@@ -20,22 +20,21 @@ Copyright (C) 2025 Zara-Toorox
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from .data_io import DataManagerIO
+from ..ml.ml_types import HourlyProfile, LearnedWeights
+from .data_backup_handler import DataBackupHandler
+from .data_daily_summaries import DailySummariesHandler
 from .data_forecast_handler import DataForecastHandler
+from .data_hourly_predictions import HourlyPredictionsHandler
+from .data_io import DataManagerIO
 from .data_ml_handler import DataMLHandler
 from .data_prediction_handler import DataPredictionHandler
-from .data_state_handler import DataStateHandler
-from .data_backup_handler import DataBackupHandler
 from .data_schema_validator import DataSchemaValidator
+from .data_state_handler import DataStateHandler
 from .data_weather_accuracy import WeatherAccuracyTracker
-from .data_hourly_predictions import HourlyPredictionsHandler
-from .data_daily_summaries import DailySummariesHandler
-
-from ..ml.ml_types import LearnedWeights, HourlyProfile
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,7 +52,9 @@ class DataManager(DataManagerIO):
         # Initialize specialized handlers
         self.forecast_handler = DataForecastHandler(hass, data_dir)
         self.ml_handler = DataMLHandler(hass, data_dir)
-        self.prediction_handler = DataPredictionHandler(hass, data_dir)  # OLD - kept for compatibility
+        self.prediction_handler = DataPredictionHandler(
+            hass, data_dir
+        )  # OLD - kept for compatibility
         self.state_handler = DataStateHandler(hass, data_dir)
         self.backup_handler = DataBackupHandler(hass, data_dir)
         self.weather_accuracy = WeatherAccuracyTracker(hass, data_dir)
@@ -120,7 +121,9 @@ class DataManager(DataManagerIO):
             validation_success = await validator.validate_and_migrate_all()
 
             if not validation_success:
-                _LOGGER.warning("JSON schema validation completed with warnings - continuing initialization")
+                _LOGGER.warning(
+                    "JSON schema validation completed with warnings - continuing initialization"
+                )
             else:
                 _LOGGER.info("JSON schema validation completed successfully")
 
@@ -140,7 +143,7 @@ class DataManager(DataManagerIO):
             _LOGGER.error(f"Failed to initialize DataManager: {e}", exc_info=True)
             return False
 
-    # 
+    #
     # FORECAST METHODS - Delegate to DataForecastHandler
     #
 
@@ -157,7 +160,7 @@ class DataManager(DataManagerIO):
         prediction_kwh: float,
         source: str = "ML",
         lock: bool = True,
-        force_overwrite: bool = False
+        force_overwrite: bool = False,
     ) -> bool:
         """Save todays daily forecast"""
         return await self.forecast_handler.save_forecast_day(
@@ -165,11 +168,7 @@ class DataManager(DataManagerIO):
         )
 
     async def save_forecast_tomorrow(
-        self,
-        date: datetime,
-        prediction_kwh: float,
-        source: str = "ML",
-        lock: bool = False
+        self, date: datetime, prediction_kwh: float, source: str = "ML", lock: bool = False
     ) -> bool:
         """Save tomorrows forecast"""
         return await self.forecast_handler.save_forecast_tomorrow(
@@ -177,11 +176,7 @@ class DataManager(DataManagerIO):
         )
 
     async def save_forecast_day_after(
-        self,
-        date: datetime,
-        prediction_kwh: float,
-        source: str = "ML",
-        lock: bool = False
+        self, date: datetime, prediction_kwh: float, source: str = "ML", lock: bool = False
     ) -> bool:
         """Save day after tomorrows forecast"""
         return await self.forecast_handler.save_forecast_day_after(
@@ -189,32 +184,21 @@ class DataManager(DataManagerIO):
         )
 
     async def save_forecast_best_hour(
-        self,
-        hour: int,
-        prediction_kwh: float,
-        source: str = "ML_Hourly"
+        self, hour: int, prediction_kwh: float, source: str = "ML_Hourly"
     ) -> bool:
         """Save best hour forecast"""
-        return await self.forecast_handler.save_forecast_best_hour(
-            hour, prediction_kwh, source
-        )
+        return await self.forecast_handler.save_forecast_best_hour(hour, prediction_kwh, source)
 
-    async def save_actual_best_hour(
-        self,
-        hour: int,
-        actual_kwh: float
-    ) -> bool:
+    async def save_actual_best_hour(self, hour: int, actual_kwh: float) -> bool:
         """Save actual best production hour"""
-        return await self.forecast_handler.save_actual_best_hour(
-            hour, actual_kwh
-        )
+        return await self.forecast_handler.save_actual_best_hour(hour, actual_kwh)
 
     async def save_forecast_next_hour(
         self,
         hour_start: datetime,
         hour_end: datetime,
         prediction_kwh: float,
-        source: str = "ML_Hourly"
+        source: str = "ML_Hourly",
     ) -> bool:
         """Save next hour forecast"""
         return await self.forecast_handler.save_forecast_next_hour(
@@ -232,27 +216,18 @@ class DataManager(DataManagerIO):
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         last_power_above_10w: Optional[datetime] = None,
-        zero_power_since: Optional[datetime] = None
+        zero_power_since: Optional[datetime] = None,
     ) -> bool:
         """Update production time tracking"""
         return await self.forecast_handler.update_production_time(
-            active, duration_seconds, start_time, end_time,
-            last_power_above_10w, zero_power_since
+            active, duration_seconds, start_time, end_time, last_power_above_10w, zero_power_since
         )
 
-    async def update_peak_today(
-        self,
-        power_w: float,
-        timestamp: datetime
-    ) -> bool:
+    async def update_peak_today(self, power_w: float, timestamp: datetime) -> bool:
         """Update todays peak power"""
         return await self.forecast_handler.update_peak_today(power_w, timestamp)
 
-    async def update_all_time_peak(
-        self,
-        power_w: float,
-        timestamp: datetime
-    ) -> bool:
+    async def update_all_time_peak(self, power_w: float, timestamp: datetime) -> bool:
         """Update all-time peak power"""
         return await self.forecast_handler.update_all_time_peak(power_w, timestamp)
 
@@ -261,10 +236,7 @@ class DataManager(DataManagerIO):
         return await self.forecast_handler.get_all_time_peak()
 
     async def finalize_today(
-        self,
-        yield_kwh: float,
-        consumption_kwh: Optional[float] = None,
-        production_seconds: int = 0
+        self, yield_kwh: float, consumption_kwh: Optional[float] = None, production_seconds: int = 0
     ) -> bool:
         """Finalize today with actual values"""
         # Finalize in daily_forecasts.json
@@ -288,8 +260,7 @@ class DataManager(DataManagerIO):
 
                 # Update prediction_history.json with actual values
                 await self.update_today_predictions_actual(
-                    actual_value=yield_kwh,
-                    accuracy=accuracy_percent
+                    actual_value=yield_kwh, accuracy=accuracy_percent
                 )
                 _LOGGER.debug(
                     f"Updated prediction_history.json: actual_value={yield_kwh:.2f} kWh, "
@@ -301,10 +272,7 @@ class DataManager(DataManagerIO):
         return success
 
     async def get_history(
-        self,
-        days: int = 30,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+        self, days: int = 30, start_date: Optional[str] = None, end_date: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Get history entries"""
         return await self.forecast_handler.get_history(days, start_date, end_date)
@@ -359,12 +327,11 @@ class DataManager(DataManagerIO):
         last_training: Optional[str] = None,
         training_samples: Optional[int] = None,
         current_accuracy: Optional[float] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
     ) -> bool:
         """Update model state partially"""
         return await self.ml_handler.update_model_state(
-            model_loaded, last_training, training_samples,
-            current_accuracy, status
+            model_loaded, last_training, training_samples, current_accuracy, status
         )
 
     async def add_hourly_sample(self, sample: Dict[str, Any]) -> bool:
@@ -383,7 +350,7 @@ class DataManager(DataManagerIO):
         self,
         limit: Optional[int] = None,
         start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+        end_date: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get hourly samples"""
         return await self.ml_handler.get_hourly_samples(limit, start_date, end_date)
@@ -398,8 +365,9 @@ class DataManager(DataManagerIO):
 
     async def get_all_training_records(self, days: int = 60) -> List[Dict[str, Any]]:
         """Get all training records hourly samples for the specified number of days"""
-        from ..core.core_helpers import SafeDateTimeUtil as dt_util
         from datetime import timedelta
+
+        from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
         # Calculate start date (days ago from now)
         now = dt_util.now()
@@ -407,9 +375,7 @@ class DataManager(DataManagerIO):
 
         # Get hourly samples from the specified date range
         return await self.ml_handler.get_hourly_samples(
-            limit=None,  # No limit, get all
-            start_date=start_date,
-            end_date=None  # Up to now
+            limit=None, start_date=start_date, end_date=None  # No limit, get all  # Up to now
         )
 
     async def cleanup_duplicate_samples(self) -> Dict[str, int]:
@@ -420,18 +386,13 @@ class DataManager(DataManagerIO):
         """Cleanup zero-production samples"""
         return await self.ml_handler.cleanup_zero_production_samples()
 
- 
     # Note: prediction_history.json methods removed - use hourly_predictions instead
 
     async def update_today_predictions_actual(
-        self,
-        actual_value: float,
-        accuracy: Optional[float] = None
+        self, actual_value: float, accuracy: Optional[float] = None
     ) -> bool:
         """Update todays predictions with actual value and accuracy"""
-        return await self.prediction_handler.update_today_predictions_actual(
-            actual_value, accuracy
-        )
+        return await self.prediction_handler.update_today_predictions_actual(actual_value, accuracy)
 
     async def save_expected_daily_production(self, value: float) -> bool:
         """Save expected daily production"""
@@ -442,8 +403,7 @@ class DataManager(DataManagerIO):
         # Load daily forecasts to check for new system first
         daily_forecasts = await self.load_daily_forecasts()
         return await self.state_handler.load_expected_daily_production(
-            check_daily_forecasts=True,
-            daily_forecasts_data=daily_forecasts
+            check_daily_forecasts=True, daily_forecasts_data=daily_forecasts
         )
 
     async def clear_expected_daily_production(self) -> bool:
@@ -470,67 +430,45 @@ class DataManager(DataManagerIO):
         """Check if weather cache is valid Default: 180 minutes (3 hours) for better resilience"""
         return await self.state_handler.is_weather_cache_valid(max_age_minutes)
 
-
     async def create_backup(
-        self,
-        backup_name: Optional[str] = None,
-        backup_type: str = "manual"
+        self, backup_name: Optional[str] = None, backup_type: str = "manual"
     ) -> bool:
         """Create backup"""
         return await self.backup_handler.create_backup(backup_name, backup_type)
 
     async def cleanup_old_backups(
-        self,
-        backup_type: str = "auto",
-        retention_days: Optional[int] = None
+        self, backup_type: str = "auto", retention_days: Optional[int] = None
     ) -> int:
         """Cleanup old backups"""
-        return await self.backup_handler.cleanup_old_backups(
-            backup_type, retention_days
-        )
+        return await self.backup_handler.cleanup_old_backups(backup_type, retention_days)
 
     async def cleanup_excess_backups(
-        self,
-        backup_type: str = "auto",
-        max_backups: Optional[int] = None
+        self, backup_type: str = "auto", max_backups: Optional[int] = None
     ) -> int:
         """Cleanup excess backups"""
-        return await self.backup_handler.cleanup_excess_backups(
-            backup_type, max_backups
-        )
+        return await self.backup_handler.cleanup_excess_backups(backup_type, max_backups)
 
-    async def list_backups(
-        self,
-        backup_type: Optional[str] = None
-    ) -> list:
+    async def list_backups(self, backup_type: Optional[str] = None) -> list:
         """List backups"""
         return await self.backup_handler.list_backups(backup_type)
 
-    async def restore_backup(
-        self,
-        backup_name: str,
-        backup_type: str = "manual"
-    ) -> bool:
+    async def restore_backup(self, backup_name: str, backup_type: str = "manual") -> bool:
         """Restore backup"""
         return await self.backup_handler.restore_backup(backup_name, backup_type)
 
-    async def delete_backup(
-        self,
-        backup_name: str,
-        backup_type: str = "manual"
-    ) -> bool:
+    async def delete_backup(self, backup_name: str, backup_type: str = "manual") -> bool:
         """Delete backup"""
         return await self.backup_handler.delete_backup(backup_name, backup_type)
 
     async def get_backup_info(
-        self,
-        backup_name: str,
-        backup_type: str = "manual"
+        self, backup_name: str, backup_type: str = "manual"
     ) -> Optional[dict]:
         """Get backup info"""
         return await self.backup_handler.get_backup_info(backup_name, backup_type)
 
-    async def save_daily_forecast(self, prediction_kwh: float, source: str = "auto_6am", force_overwrite: bool = False) -> bool:
+    async def save_daily_forecast(
+        self, prediction_kwh: float, source: str = "auto_6am", force_overwrite: bool = False
+    ) -> bool:
         """OLD METHOD - redirects to save_forecast_day"""
         return await self.save_forecast_day(prediction_kwh, source, force_overwrite=force_overwrite)
 
@@ -554,20 +492,20 @@ class DataManager(DataManagerIO):
         duration_formatted: str = "00:00:00",
         currently_producing: bool = False,
         last_power_above_10w: Optional[datetime] = None,
-        zero_power_streak_minutes: int = 0
+        zero_power_streak_minutes: int = 0,
     ) -> bool:
         """OLD METHOD - redirects to update_production_time"""
         zero_power_since = None
         if zero_power_streak_minutes > 0 and last_power_above_10w:
             zero_power_since = last_power_above_10w + timedelta(minutes=zero_power_streak_minutes)
-        
+
         return await self.update_production_time(
             active=currently_producing,
             duration_seconds=duration_seconds,
             start_time=start_time,
             end_time=end_time,
             last_power_above_10w=last_power_above_10w,
-            zero_power_since=zero_power_since
+            zero_power_since=zero_power_since,
         )
 
     async def move_to_history(self) -> bool:
@@ -578,7 +516,9 @@ class DataManager(DataManagerIO):
         """Calculate aggregated statistics"""
         return await self.forecast_handler.calculate_statistics()
 
-    async def save_power_peak(self, power_w: float, timestamp: datetime, is_all_time: bool = False) -> bool:
+    async def save_power_peak(
+        self, power_w: float, timestamp: datetime, is_all_time: bool = False
+    ) -> bool:
         """OLD METHOD - redirects to update_peak_today"""
         return await self.update_peak_today(power_w, timestamp)
 
@@ -586,7 +526,7 @@ class DataManager(DataManagerIO):
         self,
         actual_yield_kwh: float,
         actual_consumption_kwh: Optional[float] = None,
-        production_time_today: Optional[str] = None
+        production_time_today: Optional[str] = None,
     ) -> bool:
         """OLD METHOD - redirects to finalize_today"""
         production_seconds = 0
@@ -597,8 +537,10 @@ class DataManager(DataManagerIO):
                     production_seconds = int(parts[0]) * 3600 + int(parts[1]) * 60
             except Exception as e:
                 _LOGGER.debug(f"Could not parse production time '{production_time_today}': {e}")
-        
-        return await self.finalize_today(actual_yield_kwh, actual_consumption_kwh, production_seconds)
+
+        return await self.finalize_today(
+            actual_yield_kwh, actual_consumption_kwh, production_seconds
+        )
 
     def _deploy_documentation_sync(self, integration_dir, target_dir, marker_file) -> int:
         """
@@ -624,7 +566,9 @@ class DataManager(DataManagerIO):
             ]
 
             # Check if import_tools PDF exists (transitional period)
-            import_tools_pdf = integration_dir / "import_tools" / "Solar Forecast ML Integration Handbuch.pdf"
+            import_tools_pdf = (
+                integration_dir / "import_tools" / "Solar Forecast ML Integration Handbuch.pdf"
+            )
             if import_tools_pdf.exists():
                 files_to_deploy.append((import_tools_pdf, "Handbuch.pdf"))
 
@@ -660,7 +604,6 @@ class DataManager(DataManagerIO):
 
             # Source: custom_components/solar_forecast_ml/
             # Target: /config/solar_forecast_ml/docs/
-
             # Get the integration's base directory
             integration_dir = Path(__file__).parent.parent
             target_dir = self.data_dir / "docs"
@@ -721,8 +664,10 @@ class DataManager(DataManagerIO):
             # Run migration (not dry run)
             report = await migration.migrate(dry_run=False)
 
-            if report['success']:
-                _LOGGER.info(f"✅ Auto-migration successful! Converted {len(report['converted_dates'])} days of historical data")
+            if report["success"]:
+                _LOGGER.info(
+                    f"✅ Auto-migration successful! Converted {len(report['converted_dates'])} days of historical data"
+                )
                 _LOGGER.info(f"   Old file archived as: prediction_history_v1_archived.json")
                 return True
             else:

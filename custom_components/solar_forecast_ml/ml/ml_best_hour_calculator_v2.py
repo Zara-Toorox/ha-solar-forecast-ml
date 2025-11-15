@@ -19,8 +19,8 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Optional, Tuple, Dict, Any, List
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,7 +44,8 @@ class BestHourCalculatorV2:
         """Synchronous file read for astronomy cache (runs in executor)"""
         if astronomy_cache_file.exists():
             import json
-            with open(astronomy_cache_file, 'r') as f:
+
+            with open(astronomy_cache_file, "r") as f:
                 return json.load(f)
         return None
 
@@ -59,20 +60,16 @@ class BestHourCalculatorV2:
         """
         try:
             from ..core.core_helpers import SafeDateTimeUtil as dt_util
+
             now_local = dt_util.now()
             today = now_local.date()
 
             # Try astronomy cache first
-            astronomy_cache_file = (
-                self.data_manager.data_dir /
-                "stats" /
-                "astronomy_cache.json"
-            )
+            astronomy_cache_file = self.data_manager.data_dir / "stats" / "astronomy_cache.json"
 
             # Load cache via executor (non-blocking)
             cache = await self.hass.async_add_executor_job(
-                self._load_astronomy_cache_sync,
-                astronomy_cache_file
+                self._load_astronomy_cache_sync, astronomy_cache_file
             )
 
             if cache:
@@ -194,7 +191,7 @@ class BestHourCalculatorV2:
         sunrise, sunset = await self._get_sun_times()
 
         # Strategy 1: ML hourly predictions
-        if self.ml_predictor and hasattr(self.ml_predictor, 'last_hourly_predictions'):
+        if self.ml_predictor and hasattr(self.ml_predictor, "last_hourly_predictions"):
             ml_result = await self._calculate_from_ml_hourly(sunrise, sunset)
             if ml_result[0] is not None:
                 _LOGGER.info(
@@ -222,7 +219,9 @@ class BestHourCalculatorV2:
             return solar_noon_hour, 0.0  # Return 0.0 kWh as we have no prediction
 
         # No data at all
-        _LOGGER.warning("⚠ No data available for best hour calculation (no ML, profile, or sun data)")
+        _LOGGER.warning(
+            "⚠ No data available for best hour calculation (no ML, profile, or sun data)"
+        )
         return None, None
 
     async def _calculate_from_ml_hourly(
@@ -238,7 +237,7 @@ class BestHourCalculatorV2:
             Tuple of (best_hour, prediction_kwh) or (None, None)
         """
         try:
-            if not hasattr(self.ml_predictor, 'last_hourly_predictions'):
+            if not hasattr(self.ml_predictor, "last_hourly_predictions"):
                 return None, None
 
             hourly_preds = self.ml_predictor.last_hourly_predictions
@@ -247,6 +246,7 @@ class BestHourCalculatorV2:
                 return None, None
 
             from ..core.core_helpers import SafeDateTimeUtil as dt_util
+
             today = dt_util.now().date()
 
             # Filter predictions for today only
@@ -313,7 +313,7 @@ class BestHourCalculatorV2:
         try:
             profile_data = await self.data_manager.load_hourly_profile()
 
-            if not profile_data or not hasattr(profile_data, 'hourly_averages'):
+            if not profile_data or not hasattr(profile_data, "hourly_averages"):
                 _LOGGER.debug("No hourly profile data available")
                 return None, None
 

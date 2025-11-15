@@ -19,16 +19,15 @@ Copyright (C) 2025 Zara-Toorox
 
 import logging
 import math
-from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 from homeassistant.util import dt as dt_util
 
-from .forecast_strategy_base import ForecastStrategy, ForecastResult
-from .forecast_weather_calculator import WeatherCalculator
-from ..core.core_helpers import SafeDateTimeUtil as dt_util_safe
 from ..astronomy.astronomy_cache_manager import get_cache_manager
-
+from ..core.core_helpers import SafeDateTimeUtil as dt_util_safe
+from .forecast_strategy_base import ForecastResult, ForecastStrategy
+from .forecast_weather_calculator import WeatherCalculator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         self,
         weather_calculator: WeatherCalculator,
         solar_capacity: float,
-        orchestrator: Optional[Any] = None
+        orchestrator: Optional[Any] = None,
     ):
         """Initialize the Rule-Based Forecast Strategy"""
         super().__init__("rule_based")
@@ -53,7 +52,6 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         self.MAX_REALISTIC_DAILY_KWH_PER_KWP = 8.0
 
         _LOGGER.debug("RuleBasedForecastStrategy (Iterative) initialized.")
-
 
     def is_available(self) -> bool:
         """This strategy is always available as a fallback"""
@@ -68,20 +66,24 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         hourly_weather_forecast: List[Dict[str, Any]],
         sensor_data: Dict[str, Any],
         correction_factor: float,
-        **kwargs
+        **kwargs,
     ) -> ForecastResult:
         """Calculates a forecast using simple weather rules combined with a learned"""
         _LOGGER.debug("Calculating forecast using Rule-based (Iterative) strategy...")
 
         try:
             try:
-                 base_capacity_kwp = float(sensor_data.get("solar_capacity", self.solar_capacity))
-                 if base_capacity_kwp <= 0:
-                      _LOGGER.warning(f"Solar capacity ({base_capacity_kwp}kWp) is zero or negative. Using fallback 1.0 kWp.")
-                      base_capacity_kwp = 1.0
+                base_capacity_kwp = float(sensor_data.get("solar_capacity", self.solar_capacity))
+                if base_capacity_kwp <= 0:
+                    _LOGGER.warning(
+                        f"Solar capacity ({base_capacity_kwp}kWp) is zero or negative. Using fallback 1.0 kWp."
+                    )
+                    base_capacity_kwp = 1.0
             except (ValueError, TypeError):
-                 _LOGGER.warning(f"Invalid solar_capacity in sensor_data, using default {self.solar_capacity} kWp.")
-                 base_capacity_kwp = self.solar_capacity
+                _LOGGER.warning(
+                    f"Invalid solar_capacity in sensor_data, using default {self.solar_capacity} kWp."
+                )
+                base_capacity_kwp = self.solar_capacity
 
             total_today_kwh = 0.0
             total_tomorrow_kwh = 0.0
@@ -105,7 +107,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                     if not hour_dt_local:
                         _LOGGER.warning("Skipping hour, missing 'local_datetime'")
                         continue
-                    
+
                     # Parse if string (ISO format from JSON serialization)
                     if isinstance(hour_dt_local, str):
                         hour_dt_local = dt_util_safe.parse_datetime(hour_dt_local)
@@ -124,12 +126,13 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                     hour_local = hour_dt_local.hour
 
                     hour_factor = self._get_hour_factor(hour_local, hour_dt_local)
-                    
-                    combined_weather_factor = self.weather_calculator.calculate_combined_weather_factor(
-                        hour_data,
-                        include_seasonal=True
+
+                    combined_weather_factor = (
+                        self.weather_calculator.calculate_combined_weather_factor(
+                            hour_data, include_seasonal=True
+                        )
                     )
-                    
+
                     hourly_kwh = (
                         base_capacity_kwp
                         * self.PEAK_KW_PER_KWP
@@ -137,16 +140,18 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         * combined_weather_factor
                         * correction_factor
                     )
-                    
+
                     hourly_kwh = max(0.0, hourly_kwh)
 
                     # Store hourly value
-                    hourly_values.append({
-                        "hour": hour_local,
-                        "datetime": hour_dt_local.isoformat(),
-                        "production_kwh": round(hourly_kwh, 3),
-                        "date": hour_date.isoformat()
-                    })
+                    hourly_values.append(
+                        {
+                            "hour": hour_local,
+                            "datetime": hour_dt_local.isoformat(),
+                            "production_kwh": round(hourly_kwh, 3),
+                            "date": hour_date.isoformat(),
+                        }
+                    )
 
                     if hour_date == today_date:
                         total_today_kwh += hourly_kwh
@@ -160,9 +165,11 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         total_day_after_kwh += hourly_kwh
 
                 except Exception as e_inner:
-                    _LOGGER.warning(f"Failed to process hour {hour_data.get('local_hour')}: {e_inner}")
+                    _LOGGER.warning(
+                        f"Failed to process hour {hour_data.get('local_hour')}: {e_inner}"
+                    )
                     continue
-            
+
             _LOGGER.debug(
                 f"Rule-based iteration complete. "
                 f"Today (raw): {total_today_kwh:.2f} kWh, "
@@ -176,43 +183,47 @@ class RuleBasedForecastStrategy(ForecastStrategy):
 
             min_forecast_kwh = 0.0
             max_realistic_kwh = base_capacity_kwp * self.MAX_REALISTIC_DAILY_KWH_PER_KWP
-            
+
             today_forecast_kwh = max(min_forecast_kwh, min(total_today_kwh, max_realistic_kwh))
-            tomorrow_forecast_kwh = max(min_forecast_kwh, min(total_tomorrow_kwh, max_realistic_kwh))
-            day_after_forecast_kwh = max(min_forecast_kwh, min(total_day_after_kwh, max_realistic_kwh))
+            tomorrow_forecast_kwh = max(
+                min_forecast_kwh, min(total_tomorrow_kwh, max_realistic_kwh)
+            )
+            day_after_forecast_kwh = max(
+                min_forecast_kwh, min(total_day_after_kwh, max_realistic_kwh)
+            )
 
             try:
                 current_yield = sensor_data.get("current_yield")
                 if current_yield is not None and current_yield > 0:
                     current_yield_float = float(current_yield)
-                    
+
                     if current_yield_float > today_forecast_kwh:
                         remaining_hours = max(0, 21 - now_local.hour)
                         total_production_hours = 15
-                        
+
                         additional_forecast = 0.0
                         if total_production_hours > 0 and remaining_hours > 0:
                             remaining_fraction = remaining_hours / total_production_hours
                             additional_forecast = today_forecast_kwh * remaining_fraction
                         else:
                             additional_forecast = today_forecast_kwh * 0.1
-                        
+
                         adjusted_today_forecast = current_yield_float + additional_forecast
-                        
+
                         _LOGGER.info(
                             f"Minimum forecast adjustment (Rule): Current yield {current_yield_float:.2f} kWh > "
                             f"Original forecast {today_forecast_kwh:.2f} kWh. "
                             f"Adjusted to {adjusted_today_forecast:.2f} kWh."
                         )
-                        
+
                         original_today_forecast = today_forecast_kwh
                         today_forecast_kwh = adjusted_today_forecast
-                        
+
                         if original_today_forecast > 0:
                             adjustment_ratio = today_forecast_kwh / original_today_forecast
                             tomorrow_forecast_kwh = tomorrow_forecast_kwh * adjustment_ratio
                             day_after_forecast_kwh = day_after_forecast_kwh * adjustment_ratio
-                            
+
             except Exception as e:
                 _LOGGER.debug(f"Minimum forecast check (Rule) could not be performed: {e}")
 
@@ -221,7 +232,6 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             confidence_today = max(30.0, min(95.0, confidence_base * 85.0))
             confidence_tomorrow = confidence_today * 0.9
             confidence_day_after = confidence_tomorrow * 0.85
-
 
             result = ForecastResult(
                 forecast_today=today_forecast_kwh,
@@ -235,7 +245,9 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 base_capacity=base_capacity_kwp,
                 correction_factor=correction_factor,
                 best_hour_today=best_hour_today,
-                best_hour_production_kwh=best_hour_production if best_hour_today is not None else None,
+                best_hour_production_kwh=(
+                    best_hour_production if best_hour_today is not None else None
+                ),
                 hourly_values=hourly_values,  # Include hourly breakdown
             )
 
@@ -251,7 +263,10 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             return result
 
         except Exception as e:
-            _LOGGER.error(f"Rule-based (Iterative) forecast calculation failed unexpectedly: {e}", exc_info=True)
+            _LOGGER.error(
+                f"Rule-based (Iterative) forecast calculation failed unexpectedly: {e}",
+                exc_info=True,
+            )
 
             _LOGGER.warning("Using emergency fallback for Rule-based forecast.")
             fallback_capacity = self.solar_capacity if self.solar_capacity > 0 else 2.0
@@ -266,7 +281,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 confidence_day_after=10.0,
                 method="emergency_fallback_rule",
                 calibrated=False,
-                base_capacity=fallback_capacity
+                base_capacity=fallback_capacity,
             )
 
     def _get_hour_factor(self, hour: int, hour_datetime: Optional[datetime] = None) -> float:
@@ -294,7 +309,9 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                             window_start_str, window_end_str = window
 
                             # Parse ISO timestamps and convert to naive local time
-                            window_start = datetime.fromisoformat(window_start_str).replace(tzinfo=None)
+                            window_start = datetime.fromisoformat(window_start_str).replace(
+                                tzinfo=None
+                            )
                             window_end = datetime.fromisoformat(window_end_str).replace(tzinfo=None)
 
                             # Extract hours for sine curve calculation

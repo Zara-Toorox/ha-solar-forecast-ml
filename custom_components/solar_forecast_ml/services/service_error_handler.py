@@ -23,18 +23,18 @@ import asyncio
 import logging
 import traceback
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone # Added timezone
+from datetime import datetime, timedelta, timezone  # Added timezone
 from enum import Enum
-from typing import Any, Callable, Coroutine, Optional, Dict # Added Coroutine
+from typing import Any, Callable, Coroutine, Dict, Optional  # Added Coroutine
 
 # Import specific exception types used
+from ..core.core_exceptions import SolarForecastMLException  # Import base exception
 from ..core.core_exceptions import (
-    ConfigurationException,
-    WeatherAPIException,
     CircuitBreakerOpenException,
-    MLModelException,
+    ConfigurationException,
     DataIntegrityException,
-    SolarForecastMLException # Import base exception
+    MLModelException,
+    WeatherAPIException,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,39 +43,42 @@ _LOGGER = logging.getLogger(__name__)
 # --- Enums for State and Error Types ---
 class CircuitBreakerState(Enum):
     """Possible states of the Circuit Breaker"""
-    CLOSED = "closed"       # Operations allowed, monitoring failures
-    OPEN = "open"           # Operations blocked for a timeout period
-    HALF_OPEN = "half_open" # Allows a limited number of test operations
+
+    CLOSED = "closed"  # Operations allowed, monitoring failures
+    OPEN = "open"  # Operations blocked for a timeout period
+    HALF_OPEN = "half_open"  # Allows a limited number of test operations
 
 
 class ErrorType(Enum):
     """Categorization of errors for circuit breaker and logging"""
+
     CONFIGURATION = "configuration"
-    API_ERROR = "api_error"         # External API errors (e.g., weather)
-    NETWORK_ERROR = "network_error"     # General network issues
-    ML_TRAINING = "ml_training"     # Errors during model training
-    ML_PREDICTION = "ml_prediction"   # Errors during prediction generation
-    DATA_INTEGRITY = "data_integrity" # Issues with stored data files (JSON, etc.)
-    JSON_OPERATION = "json_operation" # Specific errors during JSON read/write
-    SENSOR_ERROR = "sensor_error"     # Errors reading HA sensor states
-    DEPENDENCY = "dependency"       # Missing Python packages
-    UNKNOWN = "unknown"             # Unclassified errors
+    API_ERROR = "api_error"  # External API errors (e.g., weather)
+    NETWORK_ERROR = "network_error"  # General network issues
+    ML_TRAINING = "ml_training"  # Errors during model training
+    ML_PREDICTION = "ml_prediction"  # Errors during prediction generation
+    DATA_INTEGRITY = "data_integrity"  # Issues with stored data files (JSON, etc.)
+    JSON_OPERATION = "json_operation"  # Specific errors during JSON read/write
+    SENSOR_ERROR = "sensor_error"  # Errors reading HA sensor states
+    DEPENDENCY = "dependency"  # Missing Python packages
+    UNKNOWN = "unknown"  # Unclassified errors
 
 
 # --- Circuit Breaker Implementation ---
 class CircuitBreaker:
     """Implements the Circuit Breaker pattern to prevent repeated failures"""
+
     def __init__(
         self,
         name: str,
         failure_threshold: int = 3,  # Failures needed to open the circuit
         success_threshold: int = 2,  # Successful calls in HALF_OPEN to close
-        open_timeout_seconds: int = 60, # Duration the circuit stays OPEN
+        open_timeout_seconds: int = 60,  # Duration the circuit stays OPEN
         # half_open_timeout removed, not typically needed as success/failure in HALF_OPEN decides state
     ):
         """Initialize the Circuit Breaker"""
         if failure_threshold < 1 or success_threshold < 1 or open_timeout_seconds < 1:
-             raise ValueError("Thresholds and timeout must be positive integers.")
+            raise ValueError("Thresholds and timeout must be positive integers.")
 
         self.name = name
         self.failure_threshold = failure_threshold
@@ -84,16 +87,18 @@ class CircuitBreaker:
 
         self.state = CircuitBreakerState.CLOSED
         self.failure_count = 0
-        self.success_count = 0 # Used only in HALF_OPEN state
+        self.success_count = 0  # Used only in HALF_OPEN state
         self.last_failure_time: Optional[datetime] = None
-        self.opened_at_time: Optional[datetime] = None # When the circuit last opened
+        self.opened_at_time: Optional[datetime] = None  # When the circuit last opened
         self.last_state_change_time: datetime = datetime.now(timezone.utc)
 
         # Track types of errors leading to failures
         self.error_type_counts = defaultdict(int)
-        _LOGGER.info(f"Circuit Breaker '{self.name}' initialized: "
-                     f"FailureThreshold={failure_threshold}, SuccessThreshold={success_threshold}, "
-                     f"OpenTimeout={open_timeout_seconds}s")
+        _LOGGER.info(
+            f"Circuit Breaker '{self.name}' initialized: "
+            f"FailureThreshold={failure_threshold}, SuccessThreshold={success_threshold}, "
+            f"OpenTimeout={open_timeout_seconds}s"
+        )
 
     def _get_current_time(self) -> datetime:
         """Return the current time in UTC"""
@@ -108,28 +113,29 @@ class CircuitBreaker:
     def _change_state(self, new_state: CircuitBreakerState):
         """Handles state transitions and logging"""
         if self.state != new_state:
-             old_state = self.state
-             self.state = new_state
-             self.last_state_change_time = self._get_current_time()
-             _LOGGER.info(f"Circuit Breaker '{self.name}' state changed: {old_state.value} -> {new_state.value}")
-             # Reset counts on state change
-             self._reset_counts()
-             # Record open time if applicable
-             if new_state == CircuitBreakerState.OPEN:
-                  self.opened_at_time = self.last_state_change_time
-             else:
-                  self.opened_at_time = None
-             # Clear error type counts when closing
-             if new_state == CircuitBreakerState.CLOSED:
-                  self.error_type_counts.clear()
-
+            old_state = self.state
+            self.state = new_state
+            self.last_state_change_time = self._get_current_time()
+            _LOGGER.info(
+                f"Circuit Breaker '{self.name}' state changed: {old_state.value} -> {new_state.value}"
+            )
+            # Reset counts on state change
+            self._reset_counts()
+            # Record open time if applicable
+            if new_state == CircuitBreakerState.OPEN:
+                self.opened_at_time = self.last_state_change_time
+            else:
+                self.opened_at_time = None
+            # Clear error type counts when closing
+            if new_state == CircuitBreakerState.CLOSED:
+                self.error_type_counts.clear()
 
     def allow_request(self) -> bool:
         """Check if the circuit breaker should allow the operation to proceed"""
         current_time = self._get_current_time()
 
         if self.state == CircuitBreakerState.CLOSED:
-            return True # Allow requests
+            return True  # Allow requests
 
         if self.state == CircuitBreakerState.OPEN:
             # Check if the open timeout has expired
@@ -152,52 +158,58 @@ class CircuitBreaker:
         _LOGGER.error(f"Circuit Breaker '{self.name}' in unknown state: {self.state}")
         return False
 
-
     def record_success(self):
         """Record a successful operation Handles state transition from HALF_OPEN to CLOSED"""
         if self.state == CircuitBreakerState.HALF_OPEN:
             self.success_count += 1
-            _LOGGER.debug(f"Circuit Breaker '{self.name}' (HALF_OPEN): Success recorded ({self.success_count}/{self.success_threshold}).")
+            _LOGGER.debug(
+                f"Circuit Breaker '{self.name}' (HALF_OPEN): Success recorded ({self.success_count}/{self.success_threshold})."
+            )
             # Check if success threshold is met to close the circuit
             if self.success_count >= self.success_threshold:
                 self._change_state(CircuitBreakerState.CLOSED)
         elif self.state == CircuitBreakerState.CLOSED:
-             # Optionally reset failure count slowly on success in CLOSED state?
-             # Simple approach: do nothing special on success in CLOSED state.
-             pass
+            # Optionally reset failure count slowly on success in CLOSED state?
+            # Simple approach: do nothing special on success in CLOSED state.
+            pass
 
     def record_failure(self, error_type: ErrorType = ErrorType.UNKNOWN):
         """Record a failed operation Handles state transitions to OPEN"""
         current_time = self._get_current_time()
         self.last_failure_time = current_time
         self.error_type_counts[error_type] += 1
-        _LOGGER.debug(f"Circuit Breaker '{self.name}': Failure recorded (Type: {error_type.value}).")
-
+        _LOGGER.debug(
+            f"Circuit Breaker '{self.name}': Failure recorded (Type: {error_type.value})."
+        )
 
         if self.state == CircuitBreakerState.CLOSED:
             self.failure_count += 1
-            _LOGGER.debug(f"Circuit Breaker '{self.name}' (CLOSED): Failure count incremented ({self.failure_count}/{self.failure_threshold}).")
+            _LOGGER.debug(
+                f"Circuit Breaker '{self.name}' (CLOSED): Failure count incremented ({self.failure_count}/{self.failure_threshold})."
+            )
             # Check if failure threshold is met to open the circuit
             if self.failure_count >= self.failure_threshold:
                 self._change_state(CircuitBreakerState.OPEN)
         elif self.state == CircuitBreakerState.HALF_OPEN:
             # Any failure in HALF_OPEN state immediately re-opens the circuit
-            _LOGGER.warning(f"Circuit Breaker '{self.name}': Failure occurred in HALF_OPEN state. Re-opening circuit.")
+            _LOGGER.warning(
+                f"Circuit Breaker '{self.name}': Failure occurred in HALF_OPEN state. Re-opening circuit."
+            )
             self._change_state(CircuitBreakerState.OPEN)
 
         # Special handling for configuration errors: Open immediately
         if error_type == ErrorType.CONFIGURATION and self.state != CircuitBreakerState.OPEN:
-             _LOGGER.warning(f"Circuit Breaker '{self.name}': Configuration error detected. Opening circuit immediately.")
-             # Force state to OPEN regardless of current counts
-             self._change_state(CircuitBreakerState.OPEN)
-
+            _LOGGER.warning(
+                f"Circuit Breaker '{self.name}': Configuration error detected. Opening circuit immediately."
+            )
+            # Force state to OPEN regardless of current counts
+            self._change_state(CircuitBreakerState.OPEN)
 
     def reset(self):
         """Manually reset the circuit breaker to the CLOSED state"""
         _LOGGER.info(f"Circuit Breaker '{self.name}' manually reset to CLOSED state.")
         self._change_state(CircuitBreakerState.CLOSED)
-        self.last_failure_time = None # Clear last failure time on manual reset
-
+        self.last_failure_time = None  # Clear last failure time on manual reset
 
     def get_status(self) -> Dict[str, Any]:
         """Return the current status of the circuit breaker"""
@@ -205,21 +217,23 @@ class CircuitBreaker:
             "name": self.name,
             "state": self.state.value,
             "failure_count": self.failure_count,
-            "success_count": self.success_count, # Relevant only in HALF_OPEN
+            "success_count": self.success_count,  # Relevant only in HALF_OPEN
             "failure_threshold": self.failure_threshold,
             "success_threshold": self.success_threshold,
             "open_timeout_seconds": self.open_timeout.total_seconds(),
             "error_types_count": dict(self.error_type_counts),
-            "last_failure_time": self.last_failure_time.isoformat() if self.last_failure_time else None,
+            "last_failure_time": (
+                self.last_failure_time.isoformat() if self.last_failure_time else None
+            ),
             "last_state_change_time": self.last_state_change_time.isoformat(),
             "opened_at_time": self.opened_at_time.isoformat() if self.opened_at_time else None,
         }
         # Calculate time remaining if open
         if self.state == CircuitBreakerState.OPEN and self.opened_at_time:
-             time_remaining = self.open_timeout - (self._get_current_time() - self.opened_at_time)
-             status["open_time_remaining_seconds"] = max(0, round(time_remaining.total_seconds()))
+            time_remaining = self.open_timeout - (self._get_current_time() - self.opened_at_time)
+            status["open_time_remaining_seconds"] = max(0, round(time_remaining.total_seconds()))
         else:
-             status["open_time_remaining_seconds"] = None
+            status["open_time_remaining_seconds"] = None
 
         return status
 
@@ -227,6 +241,7 @@ class CircuitBreaker:
 # --- Error Handling Service ---
 class ErrorHandlingService:
     """Central service for handling errors logging operational details"""
+
     def __init__(self):
         """Initialize the Error Handling Service"""
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
@@ -252,7 +267,9 @@ class ErrorHandlingService:
     ) -> CircuitBreaker:
         """Register and configure a new circuit breaker"""
         if name in self.circuit_breakers:
-            _LOGGER.warning(f"Circuit Breaker '{name}' is already registered. Returning existing instance.")
+            _LOGGER.warning(
+                f"Circuit Breaker '{name}' is already registered. Returning existing instance."
+            )
             return self.circuit_breakers[name]
 
         try:
@@ -266,25 +283,23 @@ class ErrorHandlingService:
             _LOGGER.info(f"Circuit Breaker '{name}' registered successfully.")
             return breaker
         except ValueError as e:
-             # Catch invalid configuration errors from CircuitBreaker constructor
-             _LOGGER.error(f"Failed to register Circuit Breaker '{name}': {e}")
-             raise # Re-raise as this is a setup issue
-
+            # Catch invalid configuration errors from CircuitBreaker constructor
+            _LOGGER.error(f"Failed to register Circuit Breaker '{name}': {e}")
+            raise  # Re-raise as this is a setup issue
 
     def get_circuit_breaker(self, name: str) -> Optional[CircuitBreaker]:
         """Get a registered circuit breaker by name"""
         breaker = self.circuit_breakers.get(name)
         if breaker is None:
-             _LOGGER.warning(f"Attempted to get non-existent Circuit Breaker '{name}'.")
+            _LOGGER.warning(f"Attempted to get non-existent Circuit Breaker '{name}'.")
         return breaker
-
 
     async def execute_with_circuit_breaker(
         self,
         breaker_name: str,
-        operation: Callable[..., Coroutine[Any, Any, Any]], # Expects an async function
+        operation: Callable[..., Coroutine[Any, Any, Any]],  # Expects an async function
         *args: Any,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Any:
         """Execute an asynchronous operation protected by a circuit breaker"""
         breaker = self.get_circuit_breaker(breaker_name)
@@ -294,10 +309,14 @@ class ErrorHandlingService:
         # Check if the circuit allows the request
         if not breaker.allow_request():
             # Circuit is OPEN, raise specific exception
-            error_msg = (f"Circuit Breaker '{breaker_name}' is {breaker.state.value}. Operation blocked.")
+            error_msg = (
+                f"Circuit Breaker '{breaker_name}' is {breaker.state.value}. Operation blocked."
+            )
             _LOGGER.warning(error_msg)
             # Log this specific event
-            self._log_error(breaker_name, CircuitBreakerOpenException.__name__, error_msg, ErrorType.UNKNOWN) # Or a specific type?
+            self._log_error(
+                breaker_name, CircuitBreakerOpenException.__name__, error_msg, ErrorType.UNKNOWN
+            )  # Or a specific type?
             raise CircuitBreakerOpenException(error_msg)
 
         # Attempt the operation
@@ -306,25 +325,33 @@ class ErrorHandlingService:
             result = await operation(*args, **kwargs)
             # Record success if operation completed without exception
             breaker.record_success()
-            _LOGGER.debug(f"Operation '{operation.__name__}' executed successfully via Circuit Breaker '{breaker_name}'.")
+            _LOGGER.debug(
+                f"Operation '{operation.__name__}' executed successfully via Circuit Breaker '{breaker_name}'."
+            )
             return result
 
         except Exception as e:
             # Operation failed, record failure and re-raise the exception
             error_type_enum = self._classify_error(e)
-            _LOGGER.error(f"Operation '{operation.__name__}' failed via Circuit Breaker '{breaker_name}': {e}", exc_info=False) # Log less verbosely here
+            _LOGGER.error(
+                f"Operation '{operation.__name__}' failed via Circuit Breaker '{breaker_name}': {e}",
+                exc_info=False,
+            )  # Log less verbosely here
             breaker.record_failure(error_type_enum)
             # Use handle_error for detailed logging and storage
-            await self.handle_error(e, source=f"circuit_breaker_{breaker_name}", context={"operation": operation.__name__})
-            raise # Re-raise the original exception
-
+            await self.handle_error(
+                e,
+                source=f"circuit_breaker_{breaker_name}",
+                context={"operation": operation.__name__},
+            )
+            raise  # Re-raise the original exception
 
     async def handle_error(
         self,
         error: Exception,
-        source: str, # Where the error originated (e.g., 'ml_training', 'weather_api')
+        source: str,  # Where the error originated (e.g., 'ml_training', 'weather_api')
         context: Optional[Dict[str, Any]] = None,
-        pipeline_position: Optional[str] = None # Specific step within the source
+        pipeline_position: Optional[str] = None,  # Specific step within the source
     ) -> None:
         """Log and store detailed information about an encountered error"""
         error_type_enum = self._classify_error(error)
@@ -340,35 +367,44 @@ class ErrorHandlingService:
             "pipeline_position": pipeline_position,
             "context": context or {},
             # Include stack trace only for certain error types or severities?
-            "stack_trace": traceback.format_exc() if isinstance(error, (MLModelException, DataIntegrityException)) else None
+            "stack_trace": (
+                traceback.format_exc()
+                if isinstance(error, (MLModelException, DataIntegrityException))
+                else None
+            ),
         }
 
         # Add to error log list, maintaining max size
         self.error_log.append(error_details)
         if len(self.error_log) > self.max_error_log_size:
-            self.error_log = self.error_log[-self.max_error_log_size:] # Keep latest entries
+            self.error_log = self.error_log[-self.max_error_log_size :]  # Keep latest entries
 
         # Log the error using standard logging
-        log_level = logging.ERROR if isinstance(error, (MLModelException, DataIntegrityException, ConfigurationException)) else logging.WARNING
+        log_level = (
+            logging.ERROR
+            if isinstance(error, (MLModelException, DataIntegrityException, ConfigurationException))
+            else logging.WARNING
+        )
         _LOGGER.log(
             log_level,
             f"[ERROR] Source: {source} | Type: {error_class_name} ({error_type_enum.value}) | "
             f"Position: {pipeline_position or 'N/A'} | Message: {error}",
             # Only include exc_info for critical errors to avoid overly verbose logs
-            exc_info=error_details["stack_trace"] is not None
+            exc_info=error_details["stack_trace"] is not None,
         )
         if context:
-             _LOGGER.debug(f"  Error Context: {context}")
-
+            _LOGGER.debug(f"  Error Context: {context}")
 
     def _classify_error(self, error: Exception) -> ErrorType:
         """Classify an exception into an ErrorType category"""
         if isinstance(error, MLModelException):
             # Further classify ML errors if needed
             msg = str(error).lower()
-            if "training" in msg: return ErrorType.ML_TRAINING
-            if "prediction" in msg: return ErrorType.ML_PREDICTION
-            return ErrorType.ML_PREDICTION # Default ML error to prediction
+            if "training" in msg:
+                return ErrorType.ML_TRAINING
+            if "prediction" in msg:
+                return ErrorType.ML_PREDICTION
+            return ErrorType.ML_PREDICTION  # Default ML error to prediction
         elif isinstance(error, DataIntegrityException):
             return ErrorType.DATA_INTEGRITY
         elif isinstance(error, ConfigurationException):
@@ -376,14 +412,14 @@ class ErrorHandlingService:
         elif isinstance(error, WeatherAPIException):
             return ErrorType.API_ERROR
         elif isinstance(error, CircuitBreakerOpenException):
-             # This is a consequence, not a root cause, classify as unknown?
-             return ErrorType.UNKNOWN
+            # This is a consequence, not a root cause, classify as unknown?
+            return ErrorType.UNKNOWN
         elif isinstance(error, asyncio.TimeoutError):
-             return ErrorType.NETWORK_ERROR # Often network related
-        elif isinstance(error, OSError): # Includes FileNotFoundError etc.
-             if "Network is unreachable" in str(error) or "Connection refused" in str(error):
-                  return ErrorType.NETWORK_ERROR
-             return ErrorType.JSON_OPERATION # Assume file related OS errors
+            return ErrorType.NETWORK_ERROR  # Often network related
+        elif isinstance(error, OSError):  # Includes FileNotFoundError etc.
+            if "Network is unreachable" in str(error) or "Connection refused" in str(error):
+                return ErrorType.NETWORK_ERROR
+            return ErrorType.JSON_OPERATION  # Assume file related OS errors
         elif isinstance(error, ImportError):
             return ErrorType.DEPENDENCY
         # Add more specific classifications here based on exception types
@@ -401,14 +437,13 @@ class ErrorHandlingService:
         # Default to UNKNOWN if no specific classification matches
         return ErrorType.UNKNOWN
 
-
     def log_ml_operation(
         self,
-        operation: str, # e.g., 'model_training', 'prediction'
+        operation: str,  # e.g., 'model_training', 'prediction'
         success: bool,
         metrics: Optional[Dict[str, Any]] = None,
         context: Optional[Dict[str, Any]] = None,
-        duration_seconds: Optional[float] = None
+        duration_seconds: Optional[float] = None,
     ) -> None:
         """Log the outcome of a Machine Learning operation"""
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -418,13 +453,13 @@ class ErrorHandlingService:
             "success": success,
             "metrics": metrics or {},
             "context": context or {},
-            "duration_seconds": duration_seconds
+            "duration_seconds": duration_seconds,
         }
 
         # Add to ML log list, maintaining max size
         self.ml_operation_log.append(log_entry)
         if len(self.ml_operation_log) > self.max_ml_log_size:
-            self.ml_operation_log = self.ml_operation_log[-self.max_ml_log_size:]
+            self.ml_operation_log = self.ml_operation_log[-self.max_ml_log_size :]
 
         # Log concisely using standard logging
         status_str = "Success" if success else "FAILED"
@@ -433,20 +468,19 @@ class ErrorHandlingService:
         log_level = logging.INFO if success else logging.ERROR
         _LOGGER.log(
             log_level,
-            f"[ML OP] {operation}: {status_str} | Duration: {duration_str} | {metrics_str}"
+            f"[ML OP] {operation}: {status_str} | Duration: {duration_str} | {metrics_str}",
         )
         if context:
-             _LOGGER.debug(f"  ML Op Context: {context}")
-
+            _LOGGER.debug(f"  ML Op Context: {context}")
 
     def log_json_operation(
         self,
         file_name: str,
-        operation: str, # e.g., 'read', 'write', 'migration'
+        operation: str,  # e.g., 'read', 'write', 'migration'
         success: bool,
         file_size_bytes: Optional[int] = None,
-        records_count: Optional[int] = None, # If applicable (e.g., predictions read)
-        error_message: Optional[str] = None
+        records_count: Optional[int] = None,  # If applicable (e.g., predictions read)
+        error_message: Optional[str] = None,
     ) -> None:
         """Log the outcome of a JSON file operation"""
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -457,35 +491,34 @@ class ErrorHandlingService:
             "success": success,
             "file_size_bytes": file_size_bytes,
             "records_count": records_count,
-            "error_message": error_message
+            "error_message": error_message,
         }
 
         # Add to JSON log list, maintaining max size
         self.json_operation_log.append(log_entry)
         if len(self.json_operation_log) > self.max_json_log_size:
-            self.json_operation_log = self.json_operation_log[-self.max_json_log_size:]
+            self.json_operation_log = self.json_operation_log[-self.max_json_log_size :]
 
         # Log concisely
         status_str = "Success" if success else "FAILED"
         log_level = logging.INFO if success else logging.ERROR
         details = ""
         if success:
-             size_str = f"{file_size_bytes} bytes" if file_size_bytes is not None else "N/A size"
-             rec_str = f"{records_count} records" if records_count is not None else ""
-             details = f"| Size: {size_str} {rec_str}".strip()
+            size_str = f"{file_size_bytes} bytes" if file_size_bytes is not None else "N/A size"
+            rec_str = f"{records_count} records" if records_count is not None else ""
+            details = f"| Size: {size_str} {rec_str}".strip()
         else:
-             details = f"| Error: {error_message or 'Unknown'}"
+            details = f"| Error: {error_message or 'Unknown'}"
 
         _LOGGER.log(log_level, f"[JSON OP] {operation} on {file_name}: {status_str} {details}")
 
-
     def log_sensor_status(
         self,
-        sensor_name: str, # Entity ID or descriptive name
-        sensor_type: str, # e.g., 'power', 'temperature'
+        sensor_name: str,  # Entity ID or descriptive name
+        sensor_type: str,  # e.g., 'power', 'temperature'
         available: bool,
         value: Optional[Any] = None,
-        error_message: Optional[str] = None # If unavailable or parsing failed
+        error_message: Optional[str] = None,  # If unavailable or parsing failed
     ) -> None:
         """Log the status and value of critical external sensors"""
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -494,29 +527,30 @@ class ErrorHandlingService:
             "sensor_name": sensor_name,
             "sensor_type": sensor_type,
             "available": available,
-            "value": str(value) if value is not None else None, # Store value as string
-            "error_message": error_message
+            "value": str(value) if value is not None else None,  # Store value as string
+            "error_message": error_message,
         }
 
         # Add to sensor log list, maintaining max size
         self.sensor_status_log.append(log_entry)
         if len(self.sensor_status_log) > self.max_sensor_log_size:
-            self.sensor_status_log = self.sensor_status_log[-self.max_sensor_log_size:]
+            self.sensor_status_log = self.sensor_status_log[-self.max_sensor_log_size :]
 
         # Log status (Debug for available, Warning for unavailable)
         status_str = "Available" if available else "UNAVAILABLE"
         if available:
             _LOGGER.debug(f"[SENSOR] {sensor_name} ({sensor_type}): {status_str} | Value: {value}")
         else:
-            _LOGGER.warning(f"[SENSOR] {sensor_name} ({sensor_type}): {status_str} | Error: {error_message or 'Unknown'}")
-
+            _LOGGER.warning(
+                f"[SENSOR] {sensor_name} ({sensor_type}): {status_str} | Error: {error_message or 'Unknown'}"
+            )
 
     def _log_error(
         self,
         source: str,
-        error_type_name: str, # Class name of the exception
+        error_type_name: str,  # Class name of the exception
         message: str,
-        error_classification: ErrorType = ErrorType.UNKNOWN
+        error_classification: ErrorType = ErrorType.UNKNOWN,
     ):
         """Internal helper to add simple errors like CB open to the main error log"""
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -531,9 +565,8 @@ class ErrorHandlingService:
 
         self.error_log.append(error_entry)
         if len(self.error_log) > self.max_error_log_size:
-            self.error_log = self.error_log[-self.max_error_log_size:]
+            self.error_log = self.error_log[-self.max_error_log_size :]
         # Logging is handled by the calling function (e.g., execute_with_circuit_breaker)
-
 
     # --- Log Access and Management ---
     def get_error_log(self, limit: int = 20) -> List[Dict[str, Any]]:
@@ -576,8 +609,7 @@ class ErrorHandlingService:
         """Return a summary of the error handlers status and recent logs"""
         # Get status of all circuit breakers
         breaker_statuses = {
-            name: breaker.get_status()
-            for name, breaker in self.circuit_breakers.items()
+            name: breaker.get_status() for name, breaker in self.circuit_breakers.items()
         }
 
         return {

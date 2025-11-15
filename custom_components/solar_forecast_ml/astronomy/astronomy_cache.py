@@ -9,13 +9,13 @@ Provides:
 - Atomic file writes with locks
 """
 
-from pathlib import Path
-from typing import Dict, Optional, Tuple
-from datetime import datetime, timedelta, date
+import asyncio
 import json
 import logging
 import math
-import asyncio
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Dict, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,11 +37,7 @@ class AstronomyCache:
         self.timezone: Optional[ZoneInfo] = None
 
     def initialize_location(
-        self,
-        latitude: float,
-        longitude: float,
-        timezone_str: str,
-        elevation_m: float = 0
+        self, latitude: float, longitude: float, timezone_str: str, elevation_m: float = 0
     ):
         """Initialize location parameters"""
         self.latitude = latitude
@@ -54,10 +50,7 @@ class AstronomyCache:
         )
 
     def _calculate_sun_position(
-        self,
-        dt: datetime,
-        latitude: float,
-        longitude: float
+        self, dt: datetime, latitude: float, longitude: float
     ) -> Tuple[float, float]:
         """
         Calculate sun elevation and azimuth for given time
@@ -82,10 +75,12 @@ class AstronomyCache:
         b = 2 - a + math.floor(a / 4)
 
         jd = (
-            math.floor(365.25 * (year + 4716)) +
-            math.floor(30.6001 * (month + 1)) +
-            day + b - 1524.5 +
-            hour / 24.0
+            math.floor(365.25 * (year + 4716))
+            + math.floor(30.6001 * (month + 1))
+            + day
+            + b
+            - 1524.5
+            + hour / 24.0
         )
 
         # Time in Julian centuries since J2000.0
@@ -100,9 +95,9 @@ class AstronomyCache:
 
         # Equation of center
         c = (
-            (1.914602 - 0.004817 * t - 0.000014 * t * t) * math.sin(m_rad) +
-            (0.019993 - 0.000101 * t) * math.sin(2 * m_rad) +
-            0.000289 * math.sin(3 * m_rad)
+            (1.914602 - 0.004817 * t - 0.000014 * t * t) * math.sin(m_rad)
+            + (0.019993 - 0.000101 * t) * math.sin(2 * m_rad)
+            + 0.000289 * math.sin(3 * m_rad)
         )
 
         # True longitude
@@ -114,15 +109,12 @@ class AstronomyCache:
 
         # Right ascension
         true_long_rad = math.radians(true_long)
-        alpha = math.degrees(math.atan2(
-            math.cos(epsilon_rad) * math.sin(true_long_rad),
-            math.cos(true_long_rad)
-        ))
+        alpha = math.degrees(
+            math.atan2(math.cos(epsilon_rad) * math.sin(true_long_rad), math.cos(true_long_rad))
+        )
 
         # Declination
-        delta = math.degrees(math.asin(
-            math.sin(epsilon_rad) * math.sin(true_long_rad)
-        ))
+        delta = math.degrees(math.asin(math.sin(epsilon_rad) * math.sin(true_long_rad)))
         delta_rad = math.radians(delta)
 
         # Greenwich Mean Sidereal Time
@@ -141,16 +133,14 @@ class AstronomyCache:
         lat_rad = math.radians(latitude)
 
         # Calculate elevation
-        sin_elevation = (
-            math.sin(lat_rad) * math.sin(delta_rad) +
-            math.cos(lat_rad) * math.cos(delta_rad) * math.cos(hour_angle_rad)
-        )
+        sin_elevation = math.sin(lat_rad) * math.sin(delta_rad) + math.cos(lat_rad) * math.cos(
+            delta_rad
+        ) * math.cos(hour_angle_rad)
         elevation = math.degrees(math.asin(max(-1, min(1, sin_elevation))))
 
         # Calculate azimuth
-        cos_azimuth = (
-            (math.sin(delta_rad) - math.sin(lat_rad) * sin_elevation) /
-            (math.cos(lat_rad) * math.cos(math.radians(elevation)))
+        cos_azimuth = (math.sin(delta_rad) - math.sin(lat_rad) * sin_elevation) / (
+            math.cos(lat_rad) * math.cos(math.radians(elevation))
         )
         cos_azimuth = max(-1, min(1, cos_azimuth))
         azimuth = math.degrees(math.acos(cos_azimuth))
@@ -161,11 +151,7 @@ class AstronomyCache:
         return elevation, azimuth
 
     def _calculate_sunrise_sunset(
-        self,
-        target_date: date,
-        latitude: float,
-        longitude: float,
-        timezone: ZoneInfo
+        self, target_date: date, latitude: float, longitude: float, timezone: ZoneInfo
     ) -> Tuple[Optional[datetime], Optional[datetime], Optional[datetime]]:
         """
         Calculate sunrise, sunset, and solar noon for a given date
@@ -183,11 +169,7 @@ class AstronomyCache:
 
         for minute in range(10 * 60, 14 * 60):  # Search 10:00 - 14:00
             test_time = datetime.combine(target_date, datetime.min.time())
-            test_time = test_time.replace(
-                hour=minute // 60,
-                minute=minute % 60,
-                tzinfo=timezone
-            )
+            test_time = test_time.replace(hour=minute // 60, minute=minute % 60, tzinfo=timezone)
             elevation, _ = self._calculate_sun_position(test_time, latitude, longitude)
             if elevation > max_elevation:
                 max_elevation = elevation
@@ -224,11 +206,7 @@ class AstronomyCache:
 
         return sunrise, sunset, solar_noon
 
-    def _calculate_clear_sky_solar_radiation(
-        self,
-        elevation_deg: float,
-        day_of_year: int
-    ) -> float:
+    def _calculate_clear_sky_solar_radiation(self, elevation_deg: float, day_of_year: int) -> float:
         """
         Calculate clear sky solar radiation using simplified model
 
@@ -250,24 +228,18 @@ class AstronomyCache:
 
         # Atmospheric transmission (depends on elevation)
         elevation_rad = math.radians(elevation_deg)
-        air_mass = 1 / (math.sin(elevation_rad) + 0.50572 * (elevation_deg + 6.07995)**-1.6364)
-        transmission = 0.7**(air_mass**0.678)
+        air_mass = 1 / (math.sin(elevation_rad) + 0.50572 * (elevation_deg + 6.07995) ** -1.6364)
+        transmission = 0.7 ** (air_mass**0.678)
 
         # Clear sky radiation
         clear_sky_radiation = (
-            solar_constant *
-            distance_factor *
-            math.sin(elevation_rad) *
-            transmission
+            solar_constant * distance_factor * math.sin(elevation_rad) * transmission
         )
 
         return max(0, clear_sky_radiation)
 
     def _calculate_theoretical_pv_output(
-        self,
-        solar_radiation_wm2: float,
-        system_capacity_kwp: float = 5.0,
-        efficiency: float = 0.85
+        self, solar_radiation_wm2: float, system_capacity_kwp: float = 5.0, efficiency: float = 0.85
     ) -> float:
         """
         Calculate theoretical PV output for one hour
@@ -286,18 +258,13 @@ class AstronomyCache:
         # PV output = capacity × (radiation / STC) × efficiency × time
         # time = 1 hour
         pv_output_kwh = (
-            system_capacity_kwp *
-            (solar_radiation_wm2 / stc_radiation) *
-            efficiency *
-            1.0  # 1 hour
+            system_capacity_kwp * (solar_radiation_wm2 / stc_radiation) * efficiency * 1.0  # 1 hour
         )
 
         return max(0, pv_output_kwh)
 
     async def build_cache_for_date(
-        self,
-        target_date: date,
-        system_capacity_kwp: float = 5.0
+        self, target_date: date, system_capacity_kwp: float = 5.0
     ) -> Optional[Dict]:
         """
         Build astronomy cache for a specific date
@@ -317,10 +284,7 @@ class AstronomyCache:
             try:
                 # Calculate sunrise, sunset, solar noon
                 sunrise, sunset, solar_noon = self._calculate_sunrise_sunset(
-                    target_date,
-                    self.latitude,
-                    self.longitude,
-                    self.timezone
+                    target_date, self.latitude, self.longitude, self.timezone
                 )
 
                 if not sunrise or not sunset or not solar_noon:
@@ -341,29 +305,19 @@ class AstronomyCache:
                 for hour in range(24):
                     # Middle of the hour
                     hour_time = datetime.combine(target_date, datetime.min.time())
-                    hour_time = hour_time.replace(
-                        hour=hour,
-                        minute=30,
-                        tzinfo=self.timezone
-                    )
+                    hour_time = hour_time.replace(hour=hour, minute=30, tzinfo=self.timezone)
 
                     # Calculate sun position
                     elevation, azimuth = self._calculate_sun_position(
-                        hour_time,
-                        self.latitude,
-                        self.longitude
+                        hour_time, self.latitude, self.longitude
                     )
 
                     # Calculate solar radiation
-                    clear_sky_sr = self._calculate_clear_sky_solar_radiation(
-                        elevation,
-                        day_of_year
-                    )
+                    clear_sky_sr = self._calculate_clear_sky_solar_radiation(elevation, day_of_year)
 
                     # Calculate theoretical PV output
                     theoretical_pv = self._calculate_theoretical_pv_output(
-                        clear_sky_sr,
-                        system_capacity_kwp
+                        clear_sky_sr, system_capacity_kwp
                     )
 
                     # Hours since solar noon (for ML feature)
@@ -371,7 +325,9 @@ class AstronomyCache:
 
                     # Day progress ratio (0.0 at sunrise, 1.0 at sunset)
                     if sunrise <= hour_time <= sunset:
-                        day_progress = (hour_time - sunrise).total_seconds() / (sunset - sunrise).total_seconds()
+                        day_progress = (hour_time - sunrise).total_seconds() / (
+                            sunset - sunrise
+                        ).total_seconds()
                     else:
                         day_progress = 0.0 if hour_time < sunrise else 1.0
 
@@ -381,7 +337,7 @@ class AstronomyCache:
                         "clear_sky_solar_radiation_wm2": round(clear_sky_sr, 1),
                         "theoretical_max_pv_kwh": round(theoretical_pv, 4),
                         "hours_since_solar_noon": round(hours_since_noon, 2),
-                        "day_progress_ratio": round(day_progress, 3)
+                        "day_progress_ratio": round(day_progress, 3),
                     }
 
                 return {
@@ -391,7 +347,7 @@ class AstronomyCache:
                     "production_window_start": production_start.isoformat(),
                     "production_window_end": production_end.isoformat(),
                     "daylight_hours": round(daylight_hours, 2),
-                    "hourly": hourly_data
+                    "hourly": hourly_data,
                 }
 
             except Exception as e:
@@ -405,8 +361,8 @@ class AstronomyCache:
         self,
         start_date: Optional[date] = None,
         days_back: int = 30,  # 30 days history
-        days_ahead: int = 7,   # 7 days forecast
-        system_capacity_kwp: float = 5.0
+        days_ahead: int = 7,  # 7 days forecast
+        system_capacity_kwp: float = 5.0,
     ) -> Dict:
         """
         Rebuild entire astronomy cache
@@ -432,33 +388,28 @@ class AstronomyCache:
             # === USER INFO - Quick overview at top ===
             "version": "1.0",
             "last_updated": datetime.now(self.timezone).isoformat(),
-
             # === LOCATION ===
             "location": {
                 "latitude": self.latitude,
                 "longitude": self.longitude,
                 "elevation_m": self.elevation_m,
-                "timezone": str(self.timezone)
+                "timezone": str(self.timezone),
             },
-
             # === PV SYSTEM ===
             "pv_system": {
                 "installed_capacity_kwp": system_capacity_kwp
                 # Max peaks will be added later by max_peak_tracker
             },
-
             # === CACHE INFO ===
             "cache_info": {
                 "total_days": 0,  # Will be updated after processing
                 "days_back": days_back,
                 "days_ahead": days_ahead,
                 "date_range_start": (start_date - timedelta(days=days_back)).isoformat(),
-                "date_range_end": (start_date + timedelta(days=days_ahead)).isoformat()
+                "date_range_end": (start_date + timedelta(days=days_ahead)).isoformat(),
             },
-
             # === DAILY ASTRONOMY DATA ===
             "days": {},
-
             # === LEGACY - For backwards compatibility ===
             "metadata": {
                 "version": "1.0",
@@ -468,19 +419,17 @@ class AstronomyCache:
                     "latitude": self.latitude,
                     "longitude": self.longitude,
                     "elevation_m": self.elevation_m,
-                    "timezone": str(self.timezone)
+                    "timezone": str(self.timezone),
                 },
-                "pv_system": {
-                    "installed_capacity_kwp": system_capacity_kwp
-                },
+                "pv_system": {"installed_capacity_kwp": system_capacity_kwp},
                 "cache_info": {
                     "total_days": 0,
                     "days_back": days_back,
                     "days_ahead": days_ahead,
                     "date_range_start": (start_date - timedelta(days=days_back)).isoformat(),
-                    "date_range_end": (start_date + timedelta(days=days_ahead)).isoformat()
-                }
-            }
+                    "date_range_end": (start_date + timedelta(days=days_ahead)).isoformat(),
+                },
+            },
         }
 
         # Calculate date range
@@ -495,10 +444,7 @@ class AstronomyCache:
         while current_date <= end_calc:
             date_str = current_date.isoformat()
 
-            day_data = await self.build_cache_for_date(
-                current_date,
-                system_capacity_kwp
-            )
+            day_data = await self.build_cache_for_date(current_date, system_capacity_kwp)
 
             if day_data:
                 cache_data["days"][date_str] = day_data
@@ -528,22 +474,21 @@ class AstronomyCache:
             # Fallback: direct write with proper encoding
             def _write_sync():
                 self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.cache_file, 'w', encoding='utf-8') as f:
+                with open(self.cache_file, "w", encoding="utf-8") as f:
                     json.dump(cache_data, f, indent=2, sort_keys=False, ensure_ascii=False)
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _write_sync)
 
         _LOGGER.info(
-            f"Astronomy cache rebuilt: {success_count} days successful, "
-            f"{error_count} errors"
+            f"Astronomy cache rebuilt: {success_count} days successful, " f"{error_count} errors"
         )
 
         return {
             "total_days": total_days,
             "success_count": success_count,
             "error_count": error_count,
-            "cache_file": str(self.cache_file)
+            "cache_file": str(self.cache_file),
         }
 
     async def get_day_data(self, target_date: date) -> Optional[Dict]:
@@ -556,12 +501,13 @@ class AstronomyCache:
         Returns:
             Dictionary with astronomy data or None if not in cache
         """
+
         def _load_sync():
             try:
                 if not self.cache_file.exists():
                     return None
 
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file, "r") as f:
                     cache = json.load(f)
 
                 date_str = target_date.isoformat()
@@ -574,11 +520,7 @@ class AstronomyCache:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _load_sync)
 
-    async def get_hourly_data(
-        self,
-        target_date: date,
-        target_hour: int
-    ) -> Optional[Dict]:
+    async def get_hourly_data(self, target_date: date, target_hour: int) -> Optional[Dict]:
         """
         Get astronomy data for a specific hour
 
@@ -595,10 +537,7 @@ class AstronomyCache:
 
         return day_data.get("hourly", {}).get(str(target_hour))
 
-    async def get_production_window(
-        self,
-        target_date: date
-    ) -> Optional[Tuple[datetime, datetime]]:
+    async def get_production_window(self, target_date: date) -> Optional[Tuple[datetime, datetime]]:
         """
         Get production window for a date
 

@@ -22,20 +22,24 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
+    SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, PERCENTAGE
+from homeassistant.const import PERCENTAGE, UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ..const import DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, ML_VERSION
+from ..const import DOMAIN, INTEGRATION_MODEL, ML_VERSION, SOFTWARE_VERSION
 from ..coordinator import SolarForecastMLCoordinator
-from .sensor_mixins import FileBasedSensorMixin, StatisticsFileBasedMixin, AlwaysAvailableFileBasedMixin
+from .sensor_mixins import (
+    AlwaysAvailableFileBasedMixin,
+    FileBasedSensorMixin,
+    StatisticsFileBasedMixin,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,6 +72,7 @@ class BaseSolarSensor(CoordinatorEntity, SensorEntity):
 
 # --- Core Sensors ---
 
+
 class SolarForecastSensor(SensorEntity):
     """Sensor for todays or tomorrows solar forecast"""
 
@@ -83,7 +88,7 @@ class SolarForecastSensor(SensorEntity):
         # Mapping zwischen Entity-Key und Data-Key
         self._key_mapping = {
             "remaining": {"data_key": "prediction_kwh", "translation_key": "today_forecast"},
-            "tomorrow": {"data_key": "forecast_tomorrow", "translation_key": "tomorrow_forecast"}
+            "tomorrow": {"data_key": "forecast_tomorrow", "translation_key": "tomorrow_forecast"},
         }
 
         # Validierung
@@ -116,7 +121,7 @@ class SolarForecastSensor(SensorEntity):
             if not self._coordinator.data:
                 return 0.0
             return self._coordinator.data.get(self._data_key) or 0.0
-        
+
         # "remaining" key: Calculate from hourly_predictions.json (current hour onwards)
         # First check if production time is over (using ProductionTimeSensor)
         production_time_sensor = self.hass.states.get(f"sensor.{DOMAIN}_production_time")
@@ -128,7 +133,7 @@ class SolarForecastSensor(SensorEntity):
         try:
             from homeassistant.util import dt as dt_util
 
-            hourly_data = getattr(self._coordinator, '_hourly_predictions_cache', None)
+            hourly_data = getattr(self._coordinator, "_hourly_predictions_cache", None)
 
             if not hourly_data:
                 try:
@@ -151,7 +156,10 @@ class SolarForecastSensor(SensorEntity):
             # Sum all predictions from current hour onwards for today
             remaining_kwh = 0.0
             for pred in predictions:
-                if pred.get("target_date") == today_str and pred.get("target_hour", -1) >= current_hour:
+                if (
+                    pred.get("target_date") == today_str
+                    and pred.get("target_hour", -1) >= current_hour
+                ):
                     remaining_kwh += pred.get("predicted_kwh", 0.0)
 
             return round(remaining_kwh, 2)
@@ -165,9 +173,7 @@ class SolarForecastSensor(SensorEntity):
         await super().async_added_to_hass()
 
         # Listen to coordinator updates
-        self.async_on_remove(
-            self._coordinator.async_add_listener(self._handle_coordinator_update)
-        )
+        self.async_on_remove(self._coordinator.async_add_listener(self._handle_coordinator_update))
 
         # For "remaining": Listen to ProductionTimeSensor changes (to detect when production stops)
         if self._key == "remaining":
@@ -272,7 +278,8 @@ class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
 
             # Get all predictions for upcoming hours (current hour + 1 onwards)
             upcoming_predictions = [
-                pred for pred in predictions
+                pred
+                for pred in predictions
                 if pred.get("target_date") == today and pred.get("target_hour", -1) > current_hour
             ]
 
@@ -283,7 +290,7 @@ class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
             self._upcoming_hours = [
                 {
                     "time": f"{pred.get('target_hour', 0):02d}:00",
-                    "kwh": pred.get("predicted_kwh", 0.0)
+                    "kwh": pred.get("predicted_kwh", 0.0),
                 }
                 for pred in upcoming_predictions
             ]
@@ -292,7 +299,9 @@ class NextHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
             if upcoming_predictions:
                 self._cached_value = upcoming_predictions[0].get("predicted_kwh", 0.0)
                 next_hour = upcoming_predictions[0].get("target_hour")
-                _LOGGER.debug(f"NextHourSensor: Found prediction for {today} {next_hour:02d}:00 = {self._cached_value} kWh")
+                _LOGGER.debug(
+                    f"NextHourSensor: Found prediction for {today} {next_hour:02d}:00 = {self._cached_value} kWh"
+                )
             else:
                 self._cached_value = 0.0
                 _LOGGER.debug(f"NextHourSensor: No upcoming predictions found for {today}")
@@ -335,7 +344,9 @@ class PeakProductionHourSensor(AlwaysAvailableFileBasedMixin, SensorEntity):
         """Load best hour from hourly_predictions.json best_hour_today field"""
         try:
             # Simply read the best_hour_today field from the file
-            best_hour_str = await self._coordinator.data_manager.hourly_predictions.get_best_hour_string()
+            best_hour_str = (
+                await self._coordinator.data_manager.hourly_predictions.get_best_hour_string()
+            )
 
             if best_hour_str:
                 self._cached_value = best_hour_str
@@ -368,7 +379,7 @@ class AverageYieldSensor(BaseSolarSensor):
     @property
     def native_value(self) -> float | None:
         """Return the average monthly yield"""
-        value = getattr(self.coordinator, 'avg_month_yield', None)
+        value = getattr(self.coordinator, "avg_month_yield", None)
         return value if value is not None and value > 0 else None
 
 
@@ -399,15 +410,17 @@ class AutarkySensor(SensorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available"""
-        return (self._coordinator.last_update_success and 
-                self._coordinator.data is not None and
-                self.native_value is not None)
+        return (
+            self._coordinator.last_update_success
+            and self._coordinator.data is not None
+            and self.native_value is not None
+        )
 
     @property
     def native_value(self) -> float | None:
         """Return the autarky percentage - LIVE calculation"""
         # Try coordinator value first (updated during coordinator refresh)
-        coord_value = getattr(self._coordinator, 'autarky_today', None)
+        coord_value = getattr(self._coordinator, "autarky_today", None)
         if coord_value is not None:
             return max(0.0, min(100.0, coord_value))
 
@@ -417,12 +430,19 @@ class AutarkySensor(SensorEntity):
                 grid_import_state = self.hass.states.get(self._grid_import_entity)
                 consumption_state = self.hass.states.get(self._consumption_entity)
 
-                if (grid_import_state and consumption_state and
-                    grid_import_state.state not in ["unavailable", "unknown", "none", None, ""] and
-                    consumption_state.state not in ["unavailable", "unknown", "none", None, ""]):
+                if (
+                    grid_import_state
+                    and consumption_state
+                    and grid_import_state.state not in ["unavailable", "unknown", "none", None, ""]
+                    and consumption_state.state not in ["unavailable", "unknown", "none", None, ""]
+                ):
 
-                    grid_import_val = float(str(grid_import_state.state).split()[0].replace(",", "."))
-                    consumption_val = float(str(consumption_state.state).split()[0].replace(",", "."))
+                    grid_import_val = float(
+                        str(grid_import_state.state).split()[0].replace(",", ".")
+                    )
+                    consumption_val = float(
+                        str(consumption_state.state).split()[0].replace(",", ".")
+                    )
 
                     if consumption_val > 0:
                         # Autarky = (Consumption - Grid Import) / Consumption * 100
@@ -437,12 +457,17 @@ class AutarkySensor(SensorEntity):
                 yield_state = self.hass.states.get(self._yield_entity)
                 consumption_state = self.hass.states.get(self._consumption_entity)
 
-                if (yield_state and consumption_state and
-                    yield_state.state not in ["unavailable", "unknown", "none", None, ""] and
-                    consumption_state.state not in ["unavailable", "unknown", "none", None, ""]):
+                if (
+                    yield_state
+                    and consumption_state
+                    and yield_state.state not in ["unavailable", "unknown", "none", None, ""]
+                    and consumption_state.state not in ["unavailable", "unknown", "none", None, ""]
+                ):
 
                     yield_val = float(str(yield_state.state).split()[0].replace(",", "."))
-                    consumption_val = float(str(consumption_state.state).split()[0].replace(",", "."))
+                    consumption_val = float(
+                        str(consumption_state.state).split()[0].replace(",", ".")
+                    )
 
                     if consumption_val > 0:
                         autarky = (yield_val / consumption_val) * 100.0
@@ -457,9 +482,7 @@ class AutarkySensor(SensorEntity):
         await super().async_added_to_hass()
 
         # Listen to coordinator updates
-        self.async_on_remove(
-            self._coordinator.async_add_listener(self._handle_coordinator_update)
-        )
+        self.async_on_remove(self._coordinator.async_add_listener(self._handle_coordinator_update))
 
         # Listen to yield and consumption sensor changes for live updates
         if self._yield_entity:
@@ -533,6 +556,7 @@ class ExpectedDailyProductionSensor(FileBasedSensorMixin, SensorEntity):
 
 # --- Production Time Sensor (Reads from daily_forecasts.json) ---
 
+
 class ProductionTimeSensor(FileBasedSensorMixin, SensorEntity):
     """Sensor for production time today - reads directly from daily_forecastsjson"""
 
@@ -565,6 +589,7 @@ class ProductionTimeSensor(FileBasedSensorMixin, SensorEntity):
 
 
 # --- New Statistical Sensors from daily_forecasts.json ---
+
 
 class MaxPeakTodaySensor(AlwaysAvailableFileBasedMixin, SensorEntity):
     """Sensor for todays maximum power peak"""
@@ -901,4 +926,3 @@ class AverageAccuracy30DaysSensor(FileBasedSensorMixin, SensorEntity):
         statistics = forecast_data.get("statistics", {})
         last_30d = statistics.get("last_30_days", {})
         return last_30d.get("avg_accuracy")
-

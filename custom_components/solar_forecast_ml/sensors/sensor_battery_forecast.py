@@ -13,11 +13,11 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
+    SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -27,17 +27,17 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ..const import (
-    DOMAIN,
-    INTEGRATION_MODEL,
-    SOFTWARE_VERSION,
-    BATTERY_EXPECTED_CHARGE_SOLAR_SENSOR,
-    BATTERY_CHARGE_FROM_SOLAR_SENSOR,
+    AUTARKY_WITH_BATTERY_SENSOR,
     BATTERY_CHARGE_FROM_GRID_SENSOR,
+    BATTERY_CHARGE_FROM_SOLAR_SENSOR,
+    BATTERY_EXPECTED_CHARGE_SOLAR_SENSOR,
+    DIRECT_SOLAR_CONSUMPTION_SENSOR,
+    DOMAIN,
     GRID_EXPORT_TODAY_SENSOR,
     GRID_IMPORT_TODAY_SENSOR,
-    DIRECT_SOLAR_CONSUMPTION_SENSOR,
-    AUTARKY_WITH_BATTERY_SENSOR,
+    INTEGRATION_MODEL,
     SELF_CONSUMPTION_WITH_BATTERY_SENSOR,
+    SOFTWARE_VERSION,
 )
 from ..coordinator import SolarForecastMLCoordinator
 
@@ -77,8 +77,7 @@ class BaseBatteryForecastSensor(CoordinatorEntity, SensorEntity):
     def available(self) -> bool:
         """Return if entity is available"""
         return (
-            self.coordinator.last_update_success
-            and self.coordinator.battery_collector is not None
+            self.coordinator.last_update_success and self.coordinator.battery_collector is not None
         )
 
 
@@ -92,7 +91,9 @@ class BatteryExpectedChargeSolarSensor(BaseBatteryForecastSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize expected charge sensor"""
-        super().__init__(coordinator, entry, BATTERY_EXPECTED_CHARGE_SOLAR_SENSOR, "Expected Charge from Solar")
+        super().__init__(
+            coordinator, entry, BATTERY_EXPECTED_CHARGE_SOLAR_SENSOR, "Expected Charge from Solar"
+        )
 
     @property
     def native_value(self) -> Optional[float]:
@@ -225,7 +226,9 @@ class DirectSolarConsumptionSensor(BaseBatteryForecastSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize direct consumption sensor"""
-        super().__init__(coordinator, entry, DIRECT_SOLAR_CONSUMPTION_SENSOR, "Direct Solar Consumption")
+        super().__init__(
+            coordinator, entry, DIRECT_SOLAR_CONSUMPTION_SENSOR, "Direct Solar Consumption"
+        )
 
     @property
     def native_value(self) -> Optional[float]:
@@ -264,7 +267,12 @@ class SelfConsumptionWithBatterySensor(BaseBatteryForecastSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize self-consumption sensor"""
-        super().__init__(coordinator, entry, SELF_CONSUMPTION_WITH_BATTERY_SENSOR, "Self Consumption with Battery")
+        super().__init__(
+            coordinator,
+            entry,
+            SELF_CONSUMPTION_WITH_BATTERY_SENSOR,
+            "Self Consumption with Battery",
+        )
 
     @property
     def native_value(self) -> Optional[float]:

@@ -13,12 +13,12 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
+    SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -29,22 +29,22 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ..const import (
     DOMAIN,
-    INTEGRATION_MODEL,
-    SOFTWARE_VERSION,
-    ICON_ELECTRICITY_PRICE,
-    ICON_CHARGING_RECOMMENDATION,
-    UNIT_CENT_PER_KWH,
-    UNIT_EURO_PER_KWH,
-    ELECTRICITY_PRICE_CURRENT_SENSOR,
-    ELECTRICITY_PRICE_NEXT_HOUR_SENSOR,
-    ELECTRICITY_PRICE_AVG_TODAY_SENSOR,
-    ELECTRICITY_PRICE_AVG_WEEK_SENSOR,
-    ELECTRICITY_PRICE_MIN_TODAY_SENSOR,
-    ELECTRICITY_PRICE_MAX_TODAY_SENSOR,
+    ELECTRICITY_CHARGING_RECOMMENDATION_SENSOR,
     ELECTRICITY_CHEAPEST_HOUR_TODAY_SENSOR,
     ELECTRICITY_MOST_EXPENSIVE_HOUR_TODAY_SENSOR,
-    ELECTRICITY_CHARGING_RECOMMENDATION_SENSOR,
+    ELECTRICITY_PRICE_AVG_TODAY_SENSOR,
+    ELECTRICITY_PRICE_AVG_WEEK_SENSOR,
+    ELECTRICITY_PRICE_CURRENT_SENSOR,
+    ELECTRICITY_PRICE_MAX_TODAY_SENSOR,
+    ELECTRICITY_PRICE_MIN_TODAY_SENSOR,
+    ELECTRICITY_PRICE_NEXT_HOUR_SENSOR,
     ELECTRICITY_SAVINGS_TODAY_SENSOR,
+    ICON_CHARGING_RECOMMENDATION,
+    ICON_ELECTRICITY_PRICE,
+    INTEGRATION_MODEL,
+    SOFTWARE_VERSION,
+    UNIT_CENT_PER_KWH,
+    UNIT_EURO_PER_KWH,
 )
 from ..coordinator import SolarForecastMLCoordinator
 
@@ -162,7 +162,9 @@ class ElectricityPriceAvgTodaySensor(BaseElectricityPriceSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize average today sensor"""
-        super().__init__(coordinator, entry, ELECTRICITY_PRICE_AVG_TODAY_SENSOR, "Average Price Today")
+        super().__init__(
+            coordinator, entry, ELECTRICITY_PRICE_AVG_TODAY_SENSOR, "Average Price Today"
+        )
 
     @property
     def native_value(self) -> Optional[float]:
@@ -182,7 +184,9 @@ class ElectricityPriceAvgWeekSensor(BaseElectricityPriceSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize average week sensor"""
-        super().__init__(coordinator, entry, ELECTRICITY_PRICE_AVG_WEEK_SENSOR, "Average Price Week")
+        super().__init__(
+            coordinator, entry, ELECTRICITY_PRICE_AVG_WEEK_SENSOR, "Average Price Week"
+        )
 
     @property
     def native_value(self) -> Optional[float]:
@@ -247,7 +251,9 @@ class ElectricityCheapestHourSensor(BaseElectricityPriceSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize cheapest hour sensor"""
-        super().__init__(coordinator, entry, ELECTRICITY_CHEAPEST_HOUR_TODAY_SENSOR, "Cheapest Hour")
+        super().__init__(
+            coordinator, entry, ELECTRICITY_CHEAPEST_HOUR_TODAY_SENSOR, "Cheapest Hour"
+        )
 
     @property
     def native_value(self) -> Optional[str]:
@@ -285,7 +291,9 @@ class ElectricityMostExpensiveHourSensor(BaseElectricityPriceSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize most expensive hour sensor"""
-        super().__init__(coordinator, entry, ELECTRICITY_MOST_EXPENSIVE_HOUR_TODAY_SENSOR, "Most Expensive Hour")
+        super().__init__(
+            coordinator, entry, ELECTRICITY_MOST_EXPENSIVE_HOUR_TODAY_SENSOR, "Most Expensive Hour"
+        )
 
     @property
     def native_value(self) -> Optional[str]:
@@ -323,7 +331,12 @@ class ElectricityChargingRecommendationSensor(BaseElectricityPriceSensor):
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize charging recommendation sensor"""
-        super().__init__(coordinator, entry, ELECTRICITY_CHARGING_RECOMMENDATION_SENSOR, "Charging Recommendation")
+        super().__init__(
+            coordinator,
+            entry,
+            ELECTRICITY_CHARGING_RECOMMENDATION_SENSOR,
+            "Charging Recommendation",
+        )
 
     @property
     def native_value(self) -> Optional[str]:
@@ -373,9 +386,7 @@ class ElectricityChargingRecommendationSensor(BaseElectricityPriceSensor):
         }
 
         if cheapest:
-            attrs["cheapest_hours"] = [
-                {"hour": f"{h:02d}:00", "price": p} for h, p in cheapest
-            ]
+            attrs["cheapest_hours"] = [{"hour": f"{h:02d}:00", "price": p} for h, p in cheapest]
 
         return attrs
 
@@ -413,7 +424,9 @@ class ElectricitySavingsTodaySensor(BaseElectricityPriceSensor):
         cheapest = self.coordinator.electricity_service.get_cheapest_hours(1)
         if cheapest:
             cheapest_price = cheapest[0][1]
-            savings = charge_from_grid * ((avg_price - cheapest_price) / 100)  # Convert cents to EUR
+            savings = charge_from_grid * (
+                (avg_price - cheapest_price) / 100
+            )  # Convert cents to EUR
             return round(max(savings, 0.0), 2)
 
         return 0.0
@@ -426,7 +439,11 @@ class ElectricitySavingsTodaySensor(BaseElectricityPriceSensor):
 
         return {
             "charge_from_grid_today": self.coordinator.battery_collector.get_charge_today(),
-            "avg_price_today": self.coordinator.electricity_service.get_average_price_today() if self.coordinator.electricity_service else None,
+            "avg_price_today": (
+                self.coordinator.electricity_service.get_average_price_today()
+                if self.coordinator.electricity_service
+                else None
+            ),
         }
 
 

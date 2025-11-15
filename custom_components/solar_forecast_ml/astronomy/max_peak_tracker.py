@@ -5,12 +5,12 @@ Tracks the best-ever production for each hour (0-23) to provide
 realistic benchmarks for ML training instead of theoretical values.
 """
 
-from pathlib import Path
-from typing import Dict, Optional
-from datetime import datetime, date
+import asyncio
 import json
 import logging
-import asyncio
+from datetime import date, datetime
+from pathlib import Path
+from typing import Dict, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,10 +22,7 @@ class MaxPeakTracker:
         self.astronomy_cache = astronomy_cache
         self.cache_file = astronomy_cache.cache_file
 
-    async def extract_max_peaks_from_history(
-        self,
-        hourly_predictions_file: Path
-    ) -> Dict:
+    async def extract_max_peaks_from_history(self, hourly_predictions_file: Path) -> Dict:
         """
         Extract max peak records from hourly_predictions.json history
 
@@ -43,7 +40,7 @@ class MaxPeakTracker:
                     _LOGGER.warning("hourly_predictions.json not found")
                     return None
 
-                with open(hourly_predictions_file, 'r') as f:
+                with open(hourly_predictions_file, "r") as f:
                     data = json.load(f)
 
                 predictions = data.get("predictions", [])
@@ -51,19 +48,10 @@ class MaxPeakTracker:
                 # Initialize hourly max peaks
                 hourly_max_peaks = {}
                 for hour in range(24):
-                    hourly_max_peaks[str(hour)] = {
-                        "kwh": 0.0,
-                        "date": None,
-                        "conditions": {}
-                    }
+                    hourly_max_peaks[str(hour)] = {"kwh": 0.0, "date": None, "conditions": {}}
 
                 # Global max peak
-                global_max = {
-                    "kwh": 0.0,
-                    "date": None,
-                    "hour": None,
-                    "conditions": {}
-                }
+                global_max = {"kwh": 0.0, "date": None, "hour": None, "conditions": {}}
 
                 # Process all predictions with actual values
                 processed = 0
@@ -96,8 +84,8 @@ class MaxPeakTracker:
                                 "sun_elevation_deg": astro.get("sun_elevation_deg"),
                                 "cloud_cover_percent": weather.get("cloud_cover_percent"),
                                 "temperature_c": weather.get("temperature_c"),
-                                "solar_radiation_wm2": weather.get("solar_radiation_wm2")
-                            }
+                                "solar_radiation_wm2": weather.get("solar_radiation_wm2"),
+                            },
                         }
                         updated_hours.add(target_hour)
 
@@ -111,15 +99,15 @@ class MaxPeakTracker:
                                 "sun_elevation_deg": astro.get("sun_elevation_deg"),
                                 "cloud_cover_percent": weather.get("cloud_cover_percent"),
                                 "temperature_c": weather.get("temperature_c"),
-                                "solar_radiation_wm2": weather.get("solar_radiation_wm2")
-                            }
+                                "solar_radiation_wm2": weather.get("solar_radiation_wm2"),
+                            },
                         }
 
                 return {
                     "hourly_max_peaks": hourly_max_peaks,
                     "global_max": global_max,
                     "processed_samples": processed,
-                    "updated_hours": len(updated_hours)
+                    "updated_hours": len(updated_hours),
                 }
 
             except Exception as e:
@@ -133,10 +121,7 @@ class MaxPeakTracker:
             return {"error": "Failed to extract max peaks"}
 
         # Update cache with max peaks
-        await self._update_cache_with_max_peaks(
-            result["hourly_max_peaks"],
-            result["global_max"]
-        )
+        await self._update_cache_with_max_peaks(result["hourly_max_peaks"], result["global_max"])
 
         _LOGGER.info(
             f"Max peaks extracted: {result['processed_samples']} samples processed, "
@@ -146,19 +131,16 @@ class MaxPeakTracker:
 
         return result
 
-    async def _update_cache_with_max_peaks(
-        self,
-        hourly_max_peaks: Dict,
-        global_max: Dict
-    ):
+    async def _update_cache_with_max_peaks(self, hourly_max_peaks: Dict, global_max: Dict):
         """Update astronomy cache file with max peak data"""
+
         def _update_sync():
             try:
                 if not self.cache_file.exists():
                     _LOGGER.warning("Cache file not found, cannot update max peaks")
                     return False
 
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
                     cache = json.load(f)
 
                 # Update top-level pv_system (user-friendly)
@@ -190,8 +172,8 @@ class MaxPeakTracker:
                 cache["metadata"]["last_updated"] = datetime.now().isoformat()
 
                 # Write atomically with proper encoding (prevents control character corruption)
-                temp_file = self.cache_file.with_suffix('.tmp')
-                with open(temp_file, 'w', encoding='utf-8') as f:
+                temp_file = self.cache_file.with_suffix(".tmp")
+                with open(temp_file, "w", encoding="utf-8") as f:
                     json.dump(cache, f, indent=2, sort_keys=False, ensure_ascii=False)
 
                 temp_file.replace(self.cache_file)
@@ -209,7 +191,7 @@ class MaxPeakTracker:
         target_date: date,
         target_hour: int,
         actual_kwh: float,
-        conditions: Optional[Dict] = None
+        conditions: Optional[Dict] = None,
     ) -> bool:
         """
         Check if this is a new peak for the hour and update if so
@@ -223,18 +205,21 @@ class MaxPeakTracker:
         Returns:
             True if this was a new peak
         """
+
         def _check_and_update_sync():
             try:
                 if not self.cache_file.exists():
                     return False
 
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
                     cache = json.load(f)
 
                 # Get current max for this hour (try top-level first, fallback to metadata)
                 hourly_max_peaks = cache.get("pv_system", {}).get("hourly_max_peaks", {})
                 if not hourly_max_peaks:
-                    hourly_max_peaks = cache.get("metadata", {}).get("pv_system", {}).get("hourly_max_peaks", {})
+                    hourly_max_peaks = (
+                        cache.get("metadata", {}).get("pv_system", {}).get("hourly_max_peaks", {})
+                    )
 
                 hour_str = str(target_hour)
 
@@ -251,13 +236,17 @@ class MaxPeakTracker:
                 hourly_max_peaks[hour_str] = {
                     "kwh": round(actual_kwh, 4),
                     "date": target_date.isoformat(),
-                    "conditions": conditions or {}
+                    "conditions": conditions or {},
                 }
 
                 # Update global max if needed (try top-level first, fallback to metadata)
                 global_max_kwh = cache.get("pv_system", {}).get("max_peak_record_kwh", 0.0)
                 if global_max_kwh == 0.0:
-                    global_max_kwh = cache.get("metadata", {}).get("pv_system", {}).get("max_peak_record_kwh", 0.0)
+                    global_max_kwh = (
+                        cache.get("metadata", {})
+                        .get("pv_system", {})
+                        .get("max_peak_record_kwh", 0.0)
+                    )
 
                 # Update top-level pv_system (user-friendly)
                 if "pv_system" not in cache:
@@ -291,8 +280,8 @@ class MaxPeakTracker:
                 cache["metadata"]["last_updated"] = datetime.now().isoformat()
 
                 # Write atomically with proper encoding (prevents control character corruption)
-                temp_file = self.cache_file.with_suffix('.tmp')
-                with open(temp_file, 'w', encoding='utf-8') as f:
+                temp_file = self.cache_file.with_suffix(".tmp")
+                with open(temp_file, "w", encoding="utf-8") as f:
                     json.dump(cache, f, indent=2, sort_keys=False, ensure_ascii=False)
 
                 temp_file.replace(self.cache_file)
@@ -321,15 +310,18 @@ class MaxPeakTracker:
         Returns:
             Historical max kWh or None
         """
+
         def _get_sync():
             try:
                 if not self.cache_file.exists():
                     return None
 
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
                     cache = json.load(f)
 
-                hourly_max_peaks = cache.get("metadata", {}).get("pv_system", {}).get("hourly_max_peaks", {})
+                hourly_max_peaks = (
+                    cache.get("metadata", {}).get("pv_system", {}).get("hourly_max_peaks", {})
+                )
                 hour_str = str(hour)
 
                 if hour_str in hourly_max_peaks:

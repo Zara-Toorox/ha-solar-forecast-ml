@@ -17,12 +17,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Copyright (C) 2025 Zara-Toorox
 """
 
+import asyncio  # Import asyncio for sleep
 import logging
-import asyncio # Import asyncio for sleep
 from typing import Any, Dict, Optional
 
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 # Import centralized external sensor mapping
 from ..const import EXTERNAL_SENSOR_MAPPING
@@ -48,18 +48,20 @@ class SensorDataCollector:
         """Safely strips whitespace from a potential entity ID string"""
         if isinstance(entity_id_raw, str) and entity_id_raw.strip():
             return entity_id_raw.strip()
-        return None # Return None for invalid input like None, empty string, or non-string types
+        return None  # Return None for invalid input like None, empty string, or non-string types
 
     def get_sensor_entity_id(self, internal_key: str) -> Optional[str]:
         """Gets the configured entity ID for a specific internal sensor key eg temperature"""
         config_key = self._sensor_configs.get(internal_key)
         if not config_key:
             # This indicates a programming error (mismatch between internal keys and _sensor_configs)
-            _LOGGER.error(f"Internal error: No config key found for internal sensor key '{internal_key}'")
+            _LOGGER.error(
+                f"Internal error: No config key found for internal sensor key '{internal_key}'"
+            )
             return None
 
         entity_id_raw = self.entry.data.get(config_key)
-        return self.strip_entity_id(entity_id_raw) # Use stripping helper
+        return self.strip_entity_id(entity_id_raw)  # Use stripping helper
 
     def get_sensor_value(self, entity_id: str | None) -> Optional[float]:
         """Gets the current state of the specified entity ID and attempts to convert it ..."""
@@ -70,8 +72,10 @@ class SensorDataCollector:
 
         state = self.hass.states.get(entity_id)
         # Check if state object exists and has a valid state string
-        if not state or state.state in ['unavailable', 'unknown', 'None', '', None]:
-            _LOGGER.debug(f"Sensor '{entity_id}' is unavailable or has an invalid state: {state.state if state else 'Not found'}")
+        if not state or state.state in ["unavailable", "unknown", "None", "", None]:
+            _LOGGER.debug(
+                f"Sensor '{entity_id}' is unavailable or has an invalid state: {state.state if state else 'Not found'}"
+            )
             return None
 
         # Attempt to convert the state string to a float
@@ -86,7 +90,9 @@ class SensorDataCollector:
             return value
         except (ValueError, TypeError):
             # Log a warning if conversion fails
-            _LOGGER.warning(f"Could not parse sensor value for '{entity_id}' to float: '{state.state}'")
+            _LOGGER.warning(
+                f"Could not parse sensor value for '{entity_id}' to float: '{state.state}'"
+            )
             return None
 
     def collect_all_sensor_data_dict(self) -> Dict[str, Optional[float]]:
@@ -111,17 +117,17 @@ class SensorDataCollector:
         """Waits during startup for at least one configured external sensor to become av..."""
         _LOGGER.info("Waiting for external sensors to become available (max %ds)...", max_wait)
 
-        wait_interval = 2 # Check every 2 seconds
+        wait_interval = 2  # Check every 2 seconds
         total_waited = 0
-        available_sensor_keys = set() # Track which sensors are available
+        available_sensor_keys = set()  # Track which sensors are available
 
         configured_external_sensors = [
-             key for key in self._sensor_configs.keys() if self.get_sensor_entity_id(key)
+            key for key in self._sensor_configs.keys() if self.get_sensor_entity_id(key)
         ]
 
         if not configured_external_sensors:
-             _LOGGER.info("No external sensors configured, skipping wait.")
-             return 0
+            _LOGGER.info("No external sensors configured, skipping wait.")
+            return 0
 
         _LOGGER.debug(f"Configured external sensors to wait for: {configured_external_sensors}")
 
@@ -131,8 +137,10 @@ class SensorDataCollector:
 
             # Check status of each configured external sensor
             for internal_key in configured_external_sensors:
-                entity_id = self.get_sensor_entity_id(internal_key) # Re-get ID just in case? No, should be stable.
-                value = self.get_sensor_value(entity_id) # Checks availability and parse
+                entity_id = self.get_sensor_entity_id(
+                    internal_key
+                )  # Re-get ID just in case? No, should be stable.
+                value = self.get_sensor_value(entity_id)  # Checks availability and parse
 
                 if value is not None:
                     # Sensor is available and provides a valid number
@@ -144,7 +152,9 @@ class SensorDataCollector:
                     sensor_status_log.append(f"{internal_key}=WAITING")
 
             # Log current status concisely
-            _LOGGER.debug(f"Sensor availability check ({total_waited}s): [{', '.join(sensor_status_log)}]")
+            _LOGGER.debug(
+                f"Sensor availability check ({total_waited}s): [{', '.join(sensor_status_log)}]"
+            )
 
             # Check if at least one sensor is available
             if current_available_count > 0:
@@ -152,7 +162,7 @@ class SensorDataCollector:
                     f"At least one external sensor ({current_available_count}/{len(configured_external_sensors)}) "
                     f"became available after {total_waited}s. Proceeding."
                 )
-                return current_available_count # Return count of available sensors
+                return current_available_count  # Return count of available sensors
 
             # Wait before next check
             await asyncio.sleep(wait_interval)
@@ -163,4 +173,4 @@ class SensorDataCollector:
             f"No external sensors became available after waiting {max_wait}s. "
             f"Integration will continue, but predictions might be less accurate initially."
         )
-        return 0 # Return 0 if timeout reached
+        return 0  # Return 0 if timeout reached

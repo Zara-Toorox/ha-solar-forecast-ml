@@ -12,13 +12,14 @@ License, or (at your option) any later version.
 Copyright (C) 2025 Zara-Toorox
 """
 
-import logging
-import aiofiles
 import asyncio
 import json
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta, date
+import logging
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import aiofiles
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class BatteryChargePersistence:
                 await self.save()
                 return True
 
-            async with aiofiles.open(self.file_path, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(self.file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
                 self.data = json.loads(content)
 
@@ -68,12 +69,12 @@ class BatteryChargePersistence:
         async with self._save_lock:  # Prevent concurrent saves
             try:
                 # Update last_update timestamp
-                self.data['last_update'] = datetime.now().isoformat()
+                self.data["last_update"] = datetime.now().isoformat()
 
                 # Write to temporary file first
-                temp_file = self.file_path.with_suffix('.tmp')
+                temp_file = self.file_path.with_suffix(".tmp")
 
-                async with aiofiles.open(temp_file, 'w', encoding='utf-8') as f:
+                async with aiofiles.open(temp_file, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(self.data, indent=2, ensure_ascii=False))
 
                 # Atomic rename
@@ -87,49 +88,49 @@ class BatteryChargePersistence:
     def _create_empty_structure(self) -> Dict[str, Any]:
         """Create empty data structure"""
         return {
-            'version': '1.0',
-            'battery_capacity': self.battery_capacity,
-            'last_update': datetime.now().isoformat(),
-            'daily': {},
-            'monthly': {},
-            'yearly': {},
+            "version": "1.0",
+            "battery_capacity": self.battery_capacity,
+            "last_update": datetime.now().isoformat(),
+            "daily": {},
+            "monthly": {},
+            "yearly": {},
         }
 
     def _ensure_day_exists(self, date_str: str):
         """Ensure daily entry exists"""
-        if date_str not in self.data['daily']:
-            self.data['daily'][date_str] = {
-                'date': date_str,
+        if date_str not in self.data["daily"]:
+            self.data["daily"][date_str] = {
+                "date": date_str,
                 # LEGACY v8.x fields (for backwards compatibility)
-                'grid_charge_kwh': 0.0,
-                'solar_charge_kwh': 0.0,
-                'grid_discharge_kwh': 0.0,
-                'solar_discharge_kwh': 0.0,
-                'total_discharge_kwh': 0.0,
-                'grid_charge_cost_eur': 0.0,
-                'solar_savings_eur': 0.0,
-                'grid_arbitrage_profit_eur': 0.0,
-                'total_profit_eur': 0.0,
+                "grid_charge_kwh": 0.0,
+                "solar_charge_kwh": 0.0,
+                "grid_discharge_kwh": 0.0,
+                "solar_discharge_kwh": 0.0,
+                "total_discharge_kwh": 0.0,
+                "grid_charge_cost_eur": 0.0,
+                "solar_savings_eur": 0.0,
+                "grid_arbitrage_profit_eur": 0.0,
+                "total_profit_eur": 0.0,
                 # NEW v9.0.0 energy flow tracking (kWh)
-                'solar_to_house_kwh': 0.0,
-                'solar_to_battery_kwh': 0.0,
-                'solar_to_grid_kwh': 0.0,
-                'grid_to_house_kwh': 0.0,
-                'grid_to_battery_kwh': 0.0,
-                'battery_to_house_kwh': 0.0,
-                'grid_import_today_kwh': 0.0,
-                'grid_export_today_kwh': 0.0,
+                "solar_to_house_kwh": 0.0,
+                "solar_to_battery_kwh": 0.0,
+                "solar_to_grid_kwh": 0.0,
+                "grid_to_house_kwh": 0.0,
+                "grid_to_battery_kwh": 0.0,
+                "battery_to_house_kwh": 0.0,
+                "grid_import_today_kwh": 0.0,
+                "grid_export_today_kwh": 0.0,
                 # Events
-                'charge_events': [],
-                'discharge_events': [],
-                'summary': {
-                    'total_charge_events': 0,
-                    'total_discharge_events': 0,
-                    'avg_grid_charge_price': 0.0,
-                    'avg_discharge_price': 0.0,
-                    'grid_charge_ratio': 0.0,
-                    'solar_charge_ratio': 0.0,
-                }
+                "charge_events": [],
+                "discharge_events": [],
+                "summary": {
+                    "total_charge_events": 0,
+                    "total_discharge_events": 0,
+                    "avg_grid_charge_price": 0.0,
+                    "avg_discharge_price": 0.0,
+                    "grid_charge_ratio": 0.0,
+                    "solar_charge_ratio": 0.0,
+                },
             }
 
     async def add_charge_event(
@@ -145,33 +146,33 @@ class BatteryChargePersistence:
         date_str = timestamp.date().isoformat()
         self._ensure_day_exists(date_str)
 
-        day_data = self.data['daily'][date_str]
+        day_data = self.data["daily"][date_str]
 
         # Add event
         event = {
-            'timestamp': timestamp.isoformat(),
-            'hour': timestamp.hour,
-            'source': source,
-            'power_w': round(power_w, 1),
-            'duration_min': round(duration_min, 2),
-            'kwh': round(kwh, 4),
-            'price_cent_kwh': round(price_cent_kwh, 2),
+            "timestamp": timestamp.isoformat(),
+            "hour": timestamp.hour,
+            "source": source,
+            "power_w": round(power_w, 1),
+            "duration_min": round(duration_min, 2),
+            "kwh": round(kwh, 4),
+            "price_cent_kwh": round(price_cent_kwh, 2),
         }
-        day_data['charge_events'].append(event)
+        day_data["charge_events"].append(event)
 
         # Update totals
-        if source == 'grid':
-            day_data['grid_charge_kwh'] += kwh
+        if source == "grid":
+            day_data["grid_charge_kwh"] += kwh
             cost_eur = kwh * (price_cent_kwh / 100)
-            day_data['grid_charge_cost_eur'] += cost_eur
+            day_data["grid_charge_cost_eur"] += cost_eur
         else:  # solar
-            day_data['solar_charge_kwh'] += kwh
+            day_data["solar_charge_kwh"] += kwh
 
         # Update summary
         self._update_daily_summary(date_str)
 
         # Auto-save every 10 events or every hour
-        if len(day_data['charge_events']) % 10 == 0:
+        if len(day_data["charge_events"]) % 10 == 0:
             await self.save()
 
     async def add_discharge_event(
@@ -187,7 +188,7 @@ class BatteryChargePersistence:
         date_str = timestamp.date().isoformat()
         self._ensure_day_exists(date_str)
 
-        day_data = self.data['daily'][date_str]
+        day_data = self.data["daily"][date_str]
 
         # Calculate breakdown
         solar_kwh = kwh * solar_ratio
@@ -195,84 +196,87 @@ class BatteryChargePersistence:
 
         # Add event
         event = {
-            'timestamp': timestamp.isoformat(),
-            'hour': timestamp.hour,
-            'power_w': round(power_w, 1),
-            'duration_min': round(duration_min, 2),
-            'kwh': round(kwh, 4),
-            'price_cent_kwh': round(price_cent_kwh, 2),
-            'source_breakdown': {
-                'solar_kwh': round(solar_kwh, 4),
-                'grid_kwh': round(grid_kwh, 4),
-                'solar_ratio': round(solar_ratio, 3),
-            }
+            "timestamp": timestamp.isoformat(),
+            "hour": timestamp.hour,
+            "power_w": round(power_w, 1),
+            "duration_min": round(duration_min, 2),
+            "kwh": round(kwh, 4),
+            "price_cent_kwh": round(price_cent_kwh, 2),
+            "source_breakdown": {
+                "solar_kwh": round(solar_kwh, 4),
+                "grid_kwh": round(grid_kwh, 4),
+                "solar_ratio": round(solar_ratio, 3),
+            },
         }
-        day_data['discharge_events'].append(event)
+        day_data["discharge_events"].append(event)
 
         # Update totals
-        day_data['solar_discharge_kwh'] += solar_kwh
-        day_data['grid_discharge_kwh'] += grid_kwh
-        day_data['total_discharge_kwh'] += kwh
+        day_data["solar_discharge_kwh"] += solar_kwh
+        day_data["grid_discharge_kwh"] += grid_kwh
+        day_data["total_discharge_kwh"] += kwh
 
         # Calculate savings
         solar_savings = solar_kwh * (price_cent_kwh / 100)
-        day_data['solar_savings_eur'] += solar_savings
+        day_data["solar_savings_eur"] += solar_savings
 
         # Calculate grid arbitrage profit
-        if grid_kwh > 0 and day_data['grid_charge_kwh'] > 0:
+        if grid_kwh > 0 and day_data["grid_charge_kwh"] > 0:
             # Use average grid charge price for arbitrage calculation
-            avg_charge_price = (day_data['grid_charge_cost_eur'] / day_data['grid_charge_kwh']) * 100
+            avg_charge_price = (
+                day_data["grid_charge_cost_eur"] / day_data["grid_charge_kwh"]
+            ) * 100
             arbitrage_profit = grid_kwh * ((price_cent_kwh - avg_charge_price) / 100)
-            day_data['grid_arbitrage_profit_eur'] += arbitrage_profit
+            day_data["grid_arbitrage_profit_eur"] += arbitrage_profit
 
         # Update summary
         self._update_daily_summary(date_str)
 
         # Auto-save every 10 events
-        if len(day_data['discharge_events']) % 10 == 0:
+        if len(day_data["discharge_events"]) % 10 == 0:
             await self.save()
 
     def _update_daily_summary(self, date_str: str):
         """Update daily summary calculations"""
-        day_data = self.data['daily'][date_str]
-        summary = day_data['summary']
+        day_data = self.data["daily"][date_str]
+        summary = day_data["summary"]
 
         # Event counts
-        summary['total_charge_events'] = len(day_data['charge_events'])
-        summary['total_discharge_events'] = len(day_data['discharge_events'])
+        summary["total_charge_events"] = len(day_data["charge_events"])
+        summary["total_discharge_events"] = len(day_data["discharge_events"])
 
         # Average prices
-        grid_charges = [e for e in day_data['charge_events'] if e['source'] == 'grid']
+        grid_charges = [e for e in day_data["charge_events"] if e["source"] == "grid"]
         if grid_charges:
-            total_kwh = sum(e['kwh'] for e in grid_charges)
+            total_kwh = sum(e["kwh"] for e in grid_charges)
             if total_kwh > 0:
-                weighted_price = sum(e['kwh'] * e['price_cent_kwh'] for e in grid_charges) / total_kwh
-                summary['avg_grid_charge_price'] = round(weighted_price, 2)
+                weighted_price = (
+                    sum(e["kwh"] * e["price_cent_kwh"] for e in grid_charges) / total_kwh
+                )
+                summary["avg_grid_charge_price"] = round(weighted_price, 2)
 
-        if day_data['discharge_events']:
-            total_kwh = sum(e['kwh'] for e in day_data['discharge_events'])
+        if day_data["discharge_events"]:
+            total_kwh = sum(e["kwh"] for e in day_data["discharge_events"])
             if total_kwh > 0:
-                weighted_price = sum(e['kwh'] * e['price_cent_kwh'] for e in day_data['discharge_events']) / total_kwh
-                summary['avg_discharge_price'] = round(weighted_price, 2)
+                weighted_price = (
+                    sum(e["kwh"] * e["price_cent_kwh"] for e in day_data["discharge_events"])
+                    / total_kwh
+                )
+                summary["avg_discharge_price"] = round(weighted_price, 2)
 
         # Charge ratios
-        total_charge = day_data['grid_charge_kwh'] + day_data['solar_charge_kwh']
+        total_charge = day_data["grid_charge_kwh"] + day_data["solar_charge_kwh"]
         if total_charge > 0:
-            summary['grid_charge_ratio'] = round(day_data['grid_charge_kwh'] / total_charge, 3)
-            summary['solar_charge_ratio'] = round(day_data['solar_charge_kwh'] / total_charge, 3)
+            summary["grid_charge_ratio"] = round(day_data["grid_charge_kwh"] / total_charge, 3)
+            summary["solar_charge_ratio"] = round(day_data["solar_charge_kwh"] / total_charge, 3)
 
         # Total profit
-        day_data['total_profit_eur'] = (
-            day_data['solar_savings_eur'] +
-            day_data['grid_arbitrage_profit_eur'] -
-            day_data['grid_charge_cost_eur']
+        day_data["total_profit_eur"] = (
+            day_data["solar_savings_eur"]
+            + day_data["grid_arbitrage_profit_eur"]
+            - day_data["grid_charge_cost_eur"]
         )
 
-    async def update_energy_flows_v9(
-        self,
-        timestamp: datetime,
-        energy_flows: Dict[str, float]
-    ):
+    async def update_energy_flows_v9(self, timestamp: datetime, energy_flows: Dict[str, float]):
         """Update v9.0.0 energy flow data
 
         Args:
@@ -290,17 +294,17 @@ class BatteryChargePersistence:
         date_str = timestamp.date().isoformat()
         self._ensure_day_exists(date_str)
 
-        day_data = self.data['daily'][date_str]
+        day_data = self.data["daily"][date_str]
 
         # Update energy flows (accumulate)
-        day_data['solar_to_house_kwh'] += energy_flows.get('solar_to_house_kwh', 0.0)
-        day_data['solar_to_battery_kwh'] += energy_flows.get('solar_to_battery_kwh', 0.0)
-        day_data['solar_to_grid_kwh'] += energy_flows.get('solar_to_grid_kwh', 0.0)
-        day_data['grid_to_house_kwh'] += energy_flows.get('grid_to_house_kwh', 0.0)
-        day_data['grid_to_battery_kwh'] += energy_flows.get('grid_to_battery_kwh', 0.0)
-        day_data['battery_to_house_kwh'] += energy_flows.get('battery_to_house_kwh', 0.0)
-        day_data['grid_import_today_kwh'] += energy_flows.get('grid_import_kwh', 0.0)
-        day_data['grid_export_today_kwh'] += energy_flows.get('grid_export_kwh', 0.0)
+        day_data["solar_to_house_kwh"] += energy_flows.get("solar_to_house_kwh", 0.0)
+        day_data["solar_to_battery_kwh"] += energy_flows.get("solar_to_battery_kwh", 0.0)
+        day_data["solar_to_grid_kwh"] += energy_flows.get("solar_to_grid_kwh", 0.0)
+        day_data["grid_to_house_kwh"] += energy_flows.get("grid_to_house_kwh", 0.0)
+        day_data["grid_to_battery_kwh"] += energy_flows.get("grid_to_battery_kwh", 0.0)
+        day_data["battery_to_house_kwh"] += energy_flows.get("battery_to_house_kwh", 0.0)
+        day_data["grid_import_today_kwh"] += energy_flows.get("grid_import_kwh", 0.0)
+        day_data["grid_export_today_kwh"] += energy_flows.get("grid_export_kwh", 0.0)
 
         _LOGGER.debug(
             f"Updated v9.0.0 energy flows for {date_str}: "
@@ -312,22 +316,22 @@ class BatteryChargePersistence:
     def get_today_summary(self) -> Dict[str, Any]:
         """Get summary for today"""
         today = datetime.now().date().isoformat()
-        return self.data['daily'].get(today, {})
+        return self.data["daily"].get(today, {})
 
     def get_day_summary(self, date: datetime) -> Dict[str, Any]:
         """Get summary for specific day"""
         date_str = date.date().isoformat()
-        return self.data['daily'].get(date_str, {})
+        return self.data["daily"].get(date_str, {})
 
     def get_month_summary(self, year: int, month: int) -> Dict[str, Any]:
         """Get summary for specific month"""
         key = f"{year}-{month:02d}"
-        return self.data['monthly'].get(key, {})
+        return self.data["monthly"].get(key, {})
 
     def get_year_summary(self, year: int) -> Dict[str, Any]:
         """Get summary for specific year"""
         key = str(year)
-        return self.data['yearly'].get(key, {})
+        return self.data["yearly"].get(key, {})
 
     async def rollup_to_monthly(self, date: date):
         """Aggregate daily data to monthly summary Args: date: Date to rollup (typically yesterday) - date object, not datetime"""
@@ -335,53 +339,53 @@ class BatteryChargePersistence:
             year_month = f"{date.year}-{date.month:02d}"
             date_str = date.isoformat()  # FIX: date is already a date object, not datetime
 
-            if date_str not in self.data['daily']:
+            if date_str not in self.data["daily"]:
                 return
 
             # Ensure monthly entry exists
-            if year_month not in self.data['monthly']:
-                self.data['monthly'][year_month] = {
-                    'year_month': year_month,
+            if year_month not in self.data["monthly"]:
+                self.data["monthly"][year_month] = {
+                    "year_month": year_month,
                     # LEGACY v8.x
-                    'grid_charge_kwh': 0.0,
-                    'solar_charge_kwh': 0.0,
-                    'grid_charge_cost_eur': 0.0,
-                    'solar_savings_eur': 0.0,
-                    'grid_arbitrage_profit_eur': 0.0,
-                    'total_profit_eur': 0.0,
+                    "grid_charge_kwh": 0.0,
+                    "solar_charge_kwh": 0.0,
+                    "grid_charge_cost_eur": 0.0,
+                    "solar_savings_eur": 0.0,
+                    "grid_arbitrage_profit_eur": 0.0,
+                    "total_profit_eur": 0.0,
                     # NEW v9.0.0
-                    'solar_to_house_kwh': 0.0,
-                    'solar_to_battery_kwh': 0.0,
-                    'solar_to_grid_kwh': 0.0,
-                    'grid_to_house_kwh': 0.0,
-                    'grid_to_battery_kwh': 0.0,
-                    'battery_to_house_kwh': 0.0,
-                    'grid_import_kwh': 0.0,
-                    'grid_export_kwh': 0.0,
-                    'days_tracked': 0,
+                    "solar_to_house_kwh": 0.0,
+                    "solar_to_battery_kwh": 0.0,
+                    "solar_to_grid_kwh": 0.0,
+                    "grid_to_house_kwh": 0.0,
+                    "grid_to_battery_kwh": 0.0,
+                    "battery_to_house_kwh": 0.0,
+                    "grid_import_kwh": 0.0,
+                    "grid_export_kwh": 0.0,
+                    "days_tracked": 0,
                 }
 
             # Add daily values to monthly
-            day_data = self.data['daily'][date_str]
-            month_data = self.data['monthly'][year_month]
+            day_data = self.data["daily"][date_str]
+            month_data = self.data["monthly"][year_month]
 
             # LEGACY v8.x
-            month_data['grid_charge_kwh'] += day_data['grid_charge_kwh']
-            month_data['solar_charge_kwh'] += day_data['solar_charge_kwh']
-            month_data['grid_charge_cost_eur'] += day_data['grid_charge_cost_eur']
-            month_data['solar_savings_eur'] += day_data['solar_savings_eur']
-            month_data['grid_arbitrage_profit_eur'] += day_data['grid_arbitrage_profit_eur']
-            month_data['total_profit_eur'] += day_data['total_profit_eur']
+            month_data["grid_charge_kwh"] += day_data["grid_charge_kwh"]
+            month_data["solar_charge_kwh"] += day_data["solar_charge_kwh"]
+            month_data["grid_charge_cost_eur"] += day_data["grid_charge_cost_eur"]
+            month_data["solar_savings_eur"] += day_data["solar_savings_eur"]
+            month_data["grid_arbitrage_profit_eur"] += day_data["grid_arbitrage_profit_eur"]
+            month_data["total_profit_eur"] += day_data["total_profit_eur"]
             # NEW v9.0.0
-            month_data['solar_to_house_kwh'] += day_data.get('solar_to_house_kwh', 0.0)
-            month_data['solar_to_battery_kwh'] += day_data.get('solar_to_battery_kwh', 0.0)
-            month_data['solar_to_grid_kwh'] += day_data.get('solar_to_grid_kwh', 0.0)
-            month_data['grid_to_house_kwh'] += day_data.get('grid_to_house_kwh', 0.0)
-            month_data['grid_to_battery_kwh'] += day_data.get('grid_to_battery_kwh', 0.0)
-            month_data['battery_to_house_kwh'] += day_data.get('battery_to_house_kwh', 0.0)
-            month_data['grid_import_kwh'] += day_data.get('grid_import_today_kwh', 0.0)
-            month_data['grid_export_kwh'] += day_data.get('grid_export_today_kwh', 0.0)
-            month_data['days_tracked'] += 1
+            month_data["solar_to_house_kwh"] += day_data.get("solar_to_house_kwh", 0.0)
+            month_data["solar_to_battery_kwh"] += day_data.get("solar_to_battery_kwh", 0.0)
+            month_data["solar_to_grid_kwh"] += day_data.get("solar_to_grid_kwh", 0.0)
+            month_data["grid_to_house_kwh"] += day_data.get("grid_to_house_kwh", 0.0)
+            month_data["grid_to_battery_kwh"] += day_data.get("grid_to_battery_kwh", 0.0)
+            month_data["battery_to_house_kwh"] += day_data.get("battery_to_house_kwh", 0.0)
+            month_data["grid_import_kwh"] += day_data.get("grid_import_today_kwh", 0.0)
+            month_data["grid_export_kwh"] += day_data.get("grid_export_today_kwh", 0.0)
+            month_data["days_tracked"] += 1
 
             _LOGGER.info(f"Rolled up {date_str} to monthly summary {year_month}")
             await self.save()
@@ -395,53 +399,53 @@ class BatteryChargePersistence:
             year_str = str(year)
             year_month = f"{year}-{month:02d}"
 
-            if year_month not in self.data['monthly']:
+            if year_month not in self.data["monthly"]:
                 return
 
             # Ensure yearly entry exists
-            if year_str not in self.data['yearly']:
-                self.data['yearly'][year_str] = {
-                    'year': year,
+            if year_str not in self.data["yearly"]:
+                self.data["yearly"][year_str] = {
+                    "year": year,
                     # LEGACY v8.x
-                    'grid_charge_kwh': 0.0,
-                    'solar_charge_kwh': 0.0,
-                    'grid_charge_cost_eur': 0.0,
-                    'solar_savings_eur': 0.0,
-                    'grid_arbitrage_profit_eur': 0.0,
-                    'total_profit_eur': 0.0,
+                    "grid_charge_kwh": 0.0,
+                    "solar_charge_kwh": 0.0,
+                    "grid_charge_cost_eur": 0.0,
+                    "solar_savings_eur": 0.0,
+                    "grid_arbitrage_profit_eur": 0.0,
+                    "total_profit_eur": 0.0,
                     # NEW v9.0.0
-                    'solar_to_house_kwh': 0.0,
-                    'solar_to_battery_kwh': 0.0,
-                    'solar_to_grid_kwh': 0.0,
-                    'grid_to_house_kwh': 0.0,
-                    'grid_to_battery_kwh': 0.0,
-                    'battery_to_house_kwh': 0.0,
-                    'grid_import_kwh': 0.0,
-                    'grid_export_kwh': 0.0,
-                    'months_tracked': 0,
+                    "solar_to_house_kwh": 0.0,
+                    "solar_to_battery_kwh": 0.0,
+                    "solar_to_grid_kwh": 0.0,
+                    "grid_to_house_kwh": 0.0,
+                    "grid_to_battery_kwh": 0.0,
+                    "battery_to_house_kwh": 0.0,
+                    "grid_import_kwh": 0.0,
+                    "grid_export_kwh": 0.0,
+                    "months_tracked": 0,
                 }
 
             # Add monthly values to yearly
-            month_data = self.data['monthly'][year_month]
-            year_data = self.data['yearly'][year_str]
+            month_data = self.data["monthly"][year_month]
+            year_data = self.data["yearly"][year_str]
 
             # LEGACY v8.x
-            year_data['grid_charge_kwh'] += month_data['grid_charge_kwh']
-            year_data['solar_charge_kwh'] += month_data['solar_charge_kwh']
-            year_data['grid_charge_cost_eur'] += month_data['grid_charge_cost_eur']
-            year_data['solar_savings_eur'] += month_data['solar_savings_eur']
-            year_data['grid_arbitrage_profit_eur'] += month_data['grid_arbitrage_profit_eur']
-            year_data['total_profit_eur'] += month_data['total_profit_eur']
+            year_data["grid_charge_kwh"] += month_data["grid_charge_kwh"]
+            year_data["solar_charge_kwh"] += month_data["solar_charge_kwh"]
+            year_data["grid_charge_cost_eur"] += month_data["grid_charge_cost_eur"]
+            year_data["solar_savings_eur"] += month_data["solar_savings_eur"]
+            year_data["grid_arbitrage_profit_eur"] += month_data["grid_arbitrage_profit_eur"]
+            year_data["total_profit_eur"] += month_data["total_profit_eur"]
             # NEW v9.0.0
-            year_data['solar_to_house_kwh'] += month_data.get('solar_to_house_kwh', 0.0)
-            year_data['solar_to_battery_kwh'] += month_data.get('solar_to_battery_kwh', 0.0)
-            year_data['solar_to_grid_kwh'] += month_data.get('solar_to_grid_kwh', 0.0)
-            year_data['grid_to_house_kwh'] += month_data.get('grid_to_house_kwh', 0.0)
-            year_data['grid_to_battery_kwh'] += month_data.get('grid_to_battery_kwh', 0.0)
-            year_data['battery_to_house_kwh'] += month_data.get('battery_to_house_kwh', 0.0)
-            year_data['grid_import_kwh'] += month_data.get('grid_import_kwh', 0.0)
-            year_data['grid_export_kwh'] += month_data.get('grid_export_kwh', 0.0)
-            year_data['months_tracked'] += 1
+            year_data["solar_to_house_kwh"] += month_data.get("solar_to_house_kwh", 0.0)
+            year_data["solar_to_battery_kwh"] += month_data.get("solar_to_battery_kwh", 0.0)
+            year_data["solar_to_grid_kwh"] += month_data.get("solar_to_grid_kwh", 0.0)
+            year_data["grid_to_house_kwh"] += month_data.get("grid_to_house_kwh", 0.0)
+            year_data["grid_to_battery_kwh"] += month_data.get("grid_to_battery_kwh", 0.0)
+            year_data["battery_to_house_kwh"] += month_data.get("battery_to_house_kwh", 0.0)
+            year_data["grid_import_kwh"] += month_data.get("grid_import_kwh", 0.0)
+            year_data["grid_export_kwh"] += month_data.get("grid_export_kwh", 0.0)
+            year_data["months_tracked"] += 1
 
             _LOGGER.info(f"Rolled up {year_month} to yearly summary {year}")
             await self.save()
@@ -455,14 +459,14 @@ class BatteryChargePersistence:
             cutoff_date = (datetime.now() - timedelta(days=keep_days)).date()
             removed_count = 0
 
-            for date_str in list(self.data['daily'].keys()):
+            for date_str in list(self.data["daily"].keys()):
                 try:
                     date = datetime.fromisoformat(date_str).date()
                     if date < cutoff_date:
                         # Remove detailed events, keep summary
-                        day_data = self.data['daily'][date_str]
-                        day_data['charge_events'] = []
-                        day_data['discharge_events'] = []
+                        day_data = self.data["daily"][date_str]
+                        day_data["charge_events"] = []
+                        day_data["discharge_events"] = []
                         removed_count += 1
                 except ValueError:
                     continue

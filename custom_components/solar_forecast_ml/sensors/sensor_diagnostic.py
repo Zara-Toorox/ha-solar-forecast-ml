@@ -22,24 +22,24 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
+    SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, PERCENTAGE
+from homeassistant.const import PERCENTAGE, UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .sensor_base import BaseSolarSensor
-from .sensor_mixins import CoordinatorPropertySensorMixin
+from ..astronomy.astronomy_cache_manager import get_cache_manager
+from ..const import DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR, UPDATE_INTERVAL
 from ..coordinator import SolarForecastMLCoordinator
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..ml.ml_external_helpers import format_time_ago
-from ..const import UPDATE_INTERVAL, DAILY_UPDATE_HOUR, DAILY_VERIFICATION_HOUR
 from ..ml.ml_predictor import ModelState
-from ..astronomy.astronomy_cache_manager import get_cache_manager
+from .sensor_base import BaseSolarSensor
+from .sensor_mixins import CoordinatorPropertySensorMixin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ ML_STATE_TRANSLATIONS = {
     ModelState.DEGRADED.value: "Degraded",
     ModelState.ERROR.value: "Error",
     "unavailable": "Unavailable",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
 }
 
 
@@ -59,8 +59,10 @@ ML_STATE_TRANSLATIONS = {
 # MIGRATED COORDINATOR-PROPERTY SENSORS (Using Mixin)
 # =============================================================================
 
+
 class DiagnosticStatusSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     """Sensor showing the overall diagnostic status of the coordinator"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:stethoscope"
 
@@ -73,11 +75,12 @@ class DiagnosticStatusSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
 
     def get_coordinator_value(self) -> str | None:
         """Get value from coordinator"""
-        return getattr(self.coordinator, 'diagnostic_status', None)
+        return getattr(self.coordinator, "diagnostic_status", None)
 
 
 class YesterdayDeviationSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     """Sensor showing the absolute forecast deviation error"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -93,12 +96,13 @@ class YesterdayDeviationSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
 
     def get_coordinator_value(self) -> float | None:
         """Get value from coordinator"""
-        deviation = getattr(self.coordinator, 'last_day_error_kwh', None)
+        deviation = getattr(self.coordinator, "last_day_error_kwh", None)
         return max(0.0, deviation) if deviation is not None else None
 
 
 class CloudinessTrend1hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     """Sensor showing cloudiness change in the last 1 hour"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = None  # Text interpretation, no unit
     _attr_state_class = None  # Not a measurement anymore
@@ -154,7 +158,7 @@ class CloudinessTrend1hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
             value = self.coordinator.cloudiness_trend_1h
             return {
                 "change_percent": round(value, 1),
-                "description": "Cloud change in last hour (positive = more clouds)"
+                "description": "Cloud change in last hour (positive = more clouds)",
             }
         except Exception:
             return {"status": "unavailable"}
@@ -162,6 +166,7 @@ class CloudinessTrend1hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
 
 class CloudinessTrend3hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     """Sensor showing cloudiness change in the last 3 hours"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = None  # Text interpretation, no unit
     _attr_state_class = None  # Not a measurement anymore
@@ -217,7 +222,7 @@ class CloudinessTrend3hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
             value = self.coordinator.cloudiness_trend_3h
             return {
                 "change_percent": round(value, 1),
-                "description": "Cloud change in last 3 hours"
+                "description": "Cloud change in last 3 hours",
             }
         except Exception:
             return {"status": "unavailable"}
@@ -225,6 +230,7 @@ class CloudinessTrend3hSensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
 
 class CloudinessVolatilitySensor(CoordinatorPropertySensorMixin, BaseSolarSensor):
     """Sensor showing weather stability index (inverted volatility)"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = "%"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -274,12 +280,13 @@ class CloudinessVolatilitySensor(CoordinatorPropertySensorMixin, BaseSolarSensor
         return {
             "interpretation": interpretation,
             "stability_index": round(value, 1),
-            "raw_volatility": round(raw_volatility, 1)
+            "raw_volatility": round(raw_volatility, 1),
         }
 
 
 class NextProductionStartSensor(BaseSolarSensor):
     """Sensor showing when next solar production starts"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = None
     _attr_state_class = None
@@ -335,13 +342,13 @@ class NextProductionStartSensor(BaseSolarSensor):
 
             # Fallback to sun.sun entity if cache unavailable
             _LOGGER.debug("Astronomy cache unavailable, falling back to sun.sun entity")
-            sun_entity = self.hass.states.get('sun.sun')
+            sun_entity = self.hass.states.get("sun.sun")
             if not sun_entity:
                 _LOGGER.debug("sun.sun entity not available")
                 return None
 
             # Get next sunrise (UTC)
-            next_rising_str = sun_entity.attributes.get('next_rising')
+            next_rising_str = sun_entity.attributes.get("next_rising")
             if not next_rising_str:
                 _LOGGER.debug("next_rising attribute not found in sun.sun")
                 return None
@@ -435,8 +442,8 @@ class NextProductionStartSensor(BaseSolarSensor):
             # Fallback to sun.sun entity if cache unavailable
             if not end_time:
                 _LOGGER.debug("Using sun.sun fallback for production end time")
-                sun_entity = self.hass.states.get('sun.sun')
-                next_setting_str = sun_entity.attributes.get('next_setting') if sun_entity else None
+                sun_entity = self.hass.states.get("sun.sun")
+                next_setting_str = sun_entity.attributes.get("next_setting") if sun_entity else None
 
                 if next_setting_str:
                     next_setting_utc = dt_util.parse_datetime(next_setting_str)
@@ -475,7 +482,11 @@ class NextProductionStartSensor(BaseSolarSensor):
                 "duration": duration if duration else "Unknown",
                 "starts_in": starts_in,
                 "day": day,
-                "production_window": f"{start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')}" if end_time else "Unknown"
+                "production_window": (
+                    f"{start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')}"
+                    if end_time
+                    else "Unknown"
+                ),
             }
 
         except Exception as e:
@@ -487,8 +498,10 @@ class NextProductionStartSensor(BaseSolarSensor):
 # COMPLEX SENSORS (Keep original implementation)
 # =============================================================================
 
+
 class LastCoordinatorUpdateSensor(BaseSolarSensor):
     """Sensor showing the timestamp of the last successful coordinator update"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -503,13 +516,13 @@ class LastCoordinatorUpdateSensor(BaseSolarSensor):
     @property
     def native_value(self) -> datetime | None:
         """Return the timestamp"""
-        return getattr(self.coordinator, 'last_update_success_time', None)
+        return getattr(self.coordinator, "last_update_success_time", None)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Provide additional context"""
-        last_update = getattr(self.coordinator, 'last_update_success_time', None)
-        last_attempt = getattr(self.coordinator, 'last_update', None)
+        last_update = getattr(self.coordinator, "last_update_success_time", None)
+        last_attempt = getattr(self.coordinator, "last_update", None)
         return {
             "last_update_iso": last_update.isoformat() if last_update else None,
             "time_ago": format_time_ago(last_update) if last_update else "Never",
@@ -519,6 +532,7 @@ class LastCoordinatorUpdateSensor(BaseSolarSensor):
 
 class LastMLTrainingSensor(BaseSolarSensor):
     """Sensor showing the timestamp of the last ML model training"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -536,13 +550,13 @@ class LastMLTrainingSensor(BaseSolarSensor):
         ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor:
             return None
-        return getattr(ml_predictor, 'last_training_time', None)
+        return getattr(ml_predictor, "last_training_time", None)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Provide additional context"""
         ml_predictor = self.coordinator.ml_predictor
-        last_training = getattr(ml_predictor, 'last_training_time', None) if ml_predictor else None
+        last_training = getattr(ml_predictor, "last_training_time", None) if ml_predictor else None
         return {
             "last_training_iso": last_training.isoformat() if last_training else None,
             "time_ago": format_time_ago(last_training) if last_training else "Never",
@@ -551,6 +565,7 @@ class LastMLTrainingSensor(BaseSolarSensor):
 
 class NextScheduledUpdateSensor(BaseSolarSensor):
     """Sensor showing the time of the next scheduled update"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -638,6 +653,7 @@ class NextScheduledUpdateSensor(BaseSolarSensor):
 
 class MLServiceStatusSensor(BaseSolarSensor):
     """Sensor showing the status of the ML prediction service"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -654,10 +670,10 @@ class MLServiceStatusSensor(BaseSolarSensor):
         ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor:
             return ML_STATE_TRANSLATIONS["unavailable"]
-        state_enum = getattr(ml_predictor, 'model_state', None)
+        state_enum = getattr(ml_predictor, "model_state", None)
         if state_enum is None:
             return ML_STATE_TRANSLATIONS["unknown"]
-        state_str = state_enum.value if hasattr(state_enum, 'value') else str(state_enum)
+        state_str = state_enum.value if hasattr(state_enum, "value") else str(state_enum)
         return ML_STATE_TRANSLATIONS.get(state_str, ML_STATE_TRANSLATIONS["unknown"])
 
     @property
@@ -667,17 +683,21 @@ class MLServiceStatusSensor(BaseSolarSensor):
         if not ml_predictor:
             return {"status": "unavailable"}
 
-        state_enum = getattr(ml_predictor, 'model_state', None)
-        state_str = state_enum.value if hasattr(state_enum, 'value') and state_enum else "unknown"
-        model_loaded = getattr(ml_predictor, 'model_loaded', False)
-        can_predict = getattr(ml_predictor, 'can_predict', False)
+        state_enum = getattr(ml_predictor, "model_state", None)
+        state_str = state_enum.value if hasattr(state_enum, "value") and state_enum else "unknown"
+        model_loaded = getattr(ml_predictor, "model_loaded", False)
+        can_predict = getattr(ml_predictor, "can_predict", False)
 
         return {
             "model_state": state_str,
             "model_loaded": model_loaded,
             "can_predict": can_predict,
-            "training_samples": getattr(ml_predictor, 'training_samples', 0),
-            "last_training_iso": getattr(ml_predictor, 'last_training_time', None).isoformat() if getattr(ml_predictor, 'last_training_time', None) else None
+            "training_samples": getattr(ml_predictor, "training_samples", 0),
+            "last_training_iso": (
+                getattr(ml_predictor, "last_training_time", None).isoformat()
+                if getattr(ml_predictor, "last_training_time", None)
+                else None
+            ),
         }
 
     @property
@@ -696,6 +716,7 @@ class MLServiceStatusSensor(BaseSolarSensor):
 
 class MLMetricsSensor(BaseSolarSensor):
     """Sensor providing key metrics about the ML model"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -712,8 +733,8 @@ class MLMetricsSensor(BaseSolarSensor):
         ml_predictor = self.coordinator.ml_predictor
         if not ml_predictor:
             return "ML Unavailable"
-        samples = getattr(ml_predictor, 'training_samples', 0)
-        accuracy = getattr(ml_predictor, 'current_accuracy', None)
+        samples = getattr(ml_predictor, "training_samples", 0)
+        accuracy = getattr(ml_predictor, "current_accuracy", None)
         acc_str = f"{accuracy*100:.1f}%" if accuracy is not None else "N/A"
         return f"{samples} Samples | Acc: {acc_str}"
 
@@ -724,25 +745,32 @@ class MLMetricsSensor(BaseSolarSensor):
         if not ml_predictor:
             return {"status": "unavailable"}
 
-        feature_engineer = getattr(ml_predictor, 'feature_engineer', None)
+        feature_engineer = getattr(ml_predictor, "feature_engineer", None)
         feature_count = len(feature_engineer.feature_names) if feature_engineer else 0
-        perf_metrics = getattr(ml_predictor, 'performance_metrics', {})
-        current_weights = getattr(ml_predictor, 'current_weights', None)
+        perf_metrics = getattr(ml_predictor, "performance_metrics", {})
+        current_weights = getattr(ml_predictor, "current_weights", None)
 
         return {
             "status": "available",
-            "training_samples": getattr(ml_predictor, 'training_samples', 0),
+            "training_samples": getattr(ml_predictor, "training_samples", 0),
             "features_count": feature_count,
-            "current_accuracy": round(getattr(ml_predictor, 'current_accuracy', 0.0), 4) if getattr(ml_predictor, 'current_accuracy', None) is not None else None,
-            "model_version": getattr(current_weights, 'model_version', None) if current_weights else None,
-            "avg_prediction_time_ms": round(perf_metrics.get('avg_prediction_time_ms', 0.0), 2),
-            "prediction_success_rate": round(1.0 - perf_metrics.get('error_rate', 0.0), 3),
-            "total_predictions": perf_metrics.get('total_predictions', 0)
+            "current_accuracy": (
+                round(getattr(ml_predictor, "current_accuracy", 0.0), 4)
+                if getattr(ml_predictor, "current_accuracy", None) is not None
+                else None
+            ),
+            "model_version": (
+                getattr(current_weights, "model_version", None) if current_weights else None
+            ),
+            "avg_prediction_time_ms": round(perf_metrics.get("avg_prediction_time_ms", 0.0), 2),
+            "prediction_success_rate": round(1.0 - perf_metrics.get("error_rate", 0.0), 3),
+            "total_predictions": perf_metrics.get("total_predictions", 0),
         }
 
 
 class CoordinatorHealthSensor(BaseSolarSensor):
     """Sensor reflecting the health of the DataUpdateCoordinator"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -756,8 +784,8 @@ class CoordinatorHealthSensor(BaseSolarSensor):
     @property
     def native_value(self) -> str:
         """Return health status"""
-        last_success_time = getattr(self.coordinator, 'last_update_success_time', None)
-        last_update_success_flag = getattr(self.coordinator, 'last_update_success', True)
+        last_success_time = getattr(self.coordinator, "last_update_success_time", None)
+        last_update_success_flag = getattr(self.coordinator, "last_update_success", True)
 
         if not last_update_success_flag and last_success_time is None:
             return "Failed Initializing"
@@ -767,7 +795,11 @@ class CoordinatorHealthSensor(BaseSolarSensor):
             return "Initializing"
 
         age_seconds = (dt_util.now() - last_success_time).total_seconds()
-        interval_seconds = self.coordinator.update_interval.total_seconds() if self.coordinator.update_interval else UPDATE_INTERVAL.total_seconds()
+        interval_seconds = (
+            self.coordinator.update_interval.total_seconds()
+            if self.coordinator.update_interval
+            else UPDATE_INTERVAL.total_seconds()
+        )
 
         if age_seconds < (interval_seconds * 1.5):
             return "Healthy"
@@ -779,20 +811,27 @@ class CoordinatorHealthSensor(BaseSolarSensor):
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Provide detailed metrics"""
-        last_success_time = getattr(self.coordinator, 'last_update_success_time', None)
-        last_attempt_time = getattr(self.coordinator, 'last_update', None)
+        last_success_time = getattr(self.coordinator, "last_update_success_time", None)
+        last_attempt_time = getattr(self.coordinator, "last_update", None)
 
         return {
-            "last_update_successful": getattr(self.coordinator, 'last_update_success', False),
+            "last_update_successful": getattr(self.coordinator, "last_update_success", False),
             "last_success_time_iso": last_success_time.isoformat() if last_success_time else None,
             "last_attempt_time_iso": last_attempt_time.isoformat() if last_attempt_time else None,
-            "time_since_last_success": format_time_ago(last_success_time) if last_success_time else "Never",
-            "update_interval_seconds": self.coordinator.update_interval.total_seconds() if self.coordinator.update_interval else None,
+            "time_since_last_success": (
+                format_time_ago(last_success_time) if last_success_time else "Never"
+            ),
+            "update_interval_seconds": (
+                self.coordinator.update_interval.total_seconds()
+                if self.coordinator.update_interval
+                else None
+            ),
         }
 
 
 class DataFilesStatusSensor(BaseSolarSensor):
     """Sensor showing count of available data files"""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
@@ -802,12 +841,13 @@ class DataFilesStatusSensor(BaseSolarSensor):
         self._attr_translation_key = "data_files_status"
         self._attr_icon = "mdi:file-multiple-outline"
         self._attr_name = "Data Files Status"
-        self._data_manager = getattr(coordinator, 'data_manager', None)
+        self._data_manager = getattr(coordinator, "data_manager", None)
 
     def _check_file_exists(self, file_path) -> bool:
         """Check if a file exists"""
         try:
             from pathlib import Path
+
             return Path(file_path).exists()
         except Exception:
             return False
@@ -819,8 +859,12 @@ class DataFilesStatusSensor(BaseSolarSensor):
             return "0/0"
 
         from ..const import (
-            LEARNED_WEIGHTS_FILE, HOURLY_PROFILE_FILE, HOURLY_SAMPLES_FILE,
-            MODEL_STATE_FILE, DAILY_FORECASTS_FILE, PREDICTION_HISTORY_FILE
+            DAILY_FORECASTS_FILE,
+            HOURLY_PROFILE_FILE,
+            HOURLY_SAMPLES_FILE,
+            LEARNED_WEIGHTS_FILE,
+            MODEL_STATE_FILE,
+            PREDICTION_HISTORY_FILE,
         )
 
         required_files = [
@@ -829,7 +873,7 @@ class DataFilesStatusSensor(BaseSolarSensor):
             HOURLY_SAMPLES_FILE,
             MODEL_STATE_FILE,
             DAILY_FORECASTS_FILE,
-            PREDICTION_HISTORY_FILE
+            PREDICTION_HISTORY_FILE,
         ]
 
         available_count = 0
@@ -837,7 +881,12 @@ class DataFilesStatusSensor(BaseSolarSensor):
         stats_dir = self._data_manager.data_dir / "stats"
 
         for filename in required_files:
-            if filename in [LEARNED_WEIGHTS_FILE, HOURLY_PROFILE_FILE, HOURLY_SAMPLES_FILE, MODEL_STATE_FILE]:
+            if filename in [
+                LEARNED_WEIGHTS_FILE,
+                HOURLY_PROFILE_FILE,
+                HOURLY_SAMPLES_FILE,
+                MODEL_STATE_FILE,
+            ]:
                 file_path = ml_dir / filename
             else:
                 file_path = stats_dir / filename
@@ -855,8 +904,12 @@ class DataFilesStatusSensor(BaseSolarSensor):
             return {"status": "unavailable"}
 
         from ..const import (
-            LEARNED_WEIGHTS_FILE, HOURLY_PROFILE_FILE, HOURLY_SAMPLES_FILE,
-            MODEL_STATE_FILE, DAILY_FORECASTS_FILE, PREDICTION_HISTORY_FILE
+            DAILY_FORECASTS_FILE,
+            HOURLY_PROFILE_FILE,
+            HOURLY_SAMPLES_FILE,
+            LEARNED_WEIGHTS_FILE,
+            MODEL_STATE_FILE,
+            PREDICTION_HISTORY_FILE,
         )
 
         ml_dir = self._data_manager.data_dir / "ml"
@@ -868,14 +921,14 @@ class DataFilesStatusSensor(BaseSolarSensor):
             "hourly_samples": self._check_file_exists(ml_dir / HOURLY_SAMPLES_FILE),
             "model_state": self._check_file_exists(ml_dir / MODEL_STATE_FILE),
             "daily_forecasts": self._check_file_exists(stats_dir / DAILY_FORECASTS_FILE),
-            "prediction_history": self._check_file_exists(stats_dir / PREDICTION_HISTORY_FILE)
+            "prediction_history": self._check_file_exists(stats_dir / PREDICTION_HISTORY_FILE),
         }
 
         return {
             "files": files_status,
             "total_available": sum(1 for exists in files_status.values() if exists),
             "total_required": len(files_status),
-            "data_directory": str(self._data_manager.data_dir)
+            "data_directory": str(self._data_manager.data_dir),
         }
 
 
@@ -886,6 +939,7 @@ class MLTrainingReadinessSensor(BaseSolarSensor):
     Replaces confusing "Samples" counter with clear training readiness status.
     Shows users if system is ready for training and provides guidance.
     """
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:progress-check"
 
@@ -911,7 +965,7 @@ class MLTrainingReadinessSensor(BaseSolarSensor):
         try:
             # V2: Get cached count from coordinator (updated during refresh)
             # This avoids blocking I/O in sensor property getter
-            training_ready_count = getattr(self.coordinator, '_v2_training_ready_count', None)
+            training_ready_count = getattr(self.coordinator, "_v2_training_ready_count", None)
 
             if training_ready_count is not None:
                 return training_ready_count
@@ -991,7 +1045,7 @@ class MLTrainingReadinessSensor(BaseSolarSensor):
 
         # Also get total samples for comparison
         ml_predictor = self.coordinator.ml_predictor
-        total_samples = getattr(ml_predictor, 'training_samples', 0) if ml_predictor else 0
+        total_samples = getattr(ml_predictor, "training_samples", 0) if ml_predictor else 0
 
         days_collecting = self._get_days_collecting()
         status = self._get_status(ready)
@@ -1014,7 +1068,7 @@ class MLTrainingReadinessSensor(BaseSolarSensor):
                 "collecting": "🔴",
                 "early": "🟡",
                 "ready": "🟢",
-                "excellent": "⭐"
+                "excellent": "⭐",
             }.get(status, "⚪"),
         }
 
@@ -1028,5 +1082,5 @@ class MLTrainingReadinessSensor(BaseSolarSensor):
             "collecting": "mdi:progress-clock",
             "early": "mdi:progress-alert",
             "ready": "mdi:progress-check",
-            "excellent": "mdi:progress-star"
+            "excellent": "mdi:progress-star",
         }.get(status, "mdi:progress-question")

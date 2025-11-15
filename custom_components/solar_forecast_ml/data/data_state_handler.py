@@ -18,16 +18,17 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from pathlib import Path
-from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
-from homeassistant.core import HomeAssistant
-from ..core.core_exceptions import DataIntegrityException
-from .data_manager import DataManagerIO
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-from .data_io import DataManagerIO
-from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from homeassistant.core import HomeAssistant
+
 from ..const import DATA_VERSION
+from ..core.core_exceptions import DataIntegrityException
+from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from .data_io import DataManagerIO
+from .data_manager import DataManagerIO
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,25 +38,24 @@ class DataStateHandler(DataManagerIO):
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
-        
+
         self.coordinator_state_file = self.data_dir / "data" / "coordinator_state.json"
         self.weather_cache_file = self.data_dir / "data" / "weather_cache.json"
         self.production_time_state_file = self.data_dir / "data" / "production_time_state.json"
-        
+
         self._coordinator_state_default = {
             "version": DATA_VERSION,
             "expected_daily_production": None,
             "last_set_date": None,
             "last_updated": None,
-            "last_collected_hour": None # New field
+            "last_collected_hour": None,  # New field
         }
 
     async def ensure_state_files(self) -> None:
         """Ensure state files exist"""
         if not self.coordinator_state_file.exists():
             await self._atomic_write_json(
-                self.coordinator_state_file,
-                self._coordinator_state_default
+                self.coordinator_state_file, self._coordinator_state_default
             )
 
     # =============================================================
@@ -70,13 +70,13 @@ class DataStateHandler(DataManagerIO):
                 "version": DATA_VERSION,
                 "expected_daily_production": value,
                 "last_set_date": now_local.date().isoformat(),
-                "last_updated": now_local.isoformat()
+                "last_updated": now_local.isoformat(),
             }
-            
+
             await self._atomic_write_json(self.coordinator_state_file, state)
             _LOGGER.debug(f"Expected daily production saved: {value:.2f} kWh")
             return True
-            
+
         except Exception as e:
             _LOGGER.error(f"Failed to save expected daily production: {e}")
             return False
@@ -84,13 +84,15 @@ class DataStateHandler(DataManagerIO):
     async def load_expected_daily_production(
         self,
         check_daily_forecasts: bool = True,
-        daily_forecasts_data: Optional[dict[str, Any]] = None
+        daily_forecasts_data: Optional[dict[str, Any]] = None,
     ) -> Optional[float]:
         """Load expected daily production from persistent storage"""
         try:
             # TRY NEW SYSTEM FIRST (daily_forecasts.json)
             if check_daily_forecasts and daily_forecasts_data:
-                if "today" in daily_forecasts_data and daily_forecasts_data["today"].get("forecast_day", {}).get("locked"):
+                if "today" in daily_forecasts_data and daily_forecasts_data["today"].get(
+                    "forecast_day", {}
+                ).get("locked"):
                     value = daily_forecasts_data["today"]["forecast_day"].get("prediction_kwh")
                     if value is not None:
                         _LOGGER.debug(
@@ -98,28 +100,27 @@ class DataStateHandler(DataManagerIO):
                             f"{value:.2f} kWh (source: {daily_forecasts_data['today']['forecast_day'].get('source')})"
                         )
                         return float(value)
-            
+
             # FALLBACK TO OLD SYSTEM (coordinator_state.json)
             state = await self._read_json_file(
-                self.coordinator_state_file,
-                self._coordinator_state_default
+                self.coordinator_state_file, self._coordinator_state_default
             )
-            
+
             if not state:
                 return None
-            
+
             # Check if value is from today
             now_local = dt_util.now()
             today_str = now_local.date().isoformat()
             last_set_date = state.get("last_set_date")
-            
+
             if last_set_date != today_str:
                 _LOGGER.debug(
                     f"Expected daily production expired "
                     f"(from {last_set_date}, today is {today_str})"
                 )
                 return None
-            
+
             value = state.get("expected_daily_production")
             if value is not None:
                 _LOGGER.debug(
@@ -127,7 +128,7 @@ class DataStateHandler(DataManagerIO):
                     f"{value:.2f} kWh"
                 )
                 return float(value)
-            
+
             return None
 
         except Exception as e:
@@ -141,7 +142,7 @@ class DataStateHandler(DataManagerIO):
                 "version": DATA_VERSION,
                 "expected_daily_production": None,
                 "last_set_date": None,
-                "last_updated": dt_util.now().isoformat()
+                "last_updated": dt_util.now().isoformat(),
             }
 
             await self._atomic_write_json(self.coordinator_state_file, state)
@@ -156,8 +157,7 @@ class DataStateHandler(DataManagerIO):
         """Get the timestamp of the last collected hourly sample"""
         try:
             state = await self._read_json_file(
-                self.coordinator_state_file,
-                self._coordinator_state_default
+                self.coordinator_state_file, self._coordinator_state_default
             )
             last_collected_hour_str = state.get("last_collected_hour")
             if last_collected_hour_str:
@@ -171,8 +171,7 @@ class DataStateHandler(DataManagerIO):
         """Set the timestamp of the last collected hourly sample"""
         try:
             state = await self._read_json_file(
-                self.coordinator_state_file,
-                self._coordinator_state_default
+                self.coordinator_state_file, self._coordinator_state_default
             )
             state["last_collected_hour"] = timestamp.isoformat()
             state["last_updated"] = dt_util.now().isoformat()
@@ -181,7 +180,8 @@ class DataStateHandler(DataManagerIO):
             return True
         except Exception as e:
             _LOGGER.error(f"Failed to set last collected hour: {e}")
-            return False    # =============================================================
+            return False  # =============================================================
+
     # WEATHER CACHE Methods
     # =============================================================
 
@@ -250,8 +250,12 @@ class DataStateHandler(DataManagerIO):
             today_str = now_local.date().isoformat()
             tomorrow_str = (now_local + timedelta(days=1)).date().isoformat()
 
-            today_count = sum(1 for h in sorted_hours if h.get("local_datetime", "").startswith(today_str))
-            tomorrow_count = sum(1 for h in sorted_hours if h.get("local_datetime", "").startswith(tomorrow_str))
+            today_count = sum(
+                1 for h in sorted_hours if h.get("local_datetime", "").startswith(today_str)
+            )
+            tomorrow_count = sum(
+                1 for h in sorted_hours if h.get("local_datetime", "").startswith(tomorrow_str)
+            )
 
             # Build final cache structure
             merged_cache = {
@@ -265,7 +269,7 @@ class DataStateHandler(DataManagerIO):
                     "tomorrow_hours": tomorrow_count,
                     "oldest_entry": sorted_hours[0].get("datetime") if sorted_hours else None,
                     "newest_entry": sorted_hours[-1].get("datetime") if sorted_hours else None,
-                }
+                },
             }
 
             await self._ensure_directory_exists(self.weather_cache_file.parent)
@@ -286,10 +290,10 @@ class DataStateHandler(DataManagerIO):
         try:
             if self.weather_cache_file.exists():
                 data = await self._read_json_file(self.weather_cache_file, None)
-                
+
                 if data is None:
                     return None
-                
+
                 # Backward compatibility: If data is a list (old format), wrap it
                 if isinstance(data, list):
                     _LOGGER.info("Converting old weather cache format (list) to new format (dict)")
@@ -299,11 +303,11 @@ class DataStateHandler(DataManagerIO):
                         "data_quality": {
                             "today_hours": 0,
                             "tomorrow_hours": 0,
-                            "total_hours": len(data)
+                            "total_hours": len(data),
                         },
-                        "converted_from_old_format": True
+                        "converted_from_old_format": True,
                     }
-                
+
                 return data
             return None
         except Exception as e:
@@ -327,15 +331,15 @@ class DataStateHandler(DataManagerIO):
             data = await self.load_weather_cache()
             if not data or "cached_at" not in data:
                 return None
-            
+
             cached_at = dt_util.parse_datetime(data["cached_at"])
             if cached_at:
                 now_local = dt_util.now()
                 age_seconds = (now_local - cached_at).total_seconds()
                 return int(age_seconds / 60)
-            
+
             return None
-            
+
         except Exception as e:
             _LOGGER.error(f"Failed to get weather cache age: {e}")
             return None

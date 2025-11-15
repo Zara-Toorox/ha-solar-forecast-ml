@@ -19,10 +19,10 @@ Copyright (C) 2025 Zara-Toorox
 
 import logging
 from datetime import datetime
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import callback, HomeAssistant, State
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -33,11 +33,11 @@ _LOGGER = logging.getLogger(__name__)
 
 def format_time_ago(last_changed: datetime) -> str:
     """Formats timestamp as X minh ago -"""
-    now = dt_util.now() # Use LOCAL time - last_changed is also LOCAL
+    now = dt_util.now()  # Use LOCAL time - last_changed is also LOCAL
     delta = now - last_changed
-    
+
     seconds = delta.total_seconds()
-    
+
     if seconds < 60:
         return "< 1 min ago"  # Space-saving for < 1 minute -
     elif seconds < 3600:
@@ -50,7 +50,7 @@ def format_time_ago(last_changed: datetime) -> str:
 
 class BaseExternalSensor:
     """Common base for external sensor displays with LIVE updates -"""
-    
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     hass: HomeAssistant  # Make hass available to the class
 
@@ -59,13 +59,13 @@ class BaseExternalSensor:
         self._sensor_config = sensor_config
         self.entry = entry
         self.coordinator = coordinator
-        
+
         # Set attributes
         self._attr_unique_id = f"{entry.entry_id}_{sensor_config['key']}"
-        self._attr_name = sensor_config['name']
-        self._attr_icon = sensor_config['icon']
-        self._attr_device_class = sensor_config.get('device_class')
-        self._attr_native_unit_of_measurement = sensor_config.get('unit')
+        self._attr_name = sensor_config["name"]
+        self._attr_icon = sensor_config["icon"]
+        self._attr_device_class = sensor_config.get("device_class")
+        self._attr_native_unit_of_measurement = sensor_config.get("unit")
 
     @staticmethod
     def strip_entity_id(entity_id_raw: Any) -> Optional[str]:
@@ -77,11 +77,11 @@ class BaseExternalSensor:
     @property
     def _sensor_entity_id(self) -> Optional[str]:
         """Gets the entity ID of the sensor to track from the ConfigEntry"""
-        config_key = self._sensor_config.get('config_key')
+        config_key = self._sensor_config.get("config_key")
         if not config_key:
             _LOGGER.error(f"Missing 'config_key' for sensor {self._attr_name}")
             return None
-        
+
         entity_id_raw = self.entry.data.get(config_key)
         return self.strip_entity_id(entity_id_raw)
 
@@ -89,82 +89,84 @@ class BaseExternalSensor:
     def available(self) -> bool:
         """External sensors are always available (they show their own status messages) -"""
         return True
-    
+
     async def async_added_to_hass(self) -> None:
         """Registers LIVE update listener -"""
         await super().async_added_to_hass()
-        
+
         sensor_entity_id = self._sensor_entity_id
-        
+
         if sensor_entity_id:
             _LOGGER.debug(f"Tracking external sensor {sensor_entity_id} for {self._attr_name}")
             self.async_on_remove(
                 async_track_state_change_event(
-                    self.hass,
-                    [sensor_entity_id],
-                    self._handle_external_sensor_update
+                    self.hass, [sensor_entity_id], self._handle_external_sensor_update
                 )
             )
         else:
             _LOGGER.debug(f"No external sensor configured for {self._attr_name}")
-    
+
     @callback
     def _handle_external_sensor_update(self, event) -> None:
         """Triggers update on external sensor change -"""
-        _LOGGER.debug(f"External sensor {event.data.get('entity_id')} updated, refreshing {self._attr_name}")
+        _LOGGER.debug(
+            f"External sensor {event.data.get('entity_id')} updated, refreshing {self._attr_name}"
+        )
         self.async_write_ha_state()
-    
+
     @property
     def native_value(self) -> str:
         """Gets value from the configured sensor with timestamp -"""
         sensor_entity_id = self._sensor_entity_id
-        
+
         if not sensor_entity_id:
             return "Not configured"
-        
+
         state = self.hass.states.get(sensor_entity_id)
         if not state:
             return "Entity not found"
-        
+
         try:
             # Check availability
-            if state.state in ['unavailable', 'unknown', 'none', None]:
+            if state.state in ["unavailable", "unknown", "none", None]:
                 return "Unavailable"
-            
+
             # Format timestamp
             time_ago = format_time_ago(state.last_changed)
-            
+
             # Get unit (override default if state provides one)
-            unit = state.attributes.get('unit_of_measurement', self._attr_native_unit_of_measurement or "")
-            
+            unit = state.attributes.get(
+                "unit_of_measurement", self._attr_native_unit_of_measurement or ""
+            )
+
             # Format output
             return self._format_value(state.state, unit, time_ago)
-            
+
         except Exception as e:
             _LOGGER.warning(f"Error reading {self._sensor_config['name']}: {e}")
             return "Error"
-    
+
     def _get_unit(self, state: State) -> Optional[str]:
         """Determines the unit of the sensor -"""
-        unit_key = self._sensor_config.get('unit_key', 'unit_of_measurement')
-        default_unit = self._sensor_config.get('unit')
-        
+        unit_key = self._sensor_config.get("unit_key", "unit_of_measurement")
+        default_unit = self._sensor_config.get("unit")
+
         return state.attributes.get(unit_key, default_unit)
-    
+
     def _format_value(self, value: str, unit: Optional[str], time_ago: str) -> str:
         """Formats sensor value for display -"""
-        format_string = self._sensor_config.get('format_string', '{value} {unit} ({time})')
-        
+        format_string = self._sensor_config.get("format_string", "{value} {unit} ({time})")
+
         # If a specific format is defined
-        if '{value}' in format_string:
-            result = format_string.replace('{value}', str(value))
+        if "{value}" in format_string:
+            result = format_string.replace("{value}", str(value))
             if unit:
-                result = result.replace('{unit}', str(unit))
+                result = result.replace("{unit}", str(unit))
             else:
-                result = result.replace(' {unit}', '')  # Remove unit placeholder
-            result = result.replace('{time}', time_ago)
+                result = result.replace(" {unit}", "")  # Remove unit placeholder
+            result = result.replace("{time}", time_ago)
             return result
-        
+
         # Standard format
         if unit:
             return f"{value} {unit} ({time_ago})"

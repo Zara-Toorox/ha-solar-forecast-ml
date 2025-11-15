@@ -20,18 +20,26 @@ Copyright (C) 2025 Zara-Toorox
 import logging
 from typing import Any, Dict, Optional
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
-from homeassistant.const import UnitOfEnergy, UnitOfPower
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import (
-    DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, ML_VERSION,
-    CONF_TEMP_SENSOR, CONF_WIND_SENSOR, CONF_RAIN_SENSOR,
-    CONF_UV_SENSOR, CONF_LUX_SENSOR, CONF_POWER_ENTITY, CONF_SOLAR_YIELD_TODAY,
-    CONF_HUMIDITY_SENSOR
+    CONF_HUMIDITY_SENSOR,
+    CONF_LUX_SENSOR,
+    CONF_POWER_ENTITY,
+    CONF_RAIN_SENSOR,
+    CONF_SOLAR_YIELD_TODAY,
+    CONF_TEMP_SENSOR,
+    CONF_UV_SENSOR,
+    CONF_WIND_SENSOR,
+    DOMAIN,
+    INTEGRATION_MODEL,
+    ML_VERSION,
+    SOFTWARE_VERSION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,7 +61,7 @@ class BaseEntityStateSensor(SensorEntity):
         source_entity_id_key: Optional[str],  # Key to look up in entry.data
         unique_id_key: str,
         translation_key: str,
-        icon: str
+        icon: str,
     ):
         """Initialize the state sensor"""
         self.hass = hass
@@ -97,9 +105,7 @@ class BaseEntityStateSensor(SensorEntity):
         source_id = self.source_entity_id  # Use property to get ID
         if source_id:
             self.async_on_remove(
-                async_track_state_change_event(
-                    self.hass, [source_id], self._handle_sensor_update
-                )
+                async_track_state_change_event(self.hass, [source_id], self._handle_sensor_update)
             )
             # Fetch initial state - False = no async_update call, just write state
             self.async_schedule_update_ha_state(False)
@@ -131,7 +137,7 @@ class BaseEntityStateSensor(SensorEntity):
         source_id = self.source_entity_id
         base_attrs = {
             "source_entity_id": source_id,
-            "source_entity_configured_key": self._source_entity_id_key
+            "source_entity_configured_key": self._source_entity_id_key,
         }
 
         if not source_id:
@@ -145,20 +151,23 @@ class BaseEntityStateSensor(SensorEntity):
             return base_attrs
 
         status = "ok"
-        if state.state in ['unavailable', 'unknown']:
+        if state.state in ["unavailable", "unknown"]:
             status = state.state
 
-        base_attrs.update({
-            "status": status,
-            "state": state.state,
-            "unit_of_measurement": state.attributes.get('unit_of_measurement'),
-            "last_updated": state.last_updated.isoformat() if state.last_updated else None,
-            "last_changed": state.last_changed.isoformat() if state.last_changed else None,
-        })
+        base_attrs.update(
+            {
+                "status": status,
+                "state": state.state,
+                "unit_of_measurement": state.attributes.get("unit_of_measurement"),
+                "last_updated": state.last_updated.isoformat() if state.last_updated else None,
+                "last_changed": state.last_changed.isoformat() if state.last_changed else None,
+            }
+        )
         return base_attrs
 
 
 # --- External Sensors Status Sensor ---
+
 
 class ExternalSensorsStatusSensor(SensorEntity):
     """Sensor showing status of all configured external sensors"""
@@ -241,7 +250,7 @@ class ExternalSensorsStatusSensor(SensorEntity):
 
             if state is None:
                 error_count += 1
-            elif state.state in ['unavailable', 'unknown']:
+            elif state.state in ["unavailable", "unknown"]:
                 unavailable_count += 1
             else:
                 ok_count += 1
@@ -269,7 +278,7 @@ class ExternalSensorsStatusSensor(SensorEntity):
                 sensors_status[sensor_name] = {
                     "status": "not_configured",
                     "entity_id": None,
-                    "state": None
+                    "state": None,
                 }
                 continue
 
@@ -280,38 +289,44 @@ class ExternalSensorsStatusSensor(SensorEntity):
                 sensors_status[sensor_name] = {
                     "status": "not_found",
                     "entity_id": entity_id,
-                    "state": None
+                    "state": None,
                 }
-            elif state.state in ['unavailable', 'unknown']:
+            elif state.state in ["unavailable", "unknown"]:
                 sensors_status[sensor_name] = {
                     "status": state.state,
                     "entity_id": entity_id,
-                    "state": state.state
+                    "state": state.state,
                 }
             else:
                 sensors_status[sensor_name] = {
                     "status": "ok",
                     "entity_id": entity_id,
                     "state": state.state,
-                    "unit": state.attributes.get('unit_of_measurement')
+                    "unit": state.attributes.get("unit_of_measurement"),
                 }
 
         return {
             "sensors": sensors_status,
-            "configured_count": sum(1 for s in sensors_status.values() if s["status"] != "not_configured"),
+            "configured_count": sum(
+                1 for s in sensors_status.values() if s["status"] != "not_configured"
+            ),
             "ok_count": sum(1 for s in sensors_status.values() if s["status"] == "ok"),
-            "unavailable_count": sum(1 for s in sensors_status.values() if s["status"] in ["unavailable", "unknown"]),
-            "error_count": sum(1 for s in sensors_status.values() if s["status"] == "not_found")
+            "unavailable_count": sum(
+                1 for s in sensors_status.values() if s["status"] in ["unavailable", "unknown"]
+            ),
+            "error_count": sum(1 for s in sensors_status.values() if s["status"] == "not_found"),
         }
 
 
 # --- State Sensors for Core Entities ---
 
+
 class PowerSensorStateSensor(BaseEntityStateSensor):
     """State sensor for the configured main power sensor"""
+
     # FIXED: Changed to diagnostic
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    
+
     # FIXED: Added proper sensor attributes for POWER
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -324,10 +339,10 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
             source_entity_id_key=CONF_POWER_ENTITY,
             unique_id_key="power_sensor_state",
             translation_key="power_sensor_state",
-            icon="mdi:flash-alert-outline"
+            icon="mdi:flash-alert-outline",
         )
         self._attr_name = "Power Sensor State"
-    
+
     # FIXED: Override to return float instead of string
     @property
     def native_value(self) -> float | None:
@@ -335,11 +350,11 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
         source_id = self.source_entity_id
         if not source_id:
             return None
-        
+
         state = self.hass.states.get(source_id)
-        if not state or state.state in ['unavailable', 'unknown', 'none', None, '']:
+        if not state or state.state in ["unavailable", "unknown", "none", None, ""]:
             return None
-        
+
         try:
             # Parse state to float
             cleaned_state = str(state.state).split(" ")[0].replace(",", ".")
@@ -351,9 +366,10 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
 
 class YieldSensorStateSensor(BaseEntityStateSensor):
     """State sensor for the configured daily yield sensor"""
+
     # FIXED: Changed to diagnostic
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    
+
     # FIXED: Added proper sensor attributes
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -366,10 +382,10 @@ class YieldSensorStateSensor(BaseEntityStateSensor):
             source_entity_id_key=CONF_SOLAR_YIELD_TODAY,
             unique_id_key="yield_sensor_state",
             translation_key="yield_sensor_state",
-            icon="mdi:counter"
+            icon="mdi:counter",
         )
         self._attr_name = "Yield Sensor State"
-    
+
     # FIXED: Override to return float instead of string
     @property
     def native_value(self) -> float | None:
@@ -377,11 +393,11 @@ class YieldSensorStateSensor(BaseEntityStateSensor):
         source_id = self.source_entity_id
         if not source_id:
             return None
-        
+
         state = self.hass.states.get(source_id)
-        if not state or state.state in ['unavailable', 'unknown', 'none', None, '']:
+        if not state or state.state in ["unavailable", "unknown", "none", None, ""]:
             return None
-        
+
         try:
             # Parse state to float
             cleaned_state = str(state.state).split(" ")[0].replace(",", ".")
