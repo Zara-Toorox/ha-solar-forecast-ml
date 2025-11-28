@@ -1,5 +1,4 @@
-"""
-Coordinator Update Helpers - Extract methods from _async_update_data
+"""Coordinator Update Helpers - Extract methods from _async_update_data V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -26,24 +25,24 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class CoordinatorUpdateHelpers:
     """Helper methods for coordinator data updates"""
 
     def __init__(self, coordinator: "SolarForecastMLCoordinator"):
-        """Initialize helpers"""
+        """Initialize helpers @zara"""
         self.coordinator = coordinator
 
     async def fetch_weather_data(self) -> Tuple[Optional[Dict], Optional[list]]:
-        """Fetch current weather and hourly forecast"""
+        """Fetch current weather and hourly forecast @zara"""
         current_weather = None
         hourly_forecast = None
 
         if self.coordinator.weather_service:
             try:
                 current_weather = await self.coordinator.weather_service.get_current_weather()
+
                 hourly_forecast = (
-                    await self.coordinator.weather_service.get_processed_hourly_forecast()
+                    await self.coordinator.weather_service.get_corrected_hourly_forecast()
                 )
                 self.coordinator._last_weather_update = dt_util.now()
 
@@ -74,7 +73,6 @@ class CoordinatorUpdateHelpers:
         if not forecast:
             raise UpdateFailed("Forecast generation failed")
 
-        # Log summary instead of full data (hourly array can be huge)
         hourly_count = len(forecast.get("hourly", []))
         _LOGGER.debug(
             f"Forecast data from orchestrator: "
@@ -86,13 +84,20 @@ class CoordinatorUpdateHelpers:
         )
         return forecast
 
-    def build_coordinator_result(
+    async def build_coordinator_result(
         self,
         forecast: Dict[str, Any],
         current_weather: Optional[Dict],
         external_sensors: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Build coordinator result dictionary"""
+        """Build coordinator result dictionary (async to load diagnostic data safely)"""
+        import asyncio
+
+        # Load diagnostic data in executor to avoid blocking event loop
+        loop = asyncio.get_running_loop()
+        cached_patterns = await loop.run_in_executor(None, self._load_cached_patterns)
+        cached_physics = await loop.run_in_executor(None, self._load_cached_physics)
+
         result = {
             "forecast_today": forecast.get("today"),
             "forecast_tomorrow": forecast.get("tomorrow"),
@@ -100,7 +105,7 @@ class CoordinatorUpdateHelpers:
             "hourly_forecast": forecast.get("hourly", []) if self.coordinator.enable_hourly else [],
             "current_weather": current_weather,
             "external_sensors": external_sensors,
-            # Production time data from tracker
+
             "production_time": {
                 "active": self.coordinator.production_time_calculator.is_active,
                 "duration_seconds": self.coordinator.production_time_calculator.total_seconds,
@@ -115,11 +120,62 @@ class CoordinatorUpdateHelpers:
                 "kwh": external_sensors.get("solar_yield_today"),
                 "sensor": self.coordinator.solar_yield_today,
             },
+            # Cached diagnostic data (loaded async via executor to avoid blocking)
+            "_cached_patterns": cached_patterns,
+            "_cached_physics": cached_physics,
         }
         return result
 
+    def _load_cached_patterns(self) -> Dict[str, Any]:
+        """Load pattern data for diagnostic sensors (called from async context) @zara"""
+        try:
+            data_manager = getattr(self.coordinator, "data_manager", None)
+            if not data_manager:
+                return {}
+
+            patterns_file = data_manager.data_dir / "ml" / "learned_patterns.json"
+            if not patterns_file.exists():
+                return {}
+
+            import json
+            with open(patterns_file, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            _LOGGER.debug(f"Error loading cached patterns: {e}")
+            return {}
+
+    def _load_cached_physics(self) -> Dict[str, Any]:
+        """Load physics data for diagnostic sensors (called from async context) @zara"""
+        try:
+            data_manager = getattr(self.coordinator, "data_manager", None)
+            if not data_manager:
+                return {}
+
+            import json
+
+            # Try residual_model_state.json first (Physics-First architecture)
+            residual_file = data_manager.data_dir / "ml" / "residual_model_state.json"
+            if residual_file.exists():
+                with open(residual_file, "r") as f:
+                    data = json.load(f)
+                    data["_source"] = "residual_model_state"
+                    return data
+
+            # Fallback to learned_geometry.json (GeometryLearner)
+            geometry_file = data_manager.data_dir / "learned_geometry.json"
+            if geometry_file.exists():
+                with open(geometry_file, "r") as f:
+                    data = json.load(f)
+                    data["_source"] = "learned_geometry"
+                    return data
+
+            return {}
+        except Exception as e:
+            _LOGGER.debug(f"Error loading cached physics: {e}")
+            return {}
+
     async def save_forecasts(self, forecast_data: Dict[str, Any], hourly_forecast: list) -> None:
-        """Save forecasts to storage"""
+        """Save forecasts to storage @zara"""
         await self.coordinator._save_forecasts_to_storage(
             forecast_data={
                 "today": forecast_data.get("today"),
@@ -132,7 +188,7 @@ class CoordinatorUpdateHelpers:
         )
 
     async def update_electricity_prices(self) -> None:
-        """Update electricity prices if battery management enabled"""
+        """Update electricity prices if battery management enabled @zara"""
         if not self.coordinator.electricity_service:
             return
 
@@ -143,7 +199,7 @@ class CoordinatorUpdateHelpers:
             if last_update is None:
                 should_update = True
             else:
-                # Update if last update was more than 12 hours ago
+
                 hours_since_update = (dt_util.now() - last_update).total_seconds() / 3600
                 should_update = hours_since_update > 12
 
@@ -161,18 +217,18 @@ class CoordinatorUpdateHelpers:
             _LOGGER.error(f"Error updating electricity prices: {e}", exc_info=True)
 
     async def handle_startup_recovery(self) -> None:
-        """Handle startup recovery for missing forecasts"""
+        """Handle startup recovery for missing forecasts @zara"""
         today_forecast = await self.coordinator.data_manager.get_current_day_forecast()
         now_local = dt_util.now()
 
         if not today_forecast or not today_forecast.get("forecast_day", {}).get("locked"):
             if now_local.hour < 12:
-                _LOGGER.warning(
-                    "System started without locked forecast (before 12:00) - " "initiating recovery"
+                _LOGGER.info(
+                    "System started without locked forecast (before 12:00) - initiating recovery"
                 )
                 await self.coordinator._recovery_forecast_process(source="startup_recovery")
             else:
-                _LOGGER.warning(
+                _LOGGER.info(
                     "System started late without forecast (after 12:00) - "
                     "using current forecast (NOT morning baseline!)"
                 )
@@ -182,19 +238,7 @@ class CoordinatorUpdateHelpers:
                         prediction_kwh=forecast_value,
                         source=f"late_startup_{now_local.hour:02d}:{now_local.minute:02d}",
                     )
-                    _LOGGER.warning(
+                    _LOGGER.info(
                         f"Set forecast to current value: {forecast_value:.2f} kWh "
                         f"(not representative of morning prediction)"
                     )
-
-    async def check_weather_service_health(self) -> None:
-        """Check and recover weather service if unhealthy"""
-        if (
-            self.coordinator.weather_service
-            and not self.coordinator.weather_service.get_health_status().get("healthy")
-        ):
-            _LOGGER.warning("Weather service unhealthy, attempting recovery...")
-            try:
-                await self.coordinator.weather_service.force_update()
-            except Exception as e:
-                _LOGGER.error(f"Weather service recovery failed: {e}")

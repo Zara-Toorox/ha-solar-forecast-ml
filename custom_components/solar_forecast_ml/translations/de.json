@@ -3,9 +3,9 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML",
-        "description": "Pflicht: Wetter-Sensor, Leistungs-Sensor, Tagesertrag\nOptional: Alle anderen Felder\n\n🔋 Batterie-Management v9.0.0 (optional):\n• Watt-basiertes System für präzise Energiefluss-Analyse\n• 8 klare Sensoren (alle positiv außer Batterie: +/-)\n• Benötigt: Batterie-Leistung, SOC, Solar-Produktion, Wechselrichter, Netzbezug, Netzexport, Hausverbrauch",
+        "description": "Pflicht: Leistungs-Sensor, Tagesertrag\nOptional: Wetter-Sensor (Open-Meteo liefert alle Wetterdaten), Alle anderen Felder\n\n🔋 Batterie-Management v9.0.0 (optional):\n• Watt-basiertes System für präzise Energiefluss-Analyse\n• 8 klare Sensoren (alle positiv außer Batterie: +/-)\n• Benötigt: Batterie-Leistung, SOC, Solar-Produktion, Wechselrichter, Netzbezug, Netzexport, Hausverbrauch",
         "data": {
-          "weather_entity": "Wetter-Sensor",
+          "weather_entity": "Wetter-Sensor (Optional)",
           "power_entity": "Leistungs-Sensor (W)",
           "solar_yield_today": "Tagesertrag (kWh)",
           "total_consumption_today": "Tagesverbrauch (kWh)",
@@ -16,22 +16,23 @@
           "lux_sensor": "Helligkeits-Sensor (lx)",
           "temp_sensor": "Temperatur-Sensor",
           "wind_sensor": "Wind-Sensor",
-          "uv_sensor": "UV-Sensor",
           "humidity_sensor": "Luftfeuchtigkeits-Sensor",
+          "pressure_sensor": "Luftdruck-Sensor (hPa)",
+          "solar_radiation_sensor": "Solarstrahlung-Sensor (W/m²)",
           "battery_capacity": "Batterie-Kapazität (kWh)",
           "battery_power_sensor": "Batterie-Leistung (W, +/-) - v9.0.0",
           "battery_soc_sensor": "Batterie Ladezustand (%) - v9.0.0",
           "solar_production_sensor": "Solarzellenleistung (W) - v9.0.0",
           "inverter_output_sensor": "Wechselrichter-Leistung (W) - v9.0.0",
           "grid_import_sensor": "Netzbezug (W) - v9.0.0",
-          "grid_export_sensor": "Netzexport (W) - v9.0.0",
           "house_consumption_sensor": "Hausverbrauch (W) - v9.0.0",
+          "grid_export_sensor": "Netzeinspeisung (W) - v9.0.0",
           "grid_charge_power_sensor": "Akkunetzbezug (W) - v9.0.0 Optional",
           "battery_temperature_sensor": "Batterie-Temperatur (°C) - v9.0.0 Optional",
           "electricity_country": "Land (DE/AT)"
         },
         "data_description": {
-          "weather_entity": "Wetter-Entität für Prognose (Pflicht)",
+          "weather_entity": "Wetter-Entität für zusätzliche Daten (Optional - Open-Meteo liefert alle Wetter-/Strahlungsdaten)",
           "power_entity": "Aktuelle Leistung in Watt (Pflicht)",
           "solar_yield_today": "Tagesertrag in kWh - MUSS um Mitternacht zurückgesetzt werden (Pflicht)",
           "total_consumption_today": "Tagesverbrauch in kWh (Optional)",
@@ -42,16 +43,17 @@
           "lux_sensor": "Externe Helligkeit in Lux (Optional)",
           "temp_sensor": "Externe Temperatur (Optional)",
           "wind_sensor": "Externe Windgeschwindigkeit (Optional)",
-          "uv_sensor": "Externer UV-Index (Optional)",
           "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)",
+          "pressure_sensor": "Externer Luftdruck in hPa (Optional)",
+          "solar_radiation_sensor": "Externe Solarstrahlung in W/m² (Optional, bevorzugt gegenüber Lux)",
           "battery_capacity": "Batterie-Kapazität in kWh (Optional, für Batterie-Management)",
           "battery_power_sensor": "[v9.0.0] Batterie-Leistung in W (Positiv=Laden, Negativ=Entladen)",
           "battery_soc_sensor": "[v9.0.0] Batterie-Ladezustand in % (0-100)",
           "solar_production_sensor": "[v9.0.0] DC-Leistung der Solarzellen in W (≥0)",
           "inverter_output_sensor": "[v9.0.0] AC-Ausgang des Wechselrichters in W (≥0) - Solar+Batterie kombiniert",
           "grid_import_sensor": "[v9.0.0] Netzbezug in W (≥0) - Strom vom öffentlichen Netz",
-          "grid_export_sensor": "[v9.0.0] Netzexport in W (≥0) - Strom ins öffentliche Netz",
           "house_consumption_sensor": "[v9.0.0] Gesamt-Hausverbrauch in W (≥0)",
+          "grid_export_sensor": "[v9.0.0] Netzeinspeisung in W (≥0) - Strom ins öffentliche Netz",
           "grid_charge_power_sensor": "[v9.0.0 Optional] Akkunetzbezug in W (≥0) - Falls nicht vorhanden, wird automatisch berechnet",
           "battery_temperature_sensor": "[v9.0.0 Optional] Batterie-Temperatur in °C - Für erweiterte Analyse",
           "electricity_country": "Land für Strompreise - DE oder AT (Optional)"
@@ -61,7 +63,7 @@
         "title": "Solar Forecast ML neu konfigurieren",
         "description": "Konfiguration aktualisieren\nLeere optionale Felder löschen den aktuellen Wert\n\n🔋 Batterie-Management v9.0.0:\n• Alle 8 Sensoren für Energiefluss-Analyse konfigurieren\n• Alle Werte positiv außer Batterie-Leistung (+/-)\n• Alte LEGACY Felder werden automatisch ignoriert",
         "data": {
-          "weather_entity": "Wetter-Sensor",
+          "weather_entity": "Wetter-Sensor (Optional)",
           "power_entity": "Leistungs-Sensor (W)",
           "solar_yield_today": "Tagesertrag (kWh)",
           "total_consumption_today": "Tagesverbrauch (kWh)",
@@ -72,22 +74,23 @@
           "lux_sensor": "Helligkeits-Sensor (lx)",
           "temp_sensor": "Temperatur-Sensor",
           "wind_sensor": "Wind-Sensor",
-          "uv_sensor": "UV-Sensor",
           "humidity_sensor": "Luftfeuchtigkeits-Sensor",
+          "pressure_sensor": "Luftdruck-Sensor (hPa)",
+          "solar_radiation_sensor": "Solarstrahlung-Sensor (W/m²)",
           "battery_capacity": "Batterie-Kapazität (kWh)",
           "battery_power_sensor": "Batterie-Leistung (W, +/-) - v9.0.0",
           "battery_soc_sensor": "Batterie Ladezustand (%) - v9.0.0",
           "solar_production_sensor": "Solarzellenleistung (W) - v9.0.0",
           "inverter_output_sensor": "Wechselrichter-Leistung (W) - v9.0.0",
           "grid_import_sensor": "Netzbezug (W) - v9.0.0",
-          "grid_export_sensor": "Netzexport (W) - v9.0.0",
           "house_consumption_sensor": "Hausverbrauch (W) - v9.0.0",
+          "grid_export_sensor": "Netzeinspeisung (W) - v9.0.0",
           "grid_charge_power_sensor": "Akkunetzbezug (W) - v9.0.0 Optional",
           "battery_temperature_sensor": "Batterie-Temperatur (°C) - v9.0.0 Optional",
           "electricity_country": "Land (DE/AT)"
         },
         "data_description": {
-          "weather_entity": "Wetter-Entität für Prognose (Pflicht)",
+          "weather_entity": "Wetter-Entität für zusätzliche Daten (Optional - Open-Meteo liefert alle Wetter-/Strahlungsdaten)",
           "power_entity": "Aktuelle Leistung in Watt (Pflicht)",
           "solar_yield_today": "Tagesertrag in kWh - MUSS um Mitternacht zurückgesetzt werden (Pflicht)",
           "total_consumption_today": "Tagesverbrauch in kWh (Optional)",
@@ -96,16 +99,17 @@
           "lux_sensor": "Externe Helligkeit in Lux (Optional)",
           "temp_sensor": "Externe Temperatur (Optional)",
           "wind_sensor": "Externe Windgeschwindigkeit (Optional)",
-          "uv_sensor": "Externer UV-Index (Optional)",
           "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)",
-          "battery_capacity": "Gesamt-Batteriekapazität in kWh (z.B. 10.0 für Anker Solix)",
+          "pressure_sensor": "Externer Luftdruck in hPa (Optional)",
+          "solar_radiation_sensor": "Externe Solarstrahlung in W/m² (Optional, bevorzugt gegenüber Lux)",
+          "battery_capacity": "Batteriekapazität in kWh (z.B. 10.0 für Anker Solix)",
           "battery_power_sensor": "[v9.0.0] Batterie-Leistung in W (Positiv=Laden, Negativ=Entladen)",
           "battery_soc_sensor": "[v9.0.0] Batterie-Ladezustand in % (0-100)",
           "solar_production_sensor": "[v9.0.0] DC-Leistung der Solarzellen in W (≥0)",
           "inverter_output_sensor": "[v9.0.0] AC-Ausgang des Wechselrichters in W (≥0) - Solar+Batterie kombiniert",
           "grid_import_sensor": "[v9.0.0] Netzbezug in W (≥0) - Strom vom öffentlichen Netz",
-          "grid_export_sensor": "[v9.0.0] Netzexport in W (≥0) - Strom ins öffentliche Netz",
           "house_consumption_sensor": "[v9.0.0] Gesamt-Hausverbrauch in W (≥0)",
+          "grid_export_sensor": "[v9.0.0] Netzeinspeisung in W (≥0) - Strom ins öffentliche Netz",
           "grid_charge_power_sensor": "[v9.0.0 Optional] Akkunetzbezug in W (≥0) - Falls nicht vorhanden, wird automatisch berechnet",
           "battery_temperature_sensor": "[v9.0.0 Optional] Batterie-Temperatur in °C - Für erweiterte Analyse",
           "electricity_country": "Land für Strompreise (aWATTar) - Deutschland (DE) oder Österreich (AT)"
@@ -144,7 +148,9 @@
           "notify_learning": "Trainings-Benachrichtigungen",
           "notify_successful_learning": "Erfolgs-Benachrichtigungen",
           "battery_enabled": "Batterie-Management aktivieren",
-          "electricity_enabled": "Strompreise aktivieren (aWATTar)"
+          "electricity_enabled": "Strompreise aktivieren (aWATTar)",
+          "ml_algorithm": "Modus",
+          "enable_tiny_lstm": "KI aktivieren / deaktivieren"
         },
         "data_description": {
           "update_interval": "Prognose-Update-Intervall (300-86400s, Standard: 3600)",
@@ -155,7 +161,9 @@
           "notify_learning": "Bei Trainingsstart benachrichtigen",
           "notify_successful_learning": "Bei erfolgreichem Training benachrichtigen",
           "battery_enabled": "Batterie-Überwachung und -Prognosen aktivieren (Sensoren über Neu konfigurieren)",
-          "electricity_enabled": "Strompreise von aWATTar aktivieren (Land über Neu konfigurieren)"
+          "electricity_enabled": "Strompreise von aWATTar aktivieren (Land über Neu konfigurieren)",
+          "ml_algorithm": "Wähle den Algorithmus: 'Automatisch' entscheidet basierend auf der Datenmenge (empfohlen). 'Ridge' ist schnell und stabil. 'Neuronales Netz' bietet 5-10% bessere Genauigkeit ab 100+ Samples.",
+          "enable_tiny_lstm": "Erlaubt Nutzung des Neuronalen Netzes (benötigt 100+ Samples, 200+ MB RAM). Fällt automatisch auf Ridge zurück wenn Anforderungen nicht erfüllt. Empfehlung: Aktiviert lassen."
         }
       }
     },
@@ -237,6 +245,15 @@
       },
       "ml_metrics": {
         "name": "ML-Modell Metriken"
+      },
+      "active_prediction_model": {
+        "name": "Aktives Vorhersagemodell"
+      },
+      "pattern_count": {
+        "name": "Gelernte Muster"
+      },
+      "physics_samples": {
+        "name": "Physik-Samples"
       },
       "coordinator_health": {
         "name": "Coordinator-Gesundheit"
@@ -333,27 +350,45 @@
         "state_attributes": {
           "interpretation": {
             "name": "Bewertung",
-            "state": {
-              "very_stable": "Sehr stabil",
-              "stable": "Stabil",
-              "moderate": "Mäßig",
-              "variable": "Variabel",
-              "very_variable": "Sehr variabel"
-            }
+            "state": {}
           },
           "volatility_percent": {
             "name": "Volatilität"
+          },
+          "volatility_class": {
+            "name": "Volatilitätsklasse"
+          },
+          "volatility_class_name": {
+            "name": "Volatilitätsklasse"
           }
         }
       },
       "training_readiness": {
         "name": "Training Bereitschaft",
         "state": {
-          "collecting": "Daten sammeln",
+          "collecting": "Sammle Daten",
           "early": "Frühes Training",
           "ready": "Bereit",
           "excellent": "Exzellent"
         }
+      },
+      "shadow_current": {
+        "name": "Schatten Aktuell",
+        "state": {
+          "clear": "Kein Schatten",
+          "light_shadow": "Leichter Schatten",
+          "moderate_shadow": "Moderater Schatten",
+          "heavy_shadow": "Starker Schatten",
+          "night": "Nacht",
+          "no_data": "Keine Daten",
+          "error": "Fehler"
+        }
+      },
+      "shadow_today": {
+        "name": "Schatten Heute"
+      },
+      "performance_loss_today": {
+        "name": "Leistungsverlust Heute"
       },
       "next_production_start": {
         "name": "Nächster Produktionsbeginn"
@@ -454,10 +489,10 @@
         "name": "Ladung aus Netz"
       },
       "battery_forecast_grid_export_today": {
-        "name": "Netz Export Heute"
+        "name": "Netzeinspeisung Heute"
       },
       "battery_forecast_grid_import_today": {
-        "name": "Netz Import Heute"
+        "name": "Netzbezug Heute"
       },
       "battery_forecast_direct_solar_consumption": {
         "name": "Direkter Solar-Verbrauch"
@@ -668,11 +703,6 @@
             "name": "Ø Preis Heute"
           }
         }
-      }
-    },
-    "button": {
-      "manual_learning": {
-        "name": "Modell trainieren"
       }
     }
   }

@@ -1,5 +1,4 @@
-"""
-Rule-Based Production Strategy
+"""Rule-Based Production Strategy V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -30,12 +29,11 @@ from ..forecast.forecast_weather_calculator import WeatherCalculator
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class RuleBasedForecastStrategy(ForecastStrategy):
     """A fallback forecast strategy that uses simple rule-based heuristics"""
 
     def __init__(self, weather_calculator: WeatherCalculator, solar_capacity: float):
-        """Initialize the Rule-Based Forecast Strategy"""
+        """Initialize the Rule-Based Forecast Strategy @zara"""
         super().__init__("rule_based")
         self.weather_calculator = weather_calculator
         self.solar_capacity = solar_capacity
@@ -47,11 +45,11 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         _LOGGER.debug("RuleBasedForecastStrategy (Iterative) initialized.")
 
     def is_available(self) -> bool:
-        """This strategy is always available as a fallback"""
+        """This strategy is always available as a fallback @zara"""
         return True
 
     def get_priority(self) -> int:
-        """Returns the priority of this strategy Lower than ML strategy"""
+        """Returns the priority of this strategy Lower than ML strategy @zara"""
         return 50
 
     async def calculate_forecast(
@@ -81,7 +79,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             total_today_kwh = 0.0
             total_tomorrow_kwh = 0.0
 
-            now_local = dt_util_safe.now()  # now() already returns LOCAL time
+            now_local = dt_util_safe.now()
             today_date = now_local.date()
             tomorrow_date = today_date + timedelta(days=1)
 
@@ -92,7 +90,6 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         _LOGGER.warning("Skipping hour, missing 'local_datetime'")
                         continue
 
-                    # Parse if string (ISO format from JSON serialization)
                     if isinstance(hour_dt_local, str):
                         hour_dt_local = dt_util_safe.parse_datetime(hour_dt_local)
                         if not hour_dt_local:
@@ -223,7 +220,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             )
 
     def _get_hour_factor(self, hour: int) -> float:
-        """Calculates a factor 00 to 10 based on the solar curve sine function"""
+        """Calculates a factor 00 to 10 based on the solar curve sine function @zara"""
         try:
             if hour >= 22 or hour <= 5:
                 return 0.0

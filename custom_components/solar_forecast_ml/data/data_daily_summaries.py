@@ -1,4 +1,20 @@
-"""Handler for daily summary data - aggregated ML insights"""
+"""Handler for daily summary data - aggregated ML insights V10.0.0 @zara
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 
 import asyncio
 import json
@@ -11,7 +27,6 @@ from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class DailySummariesHandler:
     """Manages daily summaries with ML insights"""
 
@@ -19,20 +34,6 @@ class DailySummariesHandler:
         self.data_dir = data_dir
         self.data_manager = data_manager
         self.summaries_file = data_dir / "stats" / "daily_summaries.json"
-        # NOTE: File creation moved to async ensure method to avoid blocking I/O in __init__
-        # Will be called on first async access
-
-    async def ensure_file_exists(self):
-        """Create file with initial structure (async, non-blocking)"""
-        if not self.summaries_file.exists():
-            self.summaries_file.parent.mkdir(parents=True, exist_ok=True)
-            initial_data = {
-                "version": "2.0",
-                "last_updated": dt_util.now().isoformat(),
-                "summaries": [],
-            }
-            await self._write_json_atomic(initial_data)
-            _LOGGER.info("Created new daily_summaries.json")
 
     async def create_daily_summary(
         self, date: str, hourly_predictions: List[Dict[str, Any]]
@@ -49,35 +50,31 @@ class DailySummariesHandler:
         - Recommendations
         """
         try:
-            # Filter predictions for this date
+
             day_predictions = [p for p in hourly_predictions if p.get("target_date") == date]
 
             if not day_predictions:
                 _LOGGER.warning(f"No predictions found for {date}")
                 return False
 
-            # Calculate overall stats
             overall = self._calculate_overall_stats(day_predictions)
 
-            # Calculate hourly stats
             hourly_stats = self._calculate_hourly_stats(day_predictions)
 
-            # Analyze time windows
             time_windows = self._analyze_time_windows(day_predictions)
 
-            # Analyze weather accuracy
             weather_analysis = self._analyze_weather_accuracy(day_predictions)
 
-            # Detect patterns
             patterns = self._detect_patterns(day_predictions)
 
-            # Calculate ML metrics
             ml_metrics = self._calculate_ml_metrics(day_predictions)
 
-            # Generate recommendations
             recommendations = self._generate_recommendations(patterns, ml_metrics, weather_analysis)
 
-            # Create summary
+            shadow_analysis = self._analyze_shadow_detection(day_predictions, date)
+
+            frost_analysis = await self._analyze_frost_detection(date)
+
             dt_obj = datetime.fromisoformat(date)
             summary = {
                 "date": date,
@@ -93,19 +90,17 @@ class DailySummariesHandler:
                 "patterns": patterns,
                 "ml_metrics": ml_metrics,
                 "recommendations": recommendations,
+                "shadow_analysis": shadow_analysis,
+                "frost_analysis": frost_analysis,
                 "comparison": {},
             }
 
-            # Save summary
             data = await self._read_json_async()
 
-            # Remove existing summary for this date
             data["summaries"] = [s for s in data["summaries"] if s.get("date") != date]
 
-            # Add new summary
             data["summaries"].append(summary)
 
-            # Keep only last 365 days
             data["summaries"] = sorted(data["summaries"], key=lambda x: x["date"], reverse=True)[
                 :365
             ]
@@ -121,8 +116,8 @@ class DailySummariesHandler:
             return False
 
     def _calculate_overall_stats(self, predictions: List[Dict]) -> Dict:
-        """Calculate overall day statistics"""
-        total_predicted = sum(p.get("predicted_kwh", 0) for p in predictions)
+        """Calculate overall day statistics @zara"""
+        total_predicted = sum(p.get("prediction_kwh", 0) for p in predictions)
         total_actual = sum(
             p.get("actual_kwh", 0) for p in predictions if p.get("actual_kwh") is not None
         )
@@ -130,8 +125,7 @@ class DailySummariesHandler:
         accuracy = (total_actual / total_predicted * 100) if total_predicted > 0 else 0
         error = total_actual - total_predicted
 
-        # Find peak hour
-        peak = max(predictions, key=lambda x: x.get("predicted_kwh", 0))
+        peak = max(predictions, key=lambda x: x.get("prediction_kwh", 0))
 
         return {
             "predicted_total_kwh": round(total_predicted, 2),
@@ -141,14 +135,14 @@ class DailySummariesHandler:
             "error_percent": round(
                 (error / total_predicted * 100) if total_predicted > 0 else 0, 1
             ),
-            "production_hours": len([p for p in predictions if p.get("actual_kwh", 0) > 0]),
+            "production_hours": len([p for p in predictions if p.get("actual_kwh") is not None and p.get("actual_kwh") > 0]),
             "peak_power_w": None,
             "peak_hour": peak.get("target_hour"),
-            "peak_kwh": round(peak.get("predicted_kwh", 0), 3),
+            "peak_kwh": round(peak.get("prediction_kwh", 0), 3),
         }
 
     def _calculate_hourly_stats(self, predictions: List[Dict]) -> Dict:
-        """Calculate hourly statistics"""
+        """Calculate hourly statistics @zara"""
         accuracies = [
             p.get("accuracy_percent", 0)
             for p in predictions
@@ -195,7 +189,7 @@ class DailySummariesHandler:
         }
 
     def _analyze_time_windows(self, predictions: List[Dict]) -> Dict:
-        """Analyze different time windows"""
+        """Analyze different time windows @zara"""
         windows = {
             "morning_7_10": [7, 8, 9, 10],
             "midday_11_14": [11, 12, 13, 14],
@@ -207,7 +201,7 @@ class DailySummariesHandler:
             window_preds = [p for p in predictions if p.get("target_hour") in hours]
 
             if window_preds:
-                predicted = sum(p.get("predicted_kwh", 0) for p in window_preds)
+                predicted = sum(p.get("prediction_kwh", 0) for p in window_preds)
                 actual = sum(p.get("actual_kwh", 0) for p in window_preds if p.get("actual_kwh"))
                 accuracy = (actual / predicted * 100) if predicted > 0 else 0
 
@@ -229,7 +223,7 @@ class DailySummariesHandler:
         return results
 
     def _analyze_weather_accuracy(self, predictions: List[Dict]) -> Dict:
-        """Analyze weather forecast accuracy"""
+        """Analyze weather forecast accuracy @zara"""
         temp_diffs = []
         cloud_diffs = []
 
@@ -255,10 +249,9 @@ class DailySummariesHandler:
         }
 
     def _detect_patterns(self, predictions: List[Dict]) -> List[Dict]:
-        """Detect systematic patterns in errors"""
+        """Detect systematic patterns in errors @zara"""
         patterns = []
 
-        # Check for systematic underproduction in afternoon
         afternoon = [p for p in predictions if p.get("target_hour") in [15, 16]]
         if afternoon:
             errors = [
@@ -266,7 +259,7 @@ class DailySummariesHandler:
             ]
             if errors:
                 avg_error = sum(errors) / len(errors)
-                if avg_error < -40:  # Systematic underproduction
+                if avg_error < -40:
                     patterns.append(
                         {
                             "type": "systematic_shadow",
@@ -283,7 +276,7 @@ class DailySummariesHandler:
         return patterns
 
     def _calculate_ml_metrics(self, predictions: List[Dict]) -> Dict:
-        """Calculate ML performance metrics"""
+        """Calculate ML performance metrics @zara"""
         errors = [p.get("error_kwh", 0) for p in predictions if p.get("error_kwh") is not None]
 
         if not errors:
@@ -307,7 +300,7 @@ class DailySummariesHandler:
         }
 
     def _generate_recommendations(self, patterns, ml_metrics, weather_analysis) -> List[Dict]:
-        """Generate actionable recommendations"""
+        """Generate actionable recommendations @zara"""
         recommendations = []
 
         for pattern in patterns:
@@ -326,7 +319,7 @@ class DailySummariesHandler:
         return recommendations
 
     def _get_season(self, month: int) -> str:
-        """Get season from month"""
+        """Get season from month @zara"""
         if month in [3, 4, 5]:
             return "spring"
         elif month in [6, 7, 8]:
@@ -336,13 +329,133 @@ class DailySummariesHandler:
         else:
             return "winter"
 
+    def _analyze_shadow_detection(self, predictions: List[Dict], date: str) -> Dict:
+        """Analyze shadow detection data for the day @zara"""
+        try:
+
+            shadow_predictions = [
+                p for p in predictions
+                if p.get("shadow_detection") and p.get("shadow_detection", {}).get("shadow_type") not in ["error", "night", "no_data"]
+            ]
+
+            if not shadow_predictions:
+                return {
+                    "total_hours_analyzed": 0,
+                    "shadow_hours_count": 0,
+                    "note": "No shadow detection data available"
+                }
+
+            shadow_hours = []
+            shadow_types = {"none": 0, "light": 0, "moderate": 0, "heavy": 0}
+            total_loss_kwh = 0.0
+            total_theoretical_kwh = 0.0
+
+            for pred in shadow_predictions:
+                shadow_det = pred.get("shadow_detection", {})
+                shadow_type = shadow_det.get("shadow_type", "none")
+
+                if shadow_type in shadow_types:
+                    shadow_types[shadow_type] += 1
+
+                if shadow_type != "none":
+                    shadow_hours.append({
+                        "hour": pred.get("target_hour"),
+                        "shadow_type": shadow_type,
+                        "shadow_percent": shadow_det.get("shadow_percent", 0),
+                        "loss_kwh": shadow_det.get("loss_kwh", 0)
+                    })
+
+                total_loss_kwh += shadow_det.get("loss_kwh", 0)
+
+                theoretical_max = pred.get("astronomy", {}).get("theoretical_max_kwh", 0)
+                if theoretical_max:
+                    total_theoretical_kwh += theoretical_max
+
+            peak_shadow_hour = None
+            peak_shadow_percent = 0.0
+            if shadow_hours:
+                peak = max(shadow_hours, key=lambda x: x["shadow_percent"])
+                peak_shadow_hour = peak["hour"]
+                peak_shadow_percent = peak["shadow_percent"]
+
+            daily_loss_percent = 0.0
+            if total_theoretical_kwh > 0:
+                daily_loss_percent = (total_loss_kwh / total_theoretical_kwh) * 100.0
+
+            root_causes = {}
+            for pred in shadow_predictions:
+                cause = pred.get("shadow_detection", {}).get("root_cause", "unknown")
+                if cause != "normal_variation":
+                    root_causes[cause] = root_causes.get(cause, 0) + 1
+
+            dominant_cause = "normal_variation"
+            if root_causes:
+                dominant_cause = max(root_causes, key=root_causes.get)
+
+            interpretation = self._interpret_shadow_analysis(
+                len(shadow_hours), daily_loss_percent, dominant_cause
+            )
+
+            return {
+                "date": date,
+                "total_hours_analyzed": len(shadow_predictions),
+                "shadow_hours_count": len(shadow_hours),
+                "shadow_hours": [h["hour"] for h in shadow_hours],
+                "shadow_breakdown": shadow_types,
+                "peak_shadow_hour": peak_shadow_hour,
+                "peak_shadow_percent": round(peak_shadow_percent, 1),
+                "cumulative_loss_kwh": round(total_loss_kwh, 3),
+                "cumulative_theoretical_kwh": round(total_theoretical_kwh, 3),
+                "daily_loss_percent": round(daily_loss_percent, 1),
+                "root_causes": root_causes,
+                "dominant_cause": dominant_cause,
+                "interpretation": interpretation
+            }
+
+        except Exception as e:
+            _LOGGER.error(f"Shadow analysis failed for {date}: {e}", exc_info=True)
+            return {
+                "date": date,
+                "error": str(e),
+                "total_hours_analyzed": 0,
+                "shadow_hours_count": 0
+            }
+
+    def _interpret_shadow_analysis(
+        self, shadow_hours: int, daily_loss_percent: float, dominant_cause: str
+    ) -> str:
+        """Generate human-readable interpretation of shadow analysis"""
+
+        if shadow_hours == 0:
+            return "Excellent day - no significant shadowing detected"
+
+        if daily_loss_percent < 10:
+            severity = "minimal"
+        elif daily_loss_percent < 25:
+            severity = "moderate"
+        else:
+            severity = "significant"
+
+        cause_descriptions = {
+            "weather_clouds": "due to cloud cover",
+            "building_tree_obstruction": "due to building/tree obstruction",
+            "normal_variation": "within normal operational range",
+            "unknown": "cause unclear"
+        }
+        cause_text = cause_descriptions.get(dominant_cause, "")
+
+        return (
+            f"{severity.capitalize()} shadowing detected "
+            f"({shadow_hours}h affected, {daily_loss_percent:.0f}% loss) {cause_text}"
+        )
+
     async def get_summary(self, date: str) -> Optional[Dict]:
-        """Get summary for specific date"""
+        """Get summary for specific date @zara"""
         data = await self._read_json_async()
         return next((s for s in data["summaries"] if s.get("date") == date), None)
 
     def _read_json(self) -> Dict:
-        """Read JSON file (blocking - use in sync context only)"""
+        """Read JSON file (blocking - use in sync context only) @zara"""
         try:
             with open(self.summaries_file, "r") as f:
                 return json.load(f)
@@ -352,7 +465,7 @@ class DailySummariesHandler:
                 return json.load(f)
 
     async def _read_json_async(self) -> Dict:
-        """Read JSON file (non-blocking - use in async context)"""
+        """Read JSON file (non-blocking - use in async context) @zara"""
 
         def _do_read():
             try:
@@ -366,19 +479,102 @@ class DailySummariesHandler:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _do_read)
 
+    async def _analyze_frost_detection(self, date: str) -> Dict:
+        """Analyze frost detection for the day @zara"""
+        try:
+
+            actual_file = self.data_dir / "stats" / "hourly_weather_actual.json"
+
+            if not actual_file.exists():
+                return {
+                    "hours_analyzed": 0,
+                    "frost_detected": False,
+                    "affected_hours": [],
+                    "note": "No hourly weather data available"
+                }
+
+            def _read_actual():
+                with open(actual_file, "r") as f:
+                    return json.load(f)
+
+            loop = asyncio.get_running_loop()
+            actual_data = await loop.run_in_executor(None, _read_actual)
+
+            hourly_data = actual_data.get("hourly_data", {}).get(date, {})
+
+            if not hourly_data:
+                return {
+                    "hours_analyzed": 0,
+                    "frost_detected": False,
+                    "affected_hours": [],
+                    "note": f"No data for {date}"
+                }
+
+            frost_hours = []
+            light_frost_hours = []
+            heavy_frost_hours = []
+
+            for hour_str, hour_data in hourly_data.items():
+                frost_detected = hour_data.get("frost_detected")
+
+                if frost_detected:
+                    hour_int = int(hour_str)
+                    frost_info = {
+                        "hour": hour_int,
+                        "frost_type": frost_detected,
+                        "frost_score": hour_data.get("frost_score"),
+                        "confidence": hour_data.get("frost_confidence"),
+                        "temperature_c": hour_data.get("temperature_c"),
+                        "solar_radiation_wm2": hour_data.get("solar_radiation_wm2")
+                    }
+
+                    frost_hours.append(frost_info)
+
+                    if frost_detected == "heavy_frost":
+                        heavy_frost_hours.append(hour_int)
+                    elif frost_detected == "light_frost":
+                        light_frost_hours.append(hour_int)
+
+            result = {
+                "hours_analyzed": len(hourly_data),
+                "frost_detected": len(frost_hours) > 0,
+                "total_affected_hours": len(frost_hours),
+                "heavy_frost_hours": len(heavy_frost_hours),
+                "light_frost_hours": len(light_frost_hours),
+                "affected_hours": frost_hours,
+                "hours_list_heavy": sorted(heavy_frost_hours),
+                "hours_list_light": sorted(light_frost_hours)
+            }
+
+            if result["frost_detected"]:
+                _LOGGER.info(
+                    f"Frost analysis for {date}: {len(frost_hours)} hours affected "
+                    f"(heavy: {len(heavy_frost_hours)}, light: {len(light_frost_hours)})"
+                )
+
+            return result
+
+        except Exception as e:
+            _LOGGER.error(f"Error analyzing frost detection for {date}: {e}", exc_info=True)
+            return {
+                "hours_analyzed": 0,
+                "frost_detected": False,
+                "affected_hours": [],
+                "error": str(e)
+            }
+
     def _write_json(self, data: Dict):
-        """REMOVED: This method caused blocking I/O - use _write_json_atomic instead"""
+        """Blocking I/O not allowed - use _write_json_atomic instead. @zara"""
         raise RuntimeError(
-            "DEPRECATED: _write_json() removed to prevent blocking I/O. "
-            "Use _write_json_atomic() instead or call from executor."
+            "_write_json() removed - use _write_json_atomic() or call from executor."
         )
 
     async def _write_json_atomic(self, data: Dict):
-        """Write JSON atomically using DataManager's thread-safe method"""
+        """Write JSON atomically using DataManager's thread-safe method @zara"""
         if self.data_manager:
             await self.data_manager._atomic_write_json(self.summaries_file, data)
         else:
-            # Fallback during init (no data_manager yet)
+
             def _do_write():
                 temp_file = self.summaries_file.with_suffix(".tmp")
                 with open(temp_file, "w") as f:

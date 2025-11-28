@@ -1,5 +1,4 @@
-"""
-Data Cache Module for Solar Forecast ML Integration
+"""Data Cache Module for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -26,12 +25,11 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class DataCache:
     """Handles caching logic for weather and forecast data"""
 
     def __init__(self, data_dir: Path):
-        """Initialize the data cache"""
+        """Initialize the data cache @zara"""
         self.data_dir = data_dir
         self.weather_cache_file = data_dir / "data" / "weather_cache.json"
         self._cache: Dict[str, Any] = {}
@@ -57,13 +55,13 @@ class DataCache:
         return self._cache[key]
 
     async def set_cached_forecast(self, key: str, data: Dict[str, Any]) -> None:
-        """Store forecast data in cache"""
+        """Store forecast data in cache @zara"""
         self._cache[key] = data
         self._cache_timestamps[key] = dt_util.now()
         _LOGGER.debug(f"Cached data for key: {key}")
 
     async def clear_cache(self, key: Optional[str] = None) -> None:
-        """Clear cache data"""
+        """Clear cache data @zara"""
         if key:
             self._cache.pop(key, None)
             self._cache_timestamps.pop(key, None)
@@ -74,7 +72,7 @@ class DataCache:
             _LOGGER.debug("Cleared all cache data")
 
     async def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics"""
+        """Get cache statistics @zara"""
         return {
             "total_entries": len(self._cache),
             "keys": list(self._cache.keys()),

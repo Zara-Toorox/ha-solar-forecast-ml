@@ -1,5 +1,9 @@
-"""
-Weather Data Provider for Forecasting
+"""Weather Data Provider - Open-Meteo ONLY V10.0.0 @zara
+
+IMPORTANT: This module now uses Open-Meteo as the ONLY data source.
+- NO HA Weather Entity dependency for forecasts
+- All weather data comes from Open-Meteo API
+- GHI, cloud_cover, temperature etc. are used DIRECTLY
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -21,17 +25,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from ..core.core_exceptions import ConfigurationException, WeatherAPIException
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from ..data.data_open_meteo_client import OpenMeteoClient
 
 _LOGGER = logging.getLogger(__name__)
 
-# Default weather data as fallback
 DEFAULT_WEATHER_DATA = {
     "temperature": 15.0,
     "humidity": 60.0,
@@ -39,699 +43,270 @@ DEFAULT_WEATHER_DATA = {
     "wind_speed": 3.0,
     "precipitation": 0.0,
     "pressure": 1013.25,
+    "ghi": 0.0,
+    "solar_radiation_wm2": 0.0,  # Alias for ghi - consistent naming
+    "direct_radiation": 0.0,
+    "diffuse_radiation": 0.0,
 }
 
 
 class WeatherService:
-    """Weather Service with file-based caching"""
+    """Weather Service using Open-Meteo as SINGLE data source"""
 
     def __init__(
-        self, hass: HomeAssistant, weather_entity: str, data_manager=None, error_handler=None
+        self,
+        hass: HomeAssistant,
+        latitude: float,
+        longitude: float,
+        data_dir: Path,
+        data_manager=None,
+        error_handler=None
     ):
-        """Initialize weather service"""
+        """Initialize weather service with Open-Meteo"""
         self.hass = hass
-        self.weather_entity = weather_entity
+        self.latitude = latitude
+        self.longitude = longitude
+        self.data_dir = data_dir
         self.data_manager = data_manager
         self.error_handler = error_handler
 
+        cache_file = data_dir / "data" / "open_meteo_cache.json"
+        self._open_meteo = OpenMeteoClient(latitude, longitude, cache_file)
+
         self._cached_forecast: List[Dict[str, Any]] = []
-        self._background_update_task: asyncio.Task | None = None
-        self._weather_entity_listener = None  # Event listener for weather entity state changes
+        self._background_update_task: Optional[asyncio.Task] = None
 
-        # Validate on init
-        self._validate_config()
-
-    def _validate_config(self):
-        """Validate Weather Service configuration"""
-        if not self.weather_entity:
-            raise ConfigurationException("Weather Entity not configured")
-
-        state = self.hass.states.get(self.weather_entity)
-        if state is None:
-            _LOGGER.info(
-                f"Weather Entity {self.weather_entity} not available yet (normal during startup). "
-                f"Will use cached forecast if available."
-            )
-        else:
-            _LOGGER.info(f"Weather Service configured with entity: {self.weather_entity}")
+        _LOGGER.info(
+            f"WeatherService initialized - Open-Meteo ONLY "
+            f"(lat={latitude:.4f}, lon={longitude:.4f})"
+        )
 
     async def initialize(self) -> bool:
-        """Async initialization - loads cached forecast immediately"""
+        """Async initialization - loads Open-Meteo cache"""
         try:
-            # Load cached forecast from file (instant)
-            cache_loaded = False
-            if self.data_manager:
-                cached = await self.data_manager.load_weather_cache()
-                if cached:
-                    self._cached_forecast = cached.get("forecast_hours", [])
-                    quality = cached.get("data_quality", {})
-                    _LOGGER.info(
-                        f"Loaded {len(self._cached_forecast)} hours from weather cache "
-                        f"(today: {quality.get('today_hours', 0)}h, "
-                        f"tomorrow: {quality.get('tomorrow_hours', 0)}h)"
-                    )
-                    cache_loaded = True
-                else:
-                    _LOGGER.warning("No cached forecast available")
+            await self._open_meteo.async_init()
 
-            # Generate dummy forecast if no cache available
-            if not cache_loaded or not self._cached_forecast:
-                _LOGGER.warning("Generating dummy forecast (48h) to ensure integration starts")
-                self._cached_forecast = self._generate_dummy_forecast()
+            forecast = await self._open_meteo.get_hourly_forecast(hours=72)
+            if forecast:
+                self._cached_forecast = self._transform_open_meteo_forecast(forecast)
+                _LOGGER.info(
+                    f"Loaded {len(self._cached_forecast)} hours from Open-Meteo"
+                )
+            else:
+                _LOGGER.warning("No Open-Meteo data available yet")
 
-                # Save dummy forecast to cache immediately with metadata wrapper
-                if self.data_manager:
-                    cache_wrapper = {
-                        "forecast_hours": self._cached_forecast,
-                        "cached_at": dt_util.now().isoformat(),  # LOCAL time
-                        "data_quality": {
-                            "today_hours": 24,
-                            "tomorrow_hours": 24,
-                            "total_hours": len(self._cached_forecast),
-                        },
-                        "is_dummy": True,
-                    }
-                    await self.data_manager.save_weather_cache(cache_wrapper)
-                    _LOGGER.info(
-                        f"Saved dummy forecast to cache: {len(self._cached_forecast)} hours"
-                    )
+            self._background_update_task = asyncio.create_task(
+                self._background_forecast_update()
+            )
 
-            # Setup event listener for weather entity state changes
-            self._setup_weather_entity_listener()
-
-            # Start background update (non-blocking)
-            self._background_update_task = asyncio.create_task(self._background_forecast_update())
-
-            _LOGGER.info("Weather Service initialized (non-blocking)")
+            _LOGGER.info("Weather Service initialized (Open-Meteo ONLY)")
             return True
 
         except Exception as e:
             _LOGGER.error(f"Weather Service initialization failed: {e}", exc_info=True)
             return False
 
-    async def try_get_forecast(self, timeout: int = 5) -> List[Dict[str, Any]]:
-        """Try to fetch live forecast with timeout"""
-        try:
-            result = await asyncio.wait_for(self._fetch_and_process_forecast(), timeout=timeout)
+    def _transform_open_meteo_forecast(
+        self, open_meteo_data: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Transform Open-Meteo data to internal format"""
+        transformed = []
 
-            if result:
-                # Save to cache immediately with metadata wrapper
-                if self.data_manager:
-                    # Calculate data quality metrics
-                    now_local = dt_util.now()
-                    today_hours = sum(
-                        1
-                        for h in result
-                        if dt_util.parse_datetime(h["datetime"]).date() == now_local.date()
-                    )
-                    tomorrow_hours = sum(
-                        1
-                        for h in result
-                        if dt_util.parse_datetime(h["datetime"]).date()
-                        == (now_local + timedelta(days=1)).date()
-                    )
-
-                    cache_wrapper = {
-                        "forecast_hours": result,
-                        "cached_at": now_local.isoformat(),  # LOCAL time
-                        "data_quality": {
-                            "today_hours": today_hours,
-                            "tomorrow_hours": tomorrow_hours,
-                            "total_hours": len(result),
-                        },
-                    }
-                    await self.data_manager.save_weather_cache(cache_wrapper)
-                    _LOGGER.debug(
-                        f"Saved {len(result)} forecast hours to cache (today: {today_hours}h, tomorrow: {tomorrow_hours}h)"
-                    )
-
-                self._cached_forecast = result
-                return result
+        for entry in open_meteo_data:
+            dt_obj = entry.get("datetime")
+            if isinstance(dt_obj, datetime):
+                dt_str = dt_obj.isoformat()
+                date_str = dt_obj.date().isoformat()
+                hour = dt_obj.hour
             else:
-                _LOGGER.debug("Forecast fetch returned empty result")
-                return []
+                date_str = entry.get("date", "")
+                hour = entry.get("hour", 0)
+                dt_str = f"{date_str}T{hour:02d}:00:00"
 
-        except asyncio.TimeoutError:
-            _LOGGER.warning(f"Forecast fetch timeout after {timeout}s - using cached data")
-            return []
-        except Exception as e:
-            _LOGGER.warning(f"Forecast fetch failed: {e} - using cached data")
-            return []
+            transformed_entry = {
+                "datetime": dt_str,
+                "local_datetime": dt_str,
+                "date": date_str,
+                "hour": hour,
+                "local_hour": hour,
+                "temperature": entry.get("temperature", DEFAULT_WEATHER_DATA["temperature"]),
+                "humidity": entry.get("humidity", DEFAULT_WEATHER_DATA["humidity"]),
+                "cloud_cover": entry.get("cloud_cover", DEFAULT_WEATHER_DATA["cloud_cover"]),
+                "wind_speed": entry.get("wind_speed", DEFAULT_WEATHER_DATA["wind_speed"]),
+                "precipitation": entry.get("precipitation", DEFAULT_WEATHER_DATA["precipitation"]),
+                "pressure": entry.get("pressure", DEFAULT_WEATHER_DATA["pressure"]),
+                "ghi": entry.get("ghi", 0.0),
+                "solar_radiation_wm2": entry.get("ghi", 0.0),  # Alias for ghi - consistent naming
+                "direct_radiation": entry.get("direct_radiation", 0.0),
+                "diffuse_radiation": entry.get("diffuse_radiation", 0.0),
+                "global_tilted_irradiance": entry.get("global_tilted_irradiance"),
+                "_source": "open-meteo",
+            }
+            transformed.append(transformed_entry)
+
+        return transformed
+
+    async def get_hourly_forecast(
+        self, force_refresh: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Get hourly forecast from Open-Meteo
+
+        Args:
+            force_refresh: If True, fetch fresh data from API
+
+        Returns:
+            List of hourly forecast entries
+        """
+        if force_refresh:
+            _LOGGER.info("Force refresh requested - fetching from Open-Meteo API")
+            forecast = await self._open_meteo.get_hourly_forecast(hours=72)
+            if forecast:
+                self._cached_forecast = self._transform_open_meteo_forecast(forecast)
+                _LOGGER.info(f"Fetched {len(self._cached_forecast)} hours from Open-Meteo")
+                return self._cached_forecast
+
+        if self._cached_forecast:
+            _LOGGER.debug(f"Using cached forecast: {len(self._cached_forecast)} hours")
+            return self._cached_forecast
+
+        forecast = await self._open_meteo.get_hourly_forecast(hours=72)
+        if forecast:
+            self._cached_forecast = self._transform_open_meteo_forecast(forecast)
+            return self._cached_forecast
+
+        _LOGGER.warning("No forecast data available from Open-Meteo")
+        return []
 
     async def get_processed_hourly_forecast(
         self, force_refresh: bool = False
     ) -> List[Dict[str, Any]]:
-        """Get forecast with smart fallback strategy
+        """Get processed hourly forecast (alias for get_hourly_forecast)"""
+        return await self.get_hourly_forecast(force_refresh)
 
-        Priority:
-        1. FRESH: Try to fetch from weather API (if force_refresh or cache too old)
-        2. CACHED: Use cached data if < 6 hours old
-        3. FALLBACK: Use any cached data (even if older)
-        4. EMERGENCY: Return empty list
+    async def get_corrected_hourly_forecast(
+        self, strict: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Get forecast data - Open-Meteo data is already high quality
+
+        Note: With Open-Meteo as single source, no "corrections" are needed.
+        This method exists for backwards compatibility.
 
         Args:
-            force_refresh: If True, always try to fetch fresh data first
+            strict: If True, raise error if no data available
 
         Returns:
-            List of processed hourly forecast entries
+            List of hourly forecast entries
         """
-        # Check cache age
-        cache_age_minutes = None
-        if self.data_manager:
-            cache_age_minutes = await self.data_manager.get_weather_cache_age()
+        forecast = await self.get_hourly_forecast()
 
-        cache_is_fresh = cache_age_minutes is not None and cache_age_minutes < 360  # 6 hours
+        if not forecast and strict:
+            raise FileNotFoundError("No Open-Meteo forecast data available")
 
-        # Strategy 1: Use memory cache if available and fresh
-        if self._cached_forecast and not force_refresh and cache_is_fresh:
-            _LOGGER.debug(
-                f"Using memory cache ({len(self._cached_forecast)} hours, age: {cache_age_minutes}min)"
-            )
-            return self._cached_forecast
+        return forecast
 
-        # Strategy 2: Try to fetch fresh data if needed
-        should_refresh = force_refresh or not cache_is_fresh or not self._cached_forecast
+    async def get_current_weather(self) -> Dict[str, Any]:
+        """Get current weather from Open-Meteo cache"""
+        now = dt_util.now()
+        current_hour = now.hour
+        current_date = now.date().isoformat()
 
-        if should_refresh:
-            _LOGGER.info(
-                f"Fetching fresh weather data (force_refresh={force_refresh}, "
-                f"cache_age={cache_age_minutes}min, has_memory_cache={bool(self._cached_forecast)})"
-            )
-            fresh = await self.try_get_forecast(timeout=5)
-            if fresh:
-                _LOGGER.info(f"✓ Fresh weather data fetched: {len(fresh)} hours")
-                return fresh
+        entry = self._open_meteo.get_weather_for_hour(current_date, current_hour)
 
-            # Fetch failed - log reason
-            if not self._cached_forecast:
-                _LOGGER.warning(
-                    "Fresh fetch failed and no memory cache available - trying file cache"
-                )
-
-        # Strategy 3: Load from file cache (any age)
-        if self.data_manager:
-            cached = await self.data_manager.load_weather_cache()
-            if cached:
-                forecast = cached.get("forecast_hours", [])
-                if forecast:
-                    self._cached_forecast = forecast
-                    cache_age_str = (
-                        f"{cache_age_minutes}min" if cache_age_minutes else "unknown age"
-                    )
-                    _LOGGER.info(
-                        f"✓ Using file cache: {len(forecast)} hours ({cache_age_str}) "
-                        f"[Weather API unavailable]"
-                    )
-                    return forecast
-
-        # Strategy 4: Emergency - return memory cache even if outdated
-        if self._cached_forecast:
-            _LOGGER.warning(
-                f"⚠ Using outdated memory cache ({len(self._cached_forecast)} hours, "
-                f"age: {cache_age_minutes}min) - no fresh data available"
-            )
-            return self._cached_forecast
-
-        # No data available at all
-        _LOGGER.error("❌ No weather forecast data available (API failed, no cache)")
-        return []
-
-    async def _fetch_and_process_forecast(self) -> List[Dict[str, Any]]:
-        """Fetch raw forecast and process it"""
-        raw_forecast = await self.get_forecast(hours=72)
-        if not raw_forecast:
-            return []
-
-        processed: List[Dict[str, Any]] = []
-
-        for entry in raw_forecast:
-            if not isinstance(entry, dict):
-                continue
-
-            timestamp_str = entry.get("datetime")
-            if not timestamp_str:
-                continue
-
-            timestamp = dt_util.parse_datetime(timestamp_str)
-            if not timestamp:
-                continue
-
-            local_dt = dt_util.as_local(timestamp)
-            temp_value = entry.get("temperature")
-            if temp_value is None:
-                continue
-
-            try:
-                processed_hour = {
-                    "datetime": timestamp.isoformat(),
-                    "local_hour": local_dt.hour,
-                    "local_datetime": local_dt.isoformat(),
-                    "temperature": float(temp_value),
-                    "humidity": float(entry.get("humidity", DEFAULT_WEATHER_DATA["humidity"])),
-                    "cloud_cover": self._extract_cloud_cover(entry, entry.get("condition")),
-                    "wind_speed": float(
-                        entry.get("wind_speed", DEFAULT_WEATHER_DATA["wind_speed"])
-                    ),
-                    "precipitation": self._extract_precipitation(entry),
-                    "pressure": float(entry.get("pressure", DEFAULT_WEATHER_DATA["pressure"])),
-                    "condition": entry.get("condition"),
-                }
-                processed.append(processed_hour)
-            except Exception as e:
-                _LOGGER.debug(f"Failed to process forecast entry: {e}")
-                continue
-
-        _LOGGER.info(f"Processed {len(processed)} forecast hours")
-        return processed
-
-    async def _background_forecast_update(self):
-        """Background task Periodically update forecast cache"""
-        update_interval = 3600  # 60 minutes (realistic for weather updates)
-
-        while True:
-            try:
-                await asyncio.sleep(update_interval)
-
-                _LOGGER.debug("Background forecast update starting...")
-                forecast = await self.try_get_forecast(timeout=30)
-
-                if forecast:
-                    _LOGGER.info(f"Background update: Cached {len(forecast)} forecast hours")
-                else:
-                    _LOGGER.debug("Background update: No new forecast data")
-
-            except asyncio.CancelledError:
-                _LOGGER.info("Background forecast update task cancelled")
-                break
-            except Exception as e:
-                _LOGGER.error(f"Background forecast update error: {e}", exc_info=True)
-                # Continue running despite errors
-
-    async def get_current_weather(self) -> dict[str, Any]:
-        """Get current weather data from Home Assistant Weather Entity with cache fallback"""
-        try:
-            current = await self._get_ha_weather()
-
-            # Save to cache for future fallback
-            if self.data_manager:
-                try:
-                    await self._update_current_weather_cache(current)
-                except Exception as cache_err:
-                    _LOGGER.debug(f"Failed to cache current weather: {cache_err}")
-
-            return current
-
-        except ConfigurationException as err:
-            _LOGGER.error("Current Weather retrieval failed (Config): %s", err)
-            raise
-        except WeatherAPIException as err:
-            _LOGGER.info("Could not fetch live weather data, using fallback. Reason: %s", err)
-
-            # Try cache fallback
-            cached = await self._get_cached_current_weather()
-            if cached:
-                _LOGGER.debug("Using cached current weather as fallback")
-                return cached
-
-            # Last resort: default data (only for current weather, not forecasts)
-            _LOGGER.debug("Using default weather data as fallback for current weather (forecasts use cache)")
-            return DEFAULT_WEATHER_DATA.copy()
-
-        except Exception as err:
-            _LOGGER.error("Unexpected error in get_current_weather: %s", err, exc_info=True)
-
-            # Try cache fallback even on unexpected errors
-            cached = await self._get_cached_current_weather()
-            if cached:
-                _LOGGER.info("Using cached current weather after unexpected error")
-                return cached
-
-            return DEFAULT_WEATHER_DATA.copy()
-
-    async def _update_current_weather_cache(self, current_weather: dict[str, Any]) -> None:
-        """Update current weather in cache file"""
-        if not self.data_manager:
-            return
-
-        # Load existing cache
-        cache = await self.data_manager.load_weather_cache()
-        if not cache:
-            cache = {}
-
-        # Update current_weather section
-        cache["current_weather"] = {**current_weather, "cached_at": dt_util.now().isoformat()}
-
-        # Save back
-        await self.data_manager.save_weather_cache(cache)
-
-    async def _get_cached_current_weather(self) -> Optional[dict[str, Any]]:
-        """Get cached current weather from file"""
-        if not self.data_manager:
-            return None
-
-        cache = await self.data_manager.load_weather_cache()
-        if not cache or "current_weather" not in cache:
-            return None
-
-        cached_weather = cache["current_weather"].copy()
-        # Remove cached_at from returned data
-        cached_weather.pop("cached_at", None)
-
-        return cached_weather
-
-    async def _get_ha_weather(self) -> dict[str, Any]:
-        """Get weather data from Home Assistant Weather Entity"""
-        if not self.weather_entity:
-            raise ConfigurationException("Weather Entity not configured")
-
-        state = self.hass.states.get(self.weather_entity)
-        if state is None:
-            raise WeatherAPIException(f"Weather Entity {self.weather_entity} not found")
-
-        if state.state in ["unavailable", "unknown"]:
-            raise WeatherAPIException(
-                f"Weather Entity {self.weather_entity} state is {state.state}"
-            )
-
-        attributes = state.attributes
-        if not attributes:
-            raise WeatherAPIException(f"Weather Entity {self.weather_entity} has no attributes")
-
-        temp_value = attributes.get("temperature")
-        if temp_value is None:
-            _LOGGER.warning(
-                f"Weather Entity {self.weather_entity} missing 'temperature' (loading?)"
-            )
-            raise WeatherAPIException("Missing temperature in weather entity")
-
-        weather_data = {
-            "temperature": float(temp_value),
-            "humidity": float(attributes.get("humidity", DEFAULT_WEATHER_DATA["humidity"])),
-            "cloud_cover": self._extract_cloud_cover(attributes, state.state),
-            "wind_speed": float(attributes.get("wind_speed", DEFAULT_WEATHER_DATA["wind_speed"])),
-            "precipitation": self._extract_precipitation(attributes),
-            "pressure": float(attributes.get("pressure", DEFAULT_WEATHER_DATA["pressure"])),
-            "condition": state.state,
-        }
-
-        _LOGGER.debug(
-            f"Current weather: {weather_data['temperature']} "
-            f"{weather_data['cloud_cover']}% clouds, {weather_data['condition']}"
-        )
-        return weather_data
-
-    def _extract_cloud_cover(self, attributes: Dict[str, Any], condition: str) -> float:
-        """Extract cloud cover from attributes or map from condition"""
-        for key in ["cloud_coverage", "cloudiness"]:
-            value = attributes.get(key)
-            if value is not None:
-                try:
-                    return max(0.0, min(100.0, float(value)))
-                except (ValueError, TypeError):
-                    pass
-
-        _LOGGER.debug(f"No cloud attribute, mapping condition '{condition}'")
-        return max(0.0, min(100.0, self._map_condition_to_cloud_cover(condition)))
-
-    def _map_condition_to_cloud_cover(self, condition: str | None) -> float:
-        """Map weather condition to cloud cover percentage"""
-        if not condition:
-            return DEFAULT_WEATHER_DATA["cloud_cover"]
-
-        condition_lower = condition.lower()
-        condition_map = {
-            "clear-night": 0.0,
-            "sunny": 5.0,
-            "partlycloudy": 40.0,
-            "cloudy": 80.0,
-            "overcast": 100.0,
-            "fog": 95.0,
-            "hail": 90.0,
-            "lightning": 70.0,
-            "lightning-rainy": 95.0,
-            "pouring": 100.0,
-            "rainy": 90.0,
-            "snowy": 95.0,
-            "snowy-rainy": 95.0,
-            "windy": 30.0,
-            "windy-variant": 30.0,
-            "exceptional": 50.0,
-        }
-        return condition_map.get(condition_lower, DEFAULT_WEATHER_DATA["cloud_cover"])
-
-    def _extract_precipitation(self, attributes: dict[str, Any]) -> float:
-        """Extract precipitation from various keys"""
-        keys = [
-            "precipitation",
-            "precipitation_intensity",
-            "precipitation_amount",
-            "rain",
-            "rainfall",
-            "snow",
-            "snowfall",
-        ]
-        for key in keys:
-            value = attributes.get(key)
-            if value is not None:
-                try:
-                    precip_val = float(value)
-                    return max(0.0, precip_val)
-                except (ValueError, TypeError):
-                    pass
-        return DEFAULT_WEATHER_DATA["precipitation"]
-
-    async def get_forecast(self, hours: int = 24) -> list[dict[str, Any]]:
-        """Get forecast using weatherget_forecasts service HA 20243"""
-        if not self.weather_entity:
-            raise ConfigurationException("Weather Entity not configured")
-
-        state = self.hass.states.get(self.weather_entity)
-        if not state or state.state in ["unavailable", "unknown"]:
-            _LOGGER.debug(
-                f"Forecast skipped: {self.weather_entity} is {state.state if state else 'missing'}"
-            )
-            return []
-
-        # Method 1: Service Call (HA 2024.3+, preferred)
-        try:
-            response = await self.hass.services.async_call(
-                "weather",
-                "get_forecasts",
-                {"entity_id": self.weather_entity, "type": "hourly"},
-                blocking=True,
-                return_response=True,
-            )
-
-            if response and isinstance(response, dict):
-                forecast_data = response.get(self.weather_entity, {}).get("forecast", [])
-                if forecast_data and isinstance(forecast_data, list):
-                    result = forecast_data[:hours]
-                    _LOGGER.debug(f"Loaded {len(result)} forecast entries via service call")
-                    return result
-
-        except Exception as e:
-            _LOGGER.debug(f"Service call failed (HA < 2024.3?): {e}, trying attribute access")
-
-        # Method 2: Attribute access (fallback for older HA versions)
-        attributes = state.attributes
-        if not attributes:
-            _LOGGER.debug(f"No attributes for {self.weather_entity}")
-            return []
-
-        forecast_data = None
-        source = None
-        for key in ["hourly_forecast", "forecast", "forecast_hourly"]:
-            data = attributes.get(key)
-            if data and isinstance(data, list) and data:
-                forecast_data = data
-                source = key
-                break
-
-        if not forecast_data:
-            _LOGGER.warning(
-                f"No forecast data in {self.weather_entity}. "
-                f"Available keys: {list(attributes.keys())}"
-            )
-            return []
-
-        result = forecast_data[:hours]
-        _LOGGER.debug(f"Loaded {len(result)} forecast entries from attribute '{source}'")
-        return result
-
-    def get_health_status(self) -> dict[str, Any]:
-        """Check health status of the weather service"""
-        if not self.weather_entity:
-            return {"healthy": False, "status": "error", "message": "Weather Entity not configured"}
-
-        state = self.hass.states.get(self.weather_entity)
-        if state is None:
-            # Still healthy if we have cached data
-            has_cache = bool(self._cached_forecast)
+        if entry:
             return {
-                "healthy": has_cache,
-                "status": "cached" if has_cache else "error",
-                "message": f"Entity not found, using cache" if has_cache else "Entity not found",
+                "temperature": entry.get("temperature", DEFAULT_WEATHER_DATA["temperature"]),
+                "humidity": entry.get("humidity", DEFAULT_WEATHER_DATA["humidity"]),
+                "cloud_cover": entry.get("cloud_cover", DEFAULT_WEATHER_DATA["cloud_cover"]),
+                "wind_speed": entry.get("wind_speed", DEFAULT_WEATHER_DATA["wind_speed"]),
+                "precipitation": entry.get("precipitation", DEFAULT_WEATHER_DATA["precipitation"]),
+                "pressure": entry.get("pressure", DEFAULT_WEATHER_DATA["pressure"]),
+                "ghi": entry.get("ghi", 0.0),
+                "solar_radiation_wm2": entry.get("ghi", 0.0),  # Alias for ghi - consistent naming
+                "direct_radiation": entry.get("direct_radiation", 0.0),
+                "diffuse_radiation": entry.get("diffuse_radiation", 0.0),
+                "_source": "open-meteo",
             }
 
-        if state.state in ["unavailable", "unknown"]:
-            has_cache = bool(self._cached_forecast)
-            return {
-                "healthy": has_cache,
-                "status": "cached" if has_cache else state.state,
-                "message": (
-                    f"Entity {state.state}, using cache"
-                    if has_cache
-                    else f"Entity is {state.state}"
-                ),
-            }
+        _LOGGER.debug("No current hour data, using defaults")
+        return DEFAULT_WEATHER_DATA.copy()
 
-        attributes = state.attributes
-        if not attributes or attributes.get("temperature") is None:
-            return {
-                "healthy": False,
-                "status": "degraded",
-                "message": "Missing temperature or attributes",
-            }
+    def get_weather_for_hour(self, date: str, hour: int) -> Optional[Dict[str, Any]]:
+        """Get weather data for a specific hour"""
+        return self._open_meteo.get_weather_for_hour(date, hour)
 
-        return {
-            "healthy": True,
-            "status": "ok",
-            "message": "Weather entity is available",
-            "condition": state.state,
-            "cached_hours": len(self._cached_forecast),
-            "last_updated": state.last_updated.isoformat() if state.last_updated else None,
-        }
+    def get_radiation_for_hour(self, date: str, hour: int) -> tuple:
+        """Get radiation values for a specific hour
 
-    def update_weather_entity(self, new_entity: str) -> None:
-        """Update the weather entity ID"""
-        old_entity = self.weather_entity
-        self.weather_entity = new_entity
-        _LOGGER.info(f"Weather Entity updated: {old_entity} -> {new_entity}")
-        try:
-            self._validate_config()
-        except ConfigurationException as err:
-            _LOGGER.error(f"Validation failed after update: {err}")
+        Returns:
+            Tuple of (direct_radiation, diffuse_radiation, ghi)
+        """
+        return self._open_meteo.get_radiation_for_hour(date, hour)
 
-    def _generate_dummy_forecast(self) -> List[Dict[str, Any]]:
-        """Generate dummy forecast data for 48 hours today  tomorrow"""
-        now_local = dt_util.now()  # Current time in LOCAL timezone
-        dummy_forecast = []
-
-        for hour_offset in range(48):
-            forecast_time_local = now_local + timedelta(hours=hour_offset)
-            # Round to full hour (remove minutes, seconds, microseconds) for proper deduplication
-            forecast_time_local = forecast_time_local.replace(minute=0, second=0, microsecond=0)
-            forecast_time_utc = dt_util.as_utc(forecast_time_local)
-
-            # Create dummy entry with both UTC and local datetime
-            dummy_entry = {
-                "datetime": forecast_time_utc.isoformat(),  # UTC for deduplication
-                "local_hour": forecast_time_local.hour,
-                "local_datetime": forecast_time_local.isoformat(),  # LOCAL datetime as ISO string
-                "temperature": DEFAULT_WEATHER_DATA["temperature"],
-                "humidity": DEFAULT_WEATHER_DATA["humidity"],
-                "cloud_cover": DEFAULT_WEATHER_DATA["cloud_cover"],
-                "wind_speed": DEFAULT_WEATHER_DATA["wind_speed"],
-                "precipitation": DEFAULT_WEATHER_DATA["precipitation"],
-                "pressure": DEFAULT_WEATHER_DATA["pressure"],
-                "condition": "partly-cloudy",
-            }
-            dummy_forecast.append(dummy_entry)
-
-        _LOGGER.debug(f"Generated dummy forecast: {len(dummy_forecast)} hours")
-        return dummy_forecast
-
-    def _setup_weather_entity_listener(self) -> None:
-        """Setup event listener for weather entity state changes"""
-        from homeassistant.core import callback
-        from homeassistant.helpers.event import async_track_state_change_event
-
-        @callback
-        def weather_state_changed(event):
-            """Handle weather entity state change"""
-            new_state = event.data.get("new_state")
-            old_state = event.data.get("old_state")
-
-            if new_state is None:
-                return
-
-            # Check if weather became available
-            if old_state and old_state.state in ["unavailable", "unknown"]:
-                if new_state.state not in ["unavailable", "unknown"]:
-                    _LOGGER.info(
-                        f"Weather entity {self.weather_entity} became available, "
-                        f"triggering immediate forecast update"
-                    )
-                    # Schedule immediate update (non-blocking)
-                    asyncio.create_task(self._immediate_forecast_update())
-
-            # Also update if attributes change significantly (new forecast data)
-            elif old_state and new_state.attributes != old_state.attributes:
-                forecast_keys = ["forecast", "hourly_forecast", "forecast_hourly"]
-                for key in forecast_keys:
-                    if key in new_state.attributes and key in old_state.attributes:
-                        if new_state.attributes[key] != old_state.attributes[key]:
-                            _LOGGER.debug(
-                                f"Weather entity {self.weather_entity} forecast updated, "
-                                f"refreshing cache"
-                            )
-                            asyncio.create_task(self._immediate_forecast_update())
-                            break
-
-        # Register listener
-        self._weather_entity_listener = async_track_state_change_event(
-            self.hass, [self.weather_entity], weather_state_changed
-        )
-
-        _LOGGER.info(f"Weather entity listener registered for {self.weather_entity}")
+    def get_forecast_for_date(self, date: str) -> List[Dict[str, Any]]:
+        """Get all forecast entries for a specific date"""
+        return self._open_meteo.get_forecast_for_date(date)
 
     async def force_update(self) -> bool:
-        """PUBLIC Force immediate forecast update blocking"""
+        """Force immediate forecast update from Open-Meteo"""
         try:
-            _LOGGER.info("Force update requested - fetching fresh forecast...")
+            _LOGGER.info("Force update - fetching from Open-Meteo API...")
+            forecast = await self._open_meteo.get_hourly_forecast(hours=72)
 
-            # Try to fetch fresh forecast with extended timeout
-            fresh_forecast = await self.try_get_forecast(timeout=15)
-
-            if fresh_forecast:
-                _LOGGER.info(f"Force update successful: {len(fresh_forecast)} hours retrieved")
+            if forecast:
+                self._cached_forecast = self._transform_open_meteo_forecast(forecast)
+                _LOGGER.info(f"Force update successful: {len(self._cached_forecast)} hours")
                 return True
             else:
-                _LOGGER.warning("Force update returned no data - check weather entity")
+                _LOGGER.warning("Force update returned no data")
                 return False
 
         except Exception as e:
             _LOGGER.error(f"Force update failed: {e}", exc_info=True)
             return False
 
-    async def _immediate_forecast_update(self) -> None:
-        """Perform immediate forecast update when weather becomes available"""
-        try:
-            _LOGGER.debug("Starting immediate forecast update...")
+    async def _background_forecast_update(self):
+        """Background task to periodically update forecast"""
+        update_interval = 3600
 
-            # Try to fetch fresh forecast with short timeout
-            fresh_forecast = await self.try_get_forecast(timeout=10)
+        while True:
+            try:
+                await asyncio.sleep(update_interval)
 
-            if fresh_forecast:
-                _LOGGER.info(
-                    f"Immediate forecast update successful: {len(fresh_forecast)} hours retrieved"
-                )
-                # Cache is automatically updated in try_get_forecast
-            else:
-                _LOGGER.debug("Immediate forecast update returned no data")
+                _LOGGER.debug("Background forecast update starting...")
+                forecast = await self._open_meteo.get_hourly_forecast(hours=72)
 
-        except Exception as e:
-            _LOGGER.warning(f"Immediate forecast update failed: {e}", exc_info=True)
+                if forecast:
+                    self._cached_forecast = self._transform_open_meteo_forecast(forecast)
+                    _LOGGER.info(
+                        f"Background update: {len(self._cached_forecast)} hours from Open-Meteo"
+                    )
+                else:
+                    _LOGGER.debug("Background update: No new data")
+
+            except asyncio.CancelledError:
+                _LOGGER.info("Background forecast update task cancelled")
+                break
+            except Exception as e:
+                _LOGGER.error(f"Background forecast update error: {e}", exc_info=True)
+
+    def get_health_status(self) -> Dict[str, Any]:
+        """Check health status of the weather service"""
+        cache_info = self._open_meteo._get_cache_source_info()
+
+        has_data = bool(self._cached_forecast)
+
+        return {
+            "healthy": has_data,
+            "status": "ok" if has_data else "no_data",
+            "message": f"Open-Meteo: {cache_info['source']}",
+            "source": "open-meteo",
+            "cached_hours": len(self._cached_forecast),
+            "cache_confidence": cache_info.get("confidence", 0),
+            "cache_age_hours": cache_info.get("age_hours"),
+        }
 
     async def cleanup(self):
         """Cleanup resources"""
-        # Remove event listener
-        if self._weather_entity_listener:
-            self._weather_entity_listener()
-            self._weather_entity_listener = None
-            _LOGGER.debug("Weather entity listener removed")
-
-        # Cancel background task
         if self._background_update_task and not self._background_update_task.done():
             self._background_update_task.cancel()
             try:

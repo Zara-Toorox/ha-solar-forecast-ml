@@ -1,5 +1,4 @@
-"""
-Notification Service for Solar Forecast ML Integration
+"""Notification Service for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -33,7 +32,6 @@ from ..const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Notification IDs
 NOTIFICATION_ID_DEPENDENCIES = "solar_forecast_ml_dependencies"
 NOTIFICATION_ID_INSTALLATION = "solar_forecast_ml_installation"
 NOTIFICATION_ID_SUCCESS = "solar_forecast_ml_success"
@@ -44,12 +42,11 @@ NOTIFICATION_ID_FORECAST = "solar_forecast_ml_forecast"
 NOTIFICATION_ID_LEARNING = "solar_forecast_ml_learning"
 NOTIFICATION_ID_RETRAINING = "solar_forecast_ml_retraining"
 
-
 class NotificationService:
     """Service for Persistent Notifications in Home Assistant"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """Initialize Notification Service"""
+        """Initialize Notification Service @zara"""
         self.hass = hass
         self.entry = entry
         self._initialized = False
@@ -57,14 +54,13 @@ class NotificationService:
         _LOGGER.debug("NotificationService instance created")
 
     async def initialize(self) -> bool:
-        """Initialize the Notification Service"""
+        """Initialize the Notification Service @zara"""
         try:
             async with self._notification_lock:
                 if self._initialized:
                     _LOGGER.debug("[OK] NotificationService already initialized")
                     return True
 
-                # Check if persistent_notification component is loaded
                 if "persistent_notification" not in self.hass.config.components:
                     _LOGGER.warning(
                         "[!] persistent_notification not available - "
@@ -84,11 +80,10 @@ class NotificationService:
             return False
 
     def _should_notify(self, notification_type: str) -> bool:
-        """Centralized check if notification should be displayed"""
+        """Centralized check if notification should be displayed @zara"""
         if not self._initialized:
             return False
 
-        # Get option from entry.options with fallback to default
         enabled = self.entry.options.get(notification_type, True)
 
         if not enabled:
@@ -128,7 +123,7 @@ class NotificationService:
             return False
 
     async def _safe_dismiss_notification(self, notification_id: str) -> bool:
-        """Remove notification with error handling"""
+        """Remove notification with error handling @zara"""
         if not self._initialized:
             return False
 
@@ -159,7 +154,7 @@ class NotificationService:
             return False
 
         try:
-            # Build dependency list
+
             installed_list = ""
             if installed_packages:
                 installed_items = "\n".join([f"✓ {pkg}" for pkg in installed_packages])
@@ -170,22 +165,22 @@ class NotificationService:
                 missing_items = "\n".join([f"✗ {pkg}" for pkg in missing_packages])
                 missing_list = f"\n\n**Missing Packages:**\n{missing_items}"
 
-            # Create personalized startup message
             if ml_mode:
-                message = f"""**Solar Forecast ML v8.2.6 "Sarpeidon" Started Successfully!** ☀️
+                message = f"""**Solar Forecast KI Started Successfully!** ⭐
 
 **Mode:** Machine Learning (Full Feature Set)
 
-**Version:** 8.2.6 "Sarpeidon" - Named after the doomed planet whose inhabitants used time portals to escape
+**Version:** "Lyra" - Named after the constellation containing Vega, one of the brightest stars in the night sky
 
 **Author:** Zara-Toorox
 
 **Active Features:**
-• ML-based solar production forecasting
+• ML-based solar production forecasting (14 features, weather-corrected)
 • Historical data analysis & learning
 • Weather integration for accuracy
 • Peak production time detection
 • Autarky & self-sufficiency tracking
+• Daily Solar Briefing notifications
 • Battery management & cost optimization{installed_list}
 
 **System Status:** All systems operational ✓
@@ -195,11 +190,11 @@ class NotificationService:
 **Personal Note from Zara:**
 Thank you for using Solar Forecast ML! May your panels generate efficiently and your batteries stay charged. Live long and prosper! 🖖"""
             else:
-                message = f"""**Solar Forecast ML v8.2.6 "Sarpeidon" Started in Fallback Mode** ⚠️
+                message = f"""**Solar Forecast ML Started in Fallback Mode** ⚠️
 
 **Mode:** Rule-Based Calculations (Limited Features)
 
-**Version:** 8.2.6 "Sarpeidon"
+**Version:** "Lyra" - Named after the constellation containing Vega, one of the brightest stars in the night sky
 
 **Author:** Zara-Toorox
 
@@ -252,7 +247,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def show_training_start(self, sample_count: int) -> bool:
-        """Show notification when ML training starts"""
+        """Show notification when ML training starts @zara"""
         if not self._should_notify(CONF_NOTIFY_LEARNING):
             return False
 
@@ -303,15 +298,15 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def dismiss_startup_notification(self) -> bool:
-        """Remove startup notification"""
+        """Remove startup notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_STARTUP)
 
     async def dismiss_forecast_notification(self) -> bool:
-        """Remove forecast notification"""
+        """Remove forecast notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_FORECAST)
 
     async def dismiss_training_notification(self) -> bool:
-        """Remove training notification"""
+        """Remove training notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
     async def show_model_retraining_required(
@@ -322,7 +317,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
     ) -> bool:
         """Show notification when ML model needs retraining"""
         try:
-            # Build reason-specific message
+
             if reason == "feature_mismatch":
                 reason_text = f"""**Grund:** Sensoränderung erkannt
 
@@ -362,9 +357,8 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             return False
 
     async def dismiss_retraining_notification(self) -> bool:
-        """Remove retraining notification"""
+        """Remove retraining notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_RETRAINING)
-
 
 async def create_notification_service(
     hass: HomeAssistant, entry: ConfigEntry

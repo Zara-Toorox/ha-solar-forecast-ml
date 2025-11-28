@@ -1,15 +1,17 @@
-"""
-Bulletproof Morning Routine Handler
-
-Handles critical morning forecast generation with:
-- Atomic backup/restore
-- 3-level retry with exponential backoff
-- Comprehensive integrity validation
-- Critical failure alerts
+"""Bulletproof Morning Routine Handler V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -24,7 +26,6 @@ from typing import Dict, List, Optional, Tuple
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
-
 
 class MorningRoutineHandler:
     """Bulletproof morning routine with backup/restore and retry"""
@@ -47,7 +48,7 @@ class MorningRoutineHandler:
         backup_created = False
 
         try:
-            # Create backup BEFORE any modifications
+
             backup_created = await self._create_backup()
 
             if not backup_created:
@@ -58,16 +59,14 @@ class MorningRoutineHandler:
                 )
                 return False
 
-            # Try up to 3 times with exponential backoff
             for attempt in range(1, max_retries + 1):
                 _LOGGER.info(f"=== Morning routine attempt {attempt}/{max_retries} for {date} ===")
 
                 try:
-                    # Validate prerequisites
+
                     if not await self._validate_prerequisites(date, hourly_forecast, weather_hourly, astronomy_data):
                         raise ValueError("Prerequisites validation failed")
 
-                    # Create predictions atomically
                     success = await self.data_manager.hourly_predictions.create_daily_predictions(
                         date=date,
                         hourly_forecast=hourly_forecast,
@@ -79,11 +78,9 @@ class MorningRoutineHandler:
                     if not success:
                         raise RuntimeError("Prediction creation returned False")
 
-                    # Verify integrity after creation
                     if not await self._verify_integrity(date):
                         raise RuntimeError("Integrity verification failed")
 
-                    # SUCCESS! Delete backup
                     await self._delete_backup()
 
                     _LOGGER.info(
@@ -101,7 +98,7 @@ class MorningRoutineHandler:
                     )
 
                     if attempt < max_retries:
-                        # Restore backup before retry
+
                         restore_success = await self._restore_backup()
 
                         if not restore_success:
@@ -112,13 +109,12 @@ class MorningRoutineHandler:
                             )
                             return False
 
-                        # Exponential backoff: 60s, 120s, 180s
                         wait_time = 60 * attempt
                         _LOGGER.info(f"→ Waiting {wait_time}s before retry {attempt + 1}...")
                         await asyncio.sleep(wait_time)
 
                     else:
-                        # Final failure - restore backup and alert
+
                         _LOGGER.error(
                             f"✗ CRITICAL: Morning routine FAILED after {max_retries} attempts!\n"
                             f"   → Restoring backup\n"
@@ -133,14 +129,13 @@ class MorningRoutineHandler:
         except Exception as e:
             _LOGGER.error(f"✗ CRITICAL: Morning routine handler crashed: {e}", exc_info=True)
 
-            # Emergency restore
             if backup_created:
                 await self._restore_backup()
 
             return False
 
     async def _create_backup(self) -> bool:
-        """Create atomic backup of hourly_predictions.json"""
+        """Create atomic backup of hourly_predictions.json @zara"""
         try:
             source_file = self.data_manager.data_dir / "stats" / "hourly_predictions.json"
 
@@ -148,11 +143,9 @@ class MorningRoutineHandler:
                 _LOGGER.warning("No existing hourly_predictions.json to backup - creating new")
                 return True
 
-            # Create backup with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.backup_file = source_file.with_suffix(f".json.backup_{timestamp}")
 
-            # Atomic copy
             def _copy_sync():
                 shutil.copy2(source_file, self.backup_file)
 
@@ -166,7 +159,7 @@ class MorningRoutineHandler:
             return False
 
     async def _restore_backup(self) -> bool:
-        """Restore from backup"""
+        """Restore from backup @zara"""
         try:
             if not self.backup_file or not self.backup_file.exists():
                 _LOGGER.error("✗ No backup file to restore from!")
@@ -174,7 +167,6 @@ class MorningRoutineHandler:
 
             source_file = self.data_manager.data_dir / "stats" / "hourly_predictions.json"
 
-            # Atomic restore
             def _restore_sync():
                 shutil.copy2(self.backup_file, source_file)
 
@@ -188,7 +180,7 @@ class MorningRoutineHandler:
             return False
 
     async def _delete_backup(self) -> bool:
-        """Delete backup after successful operation"""
+        """Delete backup after successful operation @zara"""
         try:
             if self.backup_file and self.backup_file.exists():
                 self.backup_file.unlink()
@@ -205,10 +197,9 @@ class MorningRoutineHandler:
     ) -> bool:
         """Validate all prerequisites before creating predictions"""
         try:
-            # Check date format
+
             datetime.fromisoformat(date)
 
-            # Check hourly forecast
             if not hourly_forecast or not isinstance(hourly_forecast, list):
                 _LOGGER.error(f"✗ Invalid hourly_forecast: {type(hourly_forecast)}")
                 return False
@@ -218,12 +209,10 @@ class MorningRoutineHandler:
                     f"⚠️  Only {len(hourly_forecast)} hours in forecast (expected 8+ for winter, 12+ for summer)"
                 )
 
-            # Check weather hourly
             if not weather_hourly or not isinstance(weather_hourly, list):
                 _LOGGER.error(f"✗ Invalid weather_hourly: {type(weather_hourly)}")
                 return False
 
-            # Check astronomy data
             if not astronomy_data or not isinstance(astronomy_data, dict):
                 _LOGGER.error(f"✗ Invalid astronomy_data: {type(astronomy_data)}")
                 return False
@@ -236,24 +225,17 @@ class MorningRoutineHandler:
             return False
 
     async def _verify_integrity(self, date: str) -> bool:
-        """Verify data integrity after creation"""
+        """Verify data integrity after creation @zara"""
         try:
-            # Read back the data
+
             data = await self.data_manager.hourly_predictions._read_json_async()
 
-            # Check for today's predictions
             today_predictions = [p for p in data.get("predictions", []) if p.get("target_date") == date]
 
             if not today_predictions:
                 _LOGGER.error(f"✗ No predictions found for {date} after creation!")
                 return False
 
-            if len(today_predictions) < 12:
-                _LOGGER.warning(
-                    f"⚠️  Only {len(today_predictions)} predictions for {date} (expected 24)"
-                )
-
-            # Check for duplicates
             ids = [p["id"] for p in data["predictions"]]
             duplicates = [id for id in ids if ids.count(id) > 1]
 
@@ -269,24 +251,24 @@ class MorningRoutineHandler:
             return False
 
     async def _send_critical_alert(self, title: str, details: str) -> None:
-        """Send critical alert about failure"""
+        """Send critical alert about failure @zara"""
         try:
-            # Log to persistent error file
+
             error_log = self.data_manager.data_dir / "stats" / "morning_routine_errors.log"
-            error_log.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(error_log, "a") as f:
-                import traceback
+            def _write_error_log():
+                error_log.parent.mkdir(parents=True, exist_ok=True)
+                with open(error_log, "a") as f:
+                    import traceback
+                    f.write(f"\n{'='*80}\n")
+                    f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                    f.write(f"Title: {title}\n")
+                    f.write(f"Details: {details}\n")
+                    f.write(f"Traceback:\n{traceback.format_exc()}\n")
 
-                f.write(f"\n{'='*80}\n")
-                f.write(f"Timestamp: {datetime.now().isoformat()}\n")
-                f.write(f"Title: {title}\n")
-                f.write(f"Details: {details}\n")
-                f.write(f"Traceback:\n{traceback.format_exc()}\n")
-
+            await self.coordinator.hass.async_add_executor_job(_write_error_log)
             _LOGGER.info(f"✓ Critical alert logged to morning_routine_errors.log")
 
-            # Try to send Home Assistant notification if available
             if hasattr(self.coordinator, "hass"):
                 await self.coordinator.hass.services.async_call(
                     "persistent_notification",

@@ -1,5 +1,4 @@
-"""
-Production History Tracking
+"""Production History Tracking V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -29,53 +28,46 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class ProductionCalculator:
     """Historical Production Calculator - Simplified Version"""
 
     def __init__(self, hass: HomeAssistant, data_manager):
-        """Initialize the Production Calculator"""
+        """Initialize the Production Calculator @zara"""
         self.hass = hass
         self.data_manager = data_manager
         _LOGGER.info("ProductionCalculator initialized (Recorder-free mode)")
 
     async def async_get_peak_production_time(self, power_entity: Optional[str] = None) -> str:
-        """Calculate peak production time using ML data"""
+        """Calculate peak production time using ML data @zara"""
         _LOGGER.debug("Peak time calculation: Using ML-based approach (no Recorder)")
 
         try:
             today = dt_util.now().date()
-            hourly_samples = await self.data_manager.get_hourly_samples()
+            today_str = today.isoformat()
 
-            today_samples = [
-                s
-                for s in hourly_samples
-                if dt_util.parse_datetime(s.get("timestamp")).date() == today
-            ]
+            today_samples = await self.data_manager.hourly_predictions.get_predictions_for_date(today_str)
 
             if not today_samples:
                 return "12:00"
 
-            # Find the hour with the maximum production
             max_production = -1
             peak_hour = 12
 
             for sample in today_samples:
-                production = sample.get("actual_kwh")  # FIX: Use 'actual_kwh' key
+                production = sample.get("actual_kwh")
                 if production is not None and production > max_production:
                     max_production = production
-                    timestamp = dt_util.parse_datetime(sample.get("timestamp"))
-                    if timestamp:
-                        peak_hour = timestamp.hour
+
+                    peak_hour = sample.get("hour", 12)
 
             return f"{peak_hour:02d}:00"
 
         except Exception as e:
-            _LOGGER.error(f"Error calculating peak production time: {e}")
+            _LOGGER.error(f"Error calculating peak production time: {e}", exc_info=True)
             return "12:00"
 
     async def calculate_yesterday_total_yield(self, yield_entity: str) -> float:
-        """Calculate yesterdays total yield from prediction history"""
+        """Calculate yesterdays total yield from prediction history @zara"""
         try:
             yesterday_str = (dt_util.now() - timedelta(days=1)).date().isoformat()
             prediction = await self.data_manager.get_prediction_for_date(yesterday_str)
@@ -91,7 +83,7 @@ class ProductionCalculator:
             return 0.0
 
     async def get_last_7_days_average_yield(self, yield_entity: str) -> float:
-        """Get average yield for the last 7 days from prediction history"""
+        """Get average yield for the last 7 days from prediction history @zara"""
         try:
             start_date = (dt_util.now() - timedelta(days=7)).date().isoformat()
             predictions = await self.data_manager.get_predictions(start_date=start_date)
@@ -111,7 +103,7 @@ class ProductionCalculator:
             return 0.0
 
     async def get_monthly_production_statistics(self, yield_entity: str) -> dict:
-        """Get monthly production statistics from prediction history"""
+        """Get monthly production statistics from prediction history @zara"""
         try:
             start_of_month = dt_util.now().replace(day=1).date().isoformat()
             predictions = await self.data_manager.get_predictions(start_date=start_of_month)
@@ -152,33 +144,6 @@ class ProductionCalculator:
             }
 
     async def get_historical_average(self) -> Optional[float]:
-        """Get historical average production"""
+        """Get historical average production @zara"""
         _LOGGER.debug("Historical average: Not available without Recorder")
         return None
-
-
-# ============================================================================
-# MIGRATION NOTES:
-# ============================================================================
-#
-# WHAT WAS REMOVED:
-# - _get_state_history() - Blocking Recorder DB access
-# - calculate_peak_production_time() - 14-day history analysis
-# - All HomeAssistant Recorder imports and dependencies
-# - Executor jobs for synchronous history queries
-#
-# WHAT TO USE INSTEAD:
-# - Peak Time: Use ML hourly samples or default 12:00
-# - Historical Data: Use DataManager prediction_history.json
-# - Monthly Stats: Use DataManager get_average_monthly_yield()
-#
-# BENEFITS:
-# - Zero startup blocking
-# - No database load
-# - Faster, more reliable
-# - Independent of Recorder configuration
-#
-# FUTURE ENHANCEMENTS:
-# - Analyze hourly_samples.json for peak time patterns
-# - Use weather_forecast_history.json for correlations
-# - ML-based peak time prediction from training data

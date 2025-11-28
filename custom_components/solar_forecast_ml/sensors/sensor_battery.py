@@ -1,13 +1,17 @@
-"""
-Battery Sensors
-
-Provides battery monitoring sensors completely separate from Solar/ML sensors
-No interference with existing solar functionality
+"""Battery Sensors V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -31,7 +35,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ..const import (  # v9.0.0 energy flow sensors
+from ..const import (
     BATTERY_EFFICIENCY_SENSOR,
     BATTERY_POWER_SENSOR,
     BATTERY_RUNTIME_REMAINING_SENSOR,
@@ -55,7 +59,6 @@ from ..const import (  # v9.0.0 energy flow sensors
 from ..coordinator import SolarForecastMLCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
 
 class BaseBatterySensor(CoordinatorEntity, SensorEntity):
     """Base class for battery sensors"""
@@ -88,13 +91,12 @@ class BaseBatterySensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available"""
+        """Return if entity is available @zara"""
         return (
             self.coordinator.last_update_success
             and self.coordinator.battery_collector is not None
             and self.coordinator.battery_collector.is_configured()
         )
-
 
 class BatterySOCSensor(BaseBatterySensor):
     """Battery State of Charge sensor (%)"""
@@ -105,19 +107,19 @@ class BatterySOCSensor(BaseBatterySensor):
     _attr_icon = ICON_BATTERY
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize SOC sensor"""
+        """Initialize SOC sensor @zara"""
         super().__init__(coordinator, entry, BATTERY_SOC_SENSOR, "State of Charge")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return the state of charge"""
+        """Return the state of charge @zara"""
         if not self.coordinator.battery_collector:
             return None
         return self.coordinator.battery_collector.get_state_of_charge()
 
     @property
     def icon(self) -> str:
-        """Return dynamic icon based on SOC level"""
+        """Return dynamic icon based on SOC level @zara"""
         soc = self.native_value
         if soc is None:
             return ICON_BATTERY
@@ -127,7 +129,6 @@ class BatterySOCSensor(BaseBatterySensor):
         elif self.coordinator.battery_collector.is_discharging():
             return ICON_BATTERY_DISCHARGING
 
-        # Dynamic battery icon based on level
         if soc >= 90:
             return "mdi:battery"
         elif soc >= 80:
@@ -151,7 +152,7 @@ class BatterySOCSensor(BaseBatterySensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         if not self.coordinator.battery_collector:
             return {}
 
@@ -163,7 +164,6 @@ class BatterySOCSensor(BaseBatterySensor):
             "is_discharging": self.coordinator.battery_collector.is_discharging(),
         }
 
-
 class BatteryPowerSensor(BaseBatterySensor):
     """Battery current power sensor (W) - positive=charging, negative=discharging"""
 
@@ -173,12 +173,12 @@ class BatteryPowerSensor(BaseBatterySensor):
     _attr_icon = ICON_BATTERY
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize power sensor"""
+        """Initialize power sensor @zara"""
         super().__init__(coordinator, entry, BATTERY_POWER_SENSOR, "Power")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return the battery power"""
+        """Return the battery power @zara"""
         if not self.coordinator.battery_collector:
             _LOGGER.debug("BatteryPowerSensor: No battery_collector available")
             return None
@@ -189,7 +189,7 @@ class BatteryPowerSensor(BaseBatterySensor):
 
     @property
     def icon(self) -> str:
-        """Return dynamic icon based on charging state"""
+        """Return dynamic icon based on charging state @zara"""
         power = self.native_value
         if power is None:
             return ICON_BATTERY
@@ -201,7 +201,6 @@ class BatteryPowerSensor(BaseBatterySensor):
         else:
             return ICON_BATTERY
 
-
 class BatteryRuntimeRemainingSensor(BaseBatterySensor):
     """Estimated battery runtime remaining (hours)"""
 
@@ -211,16 +210,15 @@ class BatteryRuntimeRemainingSensor(BaseBatterySensor):
     _attr_icon = "mdi:timer-outline"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize runtime sensor"""
+        """Initialize runtime sensor @zara"""
         super().__init__(coordinator, entry, BATTERY_RUNTIME_REMAINING_SENSOR, "Runtime Remaining")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return estimated runtime in hours"""
+        """Return estimated runtime in hours @zara"""
         if not self.coordinator.battery_collector:
             return None
 
-        # Get current consumption (if available)
         consumption = (
             self.coordinator.data.get("current_consumption", 0) if self.coordinator.data else 0
         )
@@ -232,7 +230,7 @@ class BatteryRuntimeRemainingSensor(BaseBatterySensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         if not self.coordinator.battery_collector:
             return {}
 
@@ -247,7 +245,6 @@ class BatteryRuntimeRemainingSensor(BaseBatterySensor):
             ),
         }
 
-
 class BatteryEfficiencySensor(BaseBatterySensor):
     """Battery efficiency sensor (%) - v9.0.0 based on energy flows"""
 
@@ -256,42 +253,39 @@ class BatteryEfficiencySensor(BaseBatterySensor):
     _attr_icon = "mdi:gauge"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize efficiency sensor"""
+        """Initialize efficiency sensor @zara"""
         super().__init__(coordinator, entry, BATTERY_EFFICIENCY_SENSOR, "Efficiency")
 
     def _get_battery_coordinator(self):
-        """Get battery coordinator from hass data"""
+        """Get battery coordinator from hass data @zara"""
         battery_key = f"{self.entry.entry_id}_battery"
         return self.coordinator.hass.data.get(DOMAIN, {}).get(battery_key)
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return battery efficiency (discharge / charge * 100)"""
+        """Return battery efficiency (discharge / charge * 100) @zara"""
         battery_coordinator = self._get_battery_coordinator()
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
 
         summary = battery_coordinator.persistence.get_today_summary()
 
-        # v9.0.0: Total battery charging (Solar + Grid)
         total_charge = summary.get("solar_to_battery_kwh", 0.0) + summary.get(
             "grid_to_battery_kwh", 0.0
         )
 
-        # v9.0.0: Total battery discharging
         total_discharge = summary.get("battery_to_house_kwh", 0.0)
 
         if total_charge <= 0:
             return None
 
-        # Efficiency = (Discharged / Charged) * 100
         efficiency = (total_discharge / total_charge) * 100
 
         return round(min(efficiency, 100.0), 1)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         battery_coordinator = self._get_battery_coordinator()
         if not battery_coordinator or not battery_coordinator.persistence:
             return {}
@@ -309,12 +303,6 @@ class BatteryEfficiencySensor(BaseBatterySensor):
             "solar_charge_kwh": round(summary.get("solar_to_battery_kwh", 0.0), 3),
             "grid_charge_kwh": round(summary.get("grid_to_battery_kwh", 0.0), 3),
         }
-
-
-# ============================================================================
-# NEW v9.0.0 Energy Flow Sensors
-# ============================================================================
-
 
 class BaseEnergyFlowSensor(BaseBatterySensor):
     """Base class for v9.0.0 energy flow sensors"""
@@ -336,24 +324,22 @@ class BaseEnergyFlowSensor(BaseBatterySensor):
         self._attr_icon = icon
 
     def _get_battery_coordinator(self):
-        """Get battery coordinator from hass data"""
+        """Get battery coordinator from hass data @zara"""
         battery_key = f"{self.entry.entry_id}_battery"
         return self.coordinator.hass.data.get(DOMAIN, {}).get(battery_key)
 
     @property
     def available(self) -> bool:
-        """Return if entity is available (only if using v9.0.0 config)"""
+        """Return if entity is available (only if using v9.0.0 config) @zara"""
         if not super().available:
             return False
 
-        # Only available if using v9.0.0 configuration
         battery_coordinator = self._get_battery_coordinator()
         return (
             battery_coordinator is not None
             and hasattr(battery_coordinator, "data_collector")
             and battery_coordinator.data_collector.using_new_config
         )
-
 
 class SolarToHouseSensor(BaseEnergyFlowSensor):
     """Solar → House energy flow (kWh) - Direct solar consumption"""
@@ -365,13 +351,12 @@ class SolarToHouseSensor(BaseEnergyFlowSensor):
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return solar to house energy"""
+        """Return solar to house energy @zara"""
         battery_coordinator = self._get_battery_coordinator()
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
         return summary.get("solar_to_house_kwh", 0.0)
-
 
 class SolarToBatterySensor(BaseEnergyFlowSensor):
     """Solar → Battery energy flow (kWh) - Solar charging"""
@@ -387,13 +372,12 @@ class SolarToBatterySensor(BaseEnergyFlowSensor):
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return solar to battery energy"""
+        """Return solar to battery energy @zara"""
         battery_coordinator = self._get_battery_coordinator()
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
         return summary.get("solar_to_battery_kwh", 0.0)
-
 
 class SolarToGridSensor(BaseEnergyFlowSensor):
     """Solar → Grid energy flow (kWh) - Grid export"""
@@ -409,13 +393,12 @@ class SolarToGridSensor(BaseEnergyFlowSensor):
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return solar to grid energy"""
+        """Return solar to grid energy @zara"""
         battery_coordinator = self._get_battery_coordinator()
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
         return summary.get("solar_to_grid_kwh", 0.0)
-
 
 class GridToHouseSensor(BaseEnergyFlowSensor):
     """Grid → House energy flow (kWh) - Grid consumption"""
@@ -431,13 +414,12 @@ class GridToHouseSensor(BaseEnergyFlowSensor):
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return grid to house energy"""
+        """Return grid to house energy @zara"""
         battery_coordinator = self._get_battery_coordinator()
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
         return summary.get("grid_to_house_kwh", 0.0)
-
 
 class GridToBatterySensor(BaseEnergyFlowSensor):
     """Grid → Battery energy flow (kWh) - Grid charging"""
@@ -453,13 +435,12 @@ class GridToBatterySensor(BaseEnergyFlowSensor):
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return grid to battery energy"""
+        """Return grid to battery energy @zara"""
         battery_coordinator = self._get_battery_coordinator()
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
         return summary.get("grid_to_battery_kwh", 0.0)
-
 
 class BatteryToHouseSensor(BaseEnergyFlowSensor):
     """Battery → House energy flow (kWh) - Battery discharge"""
@@ -475,22 +456,20 @@ class BatteryToHouseSensor(BaseEnergyFlowSensor):
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return battery to house energy"""
+        """Return battery to house energy @zara"""
         battery_coordinator = self._get_battery_coordinator()
         if not battery_coordinator or not battery_coordinator.persistence:
             return None
         summary = battery_coordinator.persistence.get_today_summary()
         return summary.get("battery_to_house_kwh", 0.0)
 
-
-# Export all battery sensors
 BATTERY_SENSORS = [
-    # Core battery sensors (always available)
+
     BatterySOCSensor,
     BatteryPowerSensor,
     BatteryRuntimeRemainingSensor,
     BatteryEfficiencySensor,
-    # NEW v9.0.0 energy flow sensors (only available with v9.0.0 config)
+
     SolarToHouseSensor,
     SolarToBatterySensor,
     SolarToGridSensor,

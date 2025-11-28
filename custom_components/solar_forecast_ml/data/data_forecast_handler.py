@@ -1,5 +1,4 @@
-"""
-Data Forecast Handler for Solar Forecast ML Integration
+"""Data Forecast Handler for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -29,7 +28,6 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from .data_io import DataManagerIO
 
 _LOGGER = logging.getLogger(__name__)
-
 
 class DataForecastHandler(DataManagerIO):
     """Handles daily forecasts TODAY block statistics and history"""
@@ -139,86 +137,10 @@ class DataForecastHandler(DataManagerIO):
             "metadata": {"retention_days": 730, "history_entries": 0, "last_update": None},
         }
 
-    async def ensure_daily_forecasts_file(self) -> None:
-        """Ensure daily_forecastsjson exists with correct structure"""
-        if not self.daily_forecasts_file.exists():
-            _LOGGER.info("Creating new daily_forecasts.json with NEW STRUCTURE")
-            await self._atomic_write_json(self.daily_forecasts_file, self._daily_forecasts_default)
-
-        # Migrate old structure if needed
-        data = await self.load_daily_forecasts()
-        if "today" not in data or "forecasts" in data:
-            _LOGGER.info("Migrating old structure to NEW STRUCTURE")
-            await self._migrate_to_new_structure(data)
-
-    async def _migrate_to_new_structure(self, old_data: dict) -> None:
-        """Migrate old structure to new structure"""
-        try:
-            _LOGGER.info("=== Starting migration to NEW STRUCTURE ===")
-
-            new_data = self._daily_forecasts_default.copy()
-            now_local = dt_util.now()
-            today_str = now_local.date().isoformat()
-
-            # Initialize TODAY block
-            new_data["today"]["date"] = today_str
-
-            # Migrate from OLD current_day if exists
-            if "current_day" in old_data:
-                old_current = old_data["current_day"]
-
-                # Migrate forecast
-                if old_current.get("forecast"):
-                    new_data["today"]["forecast_day"]["prediction_kwh"] = old_current[
-                        "forecast"
-                    ].get("prediction_kwh")
-                    new_data["today"]["forecast_day"]["source"] = old_current["forecast"].get(
-                        "source", "migration"
-                    )
-
-                # Migrate production time
-                if "production_tracking" in old_data:
-                    pt = old_data["production_tracking"]
-                    new_data["today"]["production_time"] = {
-                        "active": pt.get("currently_producing", False),
-                        "duration_seconds": pt.get("duration_seconds", 0),
-                        "start_time": (
-                            pt["start_time"].isoformat() if pt.get("start_time") else None
-                        ),
-                        "end_time": pt["end_time"].isoformat() if pt.get("end_time") else None,
-                        "last_power_above_10w": (
-                            pt["last_power_above_10w"].isoformat()
-                            if pt.get("last_power_above_10w")
-                            else None
-                        ),
-                        "zero_power_since": None,
-                    }
-
-            # Migrate history
-            if "forecasts" in old_data:
-                new_data["history"] = old_data["forecasts"][:730]  # Keep last 2 years
-                new_data["metadata"]["history_entries"] = len(new_data["history"])
-
-            # Migrate statistics
-            if "statistics" in old_data:
-                if "all_time_peak" in old_data["statistics"]:
-                    new_data["statistics"]["all_time_peak"] = old_data["statistics"][
-                        "all_time_peak"
-                    ]
-
-            new_data["metadata"]["last_update"] = now_local.isoformat()
-
-            await self._atomic_write_json(self.daily_forecasts_file, new_data)
-            _LOGGER.info("=== Migration to NEW STRUCTURE completed ===")
-
-        except Exception as e:
-            _LOGGER.error(f"Migration failed: {e}", exc_info=True)
-
     async def load_daily_forecasts(self) -> Dict[str, Any]:
-        """Load daily forecasts file and ensure all required fields exist"""
+        """Load daily forecasts file and ensure all required fields exist @zara"""
         data = await self._read_json_file(self.daily_forecasts_file, self._daily_forecasts_default)
 
-        # Auto-repair: Add missing fields to 'today' block if they don't exist
         if "today" in data:
             needs_save = False
             today_default = self._daily_forecasts_default["today"]
@@ -231,7 +153,6 @@ class DataForecastHandler(DataManagerIO):
                     )
                     needs_save = True
 
-            # Save repaired data back to file
             if needs_save:
                 await self._atomic_write_json(self.daily_forecasts_file, data)
                 _LOGGER.info("Auto-repaired daily_forecasts.json with missing fields")
@@ -239,17 +160,15 @@ class DataForecastHandler(DataManagerIO):
         return data
 
     async def reset_today_block(self) -> bool:
-        """Reset TODAY block at midnight"""
+        """Reset TODAY block at midnight @zara"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
             today_str = now_local.date().isoformat()
 
-            # Archive yesterday if exists
             if "today" in data and data["today"].get("finalized"):
                 await self._archive_yesterday(data["today"])
 
-            # Reset TODAY block
             data["today"] = self._daily_forecasts_default["today"].copy()
             data["today"]["date"] = today_str
 
@@ -263,7 +182,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def _archive_yesterday(self, yesterday_data: dict) -> None:
-        """Archive completed day to history"""
+        """Archive completed day to history @zara"""
         try:
             finalized = yesterday_data.get("finalized", {})
             if not finalized.get("yield_kwh"):
@@ -285,7 +204,6 @@ class DataForecastHandler(DataManagerIO):
             data = await self.load_daily_forecasts()
             data["history"].insert(0, history_entry)
 
-            # Keep last 730 days (2 years)
             if len(data["history"]) > 730:
                 data["history"] = data["history"][:730]
 
@@ -298,14 +216,14 @@ class DataForecastHandler(DataManagerIO):
         except Exception as e:
             _LOGGER.error(f"Failed to archive yesterday: {e}", exc_info=True)
 
-    # FORECAST_DAY Methods
-
     async def save_forecast_day(
         self,
         prediction_kwh: float,
         source: str = "ML",
         lock: bool = True,
         force_overwrite: bool = False,
+        prediction_kwh_raw: float = None,
+        safeguard_applied: bool = False,
     ) -> bool:
         """Save todays daily forecast locked at 6 AM"""
         try:
@@ -313,17 +231,14 @@ class DataForecastHandler(DataManagerIO):
             now_local = dt_util.now()
             today_str = now_local.date().isoformat()
 
-            # Ensure TODAY block exists
             if "today" not in data or data["today"].get("date") != today_str:
                 data["today"] = self._daily_forecasts_default["today"].copy()
                 data["today"]["date"] = today_str
 
-            # Check if already locked (unless force_overwrite is True)
             if lock and data["today"]["forecast_day"].get("locked") and not force_overwrite:
                 _LOGGER.warning("Today's forecast already locked, skipping update")
                 return False
 
-            # Log if we're forcing an overwrite
             if force_overwrite and data["today"]["forecast_day"].get("locked"):
                 old_value = data["today"]["forecast_day"].get("prediction_kwh")
                 old_source = data["today"]["forecast_day"].get("source")
@@ -335,6 +250,9 @@ class DataForecastHandler(DataManagerIO):
 
             data["today"]["forecast_day"] = {
                 "prediction_kwh": round(float(prediction_kwh), 2),
+                "prediction_kwh_raw": round(float(prediction_kwh_raw), 2) if prediction_kwh_raw is not None else None,
+                "safeguard_applied": safeguard_applied,
+                "safeguard_reduction_kwh": round(float(prediction_kwh_raw - prediction_kwh), 2) if prediction_kwh_raw is not None else 0.0,
                 "locked": lock,
                 "locked_at": now_local.isoformat() if lock else None,
                 "source": source,
@@ -366,12 +284,10 @@ class DataForecastHandler(DataManagerIO):
             if "today" not in data:
                 data["today"] = self._daily_forecasts_default["today"].copy()
 
-            # Check if already locked
             if lock and data["today"]["forecast_tomorrow"].get("locked"):
                 _LOGGER.warning("Tomorrow's forecast already locked")
                 return False
 
-            # Add to updates list
             update_entry = {
                 "prediction_kwh": round(float(prediction_kwh), 2),
                 "updated_at": now_local.isoformat(),
@@ -387,7 +303,7 @@ class DataForecastHandler(DataManagerIO):
                 "locked": lock,
                 "locked_at": now_local.isoformat() if lock else None,
                 "source": source,
-                "updates": updates[-10:],  # Keep last 10 updates
+                "updates": updates[-10:],
             }
 
             await self._atomic_write_json(self.daily_forecasts_file, data)
@@ -412,12 +328,10 @@ class DataForecastHandler(DataManagerIO):
             if "today" not in data:
                 data["today"] = self._daily_forecasts_default["today"].copy()
 
-            # Check if already locked
             if lock and data["today"]["forecast_day_after_tomorrow"].get("locked"):
                 _LOGGER.warning("Day after tomorrow's forecast already locked")
                 return False
 
-            # Add to updates list
             update_entry = {
                 "prediction_kwh": round(float(prediction_kwh), 2),
                 "updated_at": now_local.isoformat(),
@@ -433,7 +347,7 @@ class DataForecastHandler(DataManagerIO):
                 "locked": lock,
                 "next_update": None,
                 "source": source,
-                "updates": updates[-10:],  # Keep last 10 updates
+                "updates": updates[-10:],
             }
 
             await self._atomic_write_json(self.daily_forecasts_file, data)
@@ -480,7 +394,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def save_actual_best_hour(self, hour: int, actual_kwh: float) -> bool:
-        """Save actual best production hour calculated from hourly_samples at end of day"""
+        """Save actual best production hour calculated from hourly_samples at end of day @zara"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -542,14 +456,13 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def deactivate_next_hour_forecast(self) -> bool:
-        """Deactivate next hour forecast set to None"""
+        """Deactivate next hour forecast set to None @zara"""
         try:
             data = await self.load_daily_forecasts()
 
             if "today" not in data:
                 return True
 
-            # Reset next hour forecast to default
             data["today"]["forecast_next_hour"] = {
                 "period": None,
                 "prediction_kwh": None,
@@ -564,8 +477,6 @@ class DataForecastHandler(DataManagerIO):
         except Exception as e:
             _LOGGER.error(f"Failed to deactivate next hour forecast: {e}", exc_info=True)
             return False
-
-    # PRODUCTION_TIME Methods
 
     async def update_production_time(
         self,
@@ -604,17 +515,14 @@ class DataForecastHandler(DataManagerIO):
             _LOGGER.error(f"Failed to update production time: {e}", exc_info=True)
             return False
 
-    # PEAK Methods
-
     async def update_peak_today(self, power_w: float, timestamp: datetime) -> bool:
-        """Update todays peak power LIVE"""
+        """Update todays peak power LIVE @zara"""
         try:
             data = await self.load_daily_forecasts()
 
             if "today" not in data:
                 data["today"] = self._daily_forecasts_default["today"].copy()
 
-            # Only update if higher than current peak
             current_peak = data["today"]["peak_today"].get("power_w", 0.0)
             if power_w > current_peak:
                 data["today"]["peak_today"] = {
@@ -626,7 +534,6 @@ class DataForecastHandler(DataManagerIO):
 
                 _LOGGER.info(f"New peak today: {power_w:.2f}W at {timestamp.strftime('%H:%M:%S')}")
 
-                # Check if all-time peak
                 all_time_peak = (
                     data.get("statistics", {}).get("all_time_peak", {}).get("power_w", 0.0)
                 )
@@ -642,7 +549,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def update_all_time_peak(self, power_w: float, timestamp: datetime) -> bool:
-        """Update all-time peak power"""
+        """Update all-time peak power @zara"""
         try:
             data = await self.load_daily_forecasts()
 
@@ -659,7 +566,6 @@ class DataForecastHandler(DataManagerIO):
 
             _LOGGER.info(f"NEW ALL-TIME PEAK: {power_w:.2f}W on {timestamp.date()}")
 
-            # Also update astronomy cache with new all_time_peak
             await self._update_astronomy_cache_all_time_peak(power_w, timestamp)
 
             return True
@@ -682,14 +588,11 @@ class DataForecastHandler(DataManagerIO):
                 try:
                     import json
 
-                    # Read astronomy cache
                     with open(astronomy_cache_file, "r") as f:
                         cache = json.load(f)
 
-                    # Convert W to kW
                     power_kw = power_w / 1000.0
 
-                    # Update top-level pv_system (user-friendly)
                     if "pv_system" not in cache:
                         cache["pv_system"] = {}
 
@@ -697,12 +600,10 @@ class DataForecastHandler(DataManagerIO):
                     cache["pv_system"]["all_time_peak_date"] = timestamp.date().isoformat()
                     cache["pv_system"]["all_time_peak_at"] = timestamp.isoformat()
 
-                    # Update top-level last_updated
                     from datetime import datetime as dt
 
                     cache["last_updated"] = dt.now().isoformat()
 
-                    # Update metadata (legacy for backward compatibility)
                     if "metadata" not in cache:
                         cache["metadata"] = {}
                     if "pv_system" not in cache["metadata"]:
@@ -716,7 +617,6 @@ class DataForecastHandler(DataManagerIO):
 
                     cache["metadata"]["last_updated"] = dt.now().isoformat()
 
-                    # Write atomically (sort_keys=False preserves user-friendly order)
                     temp_file = astronomy_cache_file.with_suffix(".tmp")
                     with open(temp_file, "w") as f:
                         json.dump(cache, f, indent=2, sort_keys=False)
@@ -739,14 +639,12 @@ class DataForecastHandler(DataManagerIO):
             _LOGGER.debug(f"Failed to update astronomy cache all_time_peak: {e}")
 
     async def get_all_time_peak(self) -> Optional[float]:
-        """Get all-time peak value"""
+        """Get all-time peak value @zara"""
         try:
             data = await self.load_daily_forecasts()
             return data.get("statistics", {}).get("all_time_peak", {}).get("power_w")
         except Exception:
             return None
-
-    # FINALIZATION Methods
 
     async def finalize_today(
         self, yield_kwh: float, consumption_kwh: Optional[float] = None, production_seconds: int = 0
@@ -761,12 +659,10 @@ class DataForecastHandler(DataManagerIO):
                 _LOGGER.error(f"Cannot finalize: today block not set for {today_str}")
                 return False
 
-            # Calculate production_hours from seconds
             hours = production_seconds // 3600
             minutes = (production_seconds % 3600) // 60
             production_hours = f"{hours}h {minutes}m"
 
-            # Calculate accuracy
             accuracy_percent = None
             forecast_kwh = data["today"]["forecast_day"].get("prediction_kwh")
             if forecast_kwh and forecast_kwh > 0:
@@ -774,7 +670,6 @@ class DataForecastHandler(DataManagerIO):
                 accuracy = max(0.0, 100.0 - (error / forecast_kwh * 100))
                 accuracy_percent = round(accuracy, 1)
 
-            # Set finalized values
             data["today"]["finalized"] = {
                 "yield_kwh": round(float(yield_kwh), 2),
                 "consumption_kwh": (
@@ -794,7 +689,6 @@ class DataForecastHandler(DataManagerIO):
                 f"Accuracy={f'{accuracy_percent:.1f}' if accuracy_percent else 'N/A'}%"
             )
 
-            # Update aggregated statistics
             await self._update_aggregated_data(yield_kwh, consumption_kwh)
 
             return True
@@ -813,7 +707,6 @@ class DataForecastHandler(DataManagerIO):
 
             history = data.get("history", [])
 
-            # Calculate current week from history
             iso = now_local.isocalendar()
             current_week_period = f"{iso[0]}-W{iso[1]:02d}"
             monday = now_local - timedelta(days=now_local.weekday())
@@ -845,7 +738,6 @@ class DataForecastHandler(DataManagerIO):
                     "updated_at": now_local.isoformat(),
                 }
 
-            # Calculate current month from history
             current_month_period = now_local.strftime("%Y-%m")
             month_start = now_local.replace(day=1).date().isoformat()
 
@@ -864,7 +756,6 @@ class DataForecastHandler(DataManagerIO):
                     if e.get("consumption_kwh")
                 )
 
-                # Calculate average autarky for month
                 autarky_values = []
                 for e in current_month_entries:
                     if e.get("autarky") is not None:
@@ -880,7 +771,6 @@ class DataForecastHandler(DataManagerIO):
                     "updated_at": now_local.isoformat(),
                 }
 
-            # Calculate last 7 days
             cutoff_7 = (now_local - timedelta(days=7)).date().isoformat()
             last_7_days = [
                 entry
@@ -902,7 +792,6 @@ class DataForecastHandler(DataManagerIO):
                     "calculated_at": now_local.isoformat(),
                 }
 
-            # Calculate last 30 days
             cutoff_30 = (now_local - timedelta(days=30)).date().isoformat()
             last_30_days = [
                 entry
@@ -926,7 +815,6 @@ class DataForecastHandler(DataManagerIO):
                     "calculated_at": now_local.isoformat(),
                 }
 
-            # Calculate last 365 days
             cutoff_365 = (now_local - timedelta(days=365)).date().isoformat()
             last_365_days = [
                 entry
@@ -958,8 +846,6 @@ class DataForecastHandler(DataManagerIO):
             _LOGGER.error(f"Failed to calculate statistics: {e}", exc_info=True)
             return False
 
-    # HISTORY Methods
-
     async def get_history(
         self, days: int = 30, start_date: Optional[str] = None, end_date: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -983,7 +869,7 @@ class DataForecastHandler(DataManagerIO):
             return []
 
     async def rotate_forecasts_at_midnight(self) -> bool:
-        """Rotate forecasts at midnight 000030"""
+        """Rotate forecasts at midnight 000030 @zara"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -991,23 +877,18 @@ class DataForecastHandler(DataManagerIO):
 
             _LOGGER.info(f"Starting midnight forecast rotation for new day: {new_today_str}")
 
-            # Get tomorrow's forecast to move to today
             tomorrow_forecast = data.get("today", {}).get("forecast_tomorrow", {})
             tomorrow_date = tomorrow_forecast.get("date")
 
-            # Get day_after_tomorrow's forecast to move to tomorrow
             day_after_forecast = data.get("today", {}).get("forecast_day_after_tomorrow", {})
 
-            # Rotate: tomorrow -> today (UNLOCKED!)
-            # day_after_tomorrow -> tomorrow (inside today block)
-            # Create complete today block with all tracking fields
             tomorrow_date_str = (now_local + timedelta(days=1)).date().isoformat()
 
             data["today"] = {
                 "date": new_today_str,
                 "forecast_day": {
                     "prediction_kwh": tomorrow_forecast.get("prediction_kwh"),
-                    "locked": False,  # CRITICAL: Unlock for 6 AM save
+                    "locked": False,
                     "locked_at": None,
                     "source": tomorrow_forecast.get("source", "rotated_from_tomorrow"),
                     "next_update": None,
@@ -1020,7 +901,7 @@ class DataForecastHandler(DataManagerIO):
                     "locked_at": None,
                     "source": day_after_forecast.get("source", "rotated_from_day_after"),
                     "next_update": None,
-                    "updates": day_after_forecast.get("updates", [])[-10:],  # Keep last 10 updates
+                    "updates": day_after_forecast.get("updates", [])[-10:],
                 },
                 "forecast_day_after_tomorrow": {
                     "date": None,
@@ -1060,13 +941,12 @@ class DataForecastHandler(DataManagerIO):
                 "finalized": None,
             }
 
-            # Rotate: day_after_tomorrow -> tomorrow (UNLOCKED!)
             tomorrow_str = (now_local + timedelta(days=1)).date().isoformat()
             data["tomorrow"] = {
                 "date": tomorrow_str,
                 "forecast_day": {
                     "prediction_kwh": day_after_forecast.get("prediction_kwh"),
-                    "locked": False,  # CRITICAL: Unlock for updates
+                    "locked": False,
                     "locked_at": None,
                     "source": day_after_forecast.get("source", "rotated_from_day_after"),
                     "next_update": None,
@@ -1074,7 +954,6 @@ class DataForecastHandler(DataManagerIO):
                 },
             }
 
-            # Clear day_after_tomorrow
             day_after_str = (now_local + timedelta(days=2)).date().isoformat()
             data["day_after_tomorrow"] = {
                 "date": day_after_str,
@@ -1102,12 +981,11 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def move_to_history(self) -> bool:
-        """Move finalized today data to history runs at 2331"""
+        """Move finalized today data to history runs at 2331 @zara"""
         try:
             data = await self.load_daily_forecasts()
             today_data = data.get("today", {})
 
-            # Check if today has been finalized
             finalized_data = today_data.get("finalized")
             if not finalized_data:
                 _LOGGER.warning("Cannot move to history: Today has not been finalized yet")
@@ -1118,17 +996,14 @@ class DataForecastHandler(DataManagerIO):
                 _LOGGER.error("Cannot move to history: Today's date is missing")
                 return False
 
-            # Get forecast prediction from forecast_day
             forecast_day = today_data.get("forecast_day", {})
             predicted_kwh = forecast_day.get("prediction_kwh", 0.0)
             forecast_source = forecast_day.get("source", "unknown")
 
-            # Get peak data
             peak_today = today_data.get("peak_today", {})
             peak_power_w = peak_today.get("power_w")
             peak_at_full = peak_today.get("at")
 
-            # Convert peak timestamp to time-only format (HH:MM:SS)
             peak_at = None
             if peak_at_full:
                 try:
@@ -1138,17 +1013,15 @@ class DataForecastHandler(DataManagerIO):
                     peak_at = peak_dt.strftime("%H:%M:%S")
                 except Exception as e:
                     _LOGGER.debug(f"Could not parse peak timestamp '{peak_at_full}': {e}")
-                    peak_at = peak_at_full  # Fallback to original value
+                    peak_at = peak_at_full
 
-            # Get autarky data
             autarky_data = today_data.get("autarky", {})
             autarky_percent = autarky_data.get("percent")
 
-            # Parse production_hours to production_seconds
             production_seconds = 0
             production_hours_str = finalized_data.get("production_hours", "0h 0m")
             try:
-                # Parse "6h 31m" format
+
                 parts = production_hours_str.replace("h", "").replace("m", "").split()
                 if len(parts) >= 2:
                     hours = int(parts[0])
@@ -1157,29 +1030,34 @@ class DataForecastHandler(DataManagerIO):
             except Exception as e:
                 _LOGGER.debug(f"Could not parse production_hours '{production_hours_str}': {e}")
 
-            # Create history entry from finalized data
-            # All optional numeric fields get safe defaults to prevent None formatting errors
             history_entry = {
                 "date": date_str,
-                "forecast_kwh": predicted_kwh or 0.0,  # From forecast_day
-                "actual_kwh": finalized_data.get("yield_kwh") or 0.0,  # FIX: was "actual_kwh"
-                "accuracy": finalized_data.get("accuracy_percent") or 0.0,  # FIX: was "accuracy"
-                "consumption_kwh": finalized_data.get("consumption_kwh") or 0.0,  # Safe default
-                "autarky": autarky_percent or 0.0,  # From autarky block - safe default
-                "production_hours": production_hours_str,  # Keep formatted string
-                "peak_power_w": peak_power_w or 0.0,  # From peak_today - safe default
-                "peak_at": peak_at,  # From peak_today (time only, format: "HH:MM:SS")
-                "forecast_source": forecast_source,  # From forecast_day
-                "finalized_at": finalized_data.get("at"),  # FIX: was "finalized_at"
+                "predicted_kwh": predicted_kwh or 0.0,
+                "actual_kwh": finalized_data.get("yield_kwh") or 0.0,
+                "accuracy": finalized_data.get("accuracy_percent") or 0.0,
+                "consumption_kwh": finalized_data.get("consumption_kwh") or 0.0,
+                "autarky": autarky_percent or 0.0,
+                "production_hours": production_hours_str,
+                "peak_power_w": peak_power_w or 0.0,
+                "peak_at": peak_at,
+                "forecast_source": forecast_source,
+                "finalized_at": finalized_data.get("at"),
             }
 
-            # Insert at beginning of history array (most recent first)
             if "history" not in data:
                 data["history"] = []
 
+            existing_dates = [entry.get("date") for entry in data["history"]]
+            if date_str in existing_dates:
+                _LOGGER.warning(
+                    f"History already contains entry for {date_str} - "
+                    f"removing old entry and replacing with new finalized data"
+                )
+
+                data["history"] = [entry for entry in data["history"] if entry.get("date") != date_str]
+
             data["history"].insert(0, history_entry)
 
-            # Keep last 730 days (2 years)
             if len(data["history"]) > 730:
                 data["history"] = data["history"][:730]
 
@@ -1187,8 +1065,7 @@ class DataForecastHandler(DataManagerIO):
 
             await self._atomic_write_json(self.daily_forecasts_file, data)
 
-            # Safe logging with None-check for optional values
-            forecast_val = history_entry["forecast_kwh"] or 0.0
+            forecast_val = history_entry["predicted_kwh"] or 0.0
             actual_val = history_entry["actual_kwh"] or 0.0
             accuracy_val = history_entry["accuracy"] or 0.0
 
@@ -1206,7 +1083,7 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def calculate_statistics(self) -> bool:
-        """Calculate aggregated statistics from history runs at 2332"""
+        """Calculate aggregated statistics from history runs at 2332 @zara"""
         try:
             data = await self.load_daily_forecasts()
             now_local = dt_util.now()
@@ -1215,9 +1092,8 @@ class DataForecastHandler(DataManagerIO):
 
             if not history:
                 _LOGGER.warning("No history data available to calculate statistics")
-                return True  # Not an error, just no data yet
+                return True
 
-            # Calculate last 7 days
             cutoff_7 = (now_local - timedelta(days=7)).date().isoformat()
             last_7_days = [
                 entry
@@ -1239,7 +1115,6 @@ class DataForecastHandler(DataManagerIO):
                     "calculated_at": now_local.isoformat(),
                 }
 
-            # Calculate last 30 days
             cutoff_30 = (now_local - timedelta(days=30)).date().isoformat()
             last_30_days = [
                 entry
@@ -1263,7 +1138,6 @@ class DataForecastHandler(DataManagerIO):
                     "calculated_at": now_local.isoformat(),
                 }
 
-            # Calculate last 365 days
             cutoff_365 = (now_local - timedelta(days=365)).date().isoformat()
             last_365_days = [
                 entry
@@ -1281,7 +1155,6 @@ class DataForecastHandler(DataManagerIO):
                     "calculated_at": now_local.isoformat(),
                 }
 
-            # Calculate current week
             iso = now_local.isocalendar()
             current_week_period = f"{iso[0]}-W{iso[1]:02d}"
             monday = now_local - timedelta(days=now_local.weekday())
@@ -1313,7 +1186,6 @@ class DataForecastHandler(DataManagerIO):
                     "updated_at": now_local.isoformat(),
                 }
 
-            # Calculate current month
             current_month_period = now_local.strftime("%Y-%m")
 
             current_month_entries = [
@@ -1331,7 +1203,6 @@ class DataForecastHandler(DataManagerIO):
                     if e.get("consumption_kwh")
                 )
 
-                # Calculate average autarky for month
                 autarky_values = []
                 for e in current_month_entries:
                     if e.get("autarky") is not None:

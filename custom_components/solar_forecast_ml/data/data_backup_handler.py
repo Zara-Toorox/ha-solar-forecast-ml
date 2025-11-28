@@ -1,5 +1,4 @@
-"""
-Data Backup Handler for Solar Forecast ML Integration
+"""Data Backup Handler for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -31,16 +30,11 @@ from .data_io import DataManagerIO
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class DataBackupHandler(DataManagerIO):
     """Handles backup creation and cleanup"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
-
-    # ═════════════════════════════════════════════════════════════
-    # BACKUP METHODS
-    # ═════════════════════════════════════════════════════════════
 
     async def create_backup(
         self, backup_name: Optional[str] = None, backup_type: str = "manual"
@@ -54,7 +48,6 @@ class DataBackupHandler(DataManagerIO):
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
             await self._ensure_directory_exists(backup_dir)
 
-            # Copy all JSON files from stats, data, and ml directories
             for subdir in ["stats", "data", "ml"]:
                 src_dir = self.data_dir / subdir
                 if src_dir.exists():
@@ -87,7 +80,7 @@ class DataBackupHandler(DataManagerIO):
             for backup_folder in backup_dir.iterdir():
                 if backup_folder.is_dir():
                     folder_time = datetime.fromtimestamp(backup_folder.stat().st_mtime)
-                    # Ensure local timezone
+
                     folder_time = dt_util.ensure_local(folder_time)
 
                     if folder_time < cutoff_date:
@@ -119,7 +112,6 @@ class DataBackupHandler(DataManagerIO):
             if max_backups is None:
                 max_backups = MAX_BACKUP_FILES
 
-            # Get all backup folders sorted by modification time (oldest first)
             backup_folders = [
                 (folder, folder.stat().st_mtime)
                 for folder in backup_dir.iterdir()
@@ -128,7 +120,6 @@ class DataBackupHandler(DataManagerIO):
 
             backup_folders.sort(key=lambda x: x[1])
 
-            # Remove excess backups
             removed_count = 0
             while len(backup_folders) > max_backups:
                 oldest_folder, _ = backup_folders.pop(0)
@@ -149,7 +140,7 @@ class DataBackupHandler(DataManagerIO):
             return 0
 
     async def list_backups(self, backup_type: Optional[str] = None) -> list:
-        """List all available backups"""
+        """List all available backups @zara"""
         try:
             backups = []
 
@@ -164,7 +155,6 @@ class DataBackupHandler(DataManagerIO):
                     if backup_folder.is_dir():
                         stat = backup_folder.stat()
 
-                        # Calculate total size of backup
                         total_size = sum(
                             f.stat().st_size for f in backup_folder.rglob("*") if f.is_file()
                         )
@@ -180,7 +170,6 @@ class DataBackupHandler(DataManagerIO):
                             }
                         )
 
-            # Sort by date (newest first)
             backups.sort(key=lambda x: x["date"], reverse=True)
 
             return backups
@@ -190,7 +179,7 @@ class DataBackupHandler(DataManagerIO):
             return []
 
     async def restore_backup(self, backup_name: str, backup_type: str = "manual") -> bool:
-        """Restore data from backup"""
+        """Restore data from backup @zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
 
@@ -198,16 +187,14 @@ class DataBackupHandler(DataManagerIO):
                 _LOGGER.error(f"Backup not found: {backup_name}")
                 return False
 
-            # Create current backup before restoring
             await self.create_backup(
                 backup_name=f"pre_restore_{dt_util.now().strftime('%Y%m%d_%H%M%S')}",
                 backup_type="auto",
             )
 
-            # Restore files
             restored_count = 0
             for backup_file in backup_dir.glob("*.json"):
-                # Parse filename: subdir_filename.json
+
                 parts = backup_file.stem.split("_", 1)
                 if len(parts) == 2:
                     subdir, filename = parts
@@ -225,7 +212,7 @@ class DataBackupHandler(DataManagerIO):
             return False
 
     async def delete_backup(self, backup_name: str, backup_type: str = "manual") -> bool:
-        """Delete specific backup"""
+        """Delete specific backup @zara"""
         try:
             backup_dir = self.data_dir / "backups" / backup_type / backup_name
 
@@ -253,7 +240,6 @@ class DataBackupHandler(DataManagerIO):
 
             stat = backup_dir.stat()
 
-            # List files in backup
             files = []
             total_size = 0
             for backup_file in backup_dir.glob("*.json"):

@@ -1,5 +1,4 @@
-"""
-ML Model Loader for Solar Forecast ML Integration
+"""ML Model Loader for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -25,17 +24,16 @@ from ..ml.ml_types import LearnedWeights, create_default_learned_weights
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class MLModelLoader:
     """Handles loading and initialization of ML models"""
 
     def __init__(self, data_manager):
-        """Initialize model loader"""
+        """Initialize model loader @zara"""
         self.data_manager = data_manager
         self._loaded_weights: Optional[LearnedWeights] = None
 
     async def load_weights(self) -> Optional[LearnedWeights]:
-        """Load learned weights from storage"""
+        """Load learned weights from storage @zara"""
         try:
             weights_data = await self.data_manager.load_learned_weights()
 
@@ -53,7 +51,7 @@ class MLModelLoader:
             return create_default_learned_weights()
 
     async def save_weights(self, weights: LearnedWeights) -> bool:
-        """Save learned weights to storage"""
+        """Save learned weights to storage @zara"""
         try:
             weights_dict = {
                 "coefficients": weights.coefficients,
@@ -77,7 +75,7 @@ class MLModelLoader:
             return False
 
     async def load_model_state(self) -> Dict[str, Any]:
-        """Load model state information"""
+        """Load model state information @zara"""
         try:
             state = await self.data_manager.load_model_state()
             return state if state else {}
@@ -86,7 +84,7 @@ class MLModelLoader:
             return {}
 
     async def save_model_state(self, state: Dict[str, Any]) -> bool:
-        """Save model state information"""
+        """Save model state information @zara"""
         try:
             return await self.data_manager.save_model_state(state)
         except Exception as e:
@@ -94,9 +92,9 @@ class MLModelLoader:
             return False
 
     def get_loaded_weights(self) -> Optional[LearnedWeights]:
-        """Get currently loaded weights"""
+        """Get currently loaded weights @zara"""
         return self._loaded_weights
 
     def is_model_loaded(self) -> bool:
-        """Check if model is currently loaded"""
+        """Check if model is currently loaded @zara"""
         return self._loaded_weights is not None and len(self._loaded_weights.coefficients) > 0

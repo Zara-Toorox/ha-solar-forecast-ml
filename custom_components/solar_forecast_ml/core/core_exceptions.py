@@ -1,5 +1,4 @@
-"""
-Exception Classes for Solar Forecast ML Integration
+"""Exception Classes for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -21,25 +20,20 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any, Dict, Optional  # Use Dict instead of dict
+from typing import Any, Dict, Optional
 
-# Use SafeDateTimeUtil for consistent timestamps
 from .core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
-# --- Severity Enum ---
 class ErrorSeverity(Enum):
     """Defines severity levels for exceptions"""
 
-    LOW = "low"  # Informational or minor issue
-    MEDIUM = "medium"  # Warning, potentially recoverable
-    HIGH = "high"  # Error, likely requires attention
-    CRITICAL = "critical"  # Critical failure, may stop functionality
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
-
-# --- Base Exception ---
 class SolarForecastMLException(Exception):
     """Base exception for all custom errors in the Solar Forecast ML integration"""
 
@@ -53,30 +47,18 @@ class SolarForecastMLException(Exception):
         super().__init__(message)
         self.message = message
         self.severity = severity
-        self.context = context or {}  # Ensure context is always a dict
-
-        # Logging is typically handled by the code catching the exception,
-        # providing more specific context there. Avoid duplicate logging here.
-        # Example logging where caught:
-        # try:
-        #     ...
-        # except SolarForecastMLException as e:
-        #     _LOGGER.log(e.severity_to_loglevel(), "%s - Context: %s", e, e.context)
+        self.context = context or {}
 
     def severity_to_loglevel(self) -> int:
-        """Map error severity to standard logging levels"""
+        """Map error severity to standard logging levels @zara"""
         if self.severity == ErrorSeverity.CRITICAL:
             return logging.CRITICAL
         elif self.severity == ErrorSeverity.HIGH:
             return logging.ERROR
         elif self.severity == ErrorSeverity.MEDIUM:
             return logging.WARNING
-        else:  # LOW
+        else:
             return logging.INFO
-
-
-# --- Specific Exception Types ---
-
 
 class ConfigurationException(SolarForecastMLException):
     """Exception raised for errors in the integrations configuration"""
@@ -84,11 +66,10 @@ class ConfigurationException(SolarForecastMLException):
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH,  # Config errors are usually high severity
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Configuration Error: {message}", severity, context)
-
 
 class DependencyException(SolarForecastMLException):
     """Exception raised for missing or incompatible Python dependencies"""
@@ -96,11 +77,10 @@ class DependencyException(SolarForecastMLException):
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.CRITICAL,  # Missing dependencies are critical
+        severity: ErrorSeverity = ErrorSeverity.CRITICAL,
         context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Dependency Error: {message}", severity, context)
-
 
 class WeatherAPIException(SolarForecastMLException):
     """Exception raised for errors interacting with the weather data source API or e..."""
@@ -108,16 +88,10 @@ class WeatherAPIException(SolarForecastMLException):
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH,  # Failure to get weather is high severity
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Weather Data Error: {message}", severity, context)
-
-
-# Keep WeatherException if used for different types of weather issues?
-# Or merge into WeatherAPIException? Merging seems reasonable.
-# class WeatherException(SolarForecastMLException): ...
-
 
 class DataIntegrityException(SolarForecastMLException):
     """Exception raised for issues with data storage files corruption IO errors"""
@@ -125,11 +99,10 @@ class DataIntegrityException(SolarForecastMLException):
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH,  # Data loss potential is high severity
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Data Integrity Error: {message}", severity, context)
-
 
 class DataValidationException(SolarForecastMLException):
     """Exception raised when loaded data fails validation checks"""
@@ -137,15 +110,10 @@ class DataValidationException(SolarForecastMLException):
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.MEDIUM,  # Invalid data is a warning initially
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
         context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"Data Validation Error: {message}", severity, context)
-
-
-# Keep ValidationException if used for input validation specifically? Seems redundant with DataValidationException.
-# class ValidationException(SolarForecastMLException): ...
-
 
 class MLModelException(SolarForecastMLException):
     """Exception related to the Machine Learning model training prediction"""
@@ -153,23 +121,10 @@ class MLModelException(SolarForecastMLException):
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH,  # ML failures are usually high severity
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         context: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"ML Model Error: {message}", severity, context)
-
-
-# ModelException seems redundant with MLModelException. Consider removing.
-# class ModelException(SolarForecastMLException): ...
-
-
-# StorageException seems redundant with DataIntegrityException. Consider removing.
-# class StorageException(SolarForecastMLException): ...
-
-
-# ForecastException seems redundant with MLModelException or generic SolarForecastMLException. Consider removing.
-# class ForecastException(SolarForecastMLException): ...
-
 
 class CircuitBreakerOpenException(SolarForecastMLException):
     """Exception raised when an operation is blocked by an open circuit breaker"""
@@ -177,29 +132,19 @@ class CircuitBreakerOpenException(SolarForecastMLException):
     def __init__(
         self,
         message: str,
-        severity: ErrorSeverity = ErrorSeverity.HIGH,  # Blocking is a high severity event
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         context: Optional[Dict[str, Any]] = None,
     ):
-        # Message usually includes breaker name, don't prepend 'Circuit Breaker Open' if already there
+
         prefix = (
             "Circuit Breaker Open: " if not message.lower().startswith("circuit breaker") else ""
         )
         super().__init__(f"{prefix}{message}", severity, context)
 
-
-# --- Helper Functions ---
-
-
 def create_context(**kwargs) -> Dict[str, Any]:
-    """Creates a standardized context dictionary adding a timestamp"""
+    """Creates a standardized context dictionary adding a timestamp @zara"""
     context = {
-        "timestamp": dt_util.now().isoformat(),  # Use LOCAL timestamp
-        **kwargs,  # Add other context details
+        "timestamp": dt_util.now().isoformat(),
+        **kwargs,
     }
     return context
-
-
-# Removed _get_current_timestamp as create_context handles it.
-
-# Removed create_exception factory function as direct instantiation is clear enough.
-# def create_exception(...) -> SolarForecastMLException: ...

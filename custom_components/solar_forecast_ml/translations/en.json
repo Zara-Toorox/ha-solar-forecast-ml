@@ -3,9 +3,9 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML",
-        "description": "Required: Weather Sensor, Power Sensor, Daily Yield\nOptional: All other fields",
+        "description": "Required: Power Sensor, Daily Yield\nOptional: Weather Sensor (Open-Meteo provides all weather data), All other fields",
         "data": {
-          "weather_entity": "Weather Sensor",
+          "weather_entity": "Weather Sensor (Optional)",
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
@@ -18,7 +18,7 @@
           "humidity_sensor": "Humidity Sensor"
         },
         "data_description": {
-          "weather_entity": "Weather entity for forecast (Required)",
+          "weather_entity": "Weather entity for additional data (Optional - Open-Meteo provides all weather/radiation data)",
           "power_entity": "Current power in Watts (Required)",
           "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
           "total_consumption_today": "Daily consumption in kWh (Optional)",
@@ -35,7 +35,7 @@
         "title": "Reconfigure Solar Forecast ML",
         "description": "Update configuration\nEmpty optional fields will clear their value",
         "data": {
-          "weather_entity": "Weather Sensor",
+          "weather_entity": "Weather Sensor (Optional)",
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
@@ -54,7 +54,7 @@
           "electricity_country": "Country (DE/AT)"
         },
         "data_description": {
-          "weather_entity": "Weather entity for forecast (Required)",
+          "weather_entity": "Weather entity for additional data (Optional - Open-Meteo provides all weather/radiation data)",
           "power_entity": "Current power in Watts (Required)",
           "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
           "total_consumption_today": "Daily consumption in kWh (Optional)",
@@ -203,6 +203,15 @@
       "ml_metrics": {
         "name": "ML Model Metrics"
       },
+      "active_prediction_model": {
+        "name": "Active Prediction Model"
+      },
+      "pattern_count": {
+        "name": "Pattern Count"
+      },
+      "physics_samples": {
+        "name": "Physics Samples"
+      },
       "coordinator_health": {
         "name": "Coordinator Health"
       },
@@ -345,11 +354,24 @@
             "name": "Grid Charge Cost"
           }
         }
-      }
-    },
-    "button": {
-      "manual_learning": {
-        "name": "Train Model"
+      },
+      "shadow_current": {
+        "name": "Shadow Current",
+        "state": {
+          "clear": "Clear",
+          "light_shadow": "Light Shadow",
+          "moderate_shadow": "Moderate Shadow",
+          "heavy_shadow": "Heavy Shadow",
+          "night": "Night",
+          "no_data": "No Data",
+          "error": "Error"
+        }
+      },
+      "shadow_today": {
+        "name": "Shadow Today"
+      },
+      "performance_loss_today": {
+        "name": "Performance Loss Today"
       }
     }
   }

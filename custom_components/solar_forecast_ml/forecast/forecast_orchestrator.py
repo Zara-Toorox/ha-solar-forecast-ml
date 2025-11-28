@@ -1,5 +1,4 @@
-"""
-Forecast Orchestrator for Solar Forecast ML Integration
+"""Forecast Orchestrator for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -36,7 +35,6 @@ from .forecast_weather_calculator import WeatherCalculator
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class ForecastOrchestrator:
     """Selects and executes the most appropriate forecast strategy based on"""
 
@@ -46,7 +44,7 @@ class ForecastOrchestrator:
     def __init__(
         self,
         hass: HomeAssistant,
-        data_manager: Any,  # Replace with DataManager once type hints are cleaner
+        data_manager: Any,
         solar_capacity: float,
         weather_calculator: WeatherCalculator,
     ):
@@ -67,60 +65,45 @@ class ForecastOrchestrator:
         _LOGGER.debug("ForecastOrchestrator initialized.")
 
     def is_production_hour(self, target_dt: datetime) -> bool:
-        """
-        Checks if a given datetime is within realistic solar production hours
+        """Checks if a given datetime is within realistic solar production hours @zara"""
 
-        Uses in-memory astronomy cache with fallback to seasonal estimates
-        """
-        # Ensure target_dt is in local timezone for comparison
         target_dt_local = dt_util.as_local(target_dt)
 
-        # Method 1: Try in-memory astronomy cache first (no I/O blocking!)
         try:
             cache_manager = get_cache_manager()
             if cache_manager.is_loaded():
-                # Get production window for target date
+
                 date_str = target_dt_local.date().isoformat()
                 window = cache_manager.get_production_window(date_str)
 
                 if window:
                     window_start_str, window_end_str = window
 
-                    # Parse ISO timestamps and convert to naive local time
                     window_start = datetime.fromisoformat(window_start_str).replace(tzinfo=None)
                     window_end = datetime.fromisoformat(window_end_str).replace(tzinfo=None)
 
-                    # Convert target_dt_local to naive for comparison
                     target_dt_naive = target_dt_local.replace(tzinfo=None)
 
-                    # Check if target_dt is within production window
                     if window_start <= target_dt_naive <= window_end:
-                        # Removed verbose production check logging
+
                         return True
                     else:
-                        # Removed verbose production check logging
+
                         return False
 
         except Exception as e:
             _LOGGER.debug(f"Astronomy cache access failed, using fallback: {e}")
 
-        # Method 2: Seasonal conservative estimates (fallback)
         hour = target_dt_local.hour
         month = target_dt_local.month
 
-        # Extended production times with twilight
-        if month in [11, 12, 1, 2]:  # Winter: 6-17 (incl. twilight)
+        if month in [11, 12, 1, 2]:
             is_production = 6 <= hour <= 17
-        elif month in [5, 6, 7, 8]:  # Summer: 4-21 (long days)
+        elif month in [5, 6, 7, 8]:
             is_production = 4 <= hour <= 21
-        else:  # Spring/Fall: 5-19
+        else:
             is_production = 5 <= hour <= 19
 
-        # Debug logging disabled - too spammy for hourly forecasts
-        # _LOGGER.debug(
-        #     f"Production check (fallback): {target_dt_local.strftime('%Y-%m-%d %H:%M')} month={month} "
-        #     f"hour={hour} -> {is_production}"
-        # )
         return is_production
 
     def initialize_strategies(
@@ -151,7 +134,9 @@ class ForecastOrchestrator:
         if ml_predictor:
             try:
                 self.ml_strategy = MLForecastStrategy(
-                    ml_predictor=ml_predictor, error_handler=error_handler
+                    ml_predictor=ml_predictor,
+                    error_handler=error_handler,
+                    hass=self.hass
                 )
                 _LOGGER.info("ML forecast strategy (iterative) initialized.")
             except Exception as e:
@@ -265,9 +250,11 @@ class ForecastOrchestrator:
         day_after_ml = ml_result.forecast_day_after_tomorrow if ml_result else 0.0
 
         if rule_result:
+
             today_rule = rule_result.forecast_today
             tomorrow_rule = rule_result.forecast_tomorrow
             day_after_rule = rule_result.forecast_day_after_tomorrow
+
         else:
             _LOGGER.critical(
                 "Emergency Fallback: ML and Rule-Based strategies failed. Returning 0.0"
@@ -285,7 +272,7 @@ class ForecastOrchestrator:
             _LOGGER.debug("Blending: ML failed, using 100% Rule-Based result.")
 
         if ml_result:
-            max_realistic_daily = self.solar_capacity * 6.0  # 6 hours full capacity max
+            max_realistic_daily = self.solar_capacity * 6.0
             if today_ml > max_realistic_daily:
                 _LOGGER.warning(
                     f"ML prediction unrealistic: {today_ml:.2f} kWh exceeds theoretical maximum "
@@ -301,19 +288,17 @@ class ForecastOrchestrator:
 
         ACCURACY_THRESHOLD = 0.75
         MIN_ML_WEIGHT = 0.15
-        MIN_SAMPLES_FOR_CONFIDENT_ML = 50  # NEW: Minimum samples for confident ML usage
+        MIN_SAMPLES_FOR_CONFIDENT_ML = 50
 
-        # NEW: Check training sample count for adaptive blending
         training_sample_count = 0
         if self._ml_predictor and hasattr(self._ml_predictor, "last_training_samples"):
             training_sample_count = self._ml_predictor.last_training_samples
 
-        # ADAPTIVE BLENDING: Reduce ML weight if insufficient training data
         if training_sample_count < MIN_SAMPLES_FOR_CONFIDENT_ML and ml_result:
-            # Calculate sample-based weight reduction
+
             sample_ratio = training_sample_count / MIN_SAMPLES_FOR_CONFIDENT_ML
-            # Apply additional damping beyond accuracy-based damping
-            sample_damping = sample_ratio**0.5  # Square root for gentler damping
+
+            sample_damping = sample_ratio**0.5
 
             original_weight = accuracy_weight
             accuracy_weight = accuracy_weight * sample_damping
@@ -326,7 +311,7 @@ class ForecastOrchestrator:
             )
 
         if accuracy_weight < ACCURACY_THRESHOLD and ml_result:
-            # Quadratic damping for poor models: heavily penalize low accuracy
+
             raw_weight = (accuracy_weight / ACCURACY_THRESHOLD) ** 2
             accuracy_weight = MIN_ML_WEIGHT * raw_weight
             _LOGGER.info(
@@ -335,13 +320,10 @@ class ForecastOrchestrator:
                 f"(raw_weight={raw_weight:.3f})"
             )
 
-        # ========================================================================
-        # SAFEGUARD OPTION 1: DIVERSITY CHECK
-        # ========================================================================
         safeguard_diversity_applied = False
         if ml_result and self._ml_predictor and training_sample_count > 0:
             try:
-                # Get feature statistics from loaded weights
+
                 feature_stds = {}
                 if (
                     hasattr(self._ml_predictor, "current_weights")
@@ -350,62 +332,93 @@ class ForecastOrchestrator:
                     if hasattr(self._ml_predictor.current_weights, "feature_stds"):
                         feature_stds = self._ml_predictor.current_weights.feature_stds
 
-                # Check cloud cover variance (critical weather feature)
                 cloud_std = feature_stds.get("weather_cloud_percent", 0.0)
-                MIN_CLOUD_VARIANCE = 10.0  # Require at least 10% variance in training data
+                MIN_CLOUD_VARIANCE = 10.0
 
                 if cloud_std < MIN_CLOUD_VARIANCE:
                     original_weight = accuracy_weight
-                    accuracy_weight = min(accuracy_weight, 0.05)  # Cap at 5% ML
+                    accuracy_weight = min(accuracy_weight, 0.05)
                     safeguard_diversity_applied = True
 
-                    _LOGGER.warning(
-                        f"SAFEGUARD OPTION 1 (Diversity Check) TRIGGERED: "
-                        f"Low cloud variance in training data ({cloud_std:.2f}% < {MIN_CLOUD_VARIANCE}%). "
-                        f"Training data appears homogeneous. "
-                        f"Limiting ML weight: {original_weight:.1%} → {accuracy_weight:.1%}"
+                    _LOGGER.debug(
+                        f"Diversity safeguard: Low cloud variance ({cloud_std:.2f}%), "
+                        f"ML weight limited to {accuracy_weight:.1%}"
                     )
             except Exception as e:
                 _LOGGER.debug(f"Could not apply diversity check safeguard: {e}")
 
-        # ========================================================================
-        # SAFEGUARD OPTION 2: SANITY CHECK (ML vs Rule-Based)
-        # ========================================================================
         safeguard_sanity_applied = False
         if ml_result and rule_result and accuracy_weight > 0:
             try:
-                # Compare ML vs Rule-Based predictions
-                if today_rule > 0:
-                    ratio = today_ml / today_rule
-                    MIN_RATIO = 0.50  # ML should not be less than 50% of Rule-based (was: 0.30)
-                    MAX_RATIO = 3.0  # ML should not be more than 300% of Rule-based
 
-                    if ratio < MIN_RATIO:
-                        original_weight = accuracy_weight
-                        accuracy_weight = accuracy_weight * 0.10  # Reduce ML by 90%
-                        safeguard_sanity_applied = True
+                extreme_weather = False
+                weather_indicators = []
 
-                        _LOGGER.warning(
-                            f"SAFEGUARD OPTION 2 (Sanity Check) TRIGGERED: "
-                            f"ML prediction suspiciously low ({ratio:.1%} of Rule-based). "
-                            f"ML={today_ml:.2f} kWh, Rule={today_rule:.2f} kWh. "
-                            f"Reducing ML weight: {original_weight:.1%} → {accuracy_weight:.1%}"
-                        )
-                    elif ratio > MAX_RATIO:
-                        original_weight = accuracy_weight
-                        accuracy_weight = accuracy_weight * 0.50  # Reduce ML by 50%
-                        safeguard_sanity_applied = True
+                if hourly_weather_forecast:
 
-                        _LOGGER.warning(
-                            f"SAFEGUARD OPTION 2 (Sanity Check) TRIGGERED: "
-                            f"ML prediction suspiciously high ({ratio:.1%} of Rule-based). "
-                            f"ML={today_ml:.2f} kWh, Rule={today_rule:.2f} kWh. "
-                            f"Reducing ML weight: {original_weight:.1%} → {accuracy_weight:.1%}"
-                        )
+                    expected_hours = 24 if len(hourly_weather_forecast) >= 24 else len(hourly_weather_forecast)
+
+                    hours_to_check = min(3, expected_hours)
+                    for hour_data in hourly_weather_forecast[:hours_to_check]:
+                        if not isinstance(hour_data, dict):
+                            continue
+
+                        cloud = hour_data.get('cloud_cover', hour_data.get('clouds', 0))
+                        rain = hour_data.get('rain', hour_data.get('precipitation', 0))
+                        condition = str(hour_data.get('condition', '')).lower()
+
+                        try:
+                            cloud_val = float(cloud) if cloud is not None else 0
+                            rain_val = float(rain) if rain is not None else 0
+                        except (ValueError, TypeError):
+                            cloud_val = 0
+                            rain_val = 0
+
+                        if cloud_val > 90:
+                            weather_indicators.append(f"clouds={cloud_val}%")
+                        if rain_val > 1.0:
+                            weather_indicators.append(f"rain={rain_val}mm")
+                        if condition in ['rainy', 'pouring', 'snowy', 'hail', 'lightning-rainy']:
+                            weather_indicators.append(f"condition={condition}")
+
+                    extreme_weather = len(weather_indicators) > 0
+
+                rule_had_weather = len(hourly_weather_forecast) > 0
+
+                if not extreme_weather and rule_had_weather:
+
+                    if today_rule > 0:
+                        ratio = today_ml / today_rule
+                        MIN_RATIO = 0.50
+                        MAX_RATIO = 3.0
+
+                        if ratio < MIN_RATIO:
+                            original_weight = accuracy_weight
+                            accuracy_weight = accuracy_weight * 0.10
+                            safeguard_sanity_applied = True
+
+                            _LOGGER.debug(
+                                f"Sanity check: ML too low ({ratio:.1%}), weight reduced to {accuracy_weight:.1%}"
+                            )
+                        elif ratio > MAX_RATIO:
+                            original_weight = accuracy_weight
+                            accuracy_weight = accuracy_weight * 0.50
+                            safeguard_sanity_applied = True
+
+                            _LOGGER.debug(
+                                f"Sanity check: ML too high ({ratio:.1%}), weight reduced to {accuracy_weight:.1%}"
+                            )
+                elif extreme_weather:
+                    _LOGGER.debug(
+                        f"Sanity check skipped: Extreme weather [{', '.join(weather_indicators)}]"
+                    )
+                elif not rule_had_weather:
+                    _LOGGER.debug(
+                        "Sanity check skipped: Rule-Based lacks weather data"
+                    )
             except Exception as e:
                 _LOGGER.debug(f"Could not apply sanity check safeguard: {e}")
 
-        # Log safeguard summary
         if safeguard_diversity_applied or safeguard_sanity_applied:
             safeguards = []
             if safeguard_diversity_applied:
@@ -419,12 +432,9 @@ class ForecastOrchestrator:
 
         rule_weight = 1.0 - accuracy_weight
 
-        # Blend today and tomorrow with ML + Rule-Based
         final_today = (today_ml * accuracy_weight) + (today_rule * rule_weight)
         final_tomorrow = (tomorrow_ml * accuracy_weight) + (tomorrow_rule * rule_weight)
 
-        # STRATEGIC FIX: Day after tomorrow uses ONLY Rule-Based (no ML blending)
-        # ML model struggles with day+2 predictions due to lag feature limitations
         final_day_after = day_after_rule
 
         method_str = f"blended (ML: {accuracy_weight*100:.0f}% | Rule: {rule_weight*100:.0f}%)"
@@ -448,7 +458,6 @@ class ForecastOrchestrator:
             f"Final values before returning - today: {final_today}, tomorrow: {final_tomorrow}, day_after: {final_day_after}"
         )
 
-        # Extract best hour from whichever strategy provided it (prefer ML if available)
         best_hour = None
         best_hour_kwh = None
         if ml_result and ml_result.best_hour_today is not None:
@@ -462,23 +471,28 @@ class ForecastOrchestrator:
                 f"Using Rule-based best hour: {best_hour}:00 with {best_hour_kwh:.3f} kWh"
             )
 
-        # Blend hourly values from both strategies
         hourly_values = []
         if ml_result and ml_result.hourly_values and rule_result and rule_result.hourly_values:
-            # Both strategies available: blend hourly values
+
             _LOGGER.debug(
                 f"Blending hourly values: ML={len(ml_result.hourly_values)} hours, Rule={len(rule_result.hourly_values)} hours"
             )
 
-            # Create lookup dict for rule-based values by hour
-            rule_by_hour = {h["hour"]: h for h in rule_result.hourly_values}
+            ml_hours_set = {(h.get("date"), h.get("hour")) for h in ml_result.hourly_values if h.get("date") and h.get("hour") is not None}
+            rule_hours_set = {(h.get("date"), h.get("hour")) for h in rule_result.hourly_values if h.get("date") and h.get("hour") is not None}
+
+            rule_by_date_hour = {(h["date"], h["hour"]): h for h in rule_result.hourly_values if h.get("date") and h.get("hour") is not None}
 
             for ml_hour in ml_result.hourly_values:
+                if not ml_hour.get("date") or ml_hour.get("hour") is None:
+                    continue
+
                 hour = ml_hour["hour"]
-                rule_hour = rule_by_hour.get(hour)
+                date = ml_hour["date"]
+                rule_hour = rule_by_date_hour.get((date, hour))
 
                 if rule_hour:
-                    # Blend this hour
+
                     ml_kwh = ml_hour["production_kwh"]
                     rule_kwh = rule_hour["production_kwh"]
                     blended_kwh = (ml_kwh * accuracy_weight) + (rule_kwh * rule_weight)
@@ -492,20 +506,21 @@ class ForecastOrchestrator:
                         }
                     )
                 else:
-                    # Only ML has this hour
+
                     hourly_values.append(ml_hour)
 
             _LOGGER.debug(f"Blended {len(hourly_values)} hourly values")
         elif ml_result and ml_result.hourly_values:
-            # Only ML available
+
             hourly_values = ml_result.hourly_values
             _LOGGER.debug(f"Using ML hourly values: {len(hourly_values)} hours")
         elif rule_result and rule_result.hourly_values:
-            # Only Rule-based available
+
             hourly_values = rule_result.hourly_values
             _LOGGER.debug(f"Using Rule-based hourly values: {len(hourly_values)} hours")
 
-        # Note: prediction_history.json removed - hourly_predictions.json is now the single source of truth
+        today_raw = rule_result.forecast_today_raw if rule_result else None
+        safeguard_applied = rule_result.safeguard_applied_today if rule_result else False
 
         return {
             "today": round(final_today, 2),
@@ -517,7 +532,9 @@ class ForecastOrchestrator:
             "model_accuracy": model_accuracy if self._ml_predictor else None,
             "best_hour": best_hour,
             "best_hour_kwh": round(best_hour_kwh, 3) if best_hour_kwh is not None else None,
-            "hourly": hourly_values,  # Include hourly breakdown
+            "hourly": hourly_values,
+            "today_raw": round(today_raw, 2) if today_raw is not None else None,
+            "safeguard_applied": safeguard_applied,
         }
 
     def calculate_next_hour_prediction(
@@ -533,10 +550,9 @@ class ForecastOrchestrator:
             target_dt_local = now_local + timedelta(hours=1)
             target_hour = target_dt_local.hour
 
-            # Use production hour check (astronomy cache with safety margins)
             if not self.is_production_hour(target_dt_local):
                 if sensor_data and sensor_data.get("lux") is not None:
-                    if sensor_data["lux"] < 500:  # Too dark for meaningful production
+                    if sensor_data["lux"] < 500:
                         _LOGGER.debug(
                             f"Target hour {target_hour} has insufficient light (lux={sensor_data['lux']}). "
                             f"Next hour prediction is 0.0 kWh."
@@ -571,7 +587,7 @@ class ForecastOrchestrator:
                 adjusted_kwh *= factor_value
                 factors_log.append(f"{factor_name}={factor_value:.2f}")
 
-            max_hourly_kwh = self.solar_capacity * 1.2  # 20% safety margin
+            max_hourly_kwh = self.solar_capacity * 1.2
             adjusted_kwh = min(adjusted_kwh, max_hourly_kwh)
 
             final_prediction_kwh = max(0.0, adjusted_kwh)

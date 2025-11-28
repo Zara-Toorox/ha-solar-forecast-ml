@@ -5,8 +5,9 @@
 # - ML Services: Model training and management
 # - Emergency Services: Manual day-end task execution
 # - Testing Services: Essential testing and simulation
-# - Collection & Cleanup: Data maintenance tasks
 # - Astronomy Services: Solar calculations and cache management
+# - Weather Services: Weather data management
+# - Battery Services: Battery sensor discovery and configuration
 # ============================================================================
 
 # ============================================================================
@@ -14,38 +15,76 @@
 # ============================================================================
 
 force_retrain:
-  name: Retrain ML Model (V2)
+  name: "🚀 Retrain ML Model (V10.0.0 TinyML)"
   description: >
-    🚀 NEW V2 TRAINING - Uses hourly_predictions.json + astronomy_cache.json
+    🚀 V10.0.0 ADAPTIVE TRAINING - Ridge Regression + TinyLSTM Neural Network
 
-    Forces immediate retraining of the Machine Learning model with the new V2 data structure.
+    Forces immediate retraining of the Machine Learning model with adaptive algorithm selection.
 
-    What's new in V2:
-    - 44 features (vs 31 before)
-    - 6 new astronomy features (clear_sky_radiation, theoretical_max, etc.)
-    - Time features (day_of_year, season, etc.)
-    - Better weather features (precipitation, dew_point, etc.)
+    What's new in V10.0.0 "TinyML":
+    - Adaptive algorithm selection (Ridge < 100 samples, TinyLSTM ≥ 100 samples)
+    - TinyLSTM: Pure NumPy LSTM with 24-hour lookback, 32 hidden neurons
+    - 14 optimized features (time, weather, astronomy, lag)
+    - Zero new dependencies (only NumPy required)
+    - Async-safe training (non-blocking event loop)
 
-    Expected improvements:
-    - +10-20% accuracy (better astronomy + time features)
-    - +15% stability (more context)
-    - +25% realism (theoretical_max bounds)
+    Training behavior:
+    - < 100 samples → Ridge Regression (fast, stable, ~1 second)
+    - ≥ 100 samples → TinyLSTM (accurate, temporal, ~10-30 seconds)
+    - Automatic fallback to Ridge if LSTM fails or insufficient memory
+    - User can override via integration options (Automatic/Ridge/Neural Network)
+
+    Expected improvements vs V10.0.0:
+    - +5-10% accuracy with TinyLSTM (captures temporal patterns)
+    - Better handling of weather sequences (24-hour context)
+    - Improved early-morning and late-afternoon predictions
 
     Data sources:
-    - hourly_predictions.json (main source)
-    - astronomy_cache.json (critical astronomy features)
-    - hourly_samples.json (lag features only)
+    - hourly_predictions.json (main source with actual production)
+    - weather_forecast_corrected.json (weather + precision corrections)
+    - astronomy_cache.json (sun position, theoretical max, clear-sky radiation)
 
-    This will automatically use V2 training (use_v2_training=True).
+    Model storage:
+    - Weights: /ml/model_state.json (~100 KB for LSTM, ~10 KB for Ridge)
+    - Scaler: Embedded in model_state.json
+    - Algorithm used: Stored in model_state.json (ridge/tiny_lstm)
+
+    Use this service:
+    - After collecting new production data (to improve accuracy)
+    - After fixing solar_capacity configuration
+    - To test LSTM vs Ridge performance
+    - If automatic training (06:00 daily) failed
   fields: {}
 
 reset_model:
-  name: Reset ML Model
+  name: "⚠️ Reset ML Model"
   description: >
-    ⚠️ WARNING: This deletes all learned weights and requires the model to retrain from scratch!
+    ⚠️ DESTRUCTIVE ACTION - Deletes all learned model weights!
 
-    Resets the Machine Learning model to its initial state.
-    Use with caution - this action cannot be undone.
+    Resets the Machine Learning model to its initial untrained state.
+
+    What this service does:
+    - Deletes /ml/model_state.json (all learned weights + scaler)
+    - Resets ML predictor to UNINITIALIZED state
+    - Clears accuracy metrics and training sample count
+    - Forces model to retrain from scratch on next training cycle
+
+    Use this service:
+    - After major configuration changes (solar_capacity, location)
+    - If model produces consistently wrong predictions
+    - To start fresh ML training (debugging)
+    - After corrupted model_state.json file
+
+    What happens after reset:
+    - Model will use Rule-Based predictions until retrained
+    - Next training (06:00 or manual) will rebuild from scratch
+    - All historical prediction accuracy data is lost
+    - Requires ≥10 samples with actual production to retrain
+
+    ⚠️ CAUTION: This action CANNOT be undone!
+    Consider backing up /ml/model_state.json before resetting.
+
+    Alternative: Use force_retrain service to keep model but retrain with latest data.
   fields: {}
 
 # ============================================================================
@@ -54,22 +93,48 @@ reset_model:
 # Use these services if automated day-end tasks fail or need manual triggering
 
 run_all_day_end_tasks:
-  name: Run All Day-End Tasks
+  name: "🌙 Run All Day-End Tasks"
   description: >
-    ⚠️ EMERGENCY SERVICE - Use only if automated tasks fail!
+    🌙 EMERGENCY SERVICE - Manual execution of complete 23:30 day-end workflow!
 
-    Execute complete day-end sequence: finalize → history → stats → cleanup.
-    Use before midnight to save today's data if automated routine failed!
-  fields: {}
+    Executes the COMPLETE 8-step sequence that runs automatically at 23:30 daily.
 
-calculate_stats:
-  name: Calculate Statistics
-  description: >
-    ⚠️ EMERGENCY SERVICE - Use only if automated task fails!
+    Task sequence (8 steps - matches production/production_scheduled_tasks.py::end_of_day_workflow):
+    1. Finalize Day (read solar_yield_today before midnight reset)
+    2. Create Daily Summary (shadow analysis, ML accuracy metrics)
+    3. Move to History (archive today's predictions)
+    4. Update Yesterday Deviation (yesterday vs forecast comparison)
+    5. Calculate Statistics (MAE, RMSE, R² metrics)
+    6. Update RB Overall Correction (production-based factor)
+    7. Night Cleanup (remove duplicates, zero samples)
+    8. Pattern Learning (V10.0.0 KI: geometry corrections)
 
-    Manually calculate statistics (normally runs at 23:32).
-    Computes accuracy metrics from historical data.
-    Rate-limited to once per minute.
+    What this service does:
+    - Saves today's final production data before midnight
+    - Analyzes prediction accuracy (hourly + daily)
+    - Detects shadow patterns and obstructions
+    - Learns panel geometry corrections (monthly)
+    - Archives predictions to history
+    - Cleans up data duplicates
+    - Updates correction factors
+
+    Use this service:
+    - ⚠️ If automatic 23:30 task failed
+    - Before midnight to manually save today's data
+    - For debugging end-of-day workflow
+    - To trigger geometry learning manually
+
+    Processing time: ~2-5 seconds (8 steps)
+
+    Files affected:
+    - daily_summaries.json (new entry for today with shadow analysis)
+    - hourly_predictions.json (today moved to history section)
+    - learned_patterns.json (geometry corrections updated)
+    - coordinator_state.json (yesterday deviation updated)
+    - hourly_samples.json (cleaned, duplicates removed)
+
+    ⚠️ CAUTION: Run ONLY ONCE per day to avoid duplicate entries!
+    This service calls: coordinator.scheduled_tasks.end_of_day_workflow()
   fields: {}
 
 # ============================================================================
@@ -110,112 +175,6 @@ test_morning_routine:
     - /data/weather_cache.json (weather forecast from 06:00)
   fields: {}
 
-test_best_hour:
-  name: "🧪 TEST: Calculate Best Production Hour"
-  description: >
-    ⚠️ TESTING SERVICE - Creates backup before use recommended!
-
-    Calculates which hour TODAY will have the highest solar production.
-
-    Code Reference: ml/ml_best_hour_calculator_v2.py
-
-    Strategy (Hybrid V2 Algorithm):
-    1. BEST: Use ML hourly predictions (if available)
-    2. FALLBACK: Use historical profile data
-    3. EMERGENCY: Use solar noon calculation
-
-    All methods are SUN-AWARE:
-    - Integrates with sun.sun entity for sunrise/sunset
-    - Filters hours outside production window
-    - Adds 30-minute safety margins
-    - Prevents unrealistic selections (e.g., 18:00 in November)
-
-    This forecast helps with planning:
-    - When to run appliances
-    - When to charge batteries
-    - When to expect peak production
-
-    Result is saved to daily_forecasts.json and displayed in sensors.
-  fields: {}
-
-run_all_scheduled_tasks:
-  name: "🧪 TEST: Run All Scheduled Tasks"
-  description: >
-    ⚠️ COMPREHENSIVE TESTING SERVICE - This runs ALL automated tasks!
-
-    Executes ALL scheduled tasks in chronological order to simulate
-    a complete day-night cycle for debugging.
-
-    Task execution sequence (18 tasks total):
-    1. [23:05] ML Training Check (Daily)
-    2. [23:30] End-of-Day Workflow (Finalize + History + Stats + Cleanup)
-    3. [00:00] Reset Expected Production
-    4. [00:00:30] Midnight Forecast Rotation
-    5. [03:00] Weekly ML Retraining (Sunday only)
-    6. [06:00] Morning Forecast Update (includes best hour)
-    7-9. [06:15, 06:30, 06:45] Forecast Retry Attempts
-    10. [XX:00:05] Next Hour Forecast Update
-    11. [XX:02] Hourly Sample Collection
-    12-13. Battery Management Tasks (if enabled)
-
-    Use this to verify all tasks work correctly without waiting for
-    scheduled times. Perfect for integration testing.
-
-    ⚠️ This service takes several minutes to complete!
-  fields: {}
-
-# ============================================================================
-# COLLECTION & CLEANUP SERVICES - Data Maintenance
-# ============================================================================
-
-collect_hourly_sample:
-  name: Collect Hourly Sample
-  description: >
-    Manually triggers the collection of an hourly sample for ML training.
-
-    This will collect data for the PREVIOUS full hour:
-    - Solar production (kWh)
-    - Weather conditions (temperature, clouds, etc.)
-    - External sensor data (if configured)
-
-    The sample is saved to hourly_samples.json for ML model training.
-
-    Normally this runs automatically at XX:02 every hour.
-    Use this service to manually collect a sample if automatic collection failed.
-  fields: {}
-
-night_cleanup:
-  name: Night Cleanup
-  description: >
-    Manually trigger night cleanup task (normally runs at 02:00).
-
-    What this does:
-    - Removes duplicate samples from hourly_samples.json
-    - Removes zero-production samples (where solar production = 0 kWh)
-    - Optimizes database for better ML training
-
-    Useful for testing data cleanup logic or cleaning up corrupted data.
-  fields: {}
-
-reload_scheduled_tasks:
-  name: Reload Scheduled Tasks
-  description: >
-    Re-register all scheduled task listeners.
-
-    Use this service if you suspect that automatic scheduled tasks
-    (hourly updates, morning forecast, end-of-day workflow) are not running.
-
-    This service will:
-    1. Cancel all existing scheduled task listeners
-    2. Re-register all scheduled tasks:
-       - 06:00 AM: Morning forecast update + hourly predictions creation
-       - Every hour at :05: Hourly actuals update
-       - 23:05 PM: ML training check
-       - 23:30 PM: End of day workflow
-
-    After running this service, scheduled tasks should resume automatically.
-  fields: {}
-
 # ============================================================================
 # ASTRONOMY SERVICES - Independent Solar Calculations
 # ============================================================================
@@ -226,43 +185,47 @@ reload_scheduled_tasks:
 build_astronomy_cache:
   name: "🌞 Build Astronomy Cache"
   description: >
-    Build or rebuild the astronomy cache with solar position calculations.
+    🌞 ASTRONOMY SERVICE - Build comprehensive solar position and radiation cache!
 
-    This service creates a comprehensive cache of astronomical data including:
-    - Sun position (elevation, azimuth) for every hour (0-23)
-    - Clear sky solar radiation (W/m²) using atmospheric physics model
-    - Theoretical maximum PV output based on system capacity
-    - Production windows (sunrise - 1h to sunset + 1h)
-    - Solar noon, daylight hours, and day progress ratios
+    Creates physics-based astronomical data cache for ML feature engineering and production validation.
+
+    What this service does:
+    - Calculates sun position (elevation, azimuth) for every hour (0-23)
+    - Computes clear-sky solar radiation using atmospheric physics model
+    - Calculates theoretical maximum PV output based on YOUR system capacity
+    - Determines production windows (sunrise -30min to sunset +30min)
+    - Generates solar noon, daylight hours, day progress ratios
+
+    ⚠️ V10.0.0 IMPORTANT: Uses your configured solar_capacity (e.g., 2.13 kWp)!
+    All theoretical_max_pv values will be calculated for YOUR specific system size.
 
     The cache is used for:
-    - ML feature engineering (8 new astronomy-based features)
-    - Production window validation (replaces sun.sun dependency)
-    - Realistic benchmarks (historical max vs theoretical max)
-    - Offline operation (works for 7 days without sun.sun entity)
+    - ML feature engineering (3 astronomy features: sun_elevation, theoretical_max, clear_sky_radiation)
+    - Physics-based prediction bounds (prevents unrealistic forecasts)
+    - Shadow detection (compares actual lux vs clear-sky radiation)
+    - Production window validation (replaces sun.sun entity dependency)
 
     Default settings:
-    - days_back: 30 days (for historical analysis and debugging)
-    - days_ahead: 7 days (for forecast planning)
-    - system_capacity_kwp: from integration config
+    - days_back: 30 days (historical analysis + geometry learning)
+    - days_ahead: 7 days (forecast planning)
+    - system_capacity_kwp: FROM YOUR INTEGRATION CONFIG (e.g., 2.13 kWp)
 
-    Build time: ~5 seconds for 30 days (96% faster than old 730-day default)
-    File size: ~250 KB for 30 days (95% smaller than old 5 MB)
+    Use this service:
+    - ✅ After updating solar_capacity in integration settings (rebuilds with correct kWp!)
+    - On first setup (runs automatically during installation)
+    - After changing Home Assistant location
+    - To rebuild corrupted cache file
+    - To extend historical range for analysis
+
+    Processing time: ~5 seconds for 37 days (30 back + today + 7 ahead)
+    File size: ~250 KB (compact JSON with hourly granularity)
+
+    Cache file: /config/solar_forecast_ml/stats/astronomy_cache.json
 
     Location data: Automatically from Home Assistant configuration
     - Latitude, Longitude, Elevation, Timezone
 
-    Cache file: /config/solar_forecast_ml/stats/astronomy_cache.json
-
-    Use this service:
-    - On first setup (runs automatically)
-    - After changing location
-    - After updating system capacity
-    - To rebuild corrupted cache
-    - To extend history range
-
-    IMPORTANT: This service is I/O intensive. Avoid running during
-    active ML training or other heavy operations.
+    ⚠️ CAUTION: I/O intensive - avoid running during active ML training!
   fields:
     days_back:
       description: "Days to calculate backwards from today (default: 30)"
@@ -319,3 +282,453 @@ refresh_cache_today:
     NOTE: This service does NOT rebuild historical data.
     Use build_astronomy_cache for full rebuilds.
   fields: {}
+
+# ============================================================================
+# WEATHER SERVICES - Weather Data Management
+# ============================================================================
+
+run_weather_correction:
+  name: "🔄 Rebuild Corrected Weather Forecast"
+  description: >
+    ⚠️ MANUAL TRIGGER - Rebuilds weather_forecast_corrected.json immediately!
+
+    This service manually triggers the corrected weather forecast generation
+    which normally runs automatically at 02:00 daily.
+
+    What this does:
+    1. Loads raw weather forecast from weather_cache.json
+    2. Loads precision correction factors from weather_precision_daily.json
+    3. Loads astronomy data for clear_sky calculations
+    4. Applies physics-based corrections (clear_sky × cloud_factor)
+    5. Saves corrected forecast to weather_forecast_corrected.json
+
+    Use this service:
+    - After fixing bugs in weather correction code
+    - To test weather correction logic immediately
+    - If automatic 02:00 task failed
+    - When you can't wait until 02:00 for new forecast
+
+    Processing time: ~1 second
+
+    Result file: /config/solar_forecast_ml/stats/weather_forecast_corrected.json
+
+    IMPORTANT: This service will overwrite the existing corrected forecast!
+  fields: {}
+
+refresh_open_meteo_cache:
+  name: "Refresh Open-Meteo Direct Radiation Cache"
+  description: >
+    Manually refresh Open-Meteo direct radiation data!
+
+    This service fetches fresh radiation forecasts from Open-Meteo API
+    and updates the persistent cache (open_meteo_cache.json).
+
+    What this does:
+    1. Fetches 72-hour forecast from api.open-meteo.com
+    2. Gets direct_radiation, diffuse_radiation, GHI (W/m2)
+    3. Gets temperature, clouds, humidity, wind, precipitation
+    4. Updates in-memory cache for immediate use
+    5. Saves to open_meteo_cache.json (survives HA restarts)
+
+    Direct Radiation Mode:
+    - Uses GHI (Global Horizontal Irradiance) directly from API
+    - No cloud-to-radiation calculation needed
+    - More accurate than physics-based cloud models
+    - GHI = direct_radiation + diffuse_radiation
+
+    Automatic schedule:
+    - 00:15 LOCAL: Daily update (with corrected forecast)
+    - 12:15 LOCAL: Mid-day refresh
+
+    Use this service when:
+    - After HA restart if cache is stale (>12 hours old)
+    - "Open-Meteo unavailable" warnings in logs
+    - Want immediate weather/radiation data refresh
+
+    Processing time: ~2-5 seconds (depends on API response)
+
+    Result files:
+    - /config/solar_forecast_ml/data/open_meteo_cache.json (persistent)
+    - In-memory cache (immediate use in corrected forecast)
+
+    API: api.open-meteo.com (free, no API key required)
+  fields: {}
+
+bootstrap_physics_from_history:
+  name: "🔬 Bootstrap Physics-First Models from History"
+  description: >
+    🔬 PHYSICS-FIRST BOOTSTRAP - Train GeometryLearner and ResidualTrainer from HA History!
+
+    This service trains the Physics-First Architecture components using historical
+    production data from Home Assistant combined with historical weather from Open-Meteo.
+
+    ⚠️ REQUIREMENTS:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ power_entity (required, already configured)
+    ✅ solar_yield_today (required, already configured)
+    ⭐ solar_radiation_sensor (optional, improves training)
+    ⭐ lux_sensor (optional, for clear-sky detection)
+    ⭐ temp_sensor (optional, for temperature correction)
+
+    What this service does (8 steps):
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    1. ✅ Validates required sensor configuration
+    2. 📊 Fetches production history from HA Recorder (up to 6 months)
+    3. 📈 Aggregates hourly production from cumulative yield
+    4. 🌤️ Fetches historical weather from Open-Meteo Archive API
+    5. 🌞 Builds astronomy cache retroactively (sun positions)
+    6. 📐 Builds training samples with production + weather + astronomy
+    7. 🔬 Trains GeometryLearner (learns panel tilt/azimuth from clear-sky data)
+    8. 🧠 Trains ResidualTrainer (learns ML corrections for Physics model)
+
+    GeometryLearner Output:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    - Learned panel tilt (e.g., 32.5°) from production patterns
+    - Learned panel azimuth (e.g., 175°) from morning/afternoon production
+    - Confidence score based on clear-sky sample count
+    - Saved to: /config/solar_forecast_ml/learned_geometry.json
+
+    ResidualTrainer Output:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    - ML model trained on residuals (actual - physics prediction)
+    - Captures local effects: shadows, obstructions, systematic errors
+    - Algorithm: Ridge (fast) or TinyLSTM (accurate, 100+ samples)
+    - Saved to: /config/solar_forecast_ml/ml/residual_model_state.json
+
+    After bootstrap:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ Physics-First architecture fully trained
+    ✅ Panel geometry learned (no manual configuration needed!)
+    ✅ ML residual model ready for ensemble predictions
+    ✅ Forecasts immediately use Physics+ML combination
+
+    Use this service:
+    - After fresh installation with 1+ month of history
+    - After reinstallation to quickly restore trained models
+    - To retrain models with more historical data
+    - When panel geometry may have changed (e.g., reinstallation)
+
+    Processing time: 30-120 seconds (depends on days requested)
+
+  fields:
+    days:
+      name: "Days to fetch"
+      description: "Number of days to look back in history (1-365). Default: 180 days (6 months) for comprehensive training. GeometryLearner needs clear-sky days, so more history = better results."
+      required: false
+      default: 180
+      example: 180
+      selector:
+        number:
+          min: 7
+          max: 365
+          mode: slider
+          unit_of_measurement: "days"
+    cumulative_yield_sensor:
+      name: "Cumulative Yield Sensor (optional)"
+      description: >
+        Optional: A CUMULATIVE total yield sensor (kWh) that is NOT reset daily.
+        Use this if your solar_yield_today sensor doesn't have enough history.
+        The service will calculate hourly production from the differences.
+        Example: sensor.solar_total_yield or sensor.inverter_lifetime_production
+      required: false
+      example: "sensor.solar_total_yield"
+      selector:
+        entity:
+          domain: sensor
+
+bootstrap_from_history:
+  name: "🚀 Bootstrap Pattern Learning from History"
+  description: >
+    🚀 ADVANCED - Bootstrap pattern learning from Home Assistant history!
+
+    ⚠️ REQUIREMENTS:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ Power sensor (required, already configured during setup)
+    ✅ Yield sensor (required, already configured during setup)
+    ⭐ Cumulative Yield sensor (optional, via service parameter)
+    ⭐ Other sensors are OPTIONAL (solar_radiation, temperature, etc.)
+
+    Optional sensors improve the quality of pattern learning but are NOT required!
+
+    What this service does:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    1. ✅ Validates required sensors (power + yield)
+    2. 📊 Fetches sensor history from Home Assistant Recorder
+    3. 📊 Optionally uses cumulative yield sensor for longer history
+    4. 📝 Fills hourly_weather_actual.json
+    5. 🧠 Calculates geometry_factors from actual production
+    6. 📅 Learns seasonal_adjustments (monthly patterns)
+    7. ⚡ Builds efficiency_curves (radiation vs output)
+    8. 💾 Saves learned_patterns.json with real data
+
+    After bootstrap:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ learned_patterns.json has real data (not defaults!)
+    ✅ hourly_weather_actual.json filled with historical data
+    ✅ ML training can start immediately (if 100+ samples)
+    ✅ Geometry corrections based on YOUR actual installation
+
+    Processing time: ~10-30 seconds (depends on days requested)
+
+    Result files:
+    - /config/solar_forecast_ml/stats/hourly_weather_actual.json
+    - /config/solar_forecast_ml/ml/learned_patterns.json
+
+  fields:
+    days:
+      name: "Days to fetch"
+      description: "Number of days to look back in history (1-180). Default: 30 days for comprehensive pattern learning."
+      required: false
+      default: 30
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 180
+          mode: slider
+          unit_of_measurement: "days"
+    cumulative_yield_sensor:
+      name: "Cumulative Yield Sensor (optional)"
+      description: >
+        Optional: A CUMULATIVE total yield sensor (kWh) that is NOT reset daily.
+        Use this if your solar_yield_today sensor doesn't have enough history.
+        The service will calculate hourly production from the differences.
+        Example: sensor.solar_total_yield or sensor.inverter_lifetime_production
+      required: false
+      example: "sensor.solar_total_yield"
+      selector:
+        entity:
+          domain: sensor
+
+send_daily_briefing:
+  name: Send Daily Solar Briefing
+  description: >
+    ☀️ Send a daily solar weather briefing notification with today's forecast.
+
+    This service generates and sends a formatted notification with:
+    - Today's solar forecast (kWh prediction)
+    - Weather interpretation (sunny, partly cloudy, etc.)
+    - Comparison to yesterday's actual production
+    - Best production time (Solar Noon)
+    - Sunrise/Sunset times and daylight duration
+    - Smart emoji indicators
+
+    Perfect for morning routines to know what to expect from your solar system!
+
+    Example notification:
+    Title: "☀️ Solar Forecast - Samstag, 16. Nov"
+    Message:
+    "🌞 Guter Solar-Tag erwartet!
+
+    📊 Forecast: 4.45 kWh
+       → 6x besser als gestern (0.7 kWh)
+
+    🌤️ Wetter: Sonnig bis teilweise bewölkt
+       Beste Zeit: 10:51 Uhr (Solar Noon)
+
+    ⏰ Tageslicht: 8h 35min
+       🌅 Aufgang: 06:34 Uhr
+       🌇 Untergang: 15:11 Uhr
+
+    Viel Sonne heute! ☀️"
+
+    Use this service:
+    - In automations for daily morning notifications
+    - Manually to check today's forecast briefing
+    - With different notify services (mobile_app, persistent_notification, etc.)
+
+    Tip: Create an automation that runs at 07:00 every morning!
+  fields:
+    notify_service:
+      name: Mobile Device (Optional)
+      description: >
+        OPTIONAL: Add your mobile device to receive an additional push notification.
+
+        - Leave EMPTY or use "persistent_notification": Full message in HA UI only (recommended for most users)
+        - Enter "mobile_app_iphone" (or your device name): Get BOTH push notification + HA UI message
+
+        The full briefing is ALWAYS shown in Home Assistant UI (notification bell icon).
+
+        To find your device name: Go to Developer Tools > Services and search for "notify.mobile_app"
+      example: "mobile_app_iphone"
+      default: "persistent_notification"
+      required: false
+      selector:
+        text:
+    language:
+      name: Language
+      description: Language for the notification text (de=German, en=English)
+      example: "de"
+      default: "de"
+      required: false
+      selector:
+        select:
+          options:
+            - label: "Deutsch"
+              value: "de"
+            - label: "English"
+              value: "en"
+
+# ============================================================================
+# BATTERY MANAGEMENT - Auto-Discovery Services
+# ============================================================================
+
+discover_battery_sensors:
+  name: "Batterie-Sensoren automatisch erkennen"
+  description: >
+    🔋 Erkennt automatisch kompatible Batterie-Sensoren von unterstützten Integrationen.
+
+    Unterstützte Integrationen:
+    - Anker Solix (anker_solix)
+    - Huawei Solar (huawei_solar)
+    - Fronius (fronius)
+
+    Wenn keine Integration angegeben wird, werden alle unterstützten Integrationen durchsucht.
+
+    Die erkannten Sensoren können dann manuell in der Integration konfiguriert oder mit
+    auto_apply=true automatisch eingetragen werden.
+
+    Tipp: Verwenden Sie stattdessen auto_configure_battery für eine vollautomatische Konfiguration!
+  fields:
+    integration:
+      name: "Integration"
+      description: "Name der Integration (optional). Wenn nicht angegeben, werden alle unterstützten Integrationen durchsucht."
+      required: false
+      example: "anker_solix"
+      selector:
+        select:
+          options:
+            - "anker_solix"
+            - "huawei_solar"
+            - "fronius"
+    auto_apply:
+      name: "Automatisch anwenden"
+      description: "Wenn aktiviert, werden die erkannten Sensoren automatisch in die Konfiguration eingetragen (Standard: false)"
+      required: false
+      default: false
+      example: true
+      selector:
+        boolean:
+
+auto_configure_battery:
+  name: "🚀 Batterie-Sensoren automatisch konfigurieren (1-Klick)"
+  description: >
+    🎯 ONE-CLICK LÖSUNG - Erkennt UND konfiguriert Batterie-Sensoren vollautomatisch!
+
+    Was dieser Service macht:
+    1. Sucht nach unterstützten Integrationen (Anker Solix, Huawei Solar, Fronius)
+    2. Erkennt automatisch alle kompatiblen Sensoren
+    3. Validiert die erkannten Sensoren
+    4. Trägt die Sensoren AUTOMATISCH in Ihre Solar Forecast ML Konfiguration ein
+    5. Lädt die Integration neu, um die Änderungen zu aktivieren
+
+    ✨ Einfachste Methode - Nur 1 Klick!
+
+    Nach erfolgreicher Konfiguration:
+    - Batterie-Management ist aktiviert (v9.0.0 System)
+    - Energiefluss-Tracking ist aktiv
+    - Alle Batterie-Sensoren werden überwacht
+
+    WICHTIG: Dieser Service ändert Ihre Konfiguration. Die Integration wird automatisch neu geladen.
+
+    Unterstützte Integrationen:
+    - Anker Solix (anker_solix)
+    - Huawei Solar (huawei_solar)
+    - Fronius (fronius)
+  fields:
+    integration:
+      name: "Integration (optional)"
+      description: "Name der Integration. Wenn nicht angegeben, wird automatisch nach allen unterstützten Integrationen gesucht."
+      required: false
+      example: "anker_solix"
+      selector:
+        select:
+          options:
+            - "anker_solix"
+            - "huawei_solar"
+            - "fronius"
+
+validate_battery_sensors:
+  name: "Batterie-Sensoren validieren"
+  description: >
+    ✅ Validiert die Konfiguration der Batterie-Sensoren.
+
+    Prüft ob:
+    - Alle erforderlichen Sensoren vorhanden sind
+    - Die Sensoren in Home Assistant existieren
+    - Die Sensoren gültige Werte liefern
+
+    Nützlich nach der Auto-Discovery um sicherzustellen, dass alle Sensoren korrekt erkannt wurden.
+  fields:
+    battery_power_sensor:
+      name: "Batterie Leistungssensor"
+      description: "Sensor für Batterie-Leistung (W, positiv=laden, negativ=entladen)"
+      required: true
+      example: "sensor.anker_charging_power"
+      selector:
+        entity:
+          domain: sensor
+    battery_soc_sensor:
+      name: "Batterie SOC Sensor"
+      description: "Sensor für Ladezustand (State of Charge) in Prozent (0-100%)"
+      required: true
+      example: "sensor.anker_state_of_charge"
+      selector:
+        entity:
+          domain: sensor
+    solar_production_sensor:
+      name: "Solar Produktionssensor"
+      description: "Sensor für Solar-Produktion in Watt (≥0)"
+      required: true
+      example: "sensor.anker_input_power"
+      selector:
+        entity:
+          domain: sensor
+    inverter_output_sensor:
+      name: "Wechselrichter Ausgangssensor"
+      description: "Sensor für Wechselrichter AC-Ausgang in Watt (≥0)"
+      required: true
+      example: "sensor.anker_output_power"
+      selector:
+        entity:
+          domain: sensor
+    house_consumption_sensor:
+      name: "Hausverbrauchssensor"
+      description: "Sensor für Hausverbrauch in Watt (≥0)"
+      required: true
+      example: "sensor.anker_home_load_power"
+      selector:
+        entity:
+          domain: sensor
+    grid_import_sensor:
+      name: "Netzbezugssensor"
+      description: "Sensor für Netzbezug (Strom aus dem Netz) in Watt (≥0)"
+      required: true
+      example: "sensor.anker_grid_to_home_power"
+      selector:
+        entity:
+          domain: sensor
+    grid_export_sensor:
+      name: "Netzeinspeisung Sensor"
+      description: "Sensor für Netzeinspeisung (Strom ins Netz) in Watt (≥0)"
+      required: true
+      example: "sensor.anker_photovoltaic_to_grid_power"
+      selector:
+        entity:
+          domain: sensor
+    grid_charge_power_sensor:
+      name: "Netzladeleistung Sensor"
+      description: "Sensor für Netzladeleistung zur Batterie in Watt (≥0, optional)"
+      required: false
+      example: "sensor.anker_grid_to_battery_power"
+      selector:
+        entity:
+          domain: sensor
+    battery_temperature_sensor:
+      name: "Batterie Temperatursensor"
+      description: "Sensor für Batterie-Temperatur in °C (optional)"
+      required: false
+      example: "sensor.anker_temperature"
+      selector:
+        entity:
+          domain: sensor

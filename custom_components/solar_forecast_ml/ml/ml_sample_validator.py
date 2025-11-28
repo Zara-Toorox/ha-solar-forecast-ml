@@ -1,5 +1,4 @@
-"""
-ML Sample Validator for Solar Forecast ML Integration
+"""ML Sample Validator for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -23,28 +22,35 @@ from typing import Any, Dict, List, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class MLSampleValidator:
     """Validates ML training samples for quality and completeness"""
 
     @staticmethod
-    def validate_sample(sample: Dict[str, Any]) -> bool:
-        """Validate a single training sample"""
-        # Check required fields
+    def validate_sample(sample: Dict[str, Any], exclude_frost: bool = True) -> bool:
+        """Validate a single training sample @zara"""
+
+        if exclude_frost:
+            frost_detected = sample.get("frost_detected")
+            if frost_detected == "heavy_frost":
+                _LOGGER.info(
+                    f"Excluding sample {sample.get('timestamp')} - heavy frost detected "
+                    f"(score: {sample.get('frost_score', 'N/A')}, "
+                    f"confidence: {sample.get('frost_confidence', 'N/A'):.0%})"
+                )
+                return False
+
         required_fields = ["timestamp", "features", "target"]
         for field in required_fields:
             if field not in sample:
                 _LOGGER.warning(f"Sample missing required field: {field}")
                 return False
 
-        # Validate timestamp
         try:
             datetime.fromisoformat(sample["timestamp"])
         except (ValueError, TypeError):
             _LOGGER.warning(f"Invalid timestamp format: {sample.get('timestamp')}")
             return False
 
-        # Validate features
         features = sample.get("features", {})
         if not isinstance(features, dict):
             _LOGGER.warning("Features must be a dictionary")
@@ -54,7 +60,6 @@ class MLSampleValidator:
             _LOGGER.warning("Features dictionary is empty")
             return False
 
-        # Validate target
         target = sample.get("target")
         if not isinstance(target, (int, float)):
             _LOGGER.warning(f"Invalid target type: {type(target)}")
@@ -90,7 +95,7 @@ class MLSampleValidator:
 
     @staticmethod
     def check_sample_quality(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Analyze quality metrics for a set of samples"""
+        """Analyze quality metrics for a set of samples @zara"""
         if not samples:
             return {
                 "total_samples": 0,
@@ -102,19 +107,15 @@ class MLSampleValidator:
         valid_count = 0
         issues = []
 
-        # Count valid samples
         for sample in samples:
             if MLSampleValidator.validate_sample(sample):
                 valid_count += 1
 
-        # Calculate quality score
         quality_score = valid_count / len(samples) if samples else 0.0
 
-        # Identify issues
         if quality_score < 0.9:
             issues.append(f"Low validation rate: {quality_score:.1%}")
 
-        # Check for feature consistency
         feature_sets = [set(s.get("features", {}).keys()) for s in samples if s.get("features")]
         if feature_sets:
             common_features = set.intersection(*feature_sets) if feature_sets else set()
@@ -137,7 +138,7 @@ class MLSampleValidator:
 
     @staticmethod
     def filter_valid_samples(samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Filter out invalid samples from a list"""
+        """Filter out invalid samples from a list @zara"""
         valid_samples = []
         invalid_count = 0
 

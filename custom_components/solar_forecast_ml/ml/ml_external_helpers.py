@@ -1,5 +1,4 @@
-"""
-External ML Helper Functions
+"""External ML Helper Functions V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -30,16 +29,15 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 def format_time_ago(last_changed: datetime) -> str:
-    """Formats timestamp as X minh ago -"""
-    now = dt_util.now()  # Use LOCAL time - last_changed is also LOCAL
+    """Formats timestamp as X minh ago - @zara"""
+    now = dt_util.now()
     delta = now - last_changed
 
     seconds = delta.total_seconds()
 
     if seconds < 60:
-        return "< 1 min ago"  # Space-saving for < 1 minute -
+        return "< 1 min ago"
     elif seconds < 3600:
         minutes = int(seconds / 60)
         return f"{minutes} min ago"
@@ -47,20 +45,18 @@ def format_time_ago(last_changed: datetime) -> str:
         hours = int(seconds / 3600)
         return f"{hours} h ago"
 
-
 class BaseExternalSensor:
     """Common base for external sensor displays with LIVE updates -"""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    hass: HomeAssistant  # Make hass available to the class
+    hass: HomeAssistant
 
     def __init__(self, coordinator, entry: ConfigEntry, sensor_config: Dict[str, Any]):
-        """Initializes the external sensor -"""
+        """Initializes the external sensor - @zara"""
         self._sensor_config = sensor_config
         self.entry = entry
         self.coordinator = coordinator
 
-        # Set attributes
         self._attr_unique_id = f"{entry.entry_id}_{sensor_config['key']}"
         self._attr_name = sensor_config["name"]
         self._attr_icon = sensor_config["icon"]
@@ -69,14 +65,14 @@ class BaseExternalSensor:
 
     @staticmethod
     def strip_entity_id(entity_id_raw: Any) -> Optional[str]:
-        """Safely strips an entity ID string returns None if invalid"""
+        """Safely strips an entity ID string returns None if invalid @zara"""
         if isinstance(entity_id_raw, str) and entity_id_raw:
             return entity_id_raw.strip()
         return None
 
     @property
     def _sensor_entity_id(self) -> Optional[str]:
-        """Gets the entity ID of the sensor to track from the ConfigEntry"""
+        """Gets the entity ID of the sensor to track from the ConfigEntry @zara"""
         config_key = self._sensor_config.get("config_key")
         if not config_key:
             _LOGGER.error(f"Missing 'config_key' for sensor {self._attr_name}")
@@ -87,11 +83,11 @@ class BaseExternalSensor:
 
     @property
     def available(self) -> bool:
-        """External sensors are always available (they show their own status messages) -"""
+        """External sensors are always available (they show their own status messages) - @zara"""
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Registers LIVE update listener -"""
+        """Registers LIVE update listener - @zara"""
         await super().async_added_to_hass()
 
         sensor_entity_id = self._sensor_entity_id
@@ -108,7 +104,7 @@ class BaseExternalSensor:
 
     @callback
     def _handle_external_sensor_update(self, event) -> None:
-        """Triggers update on external sensor change -"""
+        """Triggers update on external sensor change - @zara"""
         _LOGGER.debug(
             f"External sensor {event.data.get('entity_id')} updated, refreshing {self._attr_name}"
         )
@@ -116,7 +112,7 @@ class BaseExternalSensor:
 
     @property
     def native_value(self) -> str:
-        """Gets value from the configured sensor with timestamp -"""
+        """Gets value from the configured sensor with timestamp - @zara"""
         sensor_entity_id = self._sensor_entity_id
 
         if not sensor_entity_id:
@@ -127,19 +123,16 @@ class BaseExternalSensor:
             return "Entity not found"
 
         try:
-            # Check availability
+
             if state.state in ["unavailable", "unknown", "none", None]:
                 return "Unavailable"
 
-            # Format timestamp
             time_ago = format_time_ago(state.last_changed)
 
-            # Get unit (override default if state provides one)
             unit = state.attributes.get(
                 "unit_of_measurement", self._attr_native_unit_of_measurement or ""
             )
 
-            # Format output
             return self._format_value(state.state, unit, time_ago)
 
         except Exception as e:
@@ -147,27 +140,25 @@ class BaseExternalSensor:
             return "Error"
 
     def _get_unit(self, state: State) -> Optional[str]:
-        """Determines the unit of the sensor -"""
+        """Determines the unit of the sensor - @zara"""
         unit_key = self._sensor_config.get("unit_key", "unit_of_measurement")
         default_unit = self._sensor_config.get("unit")
 
         return state.attributes.get(unit_key, default_unit)
 
     def _format_value(self, value: str, unit: Optional[str], time_ago: str) -> str:
-        """Formats sensor value for display -"""
+        """Formats sensor value for display - @zara"""
         format_string = self._sensor_config.get("format_string", "{value} {unit} ({time})")
 
-        # If a specific format is defined
         if "{value}" in format_string:
             result = format_string.replace("{value}", str(value))
             if unit:
                 result = result.replace("{unit}", str(unit))
             else:
-                result = result.replace(" {unit}", "")  # Remove unit placeholder
+                result = result.replace(" {unit}", "")
             result = result.replace("{time}", time_ago)
             return result
 
-        # Standard format
         if unit:
             return f"{value} {unit} ({time_ago})"
         else:

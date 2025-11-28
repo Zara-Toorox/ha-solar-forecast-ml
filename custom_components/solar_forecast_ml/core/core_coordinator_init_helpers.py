@@ -1,5 +1,4 @@
-"""
-Coordinator Initialization Helpers - Extract __init__ logic
+"""Coordinator Initialization Helpers - Extract __init__ logic V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -45,38 +44,33 @@ from ..const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
 @dataclass
 class CoordinatorConfiguration:
     """Configuration data extracted from ConfigEntry"""
 
-    # Solar Configuration
     solar_capacity: float
     learning_enabled: bool
     enable_hourly: bool
 
-    # Entity IDs
     power_entity: Optional[str]
     solar_yield_today: Optional[str]
     primary_weather_entity: Optional[str]
     total_consumption_today: Optional[str]
 
-    # Battery Configuration
     battery_enabled: bool
     electricity_enabled: bool
     electricity_country: str
-
 
 class CoordinatorInitHelpers:
     """Helper methods for coordinator initialization"""
 
     @staticmethod
     def extract_configuration(entry: ConfigEntry) -> CoordinatorConfiguration:
-        """Extract configuration from entry"""
-        # Migration: Support old plant_kwp field for backward compatibility
+        """Extract configuration from entry @zara"""
+
         solar_capacity_value = entry.data.get(CONF_SOLAR_CAPACITY)
         if solar_capacity_value is None or solar_capacity_value == 0:
-            # Try old field name
+
             solar_capacity_value = entry.data.get("plant_kwp", DEFAULT_SOLAR_CAPACITY)
             if solar_capacity_value != DEFAULT_SOLAR_CAPACITY:
                 _LOGGER.warning(
@@ -100,7 +94,7 @@ class CoordinatorInitHelpers:
 
     @staticmethod
     def initialize_battery_collector(hass: HomeAssistant, entry: ConfigEntry, enabled: bool):
-        """Initialize battery data collector if enabled"""
+        """Initialize battery data collector if enabled @zara"""
         if not enabled:
             return None
 
@@ -116,7 +110,7 @@ class CoordinatorInitHelpers:
 
     @staticmethod
     def initialize_electricity_service(enabled: bool, country: str):
-        """Initialize electricity price service if enabled"""
+        """Initialize electricity price service if enabled @zara"""
         if not enabled:
             return None
 
@@ -135,7 +129,7 @@ class CoordinatorInitHelpers:
 
     @staticmethod
     def setup_data_directory(hass: HomeAssistant) -> Path:
-        """Setup and return data directory path"""
+        """Setup and return data directory path @zara"""
         config_dir = hass.config.path()
         data_dir_path = Path(config_dir) / DOMAIN
         return data_dir_path

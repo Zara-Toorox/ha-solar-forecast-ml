@@ -1,5 +1,4 @@
-"""
-ML Prediction Strategy Implementations
+"""ML Prediction Strategy Implementations V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -28,7 +27,6 @@ from ..ml.ml_types import HourlyProfile, LearnedWeights
 
 _LOGGER = logging.getLogger(__name__)
 
-
 @dataclass
 class PredictionResult:
     prediction: float
@@ -36,7 +34,6 @@ class PredictionResult:
     method: str
     features_used: Dict[str, float]
     model_accuracy: Optional[float] = None
-
 
 class PredictionStrategy(ABC):
 
@@ -48,7 +45,6 @@ class PredictionStrategy(ABC):
     def is_available(self) -> bool:
         pass
 
-
 class MLModelStrategy(PredictionStrategy):
     """ML Model-based prediction strategy using learned weights"""
 
@@ -57,50 +53,113 @@ class MLModelStrategy(PredictionStrategy):
     ):
         self.weights = weights
         self.current_accuracy = current_accuracy
-        # Peak power in kW - used to calculate max hourly production in kWh
+
         self.peak_power_kw = float(peak_power_kw) if peak_power_kw else 0.0
 
-        # Calculate max hourly production in kWh
-        # Under perfect conditions: 1 kWp ≈ 1 kWh per hour
-        # Apply safety margin (20%) for theoretical peak conditions
+        self.algorithm_used = getattr(weights, 'algorithm_used', 'ridge') if weights else 'ridge'
+
+        self._historical_sequence = None
+
+        self._lstm_trainer = None
+        self._sequence_builder = None
+        if self.algorithm_used == "tiny_lstm" and weights:
+            try:
+                from ..ml.ml_tiny_lstm import TinyLSTM
+                from ..ml.ml_sequence_builder import SequenceBuilder
+
+                lstm_weights = weights.weights
+                self._lstm_trainer = TinyLSTM(
+                    input_size=lstm_weights.get('input_size', 14),
+                    hidden_size=lstm_weights.get('hidden_size', 32),
+                    sequence_length=lstm_weights.get('sequence_length', 24)
+                )
+                self._lstm_trainer.set_weights(lstm_weights)
+                self._sequence_builder = SequenceBuilder(
+                    sequence_length=lstm_weights.get('sequence_length', 24)
+                )
+                _LOGGER.info("MLModelStrategy initialized with TinyLSTM inference + SequenceBuilder")
+            except Exception as e:
+                _LOGGER.error(f"Failed to initialize LSTM for inference: {e}. Falling back to Ridge.")
+                self.algorithm_used = "ridge"
+
         from ..const import DEFAULT_MAX_HOURLY_KWH, HOURLY_PRODUCTION_SAFETY_MARGIN
 
         if self.peak_power_kw > 0:
             self.max_hourly_kwh = self.peak_power_kw * HOURLY_PRODUCTION_SAFETY_MARGIN
         else:
-            self.max_hourly_kwh = DEFAULT_MAX_HOURLY_KWH  # Fallback if not configured
+            self.max_hourly_kwh = DEFAULT_MAX_HOURLY_KWH
             _LOGGER.warning(
                 f"Peak power not configured, using fallback max hourly: {self.max_hourly_kwh} kWh"
             )
 
+    def set_historical_sequence(self, recent_hours: Optional[list]) -> None:
+        """Set historical data for LSTM sequence building @zara"""
+        self._historical_sequence = recent_hours
+        if recent_hours:
+            _LOGGER.debug(f"Historical sequence set: {len(recent_hours)} hours")
+
     async def predict(self, features) -> PredictionResult:
-        """Make prediction from features (dict or list)
-
-        Args:
-            features: Either Dict[str, float] (V1) or List[float] (V2)
-
-        Returns:
-            PredictionResult with prediction and metadata
-        """
+        """Make prediction from features (dict or list) @zara"""
         if not self.weights:
             raise MLModelException("No trained weights available")
 
-        # Linear prediction: prediction = bias + sum(weight_i * feature_i)
+        if self.algorithm_used == "tiny_lstm" and self._lstm_trainer is not None:
+            prediction = await self._predict_lstm(features)
+        else:
+
+            prediction = self._predict_ridge(features)
+
+        theoretical_max_kwh = None
+        if isinstance(features, list) and hasattr(self.weights, "feature_names"):
+            try:
+                idx = self.weights.feature_names.index("theoretical_max_kwh")
+                if idx < len(features):
+
+                    theoretical_max_scaled = features[idx]
+
+                    feature_mean = self.weights.feature_means.get("theoretical_max_kwh", 0.0)
+                    feature_std = self.weights.feature_stds.get("theoretical_max_kwh", 1.0)
+                    theoretical_max_kwh = (theoretical_max_scaled * feature_std) + feature_mean
+                    _LOGGER.debug(f"🌞 Astronomy-based theoretical_max: {theoretical_max_kwh:.4f} kWh (from scaled={theoretical_max_scaled:.3f})")
+            except (ValueError, AttributeError, KeyError) as e:
+                _LOGGER.debug(f"Could not extract theoretical_max from features: {e}")
+
+        effective_max = self.max_hourly_kwh
+
+        if theoretical_max_kwh is not None and theoretical_max_kwh > 0:
+
+            theoretical_max_with_margin = theoretical_max_kwh * 1.2
+            effective_max = min(self.max_hourly_kwh, theoretical_max_with_margin)
+
+            if theoretical_max_with_margin < self.max_hourly_kwh:
+                _LOGGER.debug(f"🛡️  PHYSICS CAP ACTIVE: Using astronomy-based max={theoretical_max_with_margin:.4f} kWh "
+                            f"instead of system max={self.max_hourly_kwh:.2f} kWh (sun elevation is low)")
+
+        prediction_before_cap = prediction
+        prediction = max(0.0, min(prediction, effective_max))
+
+        if abs(prediction_before_cap - prediction) > 0.01:
+            _LOGGER.debug(f"🔧 CAPPED prediction: {prediction_before_cap:.4f} → {prediction:.4f} kWh (max={effective_max:.4f})")
+
+        confidence = self._calculate_confidence(features)
+
+        return PredictionResult(
+            prediction=prediction,
+            confidence=confidence,
+            method=f"ml_model_{self.algorithm_used}",
+            features_used=features,
+            model_accuracy=self.current_accuracy,
+        )
+
+    def _predict_ridge(self, features) -> float:
+        """Ridge regression prediction: bias + sum(weight_i * feature_i) @zara"""
         prediction = self.weights.bias
 
-        # DEBUG BUG #13: Log initial bias
-        _LOGGER.debug(f"🔍 ML Prediction DEBUG: Starting with bias={prediction:.6f}")
-
-        # V2: Handle list-based features (ordered by feature_names)
         if isinstance(features, list):
             if not hasattr(self.weights, "feature_names") or not self.weights.feature_names:
                 raise MLModelException(
                     "Cannot predict with list features: feature_names not available in weights"
                 )
-
-            # DEBUG BUG #13: Track contribution
-            total_contribution = 0.0
-            max_contributors = []
 
             for i, feature_value in enumerate(features):
                 if i >= len(self.weights.feature_names):
@@ -111,19 +170,7 @@ class MLModelStrategy(PredictionStrategy):
                 weight = self.weights.weights.get(feature_name, 0.0)
                 contribution = weight * feature_value
                 prediction += contribution
-                total_contribution += contribution
 
-                # Track top 5 contributors
-                max_contributors.append((feature_name, feature_value, weight, contribution))
-
-            # DEBUG BUG #13: Log top contributors
-            max_contributors.sort(key=lambda x: abs(x[3]), reverse=True)
-            _LOGGER.debug(f"🔍 ML Prediction DEBUG: Total contribution from {len(features)} features: {total_contribution:.6f}")
-            _LOGGER.debug(f"🔍 Top 5 contributors:")
-            for fname, fval, w, contrib in max_contributors[:5]:
-                _LOGGER.debug(f"   {fname}: value={fval:.4f} × weight={w:.6f} = {contrib:.6f}")
-
-        # V1: Handle dict-based features
         elif isinstance(features, dict):
             for feature_name, feature_value in features.items():
                 weight = self.weights.weights.get(feature_name, 0.0)
@@ -134,43 +181,91 @@ class MLModelStrategy(PredictionStrategy):
                 f"Unsupported features type: {type(features)}. Expected dict or list."
             )
 
-        # DEBUG BUG #13: Log before clipping
-        _LOGGER.debug(f"🔍 ML Prediction DEBUG: Before clipping: {prediction:.6f} kWh (max_hourly={self.max_hourly_kwh:.2f})")
+        return prediction
 
-        # Apply physical limits: Clip to realistic hourly production range
-        # Min: 0 kWh (no negative production)
-        # Max: peak_power_kw * safety_margin (theoretical maximum under perfect conditions)
-        prediction = max(0.0, min(prediction, self.max_hourly_kwh))
+    async def _predict_lstm(self, features) -> float:
+        """TinyLSTM neural network prediction @zara"""
+        if self._lstm_trainer is None:
+            raise MLModelException("LSTM trainer not initialized")
 
-        # DEBUG BUG #13: Log final result
-        _LOGGER.debug(f"🔍 ML Prediction DEBUG: FINAL prediction={prediction:.6f} kWh")
+        try:
+            import numpy as np
 
-        confidence = self._calculate_confidence(features)
+            sequence = None
+            sequence_source = "unknown"
 
-        return PredictionResult(
-            prediction=prediction,
-            confidence=confidence,
-            method="ml_model",
-            features_used=features,
-            model_accuracy=self.current_accuracy,
-        )
+            if (self._historical_sequence and
+                self._sequence_builder and
+                len(self._historical_sequence) >= self._lstm_trainer.sequence_length):
+
+                try:
+
+                    feature_names = getattr(self.weights, 'feature_names', None)
+                    if feature_names:
+                        real_sequence = self._sequence_builder.create_sequences_for_inference(
+                            recent_hours=self._historical_sequence,
+                            feature_names=feature_names
+                        )
+                        if real_sequence is not None:
+
+                            sequence = real_sequence.reshape(1, self._lstm_trainer.sequence_length, -1)
+                            sequence_source = "real_24h_history"
+                            _LOGGER.debug(
+                                f"LSTM using real 24h sequence from {len(self._historical_sequence)} historical hours"
+                            )
+                except Exception as seq_err:
+                    _LOGGER.warning(f"Failed to build real sequence: {seq_err}")
+                    sequence = None
+
+            if sequence is None:
+                if isinstance(features, list):
+                    feature_array = np.array(features, dtype=np.float32)
+                elif isinstance(features, dict):
+
+                    feature_array = np.array([
+                        features.get(name, 0.0) for name in self.weights.feature_names
+                    ], dtype=np.float32)
+                else:
+                    raise MLModelException(f"Unsupported features type: {type(features)}")
+
+                sequence_length = self._lstm_trainer.sequence_length
+                sequence = np.tile(feature_array, (sequence_length, 1))
+                sequence = sequence.reshape(1, sequence_length, -1)
+                sequence_source = "pseudo_sequence"
+
+                if self._historical_sequence:
+                    _LOGGER.warning(
+                        f"LSTM fallback to pseudo-sequence: historical data available "
+                        f"({len(self._historical_sequence)} hours) but sequence build failed"
+                    )
+                else:
+                    _LOGGER.debug("LSTM using pseudo-sequence (no historical data available)")
+
+            prediction = self._lstm_trainer.predict(sequence)
+
+            _LOGGER.debug(f"LSTM prediction ({sequence_source}): {prediction:.4f} kWh")
+            return float(prediction)
+
+        except Exception as e:
+            _LOGGER.error(f"LSTM prediction failed: {e}. Falling back to Ridge.")
+
+            return self._predict_ridge(features)
 
     def is_available(self) -> bool:
         return self.weights is not None
 
     def _calculate_confidence(self, features) -> float:
-        """Calculate confidence from features (dict or list)"""
+        """Calculate confidence from features (dict or list) @zara"""
         if not self.current_accuracy:
             return 0.5
 
         base_confidence = self.current_accuracy
 
-        # Try to get production_yesterday for confidence boost
         production_yesterday = 0.0
         if isinstance(features, dict):
             production_yesterday = features.get("production_yesterday", 0.0)
         elif isinstance(features, list) and hasattr(self.weights, "feature_names"):
-            # Find production_yesterday in feature_names
+
             try:
                 idx = self.weights.feature_names.index("production_yesterday")
                 if idx < len(features):
@@ -181,7 +276,6 @@ class MLModelStrategy(PredictionStrategy):
         if production_yesterday > 0:
             base_confidence *= 1.1
 
-        # Try to get weather_stability
         weather_stability = 0.5
         if isinstance(features, dict):
             weather_stability = features.get("weather_stability", 0.5)
@@ -197,7 +291,6 @@ class MLModelStrategy(PredictionStrategy):
 
         return min(1.0, max(0.0, base_confidence))
 
-
 class ProfileStrategy(PredictionStrategy):
     """Profile-based prediction strategy using historical hourly averages"""
 
@@ -205,15 +298,14 @@ class ProfileStrategy(PredictionStrategy):
         self.profile = profile
         self.peak_power_kw = float(peak_power_kw) if peak_power_kw else 0.0
 
-        # Calculate max hourly production based on system capacity
         from ..const import DEFAULT_MAX_HOURLY_KWH, HOURLY_PRODUCTION_SAFETY_MARGIN
 
         if self.peak_power_kw > 0:
-            # Use configured capacity with safety margin (same as ML and Fallback)
+
             self.max_hourly_kwh = self.peak_power_kw * HOURLY_PRODUCTION_SAFETY_MARGIN
         else:
-            # Fallback to default if not configured
-            self.max_hourly_kwh = DEFAULT_MAX_HOURLY_KWH * 2.0  # 6.0 kWh default
+
+            self.max_hourly_kwh = DEFAULT_MAX_HOURLY_KWH * 2.0
             _LOGGER.warning(
                 f"ProfileStrategy: peak_power_kw not configured, using default {self.max_hourly_kwh} kWh"
             )
@@ -231,7 +323,7 @@ class ProfileStrategy(PredictionStrategy):
         seasonal_factor = features.get("seasonal_factor", 0.5)
 
         adjusted_prediction = base_prediction * cloud_factor * (0.5 + seasonal_factor)
-        # Clip to reasonable range (profile-based, so use generous max)
+
         prediction = max(0.0, min(adjusted_prediction, self.max_hourly_kwh))
 
         confidence = 0.6
@@ -247,52 +339,44 @@ class ProfileStrategy(PredictionStrategy):
     def is_available(self) -> bool:
         return self.profile is not None and self.profile.samples_count > 10
 
-
 class FallbackStrategy(PredictionStrategy):
     """WARNING FIX 5 Simple fallback strategy using solar capacity"""
 
     def __init__(self, peak_power_kw: float = 0.0):
-        """Initialize fallback strategy with system capacity"""
+        """Initialize fallback strategy with system capacity @zara"""
         from ..const import DEFAULT_MAX_HOURLY_KWH, HOURLY_PRODUCTION_SAFETY_MARGIN
 
         if peak_power_kw > 0:
-            # Use configured capacity with safety margin
+
             self.base_peak_kwh = peak_power_kw * HOURLY_PRODUCTION_SAFETY_MARGIN
         else:
-            # Fallback to default if not configured
+
             self.base_peak_kwh = DEFAULT_MAX_HOURLY_KWH
             _LOGGER.warning(
                 f"FallbackStrategy: solar_capacity not configured, using default {self.base_peak_kwh} kWh"
             )
 
     async def predict(self, features) -> PredictionResult:
-        """Make prediction from features (dict or list)
+        """Make prediction from features (dict or list) @zara"""
 
-        Args:
-            features: Either Dict[str, float] (V1) or List[float] (V2)
-
-        Returns:
-            PredictionResult with simple physics-based prediction
-        """
-        # Handle both dict and list inputs
         if isinstance(features, dict):
             hour_of_day = features.get("hour_of_day", 12.0)
             cloudiness = features.get("cloudiness", 50.0)
             seasonal_factor = features.get("seasonal_factor", 0.5)
             features_dict = features
         else:
-            # List input: Use reasonable defaults (can't extract from scaled features)
-            hour_of_day = 12.0  # Noon as default
-            cloudiness = 50.0   # Moderate clouds
-            seasonal_factor = 0.5  # Mid-season
-            features_dict = {}  # Empty dict for features_used
+
+            hour_of_day = 12.0
+            cloudiness = 50.0
+            seasonal_factor = 0.5
+            features_dict = {}
 
         if hour_of_day < 6 or hour_of_day > 20:
             prediction = 0.0
         else:
             hour_factor = math.sin((hour_of_day - 6) * math.pi / 14)
             cloud_factor = (100 - cloudiness) / 100.0
-            # WARNING FIX 5: Use configured solar capacity instead of hardcoded 5000W
+
             prediction = self.base_peak_kwh * hour_factor * cloud_factor * seasonal_factor
 
         prediction = max(0.0, prediction)
@@ -308,17 +392,30 @@ class FallbackStrategy(PredictionStrategy):
     def is_available(self) -> bool:
         return True
 
-
 class PredictionOrchestrator:
 
     def __init__(self):
         self.strategies: list[PredictionStrategy] = []
-        self.peak_power_kw: float = 0.0  # Store for fallback
+        self.peak_power_kw: float = 0.0
+        self._historical_hours: Optional[list] = None
 
     def register_strategy(self, strategy: PredictionStrategy) -> None:
         self.strategies.append(strategy)
 
+    def set_historical_data(self, recent_hours: Optional[list]) -> None:
+        """Set historical data for LSTM sequence building @zara"""
+        self._historical_hours = recent_hours
+
+        for strategy in self.strategies:
+            if isinstance(strategy, MLModelStrategy):
+                strategy.set_historical_sequence(recent_hours)
+
     async def predict(self, features: Dict[str, float]) -> PredictionResult:
+        if self._historical_hours:
+            for strategy in self.strategies:
+                if isinstance(strategy, MLModelStrategy):
+                    strategy.set_historical_sequence(self._historical_hours)
+
         for strategy in self.strategies:
             if strategy.is_available():
                 try:
@@ -327,7 +424,6 @@ class PredictionOrchestrator:
                     _LOGGER.warning(f"Strategy {strategy.__class__.__name__} failed: {e}")
                     continue
 
-        # WARNING FIX 5: Use stored peak_power_kw for emergency fallback
         fallback = FallbackStrategy(self.peak_power_kw)
         return await fallback.predict(features)
 
@@ -336,18 +432,20 @@ class PredictionOrchestrator:
         weights: Optional[LearnedWeights] = None,
         profile: Optional[HourlyProfile] = None,
         accuracy: float = 0.0,
-        peak_power_kw: float = 0.0,  # Peak power in kW
+        peak_power_kw: float = 0.0,
     ) -> None:
         """Update available prediction strategies with new data"""
         self.strategies.clear()
-        self.peak_power_kw = peak_power_kw  # Store for emergency fallback
+        self.peak_power_kw = peak_power_kw
 
         if weights:
-            self.strategies.append(MLModelStrategy(weights, accuracy, peak_power_kw))
+            ml_strategy = MLModelStrategy(weights, accuracy, peak_power_kw)
+            if self._historical_hours:
+                ml_strategy.set_historical_sequence(self._historical_hours)
+            self.strategies.append(ml_strategy)
 
         if profile:
-            # Pass peak_power_kw to ProfileStrategy for correct max values
+
             self.strategies.append(ProfileStrategy(profile, peak_power_kw))
 
-        # WARNING FIX 5: Pass peak_power_kw to FallbackStrategy
         self.strategies.append(FallbackStrategy(peak_power_kw))

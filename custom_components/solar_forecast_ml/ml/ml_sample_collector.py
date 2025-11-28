@@ -1,8 +1,4 @@
-"""
-ML Training Sample Collector
-
-Collects hourly training samples from Home Assistant's recorder database.
-Handles edge cases for recorder availability, sensor states, and timezone normalization.
+"""ML Training Sample Collector V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -22,21 +18,19 @@ Copyright (C) 2025 Zara-Toorox
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone  # <-- timezone imported
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-# Import recorder at module level to prevent frame detection issues
 from homeassistant.components.recorder import get_instance, history
 from homeassistant.core import HomeAssistant, State
-from homeassistant.util import dt as dt_util  # <-- dt_util used consistently
+from homeassistant.util import dt as dt_util
 
 from ..const import ML_MODEL_VERSION
 from ..core.core_helpers import SafeDateTimeUtil
 from ..data.data_manager import DataManager
-from ..forecast.forecast_weather_calculator import WeatherCalculator  # Import for Condition-Mapping
+from ..forecast.forecast_weather_calculator import WeatherCalculator
 
 _LOGGER = logging.getLogger(__name__)
-
 
 class SampleCollector:
 
@@ -54,11 +48,10 @@ class SampleCollector:
         self.lux_sensor: Optional[str] = None
         self.humidity_sensor: Optional[str] = None
 
-        # Helper class for weather condition mapping
         self._weather_calculator = WeatherCalculator()
 
     def _check_critical_sensors_available(self) -> bool:
-        """Check if critical sensors especially power_entity are available"""
+        """Check if critical sensors especially power_entity are available @zara"""
         if not self.power_entity:
             _LOGGER.debug("Power entity not configured")
             return False
@@ -74,8 +67,8 @@ class SampleCollector:
         return True
 
     async def collect_sample(self, target_datetime: datetime) -> None:
-        """Collects data for the specified target hour local time"""
-        # Check if recorder is ready before attempting any database operations
+        """Collects data for the specified target hour local time @zara"""
+
         try:
             recorder_instance = await self.hass.async_add_executor_job(
                 lambda: get_instance(self.hass)
@@ -93,7 +86,7 @@ class SampleCollector:
         target_local_hour = target_datetime.hour
         async with self._sample_lock:
             try:
-                # Check if critical sensors are available (especially after restart)
+
                 if not self._check_critical_sensors_available():
                     _LOGGER.info(
                         f"Critical sensors not yet available for hour {target_local_hour}. "
@@ -115,10 +108,8 @@ class SampleCollector:
                     )
                     return
 
-                # 3. Collect data for the passed target hour
                 sample_time_local = await self._collect_hourly_sample(target_datetime)
 
-                # 4. Persistently store successfully collected hour (only if collection was successful)
                 if sample_time_local:
                     await self.data_manager.set_last_collected_hour(sample_time_local)
                     _LOGGER.debug(
@@ -131,7 +122,6 @@ class SampleCollector:
                     exc_info=True,
                 )
 
-    # --- (TROUBLESHOOTING) NEW HELPER METHOD for Time-Weighted Average ---
     async def _calculate_time_weighted_average(
         self,
         entity_id: str,
@@ -144,7 +134,6 @@ class SampleCollector:
             f"Calculating TWA for {entity_id} (Attribute: {attribute}) from {start_time_utc} to {end_time_utc}"
         )
 
-        # 1. Fetch all states in the time window
         try:
             history_list = await self.hass.async_add_executor_job(
                 history.get_significant_states,
@@ -153,8 +142,8 @@ class SampleCollector:
                 end_time_utc,
                 [entity_id],
                 None,
-                True,  # include_start_time_state = True
-                True,  # significant_changes_only = True (important!)
+                True,
+                True,
             )
 
             if not history_list or entity_id not in history_list:
@@ -170,11 +159,9 @@ class SampleCollector:
             _LOGGER.error(f"Error fetching history for TWA of {entity_id}: {e}")
             return None
 
-        # 2. Calculate time-weighted average
         total_value_duration = 0.0
         total_duration_sec = 0.0
 
-        # Find initial value (last value before or at start_time)
         initial_value = None
         for state in states:
             if state.last_updated <= start_time_utc:
@@ -182,15 +169,15 @@ class SampleCollector:
                     val_str = state.attributes.get(attribute) if attribute else state.state
                     initial_value = float(val_str)
                 except (ValueError, TypeError, AttributeError):
-                    continue  # Continue searching for a valid numeric value
+                    continue
             else:
-                break  # State is already after start_time
+                break
 
         if initial_value is None:
             _LOGGER.warning(
                 f"Could not find initial value for TWA of {entity_id}. Start with first value in the window."
             )
-            # Search for the first valid value *in* the window
+
             for state in states:
                 if state.last_updated > start_time_utc:
                     try:
@@ -209,7 +196,6 @@ class SampleCollector:
         prev_value = initial_value
         prev_time = start_time_utc
 
-        # Iterate over all states *after* start_time
         start_index_integration = 0
         while (
             start_index_integration < len(states)
@@ -226,7 +212,6 @@ class SampleCollector:
                     total_value_duration += prev_value * duration_sec
                     total_duration_sec += duration_sec
 
-                # Update prev_value for next step
                 val_str = state.attributes.get(attribute) if attribute else state.state
                 prev_value = float(val_str)
                 prev_time = current_time
@@ -235,18 +220,16 @@ class SampleCollector:
                     break
 
             except (ValueError, TypeError, AttributeError):
-                # Invalid state (e.g. 'unknown', 'unavailable'), continue with previous value
-                # Only log if it's NOT a normal unavailable/unknown state (to reduce log spam)
+
                 if val_str not in ("unavailable", "unknown", "none", None, ""):
                     _LOGGER.debug(
                         f"Invalid state '{val_str}' for TWA of {entity_id}, using previous value."
                     )
-                prev_time = min(state.last_updated, end_time_utc)  # Time must still progress
+                prev_time = min(state.last_updated, end_time_utc)
             except Exception as e_loop:
                 _LOGGER.warning(f"Error in TWA loop: {e_loop}")
                 prev_time = min(state.last_updated, end_time_utc)
 
-        # Last segment from prev_time to end_time_utc
         if prev_time < end_time_utc:
             duration_sec = (end_time_utc - prev_time).total_seconds()
             total_value_duration += prev_value * duration_sec
@@ -254,13 +237,12 @@ class SampleCollector:
 
         if total_duration_sec == 0:
             _LOGGER.debug(f"TWA for {entity_id}: No duration (0s), use initial_value.")
-            return initial_value  # Only one value in time window
+            return initial_value
 
         average = total_value_duration / total_duration_sec
         _LOGGER.debug(f"TWA for {entity_id} (Attribute: {attribute}) = {average:.2f}")
         return average
 
-    # --- (TROUBLESHOOTING) NEW HELPER METHOD for dominant state ---
     async def _get_dominant_condition(
         self, start_time_utc: datetime, end_time_utc: datetime, entity_id: str
     ) -> str:
@@ -291,13 +273,12 @@ class SampleCollector:
 
             durations: Dict[str, float] = {}
 
-            # Find initial state
             prev_state_str = "unknown"
             for state in states:
                 if state.last_updated <= start_time_utc:
                     prev_state_str = state.state
                 else:
-                    break  # State is already after start_time
+                    break
 
             prev_time = start_time_utc
 
@@ -320,7 +301,6 @@ class SampleCollector:
                 if prev_time >= end_time_utc:
                     break
 
-            # Last segment
             if prev_time < end_time_utc:
                 duration_sec = (end_time_utc - prev_time).total_seconds()
                 if duration_sec > 0 and prev_state_str not in ["unknown", "unavailable"]:
@@ -330,7 +310,6 @@ class SampleCollector:
                 _LOGGER.warning(f"No valid conditions for {entity_id} found in the period.")
                 return "unknown"
 
-            # Find state with longest duration
             dominant_condition = max(durations, key=durations.get)
             _LOGGER.debug(
                 f"Dominant condition for {entity_id} is '{dominant_condition}' (Durations: {durations})"
@@ -344,58 +323,59 @@ class SampleCollector:
     async def _get_historical_forecast_data(
         self, target_time_utc: datetime
     ) -> Optional[Dict[str, Any]]:
-        """Fetches historical forecast data from the weather_forecast_cachejson"""
+        """Fetches historical forecast data from Open-Meteo cache"""
         try:
-            # Load forecast cache
-            cache = await self.data_manager.load_weather_cache()
-            if not cache or not cache.get("forecast_hours"):
-                _LOGGER.debug("Forecast cache empty or not available")
+            import json
+            open_meteo_file = self.data_manager.data_dir / "data" / "open_meteo_cache.json"
+
+            if not open_meteo_file.exists():
+                _LOGGER.debug("Open-Meteo cache not available")
                 return None
 
-            forecast_hours = cache.get("forecast_hours", [])
+            def _read_cache():
+                with open(open_meteo_file, 'r') as f:
+                    return json.load(f)
 
-            # Search forecast for target hour (with 30min tolerance)
-            target_str = target_time_utc.isoformat()
-            tolerance = timedelta(minutes=30)
+            cache = await self.hass.async_add_executor_job(_read_cache)
+            forecast = cache.get("forecast", {})
 
-            for entry in forecast_hours:
-                entry_dt_str = entry.get("datetime")
-                if not entry_dt_str:
-                    continue
+            if not forecast:
+                _LOGGER.debug("Open-Meteo cache empty")
+                return None
 
-                try:
-                    entry_dt = datetime.fromisoformat(entry_dt_str.replace("Z", "+00:00"))
-                    time_diff = abs((entry_dt - target_time_utc).total_seconds())
+            target_local = target_time_utc.astimezone()
+            target_date = target_local.date().isoformat()
+            target_hour = target_local.hour
 
-                    if time_diff <= tolerance.total_seconds():
-                        # Forecast found - extract relevant data
-                        weather_data = {
-                            "temperature": entry.get("temperature", 15.0),
-                            "humidity": entry.get("humidity", 60.0),
-                            "cloud_cover": entry.get("cloud_cover", 50.0),
-                            "wind_speed": entry.get("wind_speed", 5.0),
-                            "pressure": entry.get("pressure", 1013.0),
-                            "condition": entry.get("condition", "unknown"),
-                        }
+            if target_date in forecast and str(target_hour) in forecast[target_date]:
+                entry = forecast[target_date][str(target_hour)]
 
-                        _LOGGER.debug(
-                            f"Historical forecast found for {target_time_utc.isoformat()}: "
-                            f"temp={weather_data['temperature']} cloud={weather_data['cloud_cover']}%"
-                        )
-                        return weather_data
+                weather_data = {
+                    "temperature": entry.get("temperature", 15.0),
+                    "humidity": entry.get("humidity", 60.0),
+                    "cloud_cover": entry.get("cloud_cover", 50.0),
+                    "wind_speed": entry.get("wind_speed", 5.0),
+                    "pressure": entry.get("pressure", 1013.0),
+                    "ghi": entry.get("ghi", 0.0),
+                    "direct_radiation": entry.get("direct_radiation", 0.0),
+                    "diffuse_radiation": entry.get("diffuse_radiation", 0.0),
+                    "condition": "open-meteo",
+                }
 
-                except (ValueError, TypeError) as e:
-                    _LOGGER.debug(f"Error parsing forecast entry: {e}")
-                    continue
+                _LOGGER.debug(
+                    f"Open-Meteo data for {target_date} {target_hour}:00: "
+                    f"temp={weather_data['temperature']} cloud={weather_data['cloud_cover']}% "
+                    f"ghi={weather_data['ghi']}W/m²"
+                )
+                return weather_data
 
-            _LOGGER.debug(f"No matching forecast for {target_time_utc.isoformat()} found in cache")
+            _LOGGER.debug(f"No Open-Meteo data for {target_date} {target_hour}:00")
             return None
 
         except Exception as e:
-            _LOGGER.error(f"Error fetching historical forecast data: {e}", exc_info=True)
+            _LOGGER.error(f"Error fetching Open-Meteo data: {e}", exc_info=True)
             return None
 
-    # --- COMPLETELY REBUILT METHOD ---
     async def _get_historical_average_states(
         self, start_time_utc: datetime, end_time_utc: datetime
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -405,12 +385,11 @@ class SampleCollector:
         weather_data = self._get_default_weather()
         sensor_data = self._get_default_sensor_data()
 
-        # PRIORITY 1: Historical forecast from cache (middle of time window)
         mid_time_utc = start_time_utc + (end_time_utc - start_time_utc) / 2
         forecast_data = await self._get_historical_forecast_data(mid_time_utc)
 
         if forecast_data:
-            # Use forecast data for weather_data
+
             weather_data.update(forecast_data)
             _LOGGER.debug(f"Using historical forecast for weather data")
             forecast_available = True
@@ -418,8 +397,6 @@ class SampleCollector:
             _LOGGER.debug(f"No historical forecast available, use TWA for weather entity")
             forecast_available = False
 
-        # PRIORITY 2: Sensor data via TWA (always perform)
-        # Define sensor entities (no more weather entity attributes!)
         sensor_entities: List[Tuple[str, Optional[str], str, Dict]] = [
             (self.temp_sensor, None, "temperature", sensor_data),
             (self.wind_sensor, None, "wind_speed", sensor_data),
@@ -431,7 +408,6 @@ class SampleCollector:
 
         tasks = []
 
-        # TWA tasks only for configured sensors
         for entity_id, attr, key, target_dict in sensor_entities:
             if entity_id:
                 tasks.append(
@@ -442,7 +418,6 @@ class SampleCollector:
             else:
                 tasks.append(asyncio.sleep(0, result=None))
 
-        # If no forecast available: TWA for weather entity attributes as fallback
         if not forecast_available and self.weather_entity:
             weather_fallback_attrs = [
                 ("temperature", "temperature"),
@@ -458,7 +433,6 @@ class SampleCollector:
                     )
                 )
 
-        # Condition: Always via dominant method (if weather entity present)
         if self.weather_entity and not forecast_available:
             tasks.append(
                 self._get_dominant_condition(start_time_utc, end_time_utc, self.weather_entity)
@@ -466,7 +440,6 @@ class SampleCollector:
         else:
             tasks.append(asyncio.sleep(0, result=None))
 
-        # Run all tasks in parallel with timeout
         try:
             results = await asyncio.wait_for(
                 asyncio.gather(*tasks, return_exceptions=True), timeout=30.0
@@ -476,15 +449,13 @@ class SampleCollector:
             return weather_data, sensor_data
         except Exception as e:
             _LOGGER.error(f"Error fetching TWA values: {e}", exc_info=True)
-            # If forecast available, return it, otherwise defaults
+
             return weather_data, sensor_data
 
-        # Assign results
-        # Sensor data (first 6 tasks)
         for i, (entity_id, attr, key, target_dict) in enumerate(sensor_entities):
             if i < len(results):
                 result = results[i]
-                # Check if result is an exception
+
                 if isinstance(result, Exception):
                     _LOGGER.debug(f"Sensor {entity_id} ({key}) raised exception: {result}")
                     continue
@@ -494,7 +465,6 @@ class SampleCollector:
                     except (ValueError, TypeError) as e:
                         _LOGGER.debug(f"Cannot convert result {result} to float for {key}: {e}")
 
-        # Weather entity fallback (if no forecast)
         if not forecast_available:
             offset = len(sensor_entities)
             weather_attrs = ["temperature", "humidity", "wind_speed", "pressure", "cloud_cover"]
@@ -502,7 +472,7 @@ class SampleCollector:
                 idx = offset + i
                 if idx < len(results):
                     result = results[idx]
-                    # Check if result is an exception
+
                     if isinstance(result, Exception):
                         _LOGGER.debug(f"Weather attr {key} raised exception: {result}")
                         continue
@@ -512,7 +482,6 @@ class SampleCollector:
                         except (ValueError, TypeError) as e:
                             _LOGGER.debug(f"Cannot convert result {result} to float for {key}: {e}")
 
-            # Condition (last task)
             if len(results) > offset + len(weather_attrs):
                 condition_result = results[offset + len(weather_attrs)]
                 if isinstance(condition_result, Exception):
@@ -524,11 +493,10 @@ class SampleCollector:
         _LOGGER.debug(f"Historical sensor data: {sensor_data}")
         return weather_data, sensor_data
 
-    # --- (IMPROVEMENT 1) REVISED METHOD ---
     async def _collect_hourly_sample(self, target_datetime: datetime) -> Optional[datetime]:
-        """Collects data for the specified target hour local time"""
+        """Collects data for the specified target hour local time @zara"""
         try:
-            # 1. Define the UTC period for the target hour
+
             start_time_utc, end_time_utc, sample_time_local = self._get_utc_times_for_hour(
                 target_datetime
             )
@@ -539,21 +507,19 @@ class SampleCollector:
                 )
                 return None
 
-            # 2. Fetch actual value (Riemann sum) for the UTC period
             actual_kwh = await self._perform_riemann_integration(start_time_utc, end_time_utc)
             if actual_kwh is None:
                 _LOGGER.warning(
                     f"Could not fetch actual production (Riemann) for hour {target_datetime.hour} (local) (None). Sample skipped."
                 )
-                return None  # Skip sample if essential data missing
+                return None
 
-            # 3. Fetch daily total up to the end of the target hour (end of UTC period)
             daily_total = await self._get_daily_production_so_far(end_time_utc)
             if daily_total is None:
                 _LOGGER.warning(
                     f"Could not fetch daily total up to hour {target_datetime.hour}. Set to 0 for sample."
                 )
-                daily_total = 0.0  # Set to 0 if fetch fails
+                daily_total = 0.0
 
             percentage = 0.0
             if daily_total > 0.01:
@@ -561,37 +527,13 @@ class SampleCollector:
             elif actual_kwh <= 0.01 and daily_total <= 0.01:
                 percentage = 0.0
 
-            # 4. (NEW) Fetch historical average data for weather and sensors
             weather_data, sensor_data = await self._get_historical_average_states(
                 start_time_utc, end_time_utc
             )
 
-            # 5. Assemble and store sample
-            sample = {
-                "timestamp": sample_time_local.isoformat(),  # Store as LOCAL ISO string
-                "actual_kwh": round(actual_kwh, 4),
-                "daily_total": round(daily_total, 4),
-                "percentage_of_day": round(percentage, 4),
-                "weather_data": weather_data,
-                "sensor_data": sensor_data,
-                "model_version": ML_MODEL_VERSION,
-            }
-
-            _LOGGER.debug(f"Attempting to save hourly sample to disk...")
-            try:
-                await asyncio.wait_for(self.data_manager.add_hourly_sample(sample), timeout=10.0)
-            except asyncio.TimeoutError:
-                _LOGGER.error(
-                    f"Timeout saving hourly sample after 10 seconds - file write may be blocked"
-                )
-                return None
-
-            _LOGGER.info(
-                f"Hourly Sample (HISTORICAL) saved: {sample_time_local.strftime('%Y-%m-%d %H')}:00 local | "
-                f"Actual={actual_kwh:.2f}kWh ({percentage*100:.1f}% of day), "
-                f"DailyTotal={daily_total:.2f}kWh, "
-                f"Weather-Temp={weather_data.get('temperature'):.1f}C, "
-                f"Weather-Cloud={weather_data.get('cloud_cover'):.1f}%"
+            _LOGGER.debug(
+                f"Hourly sample collected: {sample_time_local.strftime('%Y-%m-%d %H')}:00 local | "
+                f"Actual={actual_kwh:.2f}kWh ({percentage*100:.1f}% of day)"
             )
 
             return sample_time_local
@@ -603,7 +545,6 @@ class SampleCollector:
             )
             return None
 
-    # --- (IMPROVEMENT 1) NEW HELPER METHOD ---
     def _get_utc_times_for_hour(
         self, target_datetime: datetime
     ) -> Tuple[Optional[datetime], Optional[datetime], Optional[datetime]]:
@@ -614,18 +555,15 @@ class SampleCollector:
             start_time_local = target_datetime.replace(minute=0, second=0, microsecond=0)
             end_time_local = start_time_local + timedelta(hours=1)
 
-            # Check if the entire time period is in the past
             if end_time_local > now_local:
                 _LOGGER.warning(
                     f"Attempt to collect data for future/current hour {start_time_local.hour} (up to {end_time_local}). Skip."
                 )
-                return None, None, None  # Cannot collect future data
+                return None, None, None
 
-            # Convert LOCAL times to UTC for recorder query
             start_time_utc = start_time_local.astimezone(timezone.utc)
             end_time_utc = end_time_local.astimezone(timezone.utc)
 
-            # The sample timestamp is the LOCAL start time
             sample_time_local = start_time_local
 
             return start_time_utc, end_time_utc, sample_time_local
@@ -657,9 +595,6 @@ class SampleCollector:
                 )
                 return None
 
-    # =========================================================================
-    # Riemann Sum (Unchanged)
-    # =========================================================================
     async def _perform_riemann_integration(
         self, start_time: datetime, end_time: datetime
     ) -> Optional[float]:
@@ -743,8 +678,6 @@ class SampleCollector:
             ):
                 start_index_integration += 1
 
-            # Removed verbose start logging - only summary at end
-
             for state in states[start_index_integration:]:
                 try:
                     state_time = state.last_updated
@@ -765,7 +698,6 @@ class SampleCollector:
                     time_diff_hours = time_diff_seconds / 3600.0
                     wh = prev_power * time_diff_hours
                     total_wh += wh
-                    # Removed verbose step logging - only summary at end
 
                     prev_time = current_end_time
 
@@ -773,7 +705,7 @@ class SampleCollector:
                         current_power = max(0.0, float(state.state))
                         prev_power = current_power
                     except (ValueError, TypeError):
-                        # Only log if it's NOT a normal unavailable/unknown state
+
                         if state.state not in ("unavailable", "unknown", "none", None, ""):
                             _LOGGER.debug(
                                 f"Invalid state '{state.state}' at {state_time}. Continue with previous value {prev_power}W."
@@ -811,15 +743,12 @@ class SampleCollector:
             )
             return None
 
-    # (Unchanged)
     async def _get_daily_production_so_far(self, end_of_hour_utc: datetime) -> Optional[float]:
-        """Fetches the daily production so far via Riemann integration up to the end of ..."""
+        """Fetches the daily production so far via Riemann integration up to the end of ... @zara"""
 
-        # Determine start of day (local time) based on the end time
         end_of_hour_local = SafeDateTimeUtil.as_local(end_of_hour_utc)
         start_of_day_local = end_of_hour_local.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Convert to UTC
         try:
             start_of_day_utc = start_of_day_local.astimezone(timezone.utc)
         except Exception as tz_err:
@@ -844,13 +773,8 @@ class SampleCollector:
 
         return kwh
 
-    # --- (IMPROVEMENT 1) REMOVED ---
-    # async def _collect_current_sensor_data(self) -> Dict[str, Any]:
-    # async def _get_current_weather_data(self) -> Dict[str, Any]:
-
-    # --- (IMPROVEMENT 1) NEW HELPER METHODS ---
     def _get_default_weather(self) -> Dict[str, Any]:
-        """Returns default weather values"""
+        """Returns default weather values @zara"""
         return {
             "temperature": 15.0,
             "humidity": 60.0,
@@ -861,7 +785,7 @@ class SampleCollector:
         }
 
     def _get_default_sensor_data(self) -> Dict[str, Any]:
-        """Returns default sensor values"""
+        """Returns default sensor values @zara"""
         return {
             "temperature": 0.0,
             "wind_speed": 0.0,
@@ -870,8 +794,6 @@ class SampleCollector:
             "lux": 0.0,
             "humidity": 0.0,
         }
-
-    # --- END ---
 
     def set_forecast_cache(self, cache: Dict[str, Any]) -> None:
         self._forecast_cache = cache
@@ -883,9 +805,10 @@ class SampleCollector:
         temp_sensor: Optional[str] = None,
         wind_sensor: Optional[str] = None,
         rain_sensor: Optional[str] = None,
-        uv_sensor: Optional[str] = None,
         lux_sensor: Optional[str] = None,
         humidity_sensor: Optional[str] = None,
+        pressure_sensor: Optional[str] = None,
+        solar_radiation_sensor: Optional[str] = None,
         solar_yield_today: Optional[str] = None,
     ) -> None:
         """Configures the entity IDs used by the collector"""
@@ -895,11 +818,13 @@ class SampleCollector:
         self.temp_sensor = temp_sensor
         self.wind_sensor = wind_sensor
         self.rain_sensor = rain_sensor
-        self.uv_sensor = uv_sensor
         self.lux_sensor = lux_sensor
         self.humidity_sensor = humidity_sensor
+        self.pressure_sensor = pressure_sensor
+        self.solar_radiation_sensor = solar_radiation_sensor
         _LOGGER.debug(
             f"SampleCollector Entities: Weather='{weather_entity}', Power='{power_entity}', "
             f"Temp='{temp_sensor}', Wind='{wind_sensor}', Rain='{rain_sensor}', "
-            f"UV='{uv_sensor}', Lux='{lux_sensor}', Humidity='{humidity_sensor}'"
+            f"Lux='{lux_sensor}', Humidity='{humidity_sensor}', "
+            f"Pressure='{pressure_sensor}', SolarRadiation='{solar_radiation_sensor}'"
         )

@@ -1,13 +1,17 @@
-"""
-Battery Cost & Profit Sensors
-
-Provides financial tracking for battery charging/discharging
-Uses BatteryCoordinator (separate from Solar)
+"""Battery Cost & Profit Sensors V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -46,7 +50,6 @@ from ..const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class BaseBatteryCostSensor(CoordinatorEntity, SensorEntity):
     """Base class for battery cost sensors"""
 
@@ -78,9 +81,8 @@ class BaseBatteryCostSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available"""
+        """Return if entity is available @zara"""
         return self.coordinator.last_update_success and self.coordinator.persistence is not None
-
 
 class BatterySolarDischargeTodaySensor(BaseBatteryCostSensor):
     """Solar discharge today (kWh) - energy from solar origin"""
@@ -91,17 +93,16 @@ class BatterySolarDischargeTodaySensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:solar-power-variant"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize solar discharge sensor"""
+        """Initialize solar discharge sensor @zara"""
         super().__init__(
             coordinator, entry, BATTERY_SOLAR_DISCHARGE_TODAY_SENSOR, "Solar Discharge Today"
         )
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return solar discharge kWh today"""
+        """Return solar discharge kWh today @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return summary.get("solar_discharge_kwh", 0.0)
-
 
 class BatteryGridDischargeTodaySensor(BaseBatteryCostSensor):
     """Grid discharge today (kWh) - energy from grid origin"""
@@ -112,17 +113,16 @@ class BatteryGridDischargeTodaySensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:transmission-tower-export"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize grid discharge sensor"""
+        """Initialize grid discharge sensor @zara"""
         super().__init__(
             coordinator, entry, BATTERY_GRID_DISCHARGE_TODAY_SENSOR, "Grid Discharge Today"
         )
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return grid discharge kWh today"""
+        """Return grid discharge kWh today @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return summary.get("grid_discharge_kwh", 0.0)
-
 
 class BatteryGridChargeCostTodaySensor(BaseBatteryCostSensor):
     """Grid charge cost today (€) - what you paid for grid charging"""
@@ -133,20 +133,20 @@ class BatteryGridChargeCostTodaySensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:currency-eur"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize grid charge cost sensor"""
+        """Initialize grid charge cost sensor @zara"""
         super().__init__(
             coordinator, entry, BATTERY_GRID_CHARGE_COST_TODAY_SENSOR, "Grid Charge Cost Today"
         )
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return grid charge cost in € today"""
+        """Return grid charge cost in € today @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return round(summary.get("grid_charge_cost_eur", 0.0), 2)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         grid_kwh = summary.get("grid_charge_kwh", 0.0)
         cost = summary.get("grid_charge_cost_eur", 0.0)
@@ -156,11 +156,10 @@ class BatteryGridChargeCostTodaySensor(BaseBatteryCostSensor):
         }
 
         if grid_kwh > 0:
-            avg_price = (cost / grid_kwh) * 100  # Convert to Cent/kWh
+            avg_price = (cost / grid_kwh) * 100
             attrs["avg_price_cent_kwh"] = round(avg_price, 2)
 
         return attrs
-
 
 class BatterySolarSavingsTodaySensor(BaseBatteryCostSensor):
     """Solar savings today (€) - money saved by using solar from battery"""
@@ -171,26 +170,25 @@ class BatterySolarSavingsTodaySensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:piggy-bank"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize solar savings sensor"""
+        """Initialize solar savings sensor @zara"""
         super().__init__(
             coordinator, entry, BATTERY_SOLAR_SAVINGS_TODAY_SENSOR, "Solar Savings Today"
         )
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return solar savings in € today"""
+        """Return solar savings in € today @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return round(summary.get("solar_savings_eur", 0.0), 2)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return {
             "solar_discharge_kwh": round(summary.get("solar_discharge_kwh", 0.0), 2),
             "avg_discharge_price": summary.get("summary", {}).get("avg_discharge_price", 0.0),
         }
-
 
 class BatteryGridArbitrageProfitTodaySensor(BaseBatteryCostSensor):
     """Grid arbitrage profit today (€) - profit from buy-low-sell-high"""
@@ -201,7 +199,7 @@ class BatteryGridArbitrageProfitTodaySensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:chart-line"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize grid arbitrage profit sensor"""
+        """Initialize grid arbitrage profit sensor @zara"""
         super().__init__(
             coordinator,
             entry,
@@ -211,20 +209,19 @@ class BatteryGridArbitrageProfitTodaySensor(BaseBatteryCostSensor):
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return grid arbitrage profit in € today"""
+        """Return grid arbitrage profit in € today @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return round(summary.get("grid_arbitrage_profit_eur", 0.0), 2)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return {
             "grid_discharge_kwh": round(summary.get("grid_discharge_kwh", 0.0), 2),
             "avg_charge_price": summary.get("summary", {}).get("avg_grid_charge_price", 0.0),
             "avg_discharge_price": summary.get("summary", {}).get("avg_discharge_price", 0.0),
         }
-
 
 class BatteryTotalProfitTodaySensor(BaseBatteryCostSensor):
     """Total profit today (€) - solar savings + arbitrage - grid charge cost"""
@@ -235,20 +232,20 @@ class BatteryTotalProfitTodaySensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:cash-multiple"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize total profit sensor"""
+        """Initialize total profit sensor @zara"""
         super().__init__(
             coordinator, entry, BATTERY_TOTAL_PROFIT_TODAY_SENSOR, "Total Profit Today"
         )
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return total profit in € today"""
+        """Return total profit in € today @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return round(summary.get("total_profit_eur", 0.0), 2)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return detailed breakdown"""
+        """Return detailed breakdown @zara"""
         summary = self.coordinator.persistence.get_today_summary()
         return {
             "solar_savings": round(summary.get("solar_savings_eur", 0.0), 2),
@@ -261,7 +258,6 @@ class BatteryTotalProfitTodaySensor(BaseBatteryCostSensor):
             ),
         }
 
-
 class BatteryGridChargeMonthSensor(BaseBatteryCostSensor):
     """Grid charge this month (kWh)"""
 
@@ -271,19 +267,19 @@ class BatteryGridChargeMonthSensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:transmission-tower"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize grid charge month sensor"""
+        """Initialize grid charge month sensor @zara"""
         super().__init__(coordinator, entry, BATTERY_GRID_CHARGE_MONTH_SENSOR, "Grid Charge Month")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return grid charge kWh this month"""
+        """Return grid charge kWh this month @zara"""
         now = datetime.now()
         summary = self.coordinator.persistence.get_month_summary(now.year, now.month)
         return round(summary.get("grid_charge_kwh", 0.0), 2)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         now = datetime.now()
         summary = self.coordinator.persistence.get_month_summary(now.year, now.month)
         return {
@@ -291,7 +287,6 @@ class BatteryGridChargeMonthSensor(BaseBatteryCostSensor):
             "days_tracked": summary.get("days_tracked", 0),
             "grid_charge_cost": round(summary.get("grid_charge_cost_eur", 0.0), 2),
         }
-
 
 class BatteryTotalProfitMonthSensor(BaseBatteryCostSensor):
     """Total profit this month (€)"""
@@ -302,21 +297,21 @@ class BatteryTotalProfitMonthSensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:cash-multiple"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize total profit month sensor"""
+        """Initialize total profit month sensor @zara"""
         super().__init__(
             coordinator, entry, BATTERY_TOTAL_PROFIT_MONTH_SENSOR, "Total Profit Month"
         )
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return total profit € this month"""
+        """Return total profit € this month @zara"""
         now = datetime.now()
         summary = self.coordinator.persistence.get_month_summary(now.year, now.month)
         return round(summary.get("total_profit_eur", 0.0), 2)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return detailed breakdown"""
+        """Return detailed breakdown @zara"""
         now = datetime.now()
         summary = self.coordinator.persistence.get_month_summary(now.year, now.month)
         return {
@@ -327,7 +322,6 @@ class BatteryTotalProfitMonthSensor(BaseBatteryCostSensor):
             "grid_charge_cost": round(summary.get("grid_charge_cost_eur", 0.0), 2),
         }
 
-
 class BatteryTotalProfitYearSensor(BaseBatteryCostSensor):
     """Total profit this year (€)"""
 
@@ -337,19 +331,19 @@ class BatteryTotalProfitYearSensor(BaseBatteryCostSensor):
     _attr_icon = "mdi:cash-multiple"
 
     def __init__(self, coordinator: BatteryCoordinator, entry: ConfigEntry):
-        """Initialize total profit year sensor"""
+        """Initialize total profit year sensor @zara"""
         super().__init__(coordinator, entry, BATTERY_TOTAL_PROFIT_YEAR_SENSOR, "Total Profit Year")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return total profit € this year"""
+        """Return total profit € this year @zara"""
         now = datetime.now()
         summary = self.coordinator.persistence.get_year_summary(now.year)
         return round(summary.get("total_profit_eur", 0.0), 2)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return detailed breakdown"""
+        """Return detailed breakdown @zara"""
         now = datetime.now()
         summary = self.coordinator.persistence.get_year_summary(now.year)
         return {
@@ -360,8 +354,6 @@ class BatteryTotalProfitYearSensor(BaseBatteryCostSensor):
             "grid_charge_cost": round(summary.get("grid_charge_cost_eur", 0.0), 2),
         }
 
-
-# Export all battery cost sensors
 BATTERY_COST_SENSORS = [
     BatterySolarDischargeTodaySensor,
     BatteryGridDischargeTodaySensor,

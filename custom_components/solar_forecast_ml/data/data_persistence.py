@@ -1,12 +1,17 @@
-"""
-Data Persistence Module for Solar Forecast ML Integration
-
-Handles backup and restore operations for ML models and historical data.
-Creates tar.gz backups with automatic cleanup and manual backup preservation.
+"""Data Persistence Module for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -23,12 +28,11 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class DataPersistence:
     """Handles data backup restoration and migration"""
 
     def __init__(self, data_dir: Path):
-        """Initialize data persistence handler"""
+        """Initialize data persistence handler @zara"""
         self.data_dir = data_dir
         self.backup_dir = data_dir / "backups" / "auto"
         self.manual_backup_dir = data_dir / "backups" / "manual"
@@ -38,11 +42,10 @@ class DataPersistence:
     ) -> Optional[Path]:
         """Create a backup of all data files"""
         try:
-            # Determine backup directory
+
             backup_base = self.manual_backup_dir if manual else self.backup_dir
             backup_base.mkdir(parents=True, exist_ok=True)
 
-            # Generate backup name
             timestamp = dt_util.now().strftime("%Y%m%d_%H%M%S")
             if name:
                 backup_name = f"{name}_{timestamp}"
@@ -51,7 +54,6 @@ class DataPersistence:
 
             backup_file = backup_base / f"{backup_name}.tar.gz"
 
-            # Create tar.gz backup
             def create_tarball():
                 import tarfile
 
@@ -65,7 +67,6 @@ class DataPersistence:
 
             _LOGGER.info(f"Backup created: {backup_file}")
 
-            # Clean old backups if not manual
             if not manual:
                 await self._cleanup_old_backups()
 
@@ -76,17 +77,15 @@ class DataPersistence:
             return None
 
     async def restore_backup(self, backup_file: Path) -> bool:
-        """Restore data from a backup file"""
+        """Restore data from a backup file @zara"""
         try:
             if not backup_file.exists():
                 _LOGGER.error(f"Backup file not found: {backup_file}")
                 return False
 
-            # Create temporary restore directory
             restore_dir = self.data_dir / "temp_restore"
             restore_dir.mkdir(parents=True, exist_ok=True)
 
-            # Extract backup
             def extract_tarball():
                 import tarfile
 
@@ -95,7 +94,6 @@ class DataPersistence:
 
             await asyncio.get_event_loop().run_in_executor(None, extract_tarball)
 
-            # Move extracted files to actual location
             for subdir in ["ml", "stats", "data"]:
                 source = restore_dir / subdir
                 target = self.data_dir / subdir
@@ -105,7 +103,6 @@ class DataPersistence:
                         shutil.rmtree(target)
                     shutil.move(str(source), str(target))
 
-            # Cleanup
             shutil.rmtree(restore_dir)
 
             _LOGGER.info(f"Backup restored from: {backup_file}")
@@ -116,20 +113,18 @@ class DataPersistence:
             return False
 
     async def _cleanup_old_backups(self) -> None:
-        """Remove old automatic backups based on retention policy"""
+        """Remove old automatic backups based on retention policy @zara"""
         try:
             if not self.backup_dir.exists():
                 return
 
             backups = sorted(self.backup_dir.glob("*.tar.gz"), key=lambda p: p.stat().st_mtime)
 
-            # Remove by count
             if len(backups) > MAX_BACKUP_FILES:
                 for backup in backups[:-MAX_BACKUP_FILES]:
                     backup.unlink()
                     _LOGGER.debug(f"Removed old backup (count limit): {backup.name}")
 
-            # Remove by age
             cutoff_date = dt_util.now() - timedelta(days=BACKUP_RETENTION_DAYS)
             for backup in backups:
                 mtime = datetime.fromtimestamp(backup.stat().st_mtime)
@@ -141,7 +136,7 @@ class DataPersistence:
             _LOGGER.error(f"Failed to cleanup old backups: {e}")
 
     async def list_backups(self, manual: bool = False) -> List[Dict[str, Any]]:
-        """List available backups"""
+        """List available backups @zara"""
         try:
             backup_base = self.manual_backup_dir if manual else self.backup_dir
 
@@ -170,7 +165,7 @@ class DataPersistence:
             return []
 
     async def delete_backup(self, backup_name: str, manual: bool = False) -> bool:
-        """Delete a specific backup"""
+        """Delete a specific backup @zara"""
         try:
             backup_base = self.manual_backup_dir if manual else self.backup_dir
             backup_file = backup_base / f"{backup_name}.tar.gz"

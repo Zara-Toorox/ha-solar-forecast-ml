@@ -1,13 +1,17 @@
-"""
-Electricity Price Sensors
-
-Provides electricity price monitoring and charging recommendations
-Separate from Solar/ML sensors
+"""Electricity Price Sensors V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -50,7 +54,6 @@ from ..coordinator import SolarForecastMLCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class BaseElectricityPriceSensor(CoordinatorEntity, SensorEntity):
     """Base class for electricity price sensors"""
 
@@ -82,35 +85,34 @@ class BaseElectricityPriceSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available"""
+        """Return if entity is available @zara"""
         return (
             self.coordinator.last_update_success
             and self.coordinator.electricity_service is not None
         )
 
-
 class ElectricityPriceCurrentSensor(BaseElectricityPriceSensor):
     """Current electricity price sensor (Cent/kWh)"""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL  # MONETARY only supports TOTAL or None
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UNIT_CENT_PER_KWH
     _attr_icon = ICON_ELECTRICITY_PRICE
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize current price sensor"""
+        """Initialize current price sensor @zara"""
         super().__init__(coordinator, entry, ELECTRICITY_PRICE_CURRENT_SENSOR, "Current Price")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return current electricity price"""
+        """Return current electricity price @zara"""
         if not self.coordinator.electricity_service:
             return None
         return self.coordinator.electricity_service.get_current_price()
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         if not self.coordinator.electricity_service:
             return {}
 
@@ -129,120 +131,114 @@ class ElectricityPriceCurrentSensor(BaseElectricityPriceSensor):
 
         return attrs
 
-
 class ElectricityPriceNextHourSensor(BaseElectricityPriceSensor):
     """Next hour electricity price sensor (Cent/kWh)"""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL  # MONETARY only supports TOTAL or None
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UNIT_CENT_PER_KWH
     _attr_icon = ICON_ELECTRICITY_PRICE
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize next hour price sensor"""
+        """Initialize next hour price sensor @zara"""
         super().__init__(coordinator, entry, ELECTRICITY_PRICE_NEXT_HOUR_SENSOR, "Next Hour Price")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return next hour electricity price"""
+        """Return next hour electricity price @zara"""
         if not self.coordinator.electricity_service:
             return None
 
         next_hour = (datetime.now().hour + 1) % 24
         return self.coordinator.electricity_service.get_price_at_hour(next_hour)
 
-
 class ElectricityPriceAvgTodaySensor(BaseElectricityPriceSensor):
     """Average electricity price today sensor (Cent/kWh)"""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL  # MONETARY only supports TOTAL or None
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UNIT_CENT_PER_KWH
     _attr_icon = ICON_ELECTRICITY_PRICE
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize average today sensor"""
+        """Initialize average today sensor @zara"""
         super().__init__(
             coordinator, entry, ELECTRICITY_PRICE_AVG_TODAY_SENSOR, "Average Price Today"
         )
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return average price today"""
+        """Return average price today @zara"""
         if not self.coordinator.electricity_service:
             return None
         return self.coordinator.electricity_service.get_average_price_today()
-
 
 class ElectricityPriceAvgWeekSensor(BaseElectricityPriceSensor):
     """Average electricity price this week sensor (Cent/kWh)"""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL  # MONETARY only supports TOTAL or None
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UNIT_CENT_PER_KWH
     _attr_icon = ICON_ELECTRICITY_PRICE
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize average week sensor"""
+        """Initialize average week sensor @zara"""
         super().__init__(
             coordinator, entry, ELECTRICITY_PRICE_AVG_WEEK_SENSOR, "Average Price Week"
         )
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return average price this week"""
+        """Return average price this week @zara"""
         if not self.coordinator.electricity_service:
             return None
         return self.coordinator.electricity_service.get_average_price_week()
-
 
 class ElectricityPriceMinTodaySensor(BaseElectricityPriceSensor):
     """Minimum electricity price today sensor (Cent/kWh)"""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL  # MONETARY only supports TOTAL or None
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UNIT_CENT_PER_KWH
     _attr_icon = "mdi:arrow-down-bold"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize min price today sensor"""
+        """Initialize min price today sensor @zara"""
         super().__init__(coordinator, entry, ELECTRICITY_PRICE_MIN_TODAY_SENSOR, "Min Price Today")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return minimum price today"""
+        """Return minimum price today @zara"""
         if not self.coordinator.electricity_service:
             return None
 
         cheapest = self.coordinator.electricity_service.get_cheapest_hours(1)
         if cheapest:
-            return cheapest[0][1]  # Return price
+            return cheapest[0][1]
         return None
-
 
 class ElectricityPriceMaxTodaySensor(BaseElectricityPriceSensor):
     """Maximum electricity price today sensor (Cent/kWh)"""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.TOTAL  # MONETARY only supports TOTAL or None
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UNIT_CENT_PER_KWH
     _attr_icon = "mdi:arrow-up-bold"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize max price today sensor"""
+        """Initialize max price today sensor @zara"""
         super().__init__(coordinator, entry, ELECTRICITY_PRICE_MAX_TODAY_SENSOR, "Max Price Today")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Return maximum price today"""
+        """Return maximum price today @zara"""
         if not self.coordinator.electricity_service:
             return None
 
         expensive = self.coordinator.electricity_service.get_most_expensive_hours(1)
         if expensive:
-            return expensive[0][1]  # Return price
+            return expensive[0][1]
         return None
-
 
 class ElectricityCheapestHourSensor(BaseElectricityPriceSensor):
     """Cheapest hour today sensor"""
@@ -250,14 +246,14 @@ class ElectricityCheapestHourSensor(BaseElectricityPriceSensor):
     _attr_icon = "mdi:clock-check"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize cheapest hour sensor"""
+        """Initialize cheapest hour sensor @zara"""
         super().__init__(
             coordinator, entry, ELECTRICITY_CHEAPEST_HOUR_TODAY_SENSOR, "Cheapest Hour"
         )
 
     @property
     def native_value(self) -> Optional[str]:
-        """Return cheapest hour today"""
+        """Return cheapest hour today @zara"""
         if not self.coordinator.electricity_service:
             return None
 
@@ -269,7 +265,7 @@ class ElectricityCheapestHourSensor(BaseElectricityPriceSensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         if not self.coordinator.electricity_service:
             return {}
 
@@ -282,7 +278,6 @@ class ElectricityCheapestHourSensor(BaseElectricityPriceSensor):
                 "price_unit": UNIT_CENT_PER_KWH,
             }
         return {}
-
 
 class ElectricityMostExpensiveHourSensor(BaseElectricityPriceSensor):
     """Most expensive hour today sensor"""
@@ -290,14 +285,14 @@ class ElectricityMostExpensiveHourSensor(BaseElectricityPriceSensor):
     _attr_icon = "mdi:clock-alert"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize most expensive hour sensor"""
+        """Initialize most expensive hour sensor @zara"""
         super().__init__(
             coordinator, entry, ELECTRICITY_MOST_EXPENSIVE_HOUR_TODAY_SENSOR, "Most Expensive Hour"
         )
 
     @property
     def native_value(self) -> Optional[str]:
-        """Return most expensive hour today"""
+        """Return most expensive hour today @zara"""
         if not self.coordinator.electricity_service:
             return None
 
@@ -309,7 +304,7 @@ class ElectricityMostExpensiveHourSensor(BaseElectricityPriceSensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         if not self.coordinator.electricity_service:
             return {}
 
@@ -323,14 +318,13 @@ class ElectricityMostExpensiveHourSensor(BaseElectricityPriceSensor):
             }
         return {}
 
-
 class ElectricityChargingRecommendationSensor(BaseElectricityPriceSensor):
     """Charging recommendation sensor"""
 
     _attr_icon = ICON_CHARGING_RECOMMENDATION
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize charging recommendation sensor"""
+        """Initialize charging recommendation sensor @zara"""
         super().__init__(
             coordinator,
             entry,
@@ -340,7 +334,7 @@ class ElectricityChargingRecommendationSensor(BaseElectricityPriceSensor):
 
     @property
     def native_value(self) -> Optional[str]:
-        """Return charging recommendation"""
+        """Return charging recommendation @zara"""
         if not self.coordinator.electricity_service:
             return "No data"
 
@@ -362,7 +356,7 @@ class ElectricityChargingRecommendationSensor(BaseElectricityPriceSensor):
 
     @property
     def icon(self) -> str:
-        """Return dynamic icon"""
+        """Return dynamic icon @zara"""
         if self.native_value == "Charge now":
             return "mdi:battery-charging"
         elif self.native_value and "Wait" in self.native_value:
@@ -371,7 +365,7 @@ class ElectricityChargingRecommendationSensor(BaseElectricityPriceSensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         if not self.coordinator.electricity_service:
             return {}
 
@@ -390,7 +384,6 @@ class ElectricityChargingRecommendationSensor(BaseElectricityPriceSensor):
 
         return attrs
 
-
 class ElectricitySavingsTodaySensor(BaseElectricityPriceSensor):
     """Electricity savings today sensor (EUR)"""
 
@@ -400,40 +393,35 @@ class ElectricitySavingsTodaySensor(BaseElectricityPriceSensor):
     _attr_icon = "mdi:piggy-bank"
 
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
-        """Initialize savings sensor"""
+        """Initialize savings sensor @zara"""
         super().__init__(coordinator, entry, ELECTRICITY_SAVINGS_TODAY_SENSOR, "Savings Today")
 
     @property
     def native_value(self) -> Optional[float]:
-        """Calculate savings today"""
+        """Calculate savings today @zara"""
         if not self.coordinator.battery_collector or not self.coordinator.electricity_service:
             return None
 
-        # Get battery charge from grid today
         charge_from_grid = self.coordinator.battery_collector.get_charge_today()
 
-        # Get average price today
         avg_price = self.coordinator.electricity_service.get_average_price_today()
 
         if not charge_from_grid or not avg_price:
             return 0.0
 
-        # Calculate savings (simplified)
-        # Savings = Energy charged * (Avg price - Actual paid price)
-        # For now, assume we charged at cheapest hours
         cheapest = self.coordinator.electricity_service.get_cheapest_hours(1)
         if cheapest:
             cheapest_price = cheapest[0][1]
             savings = charge_from_grid * (
                 (avg_price - cheapest_price) / 100
-            )  # Convert cents to EUR
+            )
             return round(max(savings, 0.0), 2)
 
         return 0.0
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes"""
+        """Return additional attributes @zara"""
         if not self.coordinator.battery_collector:
             return {}
 
@@ -446,8 +434,6 @@ class ElectricitySavingsTodaySensor(BaseElectricityPriceSensor):
             ),
         }
 
-
-# Export all electricity price sensors
 ELECTRICITY_PRICE_SENSORS = [
     ElectricityPriceCurrentSensor,
     ElectricityPriceNextHourSensor,

@@ -1,5 +1,10 @@
-"""
-Configuration Flow for Solar Forecast ML Integration
+"""Configuration Flow for Solar Forecast ML Integration V10.0.0 @zara
+
+ARCHITECTURE NOTE (2025-11-27):
+Open-Meteo is now the SINGLE DATA SOURCE for all weather data!
+- NO Weather Entity selection needed
+- All weather data comes from Open-Meteo API automatically
+- Uses Home Assistant's configured latitude/longitude
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -25,19 +30,16 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 
-# --- HIER DIE KORREKTUR ---
-from homeassistant.config_entries import (  # Added OptionsFlowWithReload
+from homeassistant.config_entries import (
     SOURCE_RECONFIGURE,
     OptionsFlowWithReload,
 )
-
-# --- ENDE KORREKTUR ---
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
-from .const import CONF_HUMIDITY_SENSOR  # <-- NEU (Block 3)
-from .const import (  # Config keys; Options keys; Defaults / Constants needed; Battery Management (v9.0.0 - Watt-based); NEW v9.0.0 watt-based sensors
+from .const import CONF_HUMIDITY_SENSOR
+from .const import (
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_ENABLED,
     CONF_BATTERY_POWER_SENSOR,
@@ -46,6 +48,7 @@ from .const import (  # Config keys; Options keys; Defaults / Constants needed; 
     CONF_DIAGNOSTIC,
     CONF_ELECTRICITY_COUNTRY,
     CONF_ELECTRICITY_ENABLED,
+    CONF_ENABLE_TINY_LSTM,
     CONF_GRID_CHARGE_POWER_SENSOR,
     CONF_GRID_EXPORT_SENSOR,
     CONF_GRID_EXPORT_TODAY,
@@ -55,50 +58,52 @@ from .const import (  # Config keys; Options keys; Defaults / Constants needed; 
     CONF_HOUSE_CONSUMPTION_SENSOR,
     CONF_INVERTER_OUTPUT_SENSOR,
     CONF_LUX_SENSOR,
+    CONF_ML_ALGORITHM,
     CONF_NOTIFY_FORECAST,
     CONF_NOTIFY_LEARNING,
     CONF_NOTIFY_STARTUP,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
     CONF_POWER_ENTITY,
+    CONF_PRESSURE_SENSOR,
     CONF_RAIN_SENSOR,
     CONF_SOLAR_CAPACITY,
     CONF_SOLAR_PRODUCTION_SENSOR,
+    CONF_SOLAR_RADIATION_SENSOR,
     CONF_SOLAR_YIELD_TODAY,
     CONF_TEMP_SENSOR,
     CONF_TOTAL_CONSUMPTION_TODAY,
     CONF_UPDATE_INTERVAL,
-    CONF_UV_SENSOR,
-    CONF_WEATHER_ENTITY,
     CONF_WIND_SENSOR,
     DEFAULT_BATTERY_CAPACITY,
     DEFAULT_ELECTRICITY_COUNTRY,
+    DEFAULT_ENABLE_TINY_LSTM,
+    DEFAULT_ML_ALGORITHM,
     DEFAULT_SOLAR_CAPACITY,
     DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-
-# --- Helper function to safely get defaults ---
 def _get_default(data: dict | None, key: str, default: Any = vol.UNDEFINED):
-    """Safely get default value for schema"""
+    """Safely get default value for schema @zara"""
     if data is None:
         return default
     value = data.get(key)
     return value if value is not None and value != "" else default
 
-
-# --- Schema Definition ---
 def _get_base_schema(defaults: dict | None) -> vol.Schema:
-    """Returns the base schema for user and reconfigure steps"""
+    """Returns the base schema for user and reconfigure steps @zara
+
+    NOTE: Weather Entity selection has been REMOVED (2025-11-27).
+    Open-Meteo is now the SINGLE DATA SOURCE for all weather data.
+    Uses Home Assistant's configured latitude/longitude automatically.
+    """
     if defaults is None:
         defaults = {}
 
     return vol.Schema(
         {
-            vol.Required(
-                CONF_WEATHER_ENTITY, default=_get_default(defaults, CONF_WEATHER_ENTITY, "")
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["weather"])),
+            # NOTE: CONF_WEATHER_ENTITY removed - Open-Meteo is SINGLE SOURCE
             vol.Required(
                 CONF_POWER_ENTITY, default=_get_default(defaults, CONF_POWER_ENTITY, "")
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
@@ -132,19 +137,19 @@ def _get_base_schema(defaults: dict | None) -> vol.Schema:
                 CONF_WIND_SENSOR, default=_get_default(defaults, CONF_WIND_SENSOR)
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
             vol.Optional(
-                CONF_UV_SENSOR, default=_get_default(defaults, CONF_UV_SENSOR)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            # --- NEU (Block 3) ---
-            vol.Optional(
                 CONF_HUMIDITY_SENSOR, default=_get_default(defaults, CONF_HUMIDITY_SENSOR)
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            # --- ENDE NEU ---
-            # --- Battery Management (v9.0.0 - Watt-based) ---
+            vol.Optional(
+                CONF_PRESSURE_SENSOR, default=_get_default(defaults, CONF_PRESSURE_SENSOR)
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
+            vol.Optional(
+                CONF_SOLAR_RADIATION_SENSOR, default=_get_default(defaults, CONF_SOLAR_RADIATION_SENSOR)
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
             vol.Optional(
                 CONF_BATTERY_CAPACITY,
                 default=_get_default(defaults, CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY),
             ): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1000.0)),
-            # NEW v9.0.0: Watt-based sensors (REQUIRED for full functionality)
+
             vol.Optional(
                 CONF_BATTERY_POWER_SENSOR, default=_get_default(defaults, CONF_BATTERY_POWER_SENSOR)
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
@@ -177,7 +182,7 @@ def _get_base_schema(defaults: dict | None) -> vol.Schema:
                 CONF_BATTERY_TEMPERATURE_SENSOR,
                 default=_get_default(defaults, CONF_BATTERY_TEMPERATURE_SENSOR),
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor"])),
-            # --- Electricity Price Configuration ---
+
             vol.Optional(
                 CONF_ELECTRICITY_COUNTRY,
                 default=_get_default(
@@ -191,7 +196,6 @@ def _get_base_schema(defaults: dict | None) -> vol.Schema:
         }
     )
 
-
 @config_entries.HANDLERS.register(DOMAIN)
 class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handles the configuration flow for Solar Forecast ML"""
@@ -201,18 +205,20 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        """Redirect users to the options flow handler"""
+        """Redirect users to the options flow handler @zara"""
         return SolarForecastMLOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial setup step"""
+        """Handle the initial setup step @zara
+
+        NOTE: Weather Entity selection has been REMOVED (2025-11-27).
+        Open-Meteo is now the SINGLE DATA SOURCE - no user configuration needed.
+        """
         errors = {}
         prefill_data = user_input if user_input is not None else {}
 
         if user_input is not None:
-            # Basic validation
-            if not user_input.get(CONF_WEATHER_ENTITY):
-                errors[CONF_WEATHER_ENTITY] = "required"
+
             if not user_input.get(CONF_POWER_ENTITY):
                 errors[CONF_POWER_ENTITY] = "required"
             if not user_input.get(CONF_SOLAR_YIELD_TODAY):
@@ -231,31 +237,9 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     step_id="user", data_schema=_get_base_schema(prefill_data), errors=errors
                 )
 
-            # Check if Met.no is used - show warning if not
-            weather_entity = user_input[CONF_WEATHER_ENTITY].strip()
-            state = self.hass.states.get(weather_entity)
-            if state:
-                # Check integration platform (met, dwd, openweathermap, etc.)
-                integration_domain = state.entity_id.split(".")[1].split("_")[0] if state.entity_id else None
+            # NOTE: Weather entity check REMOVED - Open-Meteo is SINGLE SOURCE
 
-                # Alternative: Check via entity registry
-                try:
-                    from homeassistant.helpers import entity_registry as er
-                    entity_reg = er.async_get(self.hass)
-                    entity_entry = entity_reg.async_get(weather_entity)
-                    if entity_entry:
-                        integration_domain = entity_entry.platform
-                except Exception:
-                    pass  # Fallback to state check
-
-                # Show warning if not Met.no
-                if integration_domain and integration_domain.lower() not in ["met", "met_no"]:
-                    # Store user_input in instance variable for continuation
-                    self._user_input = user_input
-                    return await self.async_step_weather_warning()
-
-            # --- Data Cleaning and Entry Creation ---
-            unique_id = user_input[CONF_WEATHER_ENTITY].strip()
+            unique_id = f"solar_forecast_ml_{user_input.get(CONF_POWER_ENTITY, 'default')}"
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
 
@@ -276,69 +260,17 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             return self.async_create_entry(title="Solar Forecast ML", data=cleaned_data)
 
-        # Show initial form
         return self.async_show_form(
             step_id="user",
             data_schema=_get_base_schema({CONF_SOLAR_CAPACITY: DEFAULT_SOLAR_CAPACITY}),
             errors={},
         )
 
-    async def async_step_weather_warning(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Show warning if Met.no is not used"""
-        if user_input is not None:
-            # User clicked "Continue Anyway" - proceed with setup
-            if hasattr(self, "_user_input"):
-                user_data = self._user_input
-                delattr(self, "_user_input")  # Clean up
-
-                # --- Data Cleaning and Entry Creation ---
-                unique_id = user_data[CONF_WEATHER_ENTITY].strip()
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
-
-                cleaned_data = {}
-                for key, value in user_data.items():
-                    if isinstance(value, str):
-                        cleaned_value = value.strip()
-                        cleaned_data[key] = cleaned_value if cleaned_value else ""
-                    elif key == CONF_SOLAR_CAPACITY:
-                        cleaned_data[key] = value if value is not None else DEFAULT_SOLAR_CAPACITY
-                    elif value is None:
-                        cleaned_data[key] = ""
-                    else:
-                        cleaned_data[key] = value
-
-                if CONF_SOLAR_CAPACITY not in cleaned_data or cleaned_data[CONF_SOLAR_CAPACITY] == "":
-                    cleaned_data[CONF_SOLAR_CAPACITY] = DEFAULT_SOLAR_CAPACITY
-
-                return self.async_create_entry(title="Solar Forecast ML", data=cleaned_data)
-
-        # Show warning form
-        return self.async_show_form(
-            step_id="weather_warning",
-            data_schema=vol.Schema({}),
-            description_placeholders={
-                "warning_message": (
-                    "⚠️ WARNUNG: Suboptimale Wetter-Integration\n\n"
-                    "Du nutzt keine Met.no Integration!\n\n"
-                    "Für beste Ergebnisse empfehlen wir **Met.no**, da andere "
-                    "Integrationen (z.B. DWD) keine numerischen Wetterdaten liefern "
-                    "(cloud_cover_percent, temperature_c).\n\n"
-                    "**Folge:**\n"
-                    "- Vorhersagen können ungenau sein (Über-Vorhersagen bei Regen)\n"
-                    "- System nutzt condition-aware Fallbacks (weniger präzise)\n\n"
-                    "**Empfehlung:**\n"
-                    "1. Home Assistant → Einstellungen → Integrationen\n"
-                    "2. '+ Integration hinzufügen' → 'Met.no'\n"
-                    "3. Standort auswählen (kostenlos, kein API-Key nötig)\n"
-                    "4. Diese Integration neu konfigurieren mit Met.no\n\n"
-                    "Möchtest du trotzdem fortfahren?"
-                )
-            },
-        )
+    # NOTE: async_step_weather_warning REMOVED (2025-11-27)
+    # Open-Meteo is now the SINGLE DATA SOURCE - no weather entity warning needed
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the reconfiguration step"""
+        """Handle the reconfiguration step @zara"""
         if self.source != SOURCE_RECONFIGURE:
             return self.async_abort(reason="not_reconfigure")
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
@@ -350,9 +282,7 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             prefill_data.update(user_input)
-            # Basic validation
-            if not user_input.get(CONF_WEATHER_ENTITY, "").strip():
-                errors[CONF_WEATHER_ENTITY] = "required"
+
             if not user_input.get(CONF_POWER_ENTITY, "").strip():
                 errors[CONF_POWER_ENTITY] = "required"
             if not user_input.get(CONF_SOLAR_YIELD_TODAY, "").strip():
@@ -371,11 +301,10 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     step_id="reconfigure", data_schema=_get_base_schema(prefill_data), errors=errors
                 )
 
-            # --- Data Cleaning and Entry Update ---
-            new_unique_id = user_input.get(CONF_WEATHER_ENTITY, "").strip()
+            new_unique_id = f"solar_forecast_ml_{user_input.get(CONF_POWER_ENTITY, 'default')}"
             old_unique_id = entry.unique_id or ""
             if new_unique_id != old_unique_id:
-                # Check for conflicts before updating HA entry (HA might handle this too)
+
                 if self._async_current_entries(include_ignore=False):
                     for existing_entry in self._async_current_entries(include_ignore=False):
                         if (
@@ -388,7 +317,6 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 data_schema=_get_base_schema(prefill_data),
                                 errors=errors,
                             )
-                # Update unique_id if needed (HA does this via async_update_reload_and_abort)
 
             cleaned_data = {}
             for key, value in user_input.items():
@@ -412,20 +340,18 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 entry, data=cleaned_data, reason="reconfigure_successful"
             )
 
-        # Show reconfigure form prefilled
         return self.async_show_form(
             step_id="reconfigure", data_schema=_get_base_schema(prefill_data), errors=errors
         )
-
 
 class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
     """Handles the options flow with automatic reload after changes"""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage the options"""
+        """Manage the options @zara"""
         errors = {}
         if user_input is not None:
-            # Validation
+
             interval = user_input.get(CONF_UPDATE_INTERVAL, 3600)
             try:
                 interval_sec = int(interval)
@@ -441,8 +367,6 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
                     errors=errors,
                 )
 
-            # Update options (Boolean flags and settings go to options)
-            # Battery sensor entities, capacity, and country are now configured via reconfigure flow (in data)
             updated_options = {
                 **self.config_entry.options,
                 **{
@@ -457,16 +381,16 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
                         CONF_NOTIFY_FORECAST,
                         CONF_NOTIFY_LEARNING,
                         CONF_NOTIFY_SUCCESSFUL_LEARNING,
-                        CONF_BATTERY_ENABLED,  # Only battery enable flag
-                        CONF_ELECTRICITY_ENABLED,  # Only electricity enable flag
+                        CONF_BATTERY_ENABLED,
+                        CONF_ELECTRICITY_ENABLED,
+                        CONF_ML_ALGORITHM,
+                        CONF_ENABLE_TINY_LSTM,
                     ]
                 },
             }
 
-            # Return updated options to OptionsFlowWithReload
             return self.async_create_entry(title="", data=updated_options)
 
-        # Show form with current options (defaults are already in schema)
         options_schema = self._get_options_schema()
 
         return self.async_show_form(
@@ -476,14 +400,14 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
         )
 
     def _get_options_schema(self) -> vol.Schema:
-        """Define the schema for the options form"""
+        """Define the schema for the options form @zara"""
         current_options = self.config_entry.options
 
         return vol.Schema(
             {
                 vol.Optional(
                     CONF_UPDATE_INTERVAL, default=current_options.get(CONF_UPDATE_INTERVAL, 1800)
-                ): vol.All(  # Default 30 min
+                ): vol.All(
                     vol.Coerce(int), vol.Range(min=300, max=86400)
                 ),
                 vol.Optional(
@@ -503,14 +427,26 @@ class SolarForecastMLOptionsFlow(OptionsFlowWithReload):
                     CONF_NOTIFY_SUCCESSFUL_LEARNING,
                     default=current_options.get(CONF_NOTIFY_SUCCESSFUL_LEARNING, True),
                 ): bool,
-                # Battery Management - Only enable flags, capacity and entities are in reconfigure
+
                 vol.Optional(
                     CONF_BATTERY_ENABLED, default=current_options.get(CONF_BATTERY_ENABLED, False)
                 ): bool,
-                # Electricity Prices - Only enable flag, country is in reconfigure
+
                 vol.Optional(
                     CONF_ELECTRICITY_ENABLED,
                     default=current_options.get(CONF_ELECTRICITY_ENABLED, False),
+                ): bool,
+                vol.Optional(
+                    CONF_ML_ALGORITHM,
+                    default=current_options.get(CONF_ML_ALGORITHM, DEFAULT_ML_ALGORITHM),
+                ): vol.In({
+                    "auto": "Automatic (Recommended)",
+                    "ridge": "Ridge Regression (Fast)",
+                    "tiny_lstm": "Neural Network (Better Accuracy)"
+                }),
+                vol.Optional(
+                    CONF_ENABLE_TINY_LSTM,
+                    default=current_options.get(CONF_ENABLE_TINY_LSTM, DEFAULT_ENABLE_TINY_LSTM),
                 ): bool,
             }
         )

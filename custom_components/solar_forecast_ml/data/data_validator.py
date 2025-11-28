@@ -1,5 +1,4 @@
-"""
-Data Validation Module for Solar Forecast ML Integration
+"""Data Validation Module for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -25,13 +24,12 @@ from ..const import DATA_VERSION, MIN_TRAINING_DATA_POINTS
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class DataValidator:
     """Validates data integrity for ML and forecast data"""
 
     @staticmethod
     def validate_prediction_data(data: Dict[str, Any]) -> bool:
-        """Validate prediction data structure"""
+        """Validate prediction data structure @zara"""
         required_fields = ["timestamp", "prediction_kwh", "confidence"]
 
         for field in required_fields:
@@ -39,7 +37,6 @@ class DataValidator:
                 _LOGGER.error(f"Missing required field in prediction data: {field}")
                 return False
 
-        # Validate types
         if not isinstance(data.get("prediction_kwh"), (int, float)):
             _LOGGER.error("Invalid type for prediction_kwh")
             return False
@@ -48,7 +45,6 @@ class DataValidator:
             _LOGGER.error("Invalid type for confidence")
             return False
 
-        # Validate ranges
         if data["prediction_kwh"] < 0:
             _LOGGER.error("Negative prediction value")
             return False
@@ -61,7 +57,7 @@ class DataValidator:
 
     @staticmethod
     def validate_sample_data(sample: Dict[str, Any]) -> bool:
-        """Validate ML sample data structure"""
+        """Validate ML sample data structure @zara"""
         required_fields = ["timestamp", "actual_power", "features"]
 
         for field in required_fields:
@@ -69,13 +65,11 @@ class DataValidator:
                 _LOGGER.error(f"Missing required field in sample: {field}")
                 return False
 
-        # Validate features
         features = sample.get("features", {})
         if not isinstance(features, dict):
             _LOGGER.error("Features must be a dictionary")
             return False
 
-        # Check for minimum required features
         min_features = ["hour", "temperature", "cloud_cover"]
         for feature in min_features:
             if feature not in features:
@@ -85,7 +79,7 @@ class DataValidator:
 
     @staticmethod
     def validate_model_state(state: Dict[str, Any]) -> bool:
-        """Validate model state data"""
+        """Validate model state data @zara"""
         required_fields = ["version", "model_loaded", "training_samples"]
 
         for field in required_fields:
@@ -93,13 +87,11 @@ class DataValidator:
                 _LOGGER.error(f"Missing required field in model state: {field}")
                 return False
 
-        # Validate version
         if state.get("version") != DATA_VERSION:
             _LOGGER.warning(
                 f"Model state version mismatch: {state.get('version')} != {DATA_VERSION}"
             )
 
-        # Validate training samples
         training_samples = state.get("training_samples", 0)
         if training_samples < 0:
             _LOGGER.error("Negative training sample count")
@@ -109,7 +101,7 @@ class DataValidator:
 
     @staticmethod
     def validate_daily_forecast(forecast: Dict[str, Any]) -> bool:
-        """Validate daily forecast data"""
+        """Validate daily forecast data @zara"""
         required_fields = ["date", "prediction_kwh"]
 
         for field in required_fields:
@@ -117,7 +109,6 @@ class DataValidator:
                 _LOGGER.error(f"Missing required field in forecast: {field}")
                 return False
 
-        # Validate date format
         try:
             if forecast.get("date"):
                 datetime.fromisoformat(forecast["date"])
@@ -125,7 +116,6 @@ class DataValidator:
             _LOGGER.error(f"Invalid date format: {forecast.get('date')}")
             return False
 
-        # Validate prediction value
         prediction = forecast.get("prediction_kwh")
         if prediction is not None and (not isinstance(prediction, (int, float)) or prediction < 0):
             _LOGGER.error(f"Invalid prediction value: {prediction}")
@@ -135,7 +125,7 @@ class DataValidator:
 
     @staticmethod
     def check_data_quality(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Check overall data quality metrics"""
+        """Check overall data quality metrics @zara"""
         if not samples:
             return {
                 "total_samples": 0,

@@ -1,5 +1,4 @@
-"""
-Coordinator Helper Functions for Solar Forecast ML Integration
+"""Coordinator Helper Functions for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -25,7 +24,6 @@ from .core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class CoordinatorHelpers:
     """Helper functions for the data update coordinator"""
 
@@ -39,7 +37,6 @@ class CoordinatorHelpers:
 
         next_update = last_update + timedelta(minutes=interval_minutes)
 
-        # If next update is in the past, use current time
         if next_update < dt_util.now():
             return dt_util.now()
 
@@ -47,7 +44,7 @@ class CoordinatorHelpers:
 
     @staticmethod
     def should_force_update(last_update: Optional[datetime], max_age_hours: int = 24) -> bool:
-        """Check if data should be force-updated due to age"""
+        """Check if data should be force-updated due to age @zara"""
         if last_update is None:
             return True
 
@@ -56,7 +53,7 @@ class CoordinatorHelpers:
 
     @staticmethod
     def validate_coordinator_data(data: Dict[str, Any]) -> bool:
-        """Validate coordinator data structure"""
+        """Validate coordinator data structure @zara"""
         required_keys = ["last_update", "forecasts"]
 
         for key in required_keys:
@@ -68,25 +65,23 @@ class CoordinatorHelpers:
 
     @staticmethod
     def merge_forecast_data(old_data: Dict[str, Any], new_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Merge new forecast data with existing data"""
+        """Merge new forecast data with existing data @zara"""
         merged = old_data.copy()
 
-        # Update with new data
         for key, value in new_data.items():
             if key == "forecasts" and key in merged:
-                # Merge forecast lists
+
                 merged[key].update(value)
             else:
                 merged[key] = value
 
-        # Update timestamp
         merged["last_update"] = dt_util.now().isoformat()
 
         return merged
 
     @staticmethod
     def calculate_data_staleness(last_update: Optional[datetime]) -> Dict[str, Any]:
-        """Calculate data staleness metrics"""
+        """Calculate data staleness metrics @zara"""
         if last_update is None:
             return {
                 "stale": True,
@@ -98,21 +93,19 @@ class CoordinatorHelpers:
         age = dt_util.now() - last_update
         age_seconds = age.total_seconds()
 
-        # Determine staleness status
-        if age_seconds < 900:  # 15 minutes
+        if age_seconds < 900:
             status = "fresh"
             stale = False
-        elif age_seconds < 3600:  # 1 hour
+        elif age_seconds < 3600:
             status = "acceptable"
             stale = False
-        elif age_seconds < 21600:  # 6 hours
+        elif age_seconds < 21600:
             status = "stale"
             stale = True
         else:
             status = "very_stale"
             stale = True
 
-        # Human-readable age
         if age_seconds < 60:
             age_human = f"{int(age_seconds)} seconds ago"
         elif age_seconds < 3600:
@@ -131,7 +124,7 @@ class CoordinatorHelpers:
 
     @staticmethod
     def format_update_summary(update_results: Dict[str, bool]) -> str:
-        """Format update results into a readable summary"""
+        """Format update results into a readable summary @zara"""
         total = len(update_results)
         successful = sum(1 for v in update_results.values() if v)
         failed = total - successful

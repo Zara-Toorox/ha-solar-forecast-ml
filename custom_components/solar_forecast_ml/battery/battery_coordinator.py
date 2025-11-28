@@ -1,13 +1,17 @@
-"""
-Battery Coordinator - Separate from Solar Forecast
-
-Coordinates battery charge tracking, persistence, and price data
-Completely independent from Solar/ML coordinator
+"""Battery Coordinator - Separate from Solar Forecast V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -20,7 +24,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from ..const import (  # LEGACY v8.x; NEW v9.0.0; Common
+from ..const import (
     BASE_DATA_DIR,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_GRID_CHARGE_POWER_ENTITY,
@@ -48,15 +52,13 @@ from .electricity_price_service import ElectricityPriceService
 
 _LOGGER = logging.getLogger(__name__)
 
-# Update interval for battery tracking (2 minutes for accurate tracking)
 UPDATE_INTERVAL = timedelta(minutes=2)
-
 
 class BatteryCoordinator(DataUpdateCoordinator):
     """Battery Coordinator - Handles battery charge tracking Completely separate from Solar Forecast ML Coordinator Updates every 2 minutes to track charging/discharging"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """Initialize battery coordinator Args: hass: Home Assistant instance entry: Config entry"""
+        """Initialize battery coordinator Args: hass: Home Assistant instance entry: Config entry @zara"""
         super().__init__(
             hass,
             _LOGGER,
@@ -67,7 +69,6 @@ class BatteryCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.hass = hass
 
-        # Get configuration
         self.battery_capacity = entry.options.get(
             CONF_BATTERY_CAPACITY, entry.data.get(CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY)
         )
@@ -76,25 +77,26 @@ class BatteryCoordinator(DataUpdateCoordinator):
             entry.data.get(CONF_ELECTRICITY_COUNTRY, DEFAULT_ELECTRICITY_COUNTRY),
         )
 
-        # Initialize v9.0.0 components
         self.data_collector = BatteryDataCollector(hass, entry)
-        self.charge_tracker = BatteryChargeTracker(hass, self.battery_capacity)
+
+        using_v10 = self.data_collector.using_new_config
+
+        self.charge_tracker = BatteryChargeTracker(
+            hass, self.battery_capacity, using_new_config=using_v10
+        )
         self.persistence: Optional[BatteryChargePersistence] = None
         self.electricity_service: Optional[ElectricityPriceService] = None
 
-        # Detect configuration version
-        using_v9 = self.data_collector.using_new_config
-
         _LOGGER.info(
-            f"BatteryCoordinator initialized ({'v9.0 watt-based' if using_v9 else 'LEGACY v8.x'}) - "
+            f"BatteryCoordinator initialized ({'v10 watt-based' if using_v10 else 'LEGACY v8.x'}) - "
             f"Capacity: {self.battery_capacity} kWh, "
             f"Update interval: {UPDATE_INTERVAL}"
         )
 
     async def async_setup(self):
-        """Setup coordinator components"""
+        """Setup coordinator components @zara"""
         try:
-            # Initialize persistence
+
             persistence_file = f"{BASE_DATA_DIR}/{DATA_DIR}/battery_charge_history.json"
             self.persistence = BatteryChargePersistence(
                 file_path=persistence_file,
@@ -102,20 +104,16 @@ class BatteryCoordinator(DataUpdateCoordinator):
             )
             await self.persistence.load()
 
-            # Initialize electricity price service
             self.electricity_service = ElectricityPriceService(country=self.electricity_country)
 
-            # Fetch initial prices
             await self.electricity_service.fetch_day_ahead_prices()
 
-            # Detect configuration version
-            using_v9 = self.data_collector.using_new_config
+            using_v10 = self.data_collector.using_new_config
 
-            # Log comprehensive battery setup summary
-            if using_v9:
+            if using_v10:
                 power_sensors = self.data_collector.get_all_power_sensors()
                 _LOGGER.info(
-                    f"Battery Coordinator Setup Complete ✓ (v9.0.0 watt-based)\n"
+                    f"Battery Coordinator Setup Complete ✓ (v10.0.0 watt-based)\n"
                     f"  → Battery Capacity: {self.battery_capacity} kWh\n"
                     f"  → Update Interval: {UPDATE_INTERVAL}\n"
                     f"  → Battery Power: {self.data_collector.battery_power_sensor}\n"
@@ -134,7 +132,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
                     f"  → Battery Capacity: {self.battery_capacity} kWh\n"
                     f"  → Update Interval: {UPDATE_INTERVAL}\n"
                     f"  → ⚠️  Using LEGACY v8.x configuration!\n"
-                    f"  → ⚠️  Migrate to v9.0.0 for full energy flow tracking!"
+                    f"  → ⚠️  Migrate to v10.0.0 for full energy flow tracking!"
                 )
 
             return True
@@ -144,13 +142,13 @@ class BatteryCoordinator(DataUpdateCoordinator):
             return False
 
     async def _async_update_data(self):
-        """Fetch battery data and track charging/discharging Returns: Dictionary with current battery data"""
+        """Fetch battery data and track charging/discharging Returns: Dictionary with current battery data @zara"""
         try:
-            # Check if using v9.0.0 configuration
-            using_v9 = self.data_collector.using_new_config
 
-            if using_v9:
-                return await self._update_v9()
+            using_v10 = self.data_collector.using_new_config
+
+            if using_v10:
+                return await self._update_v10()
             else:
                 return await self._update_legacy()
 
@@ -158,9 +156,9 @@ class BatteryCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Error updating battery data: {e}")
             raise UpdateFailed(f"Error updating battery data: {e}")
 
-    async def _update_v9(self):
-        """Update using v9.0.0 watt-based system"""
-        # Get all power sensor values
+    async def _update_v10(self):
+        """Update using v10.0.0 watt-based system @zara"""
+
         power_sensors = self.data_collector.get_all_power_sensors()
 
         battery_power_w = power_sensors["battery_power_w"]
@@ -171,12 +169,10 @@ class BatteryCoordinator(DataUpdateCoordinator):
         house_consumption_w = power_sensors["house_consumption_w"]
         grid_charge_power_w = power_sensors["grid_charge_power_w"]
 
-        # Get current electricity price
         current_price = (
             self.electricity_service.get_current_price() if self.electricity_service else 0.0
         )
 
-        # Update charge tracker (calculates energy flows)
         tracker_data = self.charge_tracker.update(
             battery_power=battery_power_w,
             solar_power=solar_production_w,
@@ -185,18 +181,16 @@ class BatteryCoordinator(DataUpdateCoordinator):
             grid_import=grid_import_w,
             grid_export=grid_export_w,
             grid_charge_power=grid_charge_power_w,
+            using_new_config=True,
         )
 
-        # Get energy flows for persistence
-        energy_flows = self.charge_tracker.get_energy_flows_v9()
+        energy_flows = self.charge_tracker.get_energy_flows_v10()
 
-        # Update persistence with v9.0.0 energy flows
         if self.persistence:
-            await self.persistence.update_energy_flows_v9(
+            await self.persistence.update_energy_flows_v10(
                 timestamp=datetime.now(), energy_flows=energy_flows
             )
 
-        # Return current state
         summary = self.persistence.get_today_summary() if self.persistence else {}
         return {
             "battery_power_w": battery_power_w,
@@ -211,34 +205,30 @@ class BatteryCoordinator(DataUpdateCoordinator):
             "tracker_data": tracker_data,
             "summary": summary,
             "last_update": datetime.now().isoformat(),
-            "version": "v9.0.0",
+            "version": "v10.0.0",
         }
 
     async def _update_legacy(self):
-        """Update using LEGACY v8.x system"""
-        # Get current battery power
+        """Update using LEGACY v8.x system @zara"""
+
         battery_power = self.data_collector.get_battery_power()
         if battery_power is None:
             _LOGGER.debug("Battery power sensor not available, skipping update")
             return {}
 
-        # Get grid charge power
         grid_charge_power = self.data_collector.get_grid_charge_power() or 0.0
 
-        # Calculate solar charge power (LEGACY)
-        if battery_power > 50:  # Battery is charging (threshold to avoid noise)
+        if battery_power > 50:
             solar_power = max(0, battery_power - grid_charge_power)
         else:
             solar_power = 0.0
 
-        # Get current electricity price
         current_price = (
             self.electricity_service.get_current_price() if self.electricity_service else 0.0
         )
 
-        # Track charging/discharging events (LEGACY)
-        if battery_power > 50:  # Charging (with tolerance)
-            if grid_charge_power > 50:  # Grid charging
+        if battery_power > 50:
+            if grid_charge_power > 50:
                 await self.persistence.add_charge_event(
                     timestamp=datetime.now(),
                     source="grid",
@@ -248,7 +238,6 @@ class BatteryCoordinator(DataUpdateCoordinator):
                     price_cent_kwh=current_price,
                 )
 
-            # Solar charging (if any)
             if solar_power > 50:
                 await self.persistence.add_charge_event(
                     timestamp=datetime.now(),
@@ -259,11 +248,10 @@ class BatteryCoordinator(DataUpdateCoordinator):
                     price_cent_kwh=0.0,
                 )
 
-        elif battery_power < -50:  # Discharging (with tolerance)
+        elif battery_power < -50:
             discharge_power = abs(battery_power)
             discharge_kwh = (discharge_power / 1000) * (UPDATE_INTERVAL.total_seconds() / 3600)
 
-            # Calculate solar ratio
             today_summary = self.persistence.get_today_summary()
             total_charged = today_summary.get("grid_charge_kwh", 0) + today_summary.get(
                 "solar_charge_kwh", 0
@@ -283,7 +271,6 @@ class BatteryCoordinator(DataUpdateCoordinator):
                 solar_ratio=solar_ratio,
             )
 
-        # Return current state
         summary = self.persistence.get_today_summary() if self.persistence else {}
         return {
             "battery_power": battery_power,
@@ -296,7 +283,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
         }
 
     async def async_refresh_prices(self):
-        """Refresh electricity prices"""
+        """Refresh electricity prices @zara"""
         if self.electricity_service:
             try:
                 await self.electricity_service.fetch_day_ahead_prices()
@@ -305,19 +292,16 @@ class BatteryCoordinator(DataUpdateCoordinator):
                 _LOGGER.error(f"Error refreshing electricity prices: {e}")
 
     async def async_daily_rollup(self):
-        """Perform daily rollup tasks Called at midnight to aggregate daily data to monthly"""
+        """Perform daily rollup tasks Called at midnight to aggregate daily data to monthly @zara"""
         try:
             if not self.persistence:
                 return
 
-            # Rollup yesterday to monthly
             yesterday = datetime.now().date() - timedelta(days=1)
             await self.persistence.rollup_to_monthly(yesterday)
 
-            # Cleanup old events
             await self.persistence.cleanup_old_events()
 
-            # Save
             await self.persistence.save()
 
             _LOGGER.info("Daily rollup completed")
@@ -326,7 +310,7 @@ class BatteryCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Error during daily rollup: {e}")
 
     async def async_monthly_rollup(self):
-        """Perform monthly rollup tasks Called at end of month to aggregate monthly data to yearly"""
+        """Perform monthly rollup tasks Called at end of month to aggregate monthly data to yearly @zara"""
         try:
             if not self.persistence:
                 return

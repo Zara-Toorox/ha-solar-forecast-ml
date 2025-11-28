@@ -1,5 +1,4 @@
-"""
-Weather Data Processor for Solar Forecast ML Integration
+"""Weather Data Processor for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -23,13 +22,12 @@ from typing import Any, Dict, List, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class WeatherDataProcessor:
     """Processes and transforms weather data for ML features"""
 
     @staticmethod
     def process_forecast_data(forecast_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Process raw forecast data into standardized format"""
+        """Process raw forecast data into standardized format @zara"""
         processed = []
 
         for entry in forecast_list:
@@ -57,27 +55,21 @@ class WeatherDataProcessor:
 
     @staticmethod
     def calculate_solar_radiation(cloud_cover: float, hour: int, latitude: float = 50.0) -> float:
-        """Estimate solar radiation based on cloud cover and time"""
-        # Simple solar radiation model
-        # Peak radiation around noon, reduced by cloud cover
+        """Estimate solar radiation based on cloud cover and time @zara"""
 
         if hour < 6 or hour > 20:
             return 0.0
 
-        # Solar elevation angle (simplified)
-        hour_angle = abs(12 - hour) * 15  # degrees from solar noon
+        hour_angle = abs(12 - hour) * 15
         elevation = 90 - abs(latitude) - hour_angle
 
         if elevation < 0:
             return 0.0
 
-        # Max radiation at elevation 90 degrees
-        max_radiation = 1000.0  # W/m²
+        max_radiation = 1000.0
 
-        # Reduce by elevation angle
         elevation_factor = elevation / 90.0
 
-        # Reduce by cloud cover
         cloud_factor = 1.0 - (cloud_cover / 100.0) * 0.75
 
         radiation = max_radiation * elevation_factor * cloud_factor
@@ -86,7 +78,7 @@ class WeatherDataProcessor:
 
     @staticmethod
     def normalize_weather_features(weather_data: Dict[str, Any]) -> Dict[str, float]:
-        """Normalize weather features for ML input"""
+        """Normalize weather features for ML input @zara"""
         return {
             "temperature_norm": WeatherDataProcessor._normalize(
                 weather_data.get("temperature", 15.0), min_val=-20.0, max_val=40.0
@@ -107,7 +99,7 @@ class WeatherDataProcessor:
 
     @staticmethod
     def _safe_float(value: Any, default: float) -> float:
-        """Safely convert value to float with default"""
+        """Safely convert value to float with default @zara"""
         try:
             return float(value) if value is not None else default
         except (ValueError, TypeError):
@@ -115,7 +107,7 @@ class WeatherDataProcessor:
 
     @staticmethod
     def _normalize(value: float, min_val: float, max_val: float) -> float:
-        """Normalize value to range 0 1"""
+        """Normalize value to range 0 1 @zara"""
         if max_val == min_val:
             return 0.5
         return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))

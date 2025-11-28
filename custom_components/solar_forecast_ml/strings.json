@@ -3,9 +3,8 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML",
-        "description": "Required: Weather Sensor, Power Sensor, Daily Yield\nOptional: All other fields\n\nBattery Management v9.0.0 (optional):\n• Watt-based system for precise energy flow analysis\n• 8 clear sensors (all positive except Battery: +/-)\n• Required: Battery Power, SOC, Solar Production, Inverter Output, Grid Import, Grid Export, House Consumption",
+        "description": "Required: Power Sensor, Daily Yield\nOptional: All other fields\n\n☀️ Weather data is provided automatically via Open-Meteo API (no configuration needed)\n\nBattery Management v9.0.0 (optional):\n• Watt-based system for precise energy flow analysis\n• 8 clear sensors (all positive except Battery: +/-)\n• Required: Battery Power, SOC, Solar Production, Inverter Output, Grid Import, Grid Export, House Consumption",
         "data": {
-          "weather_entity": "Weather Sensor",
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
@@ -16,8 +15,9 @@
           "lux_sensor": "Illuminance Sensor (lx)",
           "temp_sensor": "Temperature Sensor",
           "wind_sensor": "Wind Sensor",
-          "uv_sensor": "UV Sensor",
           "humidity_sensor": "Humidity Sensor",
+          "pressure_sensor": "Pressure Sensor (hPa)",
+          "solar_radiation_sensor": "Solar Radiation Sensor (W/m²)",
           "battery_capacity": "Battery Capacity (kWh)",
           "battery_power_sensor": "Battery Power (W, +/-) - v9.0.0",
           "battery_soc_sensor": "Battery State of Charge (%) - v9.0.0",
@@ -31,7 +31,6 @@
           "electricity_country": "Country (DE/AT)"
         },
         "data_description": {
-          "weather_entity": "Weather entity for forecast (Required)",
           "power_entity": "Current power in Watts (Required)",
           "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
           "total_consumption_today": "Daily consumption in kWh (Optional)",
@@ -42,8 +41,9 @@
           "lux_sensor": "External illuminance in Lux (Optional)",
           "temp_sensor": "External temperature (Optional)",
           "wind_sensor": "External wind speed (Optional)",
-          "uv_sensor": "External UV index (Optional)",
           "humidity_sensor": "External humidity (Optional)",
+          "pressure_sensor": "External barometric pressure in hPa (Optional)",
+          "solar_radiation_sensor": "External solar radiation in W/m² (Optional, preferred over Lux)",
           "battery_capacity": "Battery capacity in kWh (Optional, for battery management)",
           "battery_power_sensor": "[v9.0.0] Battery power in W (Positive=Charging, Negative=Discharging)",
           "battery_soc_sensor": "[v9.0.0] Battery state of charge in % (0-100)",
@@ -59,9 +59,8 @@
       },
       "reconfigure": {
         "title": "Reconfigure Solar Forecast ML",
-        "description": "Update configuration\nEmpty optional fields will clear their value\n\nBattery Management v9.0.0:\n• Configure all 8 sensors for energy flow analysis\n• All positive values except Battery Power (+/-)\n• Old LEGACY fields are automatically ignored",
+        "description": "Update configuration\nEmpty optional fields will clear their value\n\n☀️ Weather data is provided automatically via Open-Meteo API\n\nBattery Management v9.0.0:\n• Configure all 8 sensors for energy flow analysis\n• All positive values except Battery Power (+/-)\n• Old LEGACY fields are automatically ignored",
         "data": {
-          "weather_entity": "Weather Sensor",
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
@@ -72,8 +71,9 @@
           "lux_sensor": "Illuminance Sensor (lx)",
           "temp_sensor": "Temperature Sensor",
           "wind_sensor": "Wind Sensor",
-          "uv_sensor": "UV Sensor",
           "humidity_sensor": "Humidity Sensor",
+          "pressure_sensor": "Pressure Sensor (hPa)",
+          "solar_radiation_sensor": "Solar Radiation Sensor (W/m²)",
           "battery_capacity": "Battery Capacity (kWh)",
           "battery_power_sensor": "Battery Power (W, +/-) - v9.0.0",
           "battery_soc_sensor": "Battery State of Charge (%) - v9.0.0",
@@ -87,7 +87,6 @@
           "electricity_country": "Country (DE/AT)"
         },
         "data_description": {
-          "weather_entity": "Weather entity for forecast (Required)",
           "power_entity": "Current power in Watts (Required)",
           "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
           "total_consumption_today": "Daily consumption in kWh (Optional)",
@@ -98,8 +97,9 @@
           "lux_sensor": "External illuminance in Lux (Optional)",
           "temp_sensor": "External temperature (Optional)",
           "wind_sensor": "External wind speed (Optional)",
-          "uv_sensor": "External UV index (Optional)",
           "humidity_sensor": "External humidity (Optional)",
+          "pressure_sensor": "External barometric pressure in hPa (Optional)",
+          "solar_radiation_sensor": "External solar radiation in W/m² (Optional, preferred over Lux)",
           "battery_capacity": "Battery capacity in kWh (Optional, for battery management)",
           "battery_power_sensor": "[v9.0.0] Battery power in W (Positive=Charging, Negative=Discharging)",
           "battery_soc_sensor": "[v9.0.0] Battery state of charge in % (0-100)",
@@ -112,10 +112,6 @@
           "battery_temperature_sensor": "[v9.0.0 Optional] Battery temperature in °C - For advanced analysis",
           "electricity_country": "Country for electricity prices - Germany (DE) or Austria (AT) (Optional)"
         }
-      },
-      "weather_warning": {
-        "title": "⚠️ Warnung: Wetter-Integration",
-        "description": "{warning_message}"
       }
     },
     "error": {
@@ -150,7 +146,9 @@
           "notify_learning": "Training Notifications",
           "notify_successful_learning": "Success Notifications",
           "battery_enabled": "Enable Battery Management",
-          "electricity_enabled": "Enable Electricity Prices (aWATTar)"
+          "electricity_enabled": "Enable Electricity Prices (aWATTar)",
+          "ml_algorithm": "Mode",
+          "enable_tiny_lstm": "Enable / Disable AI"
         },
         "data_description": {
           "update_interval": "Forecast update interval (300-86400s, default: 3600)",
@@ -161,7 +159,9 @@
           "notify_learning": "Notify on training start",
           "notify_successful_learning": "Notify on training success",
           "battery_enabled": "Enable battery monitoring and forecasts (configure sensors via Reconfigure)",
-          "electricity_enabled": "Enable electricity spot prices from aWATTar (configure country via Reconfigure)"
+          "electricity_enabled": "Enable electricity spot prices from aWATTar (configure country via Reconfigure)",
+          "ml_algorithm": "Choose algorithm: 'Automatic' lets system decide based on available data (recommended). 'Ridge' is fast and stable. 'Neural Network' provides 5-10% better accuracy with 100+ samples.",
+          "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled."
         }
       }
     },
@@ -291,11 +291,24 @@
           "ready": "Ready",
           "excellent": "Excellent"
         }
-      }
-    },
-    "button": {
-      "manual_learning": {
-        "name": "Train Model"
+      },
+      "shadow_current": {
+        "name": "Shadow Current",
+        "state": {
+          "clear": "Clear",
+          "light_shadow": "Light Shadow",
+          "moderate_shadow": "Moderate Shadow",
+          "heavy_shadow": "Heavy Shadow",
+          "night": "Night",
+          "no_data": "No Data",
+          "error": "Error"
+        }
+      },
+      "shadow_today": {
+        "name": "Shadow Today"
+      },
+      "performance_loss_today": {
+        "name": "Performance Loss Today"
       }
     }
   },

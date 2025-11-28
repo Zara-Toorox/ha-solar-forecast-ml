@@ -1,5 +1,4 @@
-"""
-Machine Learning Predictor
+"""Machine Learning Predictor V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -18,15 +17,18 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later, async_track_time_change
 
+from ..astronomy.astronomy_cache_manager import get_cache_manager
 from ..const import (
     CORRECTION_FACTOR_MAX,
     CORRECTION_FACTOR_MIN,
@@ -47,10 +49,11 @@ from ..ml.ml_types import (
 )
 from ..services.service_error_handler import ErrorHandlingService
 
-# Lazy import NumPy
 _np = None
 
-from ..ml.ml_feature_engineering_v2 import FeatureEngineerV2
+from ..ml.ml_feature_engineering_v3 import FeatureEngineerV3
+from ..ml.ml_data_loader_v3 import MLDataLoaderV3
+
 from ..ml.ml_prediction_strategies import (
     FallbackStrategy,
     MLModelStrategy,
@@ -60,16 +63,14 @@ from ..ml.ml_prediction_strategies import (
 )
 from ..ml.ml_sample_collector import SampleCollector
 
-# Import ML components (V2 only - V1 removed)
 from ..ml.ml_scaler import StandardScaler
 from ..ml.ml_trainer import RidgeTrainer
+from ..ml.ml_adaptive_trainer import AdaptiveTrainer, AlgorithmType
 
 _LOGGER = logging.getLogger(__name__)
 
-
-# --- Helper for Lazy NumPy Import ---
 def _ensure_numpy():
-    """Lazily imports and returns the NumPy module raising ImportError if unavailable"""
+    """Lazily imports and returns the NumPy module raising ImportError if unavailable @zara"""
     global _np
     if _np is None:
         try:
@@ -83,33 +84,29 @@ def _ensure_numpy():
                 "Please ensure it is installed. Error: %s",
                 e,
             )
-            raise  # Re-raise to signal dependency issue
+            raise
     return _np
 
-
-# --- Enums and Dataclasses ---
 class ModelState(Enum):
     """Represents the operational state of the ML model"""
 
     UNINITIALIZED = "uninitialized"
     TRAINING = "training"
     READY = "ready"
-    DEGRADED = "degraded"  # Model exists but accuracy is low or data is old
+    DEGRADED = "degraded"
     ERROR = "error"
-
 
 @dataclass
 class TrainingResult:
     """Stores the outcome of a model training attempt"""
 
     success: bool
-    accuracy: float | None = None  # Accuracy might be None if training failed early
+    accuracy: float | None = None
     samples_used: int = 0
     weights: Optional[LearnedWeights] = None
     error_message: Optional[str] = None
     training_time_seconds: Optional[float] = None
     feature_count: Optional[int] = None
-
 
 @dataclass
 class ModelHealth:
@@ -118,13 +115,11 @@ class ModelHealth:
     state: ModelState
     model_loaded: bool
     last_training: Optional[datetime]
-    current_accuracy: float | None  # Can be None if never trained
+    current_accuracy: float | None
     training_samples: int
-    features_available: List[str]  # List of feature names the model expects
+    features_available: List[str]
     performance_metrics: Dict[str, float] = field(default_factory=dict)
 
-
-# --- Main MLPredictor Class ---
 class MLPredictor:
     """Manages the machine learning model lifecycle including training"""
 
@@ -133,76 +128,92 @@ class MLPredictor:
         hass: HomeAssistant,
         data_manager: DataManager,
         error_handler: ErrorHandlingService,
-        notification_service=None,  # NEW: Optional for backward compatibility
+        notification_service=None,
+        config_entry=None,
     ):
         """Initialize the MLPredictor"""
         self.hass = hass
         self.data_manager = data_manager
         self.error_handler = error_handler
-        self.notification_service = notification_service  # NEW
+        self.notification_service = notification_service
+        self.config_entry = config_entry
         self.data_adapter = TypedDataAdapter()
 
-        # Historical cache for lag features
         self._historical_cache: Dict[str, Dict[str, float]] = {
             "daily_productions": {},
             "hourly_productions": {},
         }
         self._recent_weather_samples: List[Dict[str, Any]] = (
             []
-        )  # Last 24h weather samples for trend
-        self._weather_samples_last_loaded: Optional[datetime] = None  # Cache timestamp
+        )
+        self._weather_samples_last_loaded: Optional[datetime] = None
 
-        # ML Components (V2 only - 44 features)
         self.scaler = StandardScaler()
-        self.feature_engineer = FeatureEngineerV2()
-        self.trainer = RidgeTrainer()
-        self.prediction_orchestrator = PredictionOrchestrator()
-        self.sample_collector = SampleCollector(hass, data_manager)  # Pass SunGuard later if needed
+        self.feature_engineer = FeatureEngineerV3()
+        self.data_loader = MLDataLoaderV3(
+            data_manager.data_dir / "stats",
+            hass=hass
+        )
 
-        # Model State
+        ml_algorithm = "auto"
+        enable_tiny_lstm = True
+        if self.config_entry is not None:
+            ml_algorithm = self.config_entry.options.get(
+                "ml_algorithm",
+                self.config_entry.data.get("ml_algorithm", "auto")
+            )
+            enable_tiny_lstm = self.config_entry.options.get(
+                "enable_tiny_lstm",
+                self.config_entry.data.get("enable_tiny_lstm", True)
+            )
+
+        self.trainer = AdaptiveTrainer(
+            algorithm=ml_algorithm,
+            enable_lstm=enable_tiny_lstm,
+            min_samples_for_lstm=100,
+            min_memory_mb=200
+        )
+        self.algorithm_used = "ridge"
+        self.prediction_orchestrator = PredictionOrchestrator()
+        self.sample_collector = SampleCollector(hass, data_manager)
+
         self.model_state = ModelState.UNINITIALIZED
         self.model_loaded = False
         self.current_weights: Optional[LearnedWeights] = None
         self.current_profile: Optional[HourlyProfile] = (
-            None  # Hourly profile for fallback/comparison
+            None
         )
         self.peak_power_kw: float = (
-            0.0  # Peak power in kW (explicit unit) for physical limit clipping
+            0.0
         )
 
-        # Metrics and Timestamps
         self.current_accuracy: float | None = None
         self.training_samples: int = 0
         self.last_training_time: Optional[datetime] = None
         self.last_training_samples: int = (
-            0  # NEW: Track training sample count for adaptive blending
+            0
         )
 
-        # Training mode flag (V2 uses hourly_predictions.json)
-
-        # Performance Tracking (optional)
         self.performance_metrics = {
             "avg_prediction_time_ms": 0.0,
             "total_predictions": 0,
             "successful_predictions": 0,
             "error_rate": 0.0,
         }
-        self._prediction_times: List[float] = []  # Store recent prediction times for averaging
+        self._prediction_times: List[float] = []
 
-        # Background Task Management
         self._hourly_sample_listener_remove = None
         self._daily_training_listener_remove = None
-        self._daily_training_task: Optional[asyncio.TimerHandle] = None  # Store timer handle
-        self._stop_event = asyncio.Event()  # For graceful shutdown
+        self._daily_training_task: Optional[asyncio.TimerHandle] = None
+        self._stop_event = asyncio.Event()
 
-        # WARNING FIX 8: Training lock to prevent concurrent training
         self._training_lock = asyncio.Lock()
 
         _LOGGER.info("MLPredictor initialized.")
 
     @property
     def can_predict(self) -> bool:
-        """Check if ML model can make predictions"""
+        """Check if ML model can make predictions @zara"""
         return (
             self.model_loaded
             and self.model_state == ModelState.READY
@@ -212,43 +223,56 @@ class MLPredictor:
         )
 
     async def initialize(self) -> bool:
-        """Initializes the ML Predictor by loading existing model data"""
+        """Initializes the ML Predictor by loading existing model data @zara"""
         _LOGGER.info("Initializing ML Predictor...")
         init_success = False
         try:
-            _ensure_numpy()  # Check if numpy is available early
+            _ensure_numpy()
 
-            # 1. Load Learned Weights
             loaded_weights = await self.data_manager.get_learned_weights()
             if loaded_weights:
-                # Validate feature count compatibility (V2 only - 44 features)
+
                 loaded_feature_count = (
                     len(loaded_weights.feature_names)
                     if hasattr(loaded_weights, "feature_names") and loaded_weights.feature_names
                     else 0
                 )
 
-                # Ensure V2 feature engineer is used (44 features)
-                if loaded_feature_count == 44:
-                    _LOGGER.info(
-                        f"Loaded model has {loaded_feature_count} features (V2). Using FeatureEngineerV2 for predictions."
+                if loaded_feature_count == 14:
+                    loaded_algorithm = getattr(loaded_weights, 'algorithm_used', None)
+                    if loaded_algorithm:
+                        self.algorithm_used = loaded_algorithm
+                        _LOGGER.info(
+                            f"Loaded model has {loaded_feature_count} features (V3) "
+                            f"using {loaded_algorithm.upper()}. Using FeatureEngineerV3 for predictions."
+                        )
+                    else:
+                        _LOGGER.info(
+                            f"Loaded model has {loaded_feature_count} features (V3). Using FeatureEngineerV3 for predictions."
+                        )
+                    self.feature_engineer = FeatureEngineerV3()
+                    expected_feature_count = 14
+                elif loaded_feature_count == 44:
+
+                    _LOGGER.warning(
+                        f"Loaded V2 model with {loaded_feature_count} features. Model needs retraining with V3 (14 features)."
                     )
-                    self.feature_engineer = FeatureEngineerV2()
-                    expected_feature_count = 44
+
+                    self.feature_engineer = FeatureEngineerV3()
+                    expected_feature_count = 14
                 else:
-                    # Only V2 is supported now
-                    expected_feature_count = 44
+
+                    expected_feature_count = 14
+                    self.feature_engineer = FeatureEngineerV3()
 
                 if loaded_feature_count > 0 and loaded_feature_count != expected_feature_count:
                     _LOGGER.warning(
                         f"Feature count mismatch: loaded model has {loaded_feature_count} features, "
-                        f"V2 expects {expected_feature_count}. Model needs retraining."
+                        f"V3 expects {expected_feature_count}. Model needs retraining."
                     )
 
-                    # Don't load incompatible weights
                     self.model_state = ModelState.UNINITIALIZED
 
-                    # Send notification to user about retraining
                     if self.notification_service:
                         try:
                             await self.notification_service.show_model_retraining_required(
@@ -259,7 +283,6 @@ class MLPredictor:
                         except Exception as notif_err:
                             _LOGGER.debug(f"Could not send retraining notification: {notif_err}")
 
-                    # Trigger synchronous retrain to ensure model is available
                     _LOGGER.info("Starting automatic model retraining due to feature mismatch...")
                     try:
                         training_result = await self.train_model()
@@ -286,11 +309,11 @@ class MLPredictor:
                 self.current_weights = loaded_weights
                 self.current_accuracy = loaded_weights.accuracy
                 self.training_samples = loaded_weights.training_samples
-                self.last_training_samples = loaded_weights.training_samples  # Also restore for adaptive blending
+                self.last_training_samples = loaded_weights.training_samples
                 try:
                     parsed_time = dt_util.parse_datetime(loaded_weights.last_trained)
                     if parsed_time:
-                        # Ensure timezone-aware (HA requires this for TIMESTAMP sensors)
+
                         self.last_training_time = (
                             dt_util.as_local(parsed_time)
                             if parsed_time.tzinfo is None
@@ -307,7 +330,7 @@ class MLPredictor:
                 if self.training_samples >= MIN_TRAINING_DATA_POINTS:
                     self.model_state = ModelState.READY
                 else:
-                    self.model_state = ModelState.UNINITIALIZED  # Ready, but not trained
+                    self.model_state = ModelState.UNINITIALIZED
 
                 if hasattr(loaded_weights, "feature_means") and loaded_weights.feature_means:
                     try:
@@ -343,7 +366,12 @@ class MLPredictor:
                 _LOGGER.info("No existing learned weights found. Model needs training.")
                 self.model_state = ModelState.UNINITIALIZED
 
-            # 2. Load Hourly Profile (used as a fallback strategy)
+                _LOGGER.info("Creating neutral default learned_weights.json")
+                from ..ml.ml_types import create_default_learned_weights
+                default_weights = create_default_learned_weights()
+                await self.data_manager.save_learned_weights(default_weights)
+                _LOGGER.debug("✓ Neutral learned_weights.json created")
+
             loaded_profile = await self.data_manager.get_hourly_profile()
             if loaded_profile:
                 self.current_profile = loaded_profile
@@ -351,13 +379,15 @@ class MLPredictor:
                     "Hourly profile loaded (Samples=%d).", self.current_profile.samples_count
                 )
             else:
-                _LOGGER.info("No existing hourly profile found. Using default.")
+                _LOGGER.info("No existing hourly profile found. Creating default.")
                 self.current_profile = create_default_hourly_profile()
 
-            # 2b. Load Model State (for performance metrics and additional status info)
+                await self.data_manager.save_hourly_profile(self.current_profile)
+                _LOGGER.debug("✓ Default hourly_profile.json created")
+
             loaded_model_state = await self.data_manager.load_model_state()
             if loaded_model_state and loaded_model_state.get("version") == DATA_VERSION:
-                # Restore performance metrics if available
+
                 if "performance_metrics" in loaded_model_state:
                     perf_metrics = loaded_model_state["performance_metrics"]
                     if perf_metrics:
@@ -371,12 +401,10 @@ class MLPredictor:
                         )
                         _LOGGER.debug("Performance metrics restored from model_state.json")
 
-                # Restore peak_power if stored and not already set
                 if self.peak_power_kw == 0.0 and "peak_power_kw" in loaded_model_state:
                     self.peak_power_kw = loaded_model_state.get("peak_power_kw", 0.0)
                     _LOGGER.debug("Peak power restored: %.2f kW", self.peak_power_kw)
 
-                # If no weights were loaded, try to restore basic state from model_state
                 if not loaded_weights and loaded_model_state.get("model_loaded"):
                     _LOGGER.info(
                         "No weights file found, but model_state indicates previous training existed."
@@ -384,7 +412,6 @@ class MLPredictor:
                     self.training_samples = loaded_model_state.get("training_samples", 0)
                     self.current_accuracy = loaded_model_state.get("current_accuracy", 0.0)
 
-                    # Parse last_training if available
                     if loaded_model_state.get("last_training"):
                         try:
                             parsed_time = dt_util.parse_datetime(
@@ -403,7 +430,6 @@ class MLPredictor:
             else:
                 _LOGGER.debug("No valid model_state.json found or version mismatch.")
 
-            # 3. Update Prediction Strategies
             self.prediction_orchestrator.update_strategies(
                 weights=self.current_weights,
                 profile=self.current_profile,
@@ -412,10 +438,8 @@ class MLPredictor:
             )
             _LOGGER.debug("Prediction strategies updated.")
 
-            # 4. Load Historical Cache
-            asyncio.create_task(self._load_historical_cache())
+            await self._load_historical_cache()
 
-            # 5. Schedule Background Tasks
             _LOGGER.info("=== Scheduling background tasks ===")
 
             self._schedule_hourly_sampling()
@@ -424,7 +448,6 @@ class MLPredictor:
             self._schedule_daily_training_check()
             _LOGGER.info("[OK] Daily training check scheduled")
 
-            # Log current status
             samples_count = await self._check_training_data_availability()
             _LOGGER.info(f"Current hourly samples available: {samples_count}")
 
@@ -445,13 +468,25 @@ class MLPredictor:
         return init_success
 
     async def _load_historical_cache(self) -> None:
-        """Loads historical production data into memory for lag feature calculation"""
+        """Loads historical production data into memory for lag feature calculation @zara"""
         _LOGGER.debug("Loading historical production cache...")
         try:
-            # Load hourly samples from last 60 days, as these contain the most accurate data
-            start_date = (dt_util.now() - timedelta(days=60)).date().isoformat()
-            samples_data = await self.data_manager.get_hourly_samples(start_date=start_date)
-            records = samples_data if (samples_data and isinstance(samples_data, list)) else []
+
+            start_date = (dt_util.now() - timedelta(days=60)).date()
+
+            data = await self.data_manager.hourly_predictions._read_json_async()
+            all_predictions = data.get("predictions", [])
+
+            records = [
+                {
+                    "actual_kwh": p.get("actual_kwh"),
+                    "timestamp": p.get("target_datetime"),
+                    "date": p.get("id", "").split("_")[0] if p.get("id") else None,
+                    "hour": p.get("target_hour"),
+                }
+                for p in all_predictions
+                if p.get("actual_kwh") is not None and p.get("id")
+            ]
 
             daily_productions_cache: Dict[str, float] = {}
             hourly_productions_cache: Dict[str, float] = {}
@@ -474,20 +509,16 @@ class MLPredictor:
                         _LOGGER.debug(f"Skipping cache record, invalid timestamp: {timestamp_str}")
                         continue
 
-                    # Normalize timezone - handle naive, UTC, and local timestamps
-                    # Assume naive timestamps are UTC (common after migration)
                     if timestamp_dt.tzinfo is None:
                         timestamp_dt = timestamp_dt.replace(tzinfo=timezone.utc)
 
-                    # ENSURE local timezone (handles mixed UTC/local from migration)
                     timestamp_local = dt_util.as_local(timestamp_dt)
 
                     date_key = timestamp_local.date().isoformat()
                     hour_key = f"{date_key}_{timestamp_local.hour:02d}"
 
-                    # Store hourly value
                     hourly_productions_cache[hour_key] = actual_kwh
-                    # Add to daily totals cache
+
                     daily_productions_cache[date_key] = (
                         daily_productions_cache.get(date_key, 0.0) + actual_kwh
                     )
@@ -498,21 +529,15 @@ class MLPredictor:
                     _LOGGER.debug(f"Skipping record for cache due to parsing error: {parse_error}")
                     continue
 
-            # Load astronomy cache for ML predictions
-            # ML Strategy needs astronomy data to create accurate hourly predictions
-            astronomy_cache = await self._load_astronomy_cache_for_predictions()
-
             self._historical_cache = {
                 "daily_productions": daily_productions_cache,
                 "hourly_productions": hourly_productions_cache,
-                "astronomy_cache": astronomy_cache,  # CRITICAL: Include astronomy cache!
             }
 
             _LOGGER.info(
-                "Historical cache loaded from hourly_samples: %d daily totals, %d hourly values, %d astronomy days processed from %d records.",
+                "Historical cache loaded from hourly_samples: %d daily totals, %d hourly values processed from %d records.",
                 len(self._historical_cache["daily_productions"]),
                 len(self._historical_cache["hourly_productions"]),
-                len(self._historical_cache.get("astronomy_cache", {})),
                 processed_records,
             )
 
@@ -521,48 +546,7 @@ class MLPredictor:
             self._historical_cache = {
                 "daily_productions": {},
                 "hourly_productions": {},
-                "astronomy_cache": {},
             }
-
-    async def _load_astronomy_cache_for_predictions(self) -> Dict[str, Any]:
-        """
-        Load astronomy cache for ML predictions
-
-        CRITICAL FIX: ML predictions need astronomy data (elevation, azimuth, radiation)
-        to generate accurate forecasts. This method loads the astronomy cache that was
-        previously only available during training but not during predictions.
-
-        Returns:
-            Dict with date keys containing astronomy data for each day
-        """
-        try:
-            astronomy_cache_file = self.data_manager.data_dir / "stats" / "astronomy_cache.json"
-
-            if not astronomy_cache_file.exists():
-                _LOGGER.warning(
-                    "astronomy_cache.json not found for predictions - ML will use defaults"
-                )
-                return {}
-
-            def _read_sync():
-                import json
-
-                with open(astronomy_cache_file, "r") as f:
-                    return json.load(f)
-
-            import asyncio
-
-            loop = asyncio.get_running_loop()
-            cache_data = await loop.run_in_executor(None, _read_sync)
-
-            days = cache_data.get("days", {})
-            _LOGGER.debug(f"Loaded astronomy cache for predictions: {len(days)} days available")
-
-            return days
-
-        except Exception as e:
-            _LOGGER.warning(f"Failed to load astronomy cache for predictions: {e}")
-            return {}
 
     async def _load_recent_weather_samples(
         self, hours_back: int = 24, force_reload: bool = False
@@ -571,25 +555,28 @@ class MLPredictor:
         try:
             now = dt_util.now()
 
-            # Check if cache is still fresh (< 15 minutes old)
             if not force_reload and self._weather_samples_last_loaded:
                 cache_age = (now - self._weather_samples_last_loaded).total_seconds() / 60.0
                 if cache_age < 15 and len(self._recent_weather_samples) > 0:
                     _LOGGER.debug(f"Using cached weather samples (age: {cache_age:.1f} min)")
                     return
 
-            # Cache stale or empty - reload samples
             cutoff_time = now - timedelta(hours=hours_back)
-            cutoff_str = cutoff_time.isoformat()
 
-            samples = await self.data_manager.get_hourly_samples(
-                limit=hours_back * 2, start_date=cutoff_str  # Get extra to ensure coverage
-            )
+            data = await self.data_manager.hourly_predictions._read_json_async()
+            all_predictions = data.get("predictions", [])
 
-            # HIGH PRIORITY FIX: Limit to last 100 samples to prevent memory leak
-            # Sort in reverse chronological order (newest first) and limit
+            samples = [
+                {
+                    "timestamp": p.get("target_datetime"),
+                    "weather_data": p.get("weather_forecast", {}),
+                }
+                for p in all_predictions
+                if p.get("target_datetime") and p.get("target_datetime") >= cutoff_time.isoformat()
+            ]
+
             sorted_samples = sorted(samples, key=lambda x: x.get("timestamp", ""), reverse=True)
-            self._recent_weather_samples = sorted_samples[:100]  # Keep only 100 most recent
+            self._recent_weather_samples = sorted_samples[:100]
             self._weather_samples_last_loaded = now
 
             _LOGGER.debug(
@@ -602,7 +589,7 @@ class MLPredictor:
             self._weather_samples_last_loaded = None
 
     def _calculate_cloudiness_trends(self) -> Dict[str, float]:
-        """IMPROVEMENT 7 Calculate cloudiness trends from recent weather samples"""
+        """IMPROVEMENT 7 Calculate cloudiness trends from recent weather samples @zara"""
         trends = {
             "cloudiness_trend_1h": 0.0,
             "cloudiness_trend_3h": 0.0,
@@ -613,7 +600,6 @@ class MLPredictor:
             if not self._recent_weather_samples:
                 return trends
 
-            # Extract cloudiness values with timestamps
             cloudiness_data = []
             now = dt_util.now()
 
@@ -626,14 +612,10 @@ class MLPredictor:
                 if not timestamp:
                     continue
 
-                # Calculate age in hours
                 age_hours = (now - timestamp).total_seconds() / 3600.0
 
-                # Get cloudiness from weather_data
                 weather_data = sample.get("weather_data", {})
-                cloudiness = weather_data.get(
-                    "cloudiness", weather_data.get("cloud_coverage", None)
-                )
+                cloudiness = weather_data.get("clouds")
 
                 if cloudiness is not None and 0 <= cloudiness <= 100:
                     cloudiness_data.append((age_hours, float(cloudiness)))
@@ -641,20 +623,16 @@ class MLPredictor:
             if not cloudiness_data:
                 return trends
 
-            # Sort by age (oldest first)
             cloudiness_data.sort()
 
-            # Calculate 1-hour trend
             recent_1h = [c for age, c in cloudiness_data if age <= 1.0]
             if len(recent_1h) >= 2:
                 trends["cloudiness_trend_1h"] = recent_1h[-1] - recent_1h[0]
 
-            # Calculate 3-hour trend and volatility
             recent_3h = [c for age, c in cloudiness_data if age <= 3.0]
             if len(recent_3h) >= 2:
                 trends["cloudiness_trend_3h"] = recent_3h[-1] - recent_3h[0]
 
-                # Calculate volatility (standard deviation)
                 if len(recent_3h) >= 3:
                     mean_cloudiness = sum(recent_3h) / len(recent_3h)
                     variance = sum((c - mean_cloudiness) ** 2 for c in recent_3h) / len(recent_3h)
@@ -677,7 +655,7 @@ class MLPredictor:
         prediction_date: datetime,
         sensor_data: Optional[Dict[str, Any]] = None,
     ) -> PredictionResult:
-        """Generates a solar production prediction for a specific hour using V2 pipeline"""
+        """Generates a solar production prediction for a specific hour using V3 pipeline"""
         prediction_start_time = dt_util.now()
         result: PredictionResult | None = None
 
@@ -686,9 +664,8 @@ class MLPredictor:
             if sensor_data is None:
                 sensor_data = {}
 
-            # Build V2 record structure
             try:
-                # Fetch LAG features from historical cache
+
                 yesterday_dt = prediction_date - timedelta(days=1)
                 yesterday_key = yesterday_dt.date().isoformat()
                 yesterday_total_kwh = self._historical_cache["daily_productions"].get(
@@ -707,76 +684,96 @@ class MLPredictor:
                 sensor_data["production_yesterday"] = 0.0
                 sensor_data["production_same_hour_yesterday"] = 0.0
 
-            # Load astronomy data for this hour from cache
-            # Previously astronomy_basic and astronomy_advanced were empty dicts
             astronomy_basic = {}
             astronomy_advanced = {}
 
             try:
-                astro_cache = self._historical_cache.get("astronomy_cache", {})
+                cache_manager = get_cache_manager()
                 date_key = prediction_date.date().isoformat()
 
-                if date_key in astro_cache:
-                    day_data = astro_cache[date_key]
+                if cache_manager and hasattr(cache_manager, 'is_loaded') and cache_manager.is_loaded():
+                    day_data = cache_manager.get_day_data(date_key) if hasattr(cache_manager, 'get_day_data') else None
 
-                    # Extract basic astronomy
-                    astronomy_basic = {
-                        "sunrise": day_data.get("sunrise_local"),
-                        "sunset": day_data.get("sunset_local"),
-                        "solar_noon": day_data.get("solar_noon_local"),
-                        "daylight_hours": day_data.get("daylight_hours"),
-                    }
+                    if day_data and isinstance(day_data, dict):
 
-                    # Extract advanced hourly astronomy
-                    hourly_data = day_data.get("hourly", {})
-                    hour_str = str(prediction_hour)
-
-                    if hour_str in hourly_data:
-                        hour_astro = hourly_data[hour_str]
-                        astronomy_advanced = {
-                            "elevation_deg": hour_astro.get("elevation_deg"),
-                            "azimuth_deg": hour_astro.get("azimuth_deg"),
-                            "clear_sky_solar_radiation_wm2": hour_astro.get(
-                                "clear_sky_solar_radiation_wm2"
-                            ),
-                            "theoretical_max_pv_kwh": hour_astro.get("theoretical_max_pv_kwh"),
-                            "hours_since_solar_noon": hour_astro.get("hours_since_solar_noon"),
-                            "day_progress_ratio": hour_astro.get("day_progress_ratio"),
+                        astronomy_basic = {
+                            "sunrise": day_data.get("sunrise_local"),
+                            "sunset": day_data.get("sunset_local"),
+                            "solar_noon": day_data.get("solar_noon_local"),
+                            "daylight_hours": day_data.get("daylight_hours"),
                         }
+
+                        hourly_data = day_data.get("hourly", {})
+                        hour_str = str(prediction_hour)
+
+                        if isinstance(hourly_data, dict) and hour_str in hourly_data:
+                            hour_astro = hourly_data[hour_str]
+                            if isinstance(hour_astro, dict):
+                                astronomy_advanced = {
+                                    "elevation_deg": hour_astro.get("elevation_deg"),
+                                    "azimuth_deg": hour_astro.get("azimuth_deg"),
+                                    "clear_sky_solar_radiation_wm2": hour_astro.get(
+                                        "clear_sky_solar_radiation_wm2"
+                                    ),
+                                    "theoretical_max_pv_kwh": hour_astro.get("theoretical_max_pv_kwh"),
+                                    "hours_since_solar_noon": hour_astro.get("hours_since_solar_noon"),
+                                    "day_progress_ratio": hour_astro.get("day_progress_ratio"),
+                                }
             except Exception as e:
                 _LOGGER.debug(f"Could not load astronomy data for prediction: {e}")
 
-            # Build V2 record for feature extraction
+            weather_corrected = {
+                "temperature": weather_data.get("temperature", 15.0),
+                "solar_radiation_wm2": weather_data.get("solar_radiation_wm2", 0.0),
+                "wind": weather_data.get("wind_speed", weather_data.get("wind", 3.0)),
+                "humidity": weather_data.get("humidity", 70.0),
+                "rain": weather_data.get("precipitation", weather_data.get("rain", 0.0)),
+                "clouds": weather_data.get("cloud_cover", weather_data.get("clouds", 50.0)),
+            }
+
+            astronomy_merged = {
+                "sun_elevation_deg": astronomy_advanced.get("elevation_deg", -30.0),
+                "theoretical_max_kwh": astronomy_advanced.get("theoretical_max_pv_kwh", 0.0),
+                "clear_sky_radiation_wm2": astronomy_advanced.get("clear_sky_solar_radiation_wm2", 0.0),
+            }
+
             record = {
-                # Time features
+
                 "target_hour": prediction_hour,
                 "target_day_of_year": prediction_date.timetuple().tm_yday,
                 "target_month": prediction_date.month,
                 "target_day_of_week": prediction_date.weekday(),
                 "target_season": self._get_season(prediction_date.month),
                 "prediction_created_hour": dt_util.now().hour,
-                # Weather and sensor data
                 "weather_data": weather_data,
+                "weather_corrected": weather_corrected,
                 "sensor_data": sensor_data,
-                # Use real astronomy data from cache instead of empty dicts!
+                "astronomy": astronomy_merged,
+
                 "astronomy_basic": astronomy_basic,
                 "astronomy_advanced": astronomy_advanced,
-                # Flags
+
+                "production_yesterday": sensor_data.get("production_yesterday", 0.0),
+                "production_same_hour_yesterday": sensor_data.get("production_same_hour_yesterday", 0.0),
+
                 "is_production_hour": True,
             }
 
-            # V2 Feature Engineering: Extract features from record
             features = self.feature_engineer.extract_features(record)
 
-            # DEBUG BUG #13: Log raw features BEFORE scaling
             if features and len(features) > 1:
-                _LOGGER.debug(f"🔍 BUG#13 - RAW features[1] (target_day_of_year): {features[1]:.4f}")
+                _LOGGER.debug(f"Raw features[1] (target_day_of_year): {features[1]:.4f}")
 
-            if self.scaler.is_fitted:
+            if self.algorithm_used == "tiny_lstm":
+                features_scaled = features
+                _LOGGER.debug("Using raw features for TinyLSTM prediction.")
+
+                await self._load_historical_data_for_lstm(prediction_date)
+
+            elif self.scaler.is_fitted:
                 features_scaled = self.scaler.transform_single(features)
-                # DEBUG BUG #13: Log scaled features AFTER scaling
                 if features_scaled and len(features_scaled) > 1:
-                    _LOGGER.debug(f"🔍 BUG#13 - SCALED features[1] (target_day_of_year): {features_scaled[1]:.4f}")
+                    _LOGGER.debug(f"Scaled features[1] (target_day_of_year): {features_scaled[1]:.4f}")
                 _LOGGER.debug("Prediction features scaled.")
             else:
                 features_scaled = features
@@ -825,30 +822,90 @@ class MLPredictor:
             return fallback_result
 
     async def _get_fallback_prediction(self, hour: int, date: datetime) -> PredictionResult:
-        """Generates a prediction using the fallback strategy"""
+        """Generates a prediction using the fallback strategy @zara"""
         _LOGGER.warning("Using fallback prediction strategy.")
-        # WARNING FIX 5: Pass peak_power_kw to FallbackStrategy
+
         fallback_strategy = FallbackStrategy(self.peak_power_kw)
         default_features = self.feature_engineer.get_default_features(hour, date)
         return await fallback_strategy.predict(default_features)
 
-    async def train_model(self) -> TrainingResult:
-        """Trains the Ridge Regression model using V2 pipeline - 44 features"""
-        _LOGGER.info("Using V2 training pipeline (hourly_predictions.json + astronomy_cache.json)")
-        return await self.train_model_v2()
-
-    async def train_model_v2(self) -> TrainingResult:
-        """Train model using V2 data structure (hourly_predictions.json + astronomy_cache.json)"""
-        from .ml_training_helpers_v2 import MLTrainingHelpersV2
-
-        helpers = MLTrainingHelpersV2(self)
-
-        # Prevent race condition with non-blocking lock
+    async def _load_historical_data_for_lstm(self, prediction_date: datetime) -> None:
+        """Load last 24+ hours from hourly_predictions for LSTM sequence building @zara"""
         try:
-            async with asyncio.timeout(5.0):
+
+            recent_hours = None
+
+            if hasattr(self, '_hourly_predictions_cache') and self._hourly_predictions_cache:
+                predictions = self._hourly_predictions_cache.get("predictions", [])
+                if predictions:
+                    recent_hours = self._filter_recent_hours(predictions, prediction_date)
+
+            if not recent_hours:
+                hourly_file = Path(self.data_manager.data_dir) / "stats" / "hourly_predictions.json"
+                if hourly_file.exists():
+                    def _read_hourly():
+                        with open(hourly_file, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        return data.get("predictions", [])
+
+                    predictions = await self.hass.async_add_executor_job(_read_hourly)
+                    if predictions:
+                        recent_hours = self._filter_recent_hours(predictions, prediction_date)
+
+            if recent_hours and len(recent_hours) >= 24:
+                self.prediction_orchestrator.set_historical_data(recent_hours)
+                _LOGGER.debug(f"LSTM: Loaded {len(recent_hours)} historical hours for sequence building")
+            else:
+                _LOGGER.debug(
+                    f"LSTM: Insufficient historical data ({len(recent_hours) if recent_hours else 0} hours) - "
+                    f"will use pseudo-sequence fallback"
+                )
+                self.prediction_orchestrator.set_historical_data(None)
+
+        except Exception as e:
+            _LOGGER.warning(f"Failed to load historical data for LSTM: {e}")
+            self.prediction_orchestrator.set_historical_data(None)
+
+    def _filter_recent_hours(
+        self,
+        predictions: list,
+        prediction_date: datetime
+    ) -> list:
+        """
+        Filter predictions to get the last 24-48 hours before prediction_date.
+
+        Returns hourly predictions sorted chronologically, covering the 24-48 hours
+        before the prediction date. This provides the lookback window needed for
+        LSTM sequence building.
+        """
+        from datetime import timedelta
+
+        cutoff_date = (prediction_date - timedelta(hours=48)).date().isoformat()
+        target_date_str = prediction_date.date().isoformat()
+
+        filtered = [
+            p for p in predictions
+            if p.get("target_date", "") >= cutoff_date
+            and p.get("target_date", "") <= target_date_str
+        ]
+
+        filtered.sort(key=lambda x: (x.get("target_date", ""), x.get("target_hour", 0)))
+
+        return filtered[-48:] if len(filtered) > 48 else filtered
+
+    async def train_model(self) -> TrainingResult:
+        """Trains the Ridge Regression model using V3 pipeline - 14 features with weather corrections @zara"""
+        _LOGGER.info("Using V3 training pipeline (weather-corrected, 14 features)")
+        return await self.train_model_v3()
+
+    async def train_model_v3(self) -> TrainingResult:
+        """Train model using V3 data structure (weather-corrected forecasts) @zara"""
+
+        try:
+            async with asyncio.timeout(30.0):
                 async with self._training_lock:
                     training_start_time = dt_util.now()
-                    _LOGGER.info(f"Starting ML model training (V2) at {training_start_time}...")
+                    _LOGGER.info(f"Starting ML model training (V3) at {training_start_time}...")
                     self.model_state = ModelState.TRAINING
                     await self._update_model_state_file(status_override=ModelState.TRAINING)
 
@@ -858,15 +915,21 @@ class MLPredictor:
                 try:
                     _ensure_numpy()
 
-                    # Load training data from V2 structure
                     _LOGGER.info(
-                        "Loading training data from V2 structure (hourly_predictions.json + astronomy_cache.json)..."
+                        "Loading training data using V3 structure (weather-corrected forecasts)..."
                     )
-                    training_records, count = await helpers.load_training_data_v2()
 
-                    # Validate
-                    valid, error_msg, count = await helpers.validate_training_data(training_records)
-                    if not valid:
+                    training_records, count = await self.data_loader.load_training_data()
+
+                    absolute_min_samples = 10
+                    recommended_min_samples = 30
+
+                    if count < absolute_min_samples:
+                        error_msg = (
+                            f"Insufficient training data: {count} valid records found "
+                            f"(absolute minimum: {absolute_min_samples}). Training aborted."
+                        )
+                        _LOGGER.warning(error_msg)
                         self.model_state = (
                             ModelState.UNINITIALIZED if not self.model_loaded else ModelState.READY
                         )
@@ -874,37 +937,115 @@ class MLPredictor:
                             success=False, samples_used=count, error_message=error_msg
                         )
 
-                    _LOGGER.info(f"Preparing {count} records for training (V2)...")
+                    if count < recommended_min_samples:
+                        _LOGGER.warning(
+                            f"Training with {count} samples (below recommended {recommended_min_samples}). "
+                            f"Model accuracy may be lower than optimal."
+                        )
 
-                    # Prepare features using V2 feature engineering
-                    X_train_raw, y_train = await helpers.prepare_training_features_v2(
-                        training_records
-                    )
-                    _LOGGER.debug(f"V2 Feature extraction complete: {len(X_train_raw)} samples")
+                    _LOGGER.info(f"Preparing {count} records for training (V3)...")
 
-                    # Scale and train (V2 returns feature_engineer_v2)
-                    weights_dict_raw, bias, accuracy, best_lambda, feature_eng_v2 = (
-                        await helpers.scale_and_train(X_train_raw, y_train)
+                    X_train_raw = []
+                    y_train = []
+                    for record in training_records:
+                        features = self.feature_engineer.extract_features(record)
+                        X_train_raw.append(features)
+                        y_train.append(record.get("actual_kwh", 0))
+
+                    _LOGGER.debug(f"Feature extraction complete: {len(X_train_raw)} samples with 14 features")
+
+                    feature_names = self.feature_engineer.feature_names
+
+                    X_train_scaled_list = await self.hass.async_add_executor_job(
+                        self.scaler.fit_transform, X_train_raw, feature_names
+                    )
+                    _LOGGER.info(f"Scaler fitted and training data transformed ({len(feature_names)} features)")
+
+                    hourly_predictions_list = []
+                    try:
+                        hourly_file = Path(self.data_manager.data_dir) / "stats" / "hourly_predictions.json"
+                        if hourly_file.exists():
+                            def _read_hourly():
+                                with open(hourly_file, "r", encoding="utf-8") as f:
+                                    data = json.load(f)
+                                return data.get("predictions", [])
+
+                            hourly_predictions_list = await self.hass.async_add_executor_job(_read_hourly)
+                            _LOGGER.debug(f"Loaded {len(hourly_predictions_list)} hourly predictions for LSTM sequence building")
+                        else:
+                            _LOGGER.warning("hourly_predictions.json not found - LSTM training will use fallback")
+                    except Exception as e:
+                        _LOGGER.warning(f"Could not load hourly_predictions.json: {e}")
+
+                    weights_result, accuracy, algorithm_used = await self.trainer.train(
+                        X_train=X_train_scaled_list,
+                        y_train=y_train,
+                        feature_names=feature_names,
+                        hourly_predictions=hourly_predictions_list
                     )
 
-                    # Create learned weights (pass V2 feature engineer for correct feature names)
-                    new_learned_weights = await helpers.create_learned_weights(
-                        weights_dict_raw,
-                        bias,
-                        accuracy,
-                        len(training_records),
-                        training_start_time,
-                        feature_eng_v2,
+                    self.algorithm_used = algorithm_used
+
+                    _LOGGER.info(
+                        f"{algorithm_used.upper()} training complete. "
+                        f"Accuracy (R-squared): {accuracy:.4f}"
                     )
 
-                    # Finalize training
-                    await helpers.finalize_training(
-                        new_learned_weights,
-                        accuracy,
-                        len(training_records),
-                        training_records,
-                        training_start_time,
+                    if algorithm_used == "tiny_lstm":
+
+                        weights_dict_raw = weights_result
+                        bias = 0.0
+                        best_lambda = 0.0
+                    else:
+
+                        if isinstance(weights_result, tuple):
+                            weights_dict_raw, bias, _, best_lambda = weights_result
+                        else:
+                            weights_dict_raw = weights_result
+                            bias = 0.0
+                            best_lambda = 0.0
+
+                    if algorithm_used == "tiny_lstm":
+
+                        weights_dict = weights_dict_raw
+                    else:
+
+                        weights_dict = {feature_names[i]: weights_dict_raw[f"feature_{i}"] for i in range(len(feature_names))}
+
+                    feature_means = {}
+                    feature_stds = {}
+                    if hasattr(self.scaler, "means") and hasattr(self.scaler, "stds"):
+                        feature_means = self.scaler.means.copy()
+                        feature_stds = self.scaler.stds.copy()
+
+                    new_learned_weights = LearnedWeights(
+                        weights=weights_dict,
+                        bias=bias,
+                        feature_names=feature_names,
+                        feature_means=feature_means,
+                        feature_stds=feature_stds,
+                        accuracy=accuracy,
+                        training_samples=len(training_records),
+                        last_trained=dt_util.now().isoformat(),
+                        model_version=ML_MODEL_VERSION,
+                        algorithm_used=algorithm_used,
                     )
+
+                    from ..const import MODEL_ACCURACY_THRESHOLD
+
+                    await self.data_manager.save_learned_weights(new_learned_weights)
+                    _LOGGER.info("Learned weights saved to disk")
+
+                    self.learned_weights = new_learned_weights
+                    self.model_loaded = True
+                    self.current_accuracy = accuracy
+                    self.training_samples = len(y_train)
+                    self.model_state = (
+                        ModelState.READY if accuracy >= MODEL_ACCURACY_THRESHOLD else ModelState.DEGRADED
+                    )
+                    self.last_training = training_start_time
+
+                    await self._update_model_state_file()
 
                     training_end_time = dt_util.now()
                     duration_seconds = (training_end_time - training_start_time).total_seconds()
@@ -918,16 +1059,15 @@ class MLPredictor:
                         feature_count=len(weights_dict_raw),
                     )
 
-                    # Store training sample count for adaptive blending (used by forecast_orchestrator)
                     self.last_training_samples = len(training_records)
 
                     _LOGGER.info(
-                        f"ML Training V2 successful in {duration_seconds:.2f}s. "
+                        f"ML Training V3 successful in {duration_seconds:.2f}s. "
                         f"Accuracy={accuracy*100:.1f}%, Samples={len(training_records)}, Features={len(weights_dict_raw)}."
                     )
 
                     self.error_handler.log_ml_operation(
-                        operation="model_training_v2",
+                        operation="model_training_v3",
                         success=True,
                         metrics={
                             "accuracy": accuracy,
@@ -937,19 +1077,18 @@ class MLPredictor:
                         duration_seconds=duration_seconds,
                     )
 
-                    await helpers.send_training_notifications(True, accuracy, len(training_records))
                     return result
 
                 except Exception as e:
-                    _LOGGER.error(f"ML Training V2 failed: {e}", exc_info=True)
+                    _LOGGER.error(f"ML Training V3 failed: {e}", exc_info=True)
                     self.model_state = ModelState.ERROR
                     result = TrainingResult(
                         success=False, samples_used=len(training_records), error_message=str(e)
                     )
                     await self.error_handler.handle_error(
                         error=Exception(str(e)),
-                        source="ml_predictor_v2",
-                        pipeline_position="train_model_v2",
+                        source="ml_predictor_v3",
+                        pipeline_position="train_model_v3",
                     )
                     return result
 
@@ -960,7 +1099,7 @@ class MLPredictor:
             )
 
     async def _update_hourly_profile(self, training_records: List[Dict[str, Any]]) -> None:
-        """Updates the hourly production profile based on provided training records"""
+        """Updates the hourly production profile based on provided training records @zara"""
         _LOGGER.debug(f"Updating hourly profile using {len(training_records)} records...")
         if not training_records:
             _LOGGER.warning("No records provided for hourly profile update.")
@@ -980,7 +1119,6 @@ class MLPredictor:
                     if actual_kwh is None or actual_kwh <= 0 or not timestamp_str:
                         continue
 
-                    # Read LOCAL hour from timestamp
                     timestamp = dt_util.parse_datetime(timestamp_str)
                     if not timestamp:
                         continue
@@ -1031,14 +1169,13 @@ class MLPredictor:
                 self.current_profile = create_default_hourly_profile()
 
     async def _remove_outliers(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """CRITICAL FIX 4 Removes outliers from training data using IQR method"""
+        """CRITICAL FIX 4 Removes outliers from training data using IQR method @zara"""
         if not records:
             return records
 
         try:
             np = _ensure_numpy()
 
-            # Group records by hour for hour-specific outlier detection
             hourly_groups: Dict[int, List[Dict[str, Any]]] = {hour: [] for hour in range(24)}
 
             for record in records:
@@ -1056,18 +1193,15 @@ class MLPredictor:
                 except Exception:
                     continue
 
-            # Apply IQR outlier removal per hour
             filtered_records = []
             outliers_removed = 0
 
             for hour, hour_records in hourly_groups.items():
-                # HIGH PRIORITY FIX: Only apply IQR when we have enough samples
-                # Require at least 10 samples per hour for robust statistics
+
                 if len(hour_records) < 10:
                     filtered_records.extend(hour_records)
                     continue
 
-                # Extract actual_kwh values
                 values = []
                 for rec in hour_records:
                     actual = rec.get("actual_kwh")
@@ -1080,25 +1214,21 @@ class MLPredictor:
                     filtered_records.extend(hour_records)
                     continue
 
-                # Calculate IQR
                 values_array = np.array(values)
                 q1 = np.percentile(values_array, 25)
                 q3 = np.percentile(values_array, 75)
                 iqr = q3 - q1
 
-                # HIGH PRIORITY FIX: Less aggressive outlier bounds (3.0×IQR instead of 2.0)
-                # 3.0×IQR removes only extreme outliers, preserves best-case scenarios
                 lower_bound = q1 - 3.0 * iqr
                 upper_bound = q3 + 3.0 * iqr
 
-                # Filter records within bounds
                 for rec in hour_records:
                     actual = rec.get("actual_kwh")
                     if actual is None:
                         actual = rec.get("actual_value")
 
                     if actual is None:
-                        filtered_records.append(rec)  # Keep records without actual values
+                        filtered_records.append(rec)
                     elif lower_bound <= actual <= upper_bound:
                         filtered_records.append(rec)
                     else:
@@ -1119,7 +1249,7 @@ class MLPredictor:
             return records
         except Exception as e:
             _LOGGER.error(f"Outlier removal failed: {e}", exc_info=True)
-            return records  # Return original records on error
+            return records
 
     async def _update_model_state_file(
         self,
@@ -1150,7 +1280,7 @@ class MLPredictor:
                 "training_samples": samples,
                 "current_accuracy": float(accuracy) if accuracy is not None else None,
                 "status": status_str,
-                "peak_power_kw": self.peak_power_kw,  # Store peak power (in kW) for reload
+                "peak_power_kw": self.peak_power_kw,
                 "model_info": {"version": ML_MODEL_VERSION, "type": "ridge_regression_normalized"},
                 "performance_metrics": {
                     "avg_prediction_time_ms": self.performance_metrics.get(
@@ -1173,17 +1303,18 @@ class MLPredictor:
             _LOGGER.error(f"Failed to update model_state.json: {e}", exc_info=True)
 
     async def _check_training_data_availability(self) -> int:
-        """Checks how many valid hourly samples are available for training"""
+        """Checks how many valid hourly samples are available for training @zara"""
         try:
-            # Load samples from last 60 days
+
             from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
-            start_date = (dt_util.now() - timedelta(days=60)).date().isoformat()
-            records_data = await self.data_manager.get_hourly_samples(start_date=start_date)
-            records = records_data if isinstance(records_data, list) else []
-            # Count all samples with valid actual_kwh (including zeros - night hours are valid!)
+            data = await self.data_manager.hourly_predictions._read_json_async()
+            all_predictions = data.get("predictions", [])
+
             valid_count = sum(
-                1 for r in records if r.get("actual_kwh") is not None and r["actual_kwh"] >= 0
+                1
+                for p in all_predictions
+                if p.get("actual_kwh") is not None and p.get("actual_kwh") >= 0
             )
             _LOGGER.debug(
                 f"Training data check: Found {valid_count} valid hourly samples (including zero-yield)."
@@ -1194,31 +1325,22 @@ class MLPredictor:
             return 0
 
     def _schedule_hourly_sampling(self) -> None:
-        """
-        DEPRECATED: Sample collection moved to Coordinator for independence.
-
-        Sample collection now runs INDEPENDENTLY in coordinator - NOT tied to ML!
-        This ensures samples are collected even if ML is disabled/crashed.
-        """
-        _LOGGER.info(
-            "Sample collection is now handled by Coordinator (independent from ML). "
-            "Skipping ML-based scheduling."
-        )
+        """Legacy method - sample collection handled by Coordinator. @zara"""
+        _LOGGER.debug("Sample collection handled by Coordinator, skipping ML-based scheduling")
 
     def _schedule_daily_training_check(self, reschedule_delay_sec: Optional[float] = None) -> None:
-        """Schedules the next daily check to see if model retraining is needed"""
+        """Schedules the next daily check to see if model retraining is needed @zara"""
         try:
-            # Cancel existing task if present
+
             if self._daily_training_task:
                 self._daily_training_task.cancel()
                 self._daily_training_task = None
 
-            # Calculate delay
             if reschedule_delay_sec is not None:
                 delay = reschedule_delay_sec
                 _LOGGER.info(f"Scheduling next training check in {delay:.0f} seconds.")
             else:
-                now_local = dt_util.now()  # now() already returns local time
+                now_local = dt_util.now()
                 target_time_local = now_local.replace(hour=23, minute=5, second=0, microsecond=0)
                 if now_local >= target_time_local:
                     target_time_local += timedelta(days=1)
@@ -1227,24 +1349,22 @@ class MLPredictor:
                     f"Scheduling next daily training check at {target_time_local.strftime('%Y-%m-%d %H:%M:%S')} (in {delay:.0f} seconds)."
                 )
 
-            # Create a proper wrapper function that handles the async task correctly
             def _trigger_training_check():
-                """Wrapper function to properly create and handle the async task"""
+                """Wrapper function to properly create and handle the async task @zara"""
                 try:
                     _LOGGER.debug("Daily training check trigger fired - creating async task...")
                     task = self.hass.async_create_task(self._daily_training_check_callback())
-                    # Add error callback to catch any exceptions
+
                     task.add_done_callback(lambda t: self._handle_training_task_error(t))
                 except Exception as e:
                     _LOGGER.error(f"Failed to create daily training check task: {e}", exc_info=True)
 
-            # Schedule the task
             self._daily_training_task = self.hass.loop.call_later(delay, _trigger_training_check)
             _LOGGER.debug(f"Daily training check task scheduled successfully (delay={delay:.0f}s)")
 
         except Exception as e:
             _LOGGER.error(f"Failed to schedule daily training check: {e}", exc_info=True)
-            # Try to reschedule with a short delay as fallback
+
             if reschedule_delay_sec is None:
                 _LOGGER.info("Attempting fallback rescheduling in 1 hour...")
                 try:
@@ -1255,7 +1375,7 @@ class MLPredictor:
                     )
 
     async def _daily_training_check_callback(self) -> None:
-        """Callback executed daily to check if retraining is needed and trigger it"""
+        """Callback executed daily to check if retraining is needed and trigger it @zara"""
         _LOGGER.info("Performing daily check: Should ML model be retrained?")
         try:
             if await self._should_retrain():
@@ -1272,7 +1392,7 @@ class MLPredictor:
         except Exception as e:
             _LOGGER.error("Error during daily training check/trigger: %s", e, exc_info=True)
         finally:
-            # Wrap rescheduling in try-except to prevent silent failures
+
             try:
                 if not self._stop_event.is_set():
                     _LOGGER.debug("Attempting to reschedule next daily training check...")
@@ -1287,7 +1407,7 @@ class MLPredictor:
                 )
 
     async def _should_retrain(self) -> bool:
-        """Determines if the model should be automatically retrained based on criteria"""
+        """Determines if the model should be automatically retrained based on criteria @zara"""
         _LOGGER.debug("Checking retraining criteria...")
         try:
             available_samples = await self._check_training_data_availability()
@@ -1339,9 +1459,9 @@ class MLPredictor:
             return False
 
     def _handle_training_task_error(self, task: asyncio.Task) -> None:
-        """Handle errors from the daily training check task"""
+        """Handle errors from the daily training check task @zara"""
         try:
-            # This will raise if the task had an exception
+
             task.result()
         except asyncio.CancelledError:
             _LOGGER.debug("Daily training check task was cancelled")
@@ -1349,7 +1469,7 @@ class MLPredictor:
             _LOGGER.error(f"Daily training check task failed with error: {e}", exc_info=True)
 
     def _update_performance_metrics(self, prediction_time_ms: float, success: bool) -> None:
-        """Updates rolling average prediction time and error rate"""
+        """Updates rolling average prediction time and error rate @zara"""
         try:
             self.performance_metrics["total_predictions"] += 1
             if success:
@@ -1385,17 +1505,17 @@ class MLPredictor:
         temp_sensor: Optional[str] = None,
         wind_sensor: Optional[str] = None,
         rain_sensor: Optional[str] = None,
-        uv_sensor: Optional[str] = None,
         lux_sensor: Optional[str] = None,
         humidity_sensor: Optional[str] = None,
+        pressure_sensor: Optional[str] = None,
+        solar_radiation_sensor: Optional[str] = None,
     ) -> None:
         """Configures the entity IDs used by the ML predictor and its components"""
         _LOGGER.info("Configuring entities for MLPredictor and SampleCollector...")
         _LOGGER.debug(f"set_entities called with solar_capacity={solar_capacity}")
 
-        # Store peak power for physical limit clipping (in kW)
         if solar_capacity and solar_capacity > 0:
-            self.peak_power_kw = float(solar_capacity)  # Ensure it's a float in kW
+            self.peak_power_kw = float(solar_capacity)
             _LOGGER.info(
                 f"Peak-Power configured: {self.peak_power_kw} kW (from config: {solar_capacity})"
             )
@@ -1410,25 +1530,27 @@ class MLPredictor:
             temp_sensor=temp_sensor,
             wind_sensor=wind_sensor,
             rain_sensor=rain_sensor,
-            uv_sensor=uv_sensor,
             lux_sensor=lux_sensor,
             humidity_sensor=humidity_sensor,
+            pressure_sensor=pressure_sensor,
+            solar_radiation_sensor=solar_radiation_sensor,
         )
 
         _LOGGER.info(
-            "Entities configured in SampleCollector: power=%s, weather=%s, temp=%s, wind=%s, rain=%s, uv=%s, lux=%s, humidity=%s",
+            "Entities configured in SampleCollector: power=%s, weather=%s, temp=%s, wind=%s, rain=%s, lux=%s, humidity=%s, pressure=%s, solar_radiation=%s",
             power_entity,
             weather_entity,
             temp_sensor,
             wind_sensor,
             rain_sensor,
-            uv_sensor,
             lux_sensor,
             humidity_sensor,
+            pressure_sensor,
+            solar_radiation_sensor,
         )
 
     def is_healthy(self) -> bool:
-        """Performs a health check on the ML predictor state"""
+        """Performs a health check on the ML predictor state @zara"""
         _LOGGER.debug("Performing ML predictor health check...")
         try:
             _ensure_numpy()
@@ -1450,15 +1572,11 @@ class MLPredictor:
                 )
                 return False
 
-            if self.current_accuracy is not None and self.current_accuracy < 0.3:
-                _LOGGER.warning(
-                    f"Health check warning: Accuracy is very low ({self.current_accuracy:.3f}). Model might be unreliable."
-                )
-
-            max_age = timedelta(days=14)
+            max_age = timedelta(days=30)
             if self.last_training_time and (dt_util.now() - self.last_training_time) > max_age:
-                _LOGGER.warning(
-                    f"Health check warning: Last training was more than {max_age.days} days ago. Model might be outdated."
+                _LOGGER.info(
+                    f"Model is {(dt_util.now() - self.last_training_time).days} days old. "
+                    "Consider retraining for latest patterns."
                 )
 
             _LOGGER.debug("ML predictor health check passed (Loaded, Ready, Sufficient Samples).")
@@ -1472,17 +1590,17 @@ class MLPredictor:
             return False
 
     async def get_today_prediction(self) -> Optional[float]:
-        """Get total daily prediction for today"""
+        """Get total daily prediction for today @zara"""
         _LOGGER.debug("get_today_prediction stub called, returning None (use orchestrator)")
         return None
 
     async def get_tomorrow_prediction(self) -> Optional[float]:
-        """Get total daily prediction for tomorrow"""
+        """Get total daily prediction for tomorrow @zara"""
         _LOGGER.debug("get_tomorrow_prediction stub called, returning None (use orchestrator)")
         return None
 
     async def force_training(self) -> bool:
-        """Force model training regardless of conditions"""
+        """Force model training regardless of conditions @zara"""
         _LOGGER.info("Force training requested via service...")
         try:
             result = await self.train_model()
@@ -1492,10 +1610,10 @@ class MLPredictor:
             return False
 
     async def reset_model(self) -> bool:
-        """Reset the ML model by clearing learned weights and reverting to rule-based pr..."""
+        """Reset the ML model by clearing learned weights and reverting to rule-based pr... @zara"""
         _LOGGER.info("Resetting ML model...")
         try:
-            # Clear current weights and model state
+
             self.current_weights = None
             self.current_accuracy = None
             self.training_samples = 0
@@ -1503,15 +1621,12 @@ class MLPredictor:
             self.model_loaded = False
             self.model_state = ModelState.UNINITIALIZED
 
-            # Delete learned weights file
             success = await self.data_manager.delete_learned_weights()
             if not success:
                 _LOGGER.warning("Could not delete learned weights file (may not exist)")
 
-            # Reset scaler
             self.scaler = StandardScaler()
 
-            # Update prediction orchestrator to use fallback strategies only
             self.prediction_orchestrator.update_strategies(
                 weights=None,
                 profile=self.current_profile,
@@ -1519,7 +1634,6 @@ class MLPredictor:
                 peak_power_kw=self.peak_power_kw,
             )
 
-            # Update model state file
             await self._update_model_state_file(
                 status_override=ModelState.UNINITIALIZED.value,
                 accuracy_override=None,
@@ -1541,9 +1655,9 @@ class MLPredictor:
             return False
 
     async def async_will_remove_from_hass(self) -> None:
-        """Clean up resources when the integration is unloaded or HA stops"""
+        """Clean up resources when the integration is unloaded or HA stops @zara"""
         _LOGGER.info("Cleaning up MLPredictor background tasks and listeners...")
-        self._stop_event.set()  # Signal background tasks to stop first
+        self._stop_event.set()
 
         if self._hourly_sample_listener_remove:
             try:
@@ -1552,7 +1666,7 @@ class MLPredictor:
             except Exception as e:
                 _LOGGER.warning(f"Error removing hourly sample listener: {e}")
             finally:
-                self._hourly_sample_listener_remove = None  # Ensure it's None
+                self._hourly_sample_listener_remove = None
 
         if self._daily_training_task:
             self._daily_training_task.cancel()

@@ -1,5 +1,4 @@
-"""
-Task Executor for Solar Forecast ML Integration
+"""Task Executor for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -26,12 +25,11 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class TaskExecutor:
     """Executes scheduled tasks for production tracking"""
 
     def __init__(self):
-        """Initialize task executor"""
+        """Initialize task executor @zara"""
         self._running_tasks: Dict[str, asyncio.Task] = {}
         self._task_results: Dict[str, Any] = {}
 
@@ -42,14 +40,11 @@ class TaskExecutor:
         try:
             _LOGGER.debug(f"Executing task: {task_id} - {description}")
 
-            # Cancel existing task with same ID
             if task_id in self._running_tasks:
                 await self.cancel_task(task_id)
 
-            # Execute task
             result = await task_func()
 
-            # Store result
             self._task_results[task_id] = {
                 "success": True,
                 "result": result,
@@ -63,7 +58,6 @@ class TaskExecutor:
         except Exception as e:
             _LOGGER.error(f"Task failed: {task_id} - {e}", exc_info=True)
 
-            # Store error
             self._task_results[task_id] = {
                 "success": False,
                 "error": str(e),
@@ -77,11 +71,10 @@ class TaskExecutor:
         self, task_id: str, task_func: Callable[[], Awaitable[Any]], description: str = ""
     ) -> asyncio.Task:
         """Execute task in background"""
-        # Cancel existing task
+
         if task_id in self._running_tasks:
             await self.cancel_task(task_id)
 
-        # Create new background task
         task = asyncio.create_task(self.execute_task(task_id, task_func, description))
 
         self._running_tasks[task_id] = task
@@ -90,7 +83,7 @@ class TaskExecutor:
         return task
 
     async def cancel_task(self, task_id: str) -> bool:
-        """Cancel a running task"""
+        """Cancel a running task @zara"""
         if task_id not in self._running_tasks:
             return False
 
@@ -109,7 +102,7 @@ class TaskExecutor:
         return True
 
     async def cancel_all_tasks(self) -> None:
-        """Cancel all running tasks"""
+        """Cancel all running tasks @zara"""
         task_ids = list(self._running_tasks.keys())
 
         for task_id in task_ids:
@@ -118,7 +111,7 @@ class TaskExecutor:
         _LOGGER.info("All tasks cancelled")
 
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Get status of a task"""
+        """Get status of a task @zara"""
         if task_id in self._running_tasks:
             task = self._running_tasks[task_id]
             return {
@@ -132,14 +125,12 @@ class TaskExecutor:
         return None
 
     def get_all_task_statuses(self) -> Dict[str, Dict[str, Any]]:
-        """Get status of all tasks"""
+        """Get status of all tasks @zara"""
         statuses = {}
 
-        # Running tasks
         for task_id in self._running_tasks:
             statuses[task_id] = self.get_task_status(task_id)
 
-        # Completed tasks
         for task_id in self._task_results:
             if task_id not in statuses:
                 statuses[task_id] = self._task_results[task_id]

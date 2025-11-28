@@ -1,10 +1,19 @@
-"""
-Astronomy Cache Manager - In-Memory Cache for Fast Synchronous Access
+"""Astronomy Cache Manager - In-Memory Cache for Fast Synchronous Access V10.0.0 @zara
 
-This module provides a thread-safe in-memory cache of astronomy data
-to avoid blocking I/O in synchronous methods.
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
 
-The cache is loaded once at startup and refreshed periodically.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
 """
 
 import json
@@ -16,7 +25,6 @@ from typing import Any, Dict, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class AstronomyCacheManager:
     """
     In-memory cache manager for astronomy data
@@ -26,32 +34,16 @@ class AstronomyCacheManager:
     """
 
     def __init__(self):
-        """Initialize the cache manager"""
+        """Initialize the cache manager @zara"""
         self._cache: Optional[Dict[str, Any]] = None
         self._lock = Lock()
         self._last_loaded: Optional[datetime] = None
         self._cache_file: Optional[Path] = None
 
     def initialize(self, cache_file: Path) -> bool:
-        """
-        Initialize cache from file
-
-        Args:
-            cache_file: Path to astronomy_cache.json
-
-        Returns:
-            True if loaded successfully, False otherwise
-        """
+        """Initialize cache from file (file-based, no reload needed) @zara"""
         self._cache_file = cache_file
-        return self.reload()
 
-    def reload(self) -> bool:
-        """
-        Reload cache from file
-
-        Returns:
-            True if loaded successfully, False otherwise
-        """
         if not self._cache_file or not self._cache_file.exists():
             _LOGGER.debug("Astronomy cache file not found, cannot load")
             return False
@@ -63,7 +55,7 @@ class AstronomyCacheManager:
                 self._last_loaded = datetime.now()
 
             _LOGGER.debug(
-                f"Astronomy cache loaded into memory: " f"{len(self._cache.get('days', {}))} days"
+                f"Astronomy cache loaded into memory: {len(self._cache.get('days', {}))} days"
             )
             return True
 
@@ -72,15 +64,7 @@ class AstronomyCacheManager:
             return False
 
     def get_day_data(self, date_str: str) -> Optional[Dict[str, Any]]:
-        """
-        Get astronomy data for a specific date (thread-safe)
-
-        Args:
-            date_str: Date in ISO format (YYYY-MM-DD)
-
-        Returns:
-            Day data dict or None if not found
-        """
+        """Get astronomy data for a specific date (thread-safe) @zara"""
         if not self._cache:
             return None
 
@@ -88,15 +72,7 @@ class AstronomyCacheManager:
             return self._cache.get("days", {}).get(date_str)
 
     def get_production_window(self, date_str: str) -> Optional[tuple]:
-        """
-        Get production window for a date
-
-        Args:
-            date_str: Date in ISO format (YYYY-MM-DD)
-
-        Returns:
-            (start_str, end_str) tuple or None
-        """
+        """Get production window for a date @zara"""
         day_data = self.get_day_data(date_str)
         if not day_data:
             return None
@@ -109,16 +85,7 @@ class AstronomyCacheManager:
         return None
 
     def get_hourly_data(self, date_str: str, hour: int) -> Optional[Dict[str, Any]]:
-        """
-        Get hourly astronomy data for specific date and hour
-
-        Args:
-            date_str: Date in ISO format (YYYY-MM-DD)
-            hour: Hour (0-23)
-
-        Returns:
-            Hourly data dict or None
-        """
+        """Get hourly astronomy data for specific date and hour @zara"""
         day_data = self.get_day_data(date_str)
         if not day_data:
             return None
@@ -126,12 +93,7 @@ class AstronomyCacheManager:
         return day_data.get("hourly", {}).get(str(hour))
 
     def get_pv_system_info(self) -> Optional[Dict[str, Any]]:
-        """
-        Get PV system information
-
-        Returns:
-            PV system dict or None
-        """
+        """Get PV system information @zara"""
         if not self._cache:
             return None
 
@@ -139,16 +101,11 @@ class AstronomyCacheManager:
             return self._cache.get("pv_system")
 
     def is_loaded(self) -> bool:
-        """Check if cache is loaded"""
+        """Check if cache is loaded @zara"""
         return self._cache is not None
 
     def get_cache_info(self) -> Dict[str, Any]:
-        """
-        Get cache metadata
-
-        Returns:
-            Dict with cache info
-        """
+        """Get cache metadata @zara"""
         if not self._cache:
             return {"loaded": False, "last_loaded": None, "total_days": 0}
 
@@ -163,23 +120,15 @@ class AstronomyCacheManager:
             }
 
     def clear(self):
-        """Clear the cache"""
+        """Clear the cache @zara"""
         with self._lock:
             self._cache = None
             self._last_loaded = None
 
-
-# Global singleton instance
 _cache_manager: Optional[AstronomyCacheManager] = None
 
-
 def get_cache_manager() -> AstronomyCacheManager:
-    """
-    Get the global cache manager instance
-
-    Returns:
-        AstronomyCacheManager singleton
-    """
+    """Get the global cache manager instance @zara"""
     global _cache_manager
     if _cache_manager is None:
         _cache_manager = AstronomyCacheManager()

@@ -1,4 +1,20 @@
-"""Migration utilities for converting old prediction_history.json to new structure"""
+"""Migration utilities for converting old prediction_history.json to new structure V10.0.0 @zara
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 
 import asyncio
 import json
@@ -11,7 +27,6 @@ from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class DataMigration:
     """Migrate from old prediction_history.json to new hourly_predictions.json"""
 
@@ -19,24 +34,14 @@ class DataMigration:
         self.data_dir = data_dir
         self.stats_dir = data_dir / "stats"
 
-        # Old files
         self.old_prediction_history = self.stats_dir / "prediction_history.json"
         self.old_prediction_history_backup = self.stats_dir / "prediction_history_backup_v1.json"
 
-        # New files
         self.new_hourly_predictions = self.stats_dir / "hourly_predictions.json"
         self.new_daily_summaries = self.stats_dir / "daily_summaries.json"
 
     async def migrate(self, dry_run: bool = False) -> Dict[str, Any]:
-        """
-        Migrate old data to new structure
-
-        Args:
-            dry_run: If True, don't actually write files, just analyze
-
-        Returns:
-            Migration report with statistics
-        """
+        """Migrate old data to new structure @zara"""
         _LOGGER.info("=" * 80)
         _LOGGER.info("DATA MIGRATION: prediction_history.json → new structure")
         _LOGGER.info("=" * 80)
@@ -56,7 +61,7 @@ class DataMigration:
         }
 
         try:
-            # Step 1: Check if old file exists
+
             if not self.old_prediction_history.exists():
                 _LOGGER.warning("Old prediction_history.json not found - nothing to migrate")
                 report["warnings"].append("No old file found")
@@ -65,14 +70,12 @@ class DataMigration:
 
             report["old_file_exists"] = True
 
-            # Step 2: Load old data
             _LOGGER.info("Step 1/6: Loading old prediction_history.json...")
 
             def _load_old():
                 with open(self.old_prediction_history, "r") as f:
                     return json.load(f)
 
-            # Run in executor to avoid blocking
             loop = asyncio.get_running_loop()
             old_data = await loop.run_in_executor(None, _load_old)
 
@@ -80,7 +83,6 @@ class DataMigration:
             report["old_predictions_count"] = len(old_predictions)
             _LOGGER.info(f"  Loaded {len(old_predictions)} predictions from old file")
 
-            # Step 3: Analyze old data structure
             _LOGGER.info("Step 2/6: Analyzing old data...")
             analysis = self._analyze_old_data(old_predictions)
 
@@ -94,12 +96,10 @@ class DataMigration:
             )
             _LOGGER.info(f"  Duplicates detected: {analysis['duplicates_count']}")
 
-            # Step 4: Group by date and deduplicate
             _LOGGER.info("Step 3/6: Grouping and deduplicating...")
             grouped = self._group_by_date(old_predictions)
             _LOGGER.info(f"  Grouped into {len(grouped)} days")
 
-            # Step 5: Convert to new structure
             _LOGGER.info("Step 4/6: Converting to new structure...")
             conversion_results = self._convert_to_new_structure(grouped)
 
@@ -113,23 +113,20 @@ class DataMigration:
                 f"  Skipped (insufficient data): {len(conversion_results['skipped_dates'])} days"
             )
 
-            # Step 6: Write new files
             if not dry_run:
                 _LOGGER.info("Step 5/6: Writing new files...")
 
-                # Create backup before deletion
                 _LOGGER.info(f"  Creating backup: {self.old_prediction_history_backup.name}")
                 import shutil
 
                 shutil.copy2(self.old_prediction_history, self.old_prediction_history_backup)
 
-                # Write daily summaries from converted data
                 if conversion_results.get("daily_summaries"):
                     _LOGGER.info(f"  Writing daily_summaries.json...")
                     self._write_daily_summaries(conversion_results["daily_summaries"])
 
                 _LOGGER.info("Step 6/6: Cleanup...")
-                # Delete old file (v8.6.0: Clean migration - no archive)
+
                 self.old_prediction_history.unlink()
                 _LOGGER.info(f"  ✓ Old prediction_history.json deleted (backup kept)")
                 _LOGGER.info(f"  ✓ Backup available at: {self.old_prediction_history_backup.name}")
@@ -153,7 +150,7 @@ class DataMigration:
             return report
 
     def _analyze_old_data(self, predictions: List[Dict]) -> Dict[str, Any]:
-        """Analyze old data structure"""
+        """Analyze old data structure @zara"""
         dates = set()
         dates_list = []
 
@@ -165,7 +162,6 @@ class DataMigration:
 
         dates_sorted = sorted(dates)
 
-        # Count duplicates
         from collections import Counter
 
         date_counts = Counter(dates_list)
@@ -182,7 +178,7 @@ class DataMigration:
         }
 
     def _group_by_date(self, predictions: List[Dict]) -> Dict[str, List[Dict]]:
-        """Group predictions by date"""
+        """Group predictions by date @zara"""
         grouped = {}
 
         for p in predictions:
@@ -198,21 +194,20 @@ class DataMigration:
         return grouped
 
     def _convert_to_new_structure(self, grouped: Dict[str, List[Dict]]) -> Dict[str, Any]:
-        """Convert old daily predictions to new structure (creates daily summaries)"""
+        """Convert old daily predictions to new structure (creates daily summaries) @zara"""
         converted_dates = []
         skipped_dates = []
         daily_summaries = []
 
         for date, predictions in grouped.items():
             try:
-                # Pick the "best" prediction from duplicates
+
                 best_prediction = self._pick_best_prediction(predictions)
 
                 if not best_prediction:
                     skipped_dates.append(date)
                     continue
 
-                # Create a daily summary from old data
                 summary = self._create_summary_from_old_prediction(date, best_prediction)
 
                 if summary:
@@ -232,56 +227,47 @@ class DataMigration:
         }
 
     def _pick_best_prediction(self, predictions: List[Dict]) -> Optional[Dict]:
-        """Pick the best prediction from duplicates"""
+        """Pick the best prediction from duplicates @zara"""
         if not predictions:
             return None
 
-        # Prefer predictions with actual_value
         with_actual = [p for p in predictions if p.get("actual_value") is not None]
 
         if with_actual:
-            # Pick the one with most complete data
+
             scored = []
             for p in with_actual:
                 score = 0
 
-                # Has actual value
                 if p.get("actual_value") is not None:
                     score += 10
 
-                # Has sensor data
                 sensor_data = p.get("sensor_data", {})
                 if sensor_data:
                     score += sum(1 for v in sensor_data.values() if v is not None)
 
-                # Has weather data
                 weather_data = p.get("weather_data", {})
                 if weather_data:
                     score += 1
 
-                # Has accuracy
                 if p.get("accuracy") is not None and p.get("accuracy") > 0:
                     score += 5
 
                 scored.append((score, p))
 
-            # Return highest scored
             scored.sort(reverse=True, key=lambda x: x[0])
             return scored[0][1]
 
-        # If no actual values, just return the first one
         return predictions[0]
 
     def _create_summary_from_old_prediction(self, date: str, prediction: Dict) -> Optional[Dict]:
-        """Create a daily summary from old prediction format"""
+        """Create a daily summary from old prediction format @zara"""
         try:
             dt = datetime.fromisoformat(date)
 
-            # Old prediction has daily totals, not hourly
             predicted_total = prediction.get("predicted_value", 0)
             actual_total = prediction.get("actual_value")
 
-            # Calculate accuracy
             accuracy = 0.0
             if predicted_total > 0 and actual_total is not None:
                 accuracy = actual_total / predicted_total * 100
@@ -338,7 +324,7 @@ class DataMigration:
             return None
 
     def _get_season(self, month: int) -> str:
-        """Get season from month"""
+        """Get season from month @zara"""
         if month in [3, 4, 5]:
             return "spring"
         elif month in [6, 7, 8]:
@@ -349,7 +335,7 @@ class DataMigration:
             return "winter"
 
     def _write_daily_summaries(self, summaries: List[Dict]):
-        """Write daily summaries to file"""
+        """Write daily summaries to file @zara"""
         data = {"version": "2.0", "last_updated": dt_util.now().isoformat(), "summaries": summaries}
 
         def _do_write():
@@ -358,17 +344,15 @@ class DataMigration:
                 json.dump(data, f, indent=2)
             temp_file.replace(self.new_daily_summaries)
 
-        # Check if we're in an async context
         try:
             loop = asyncio.get_running_loop()
-            # We're in async context - run in executor
+
             loop.run_in_executor(None, _do_write)
         except RuntimeError:
-            # No event loop - just run directly
+
             _do_write()
 
         _LOGGER.info(f"  ✓ Written {len(summaries)} daily summaries")
-
 
 class DataValidator:
     """Validate data integrity after migration"""
@@ -378,14 +362,13 @@ class DataValidator:
         self.stats_dir = data_dir / "stats"
 
     async def validate(self) -> Dict[str, Any]:
-        """Validate data files"""
+        """Validate data files @zara"""
         _LOGGER.info("=" * 80)
         _LOGGER.info("DATA VALIDATION")
         _LOGGER.info("=" * 80)
 
         report = {"valid": True, "files_checked": [], "errors": [], "warnings": []}
 
-        # Check hourly_predictions.json
         hourly_file = self.stats_dir / "hourly_predictions.json"
         if hourly_file.exists():
             _LOGGER.info("Checking hourly_predictions.json...")
@@ -405,7 +388,6 @@ class DataValidator:
         else:
             _LOGGER.info("hourly_predictions.json not found (will be created by scheduled tasks)")
 
-        # Check daily_summaries.json
         summaries_file = self.stats_dir / "daily_summaries.json"
         if summaries_file.exists():
             _LOGGER.info("Checking daily_summaries.json...")
@@ -431,7 +413,7 @@ class DataValidator:
         return report
 
     async def _validate_hourly_predictions(self, file_path: Path) -> Dict[str, Any]:
-        """Validate hourly_predictions.json structure"""
+        """Validate hourly_predictions.json structure @zara"""
         result = {
             "valid": True,
             "errors": [],
@@ -449,7 +431,6 @@ class DataValidator:
             loop = asyncio.get_running_loop()
             data = await loop.run_in_executor(None, _load_file)
 
-            # Check required fields
             if "version" not in data:
                 result["errors"].append("Missing 'version' field")
                 result["valid"] = False
@@ -462,11 +443,9 @@ class DataValidator:
             predictions = data["predictions"]
             result["predictions_count"] = len(predictions)
 
-            # Check unique dates
             dates = set(p.get("target_date") for p in predictions if p.get("target_date"))
             result["dates_count"] = len(dates)
 
-            # Validate sample predictions
             if predictions:
                 required_fields = [
                     "id",
@@ -483,7 +462,6 @@ class DataValidator:
                         result["errors"].append(f"Missing required field in predictions: {field}")
                         result["valid"] = False
 
-            # Check for duplicates
             ids = [p.get("id") for p in predictions]
             if len(ids) != len(set(ids)):
                 result["warnings"].append("Duplicate prediction IDs found")
@@ -498,7 +476,7 @@ class DataValidator:
         return result
 
     async def _validate_daily_summaries(self, file_path: Path) -> Dict[str, Any]:
-        """Validate daily_summaries.json structure"""
+        """Validate daily_summaries.json structure @zara"""
         result = {"valid": True, "errors": [], "warnings": [], "summaries_count": 0}
 
         try:
@@ -510,7 +488,6 @@ class DataValidator:
             loop = asyncio.get_running_loop()
             data = await loop.run_in_executor(None, _load_file)
 
-            # Check required fields
             if "version" not in data:
                 result["errors"].append("Missing 'version' field")
                 result["valid"] = False
@@ -523,7 +500,6 @@ class DataValidator:
             summaries = data["summaries"]
             result["summaries_count"] = len(summaries)
 
-            # Validate sample summary
             if summaries:
                 required_fields = ["date", "overall", "hourly_stats", "time_windows"]
 

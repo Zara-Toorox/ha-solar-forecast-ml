@@ -1,13 +1,17 @@
-"""
-Battery Data Collector
-
-Collects battery sensor data from Home Assistant entities
-Completely independent from Solar/ML components
+"""Battery Data Collector V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
@@ -19,7 +23,7 @@ from typing import Any, Dict, Optional
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, State
 
-from ..const import (  # NEW v9.0.0 constants; LEGACY v8.x constants
+from ..const import (
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CHARGE_TODAY_ENTITY,
     CONF_BATTERY_DISCHARGE_TODAY_ENTITY,
@@ -40,16 +44,14 @@ from ..const import (  # NEW v9.0.0 constants; LEGACY v8.x constants
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class BatteryDataCollector:
     """Collects battery data from Home Assistant entities"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """Initialize battery data collector Args: hass: Home Assistant instance entry: Config entry with battery configuration"""
+        """Initialize battery data collector Args: hass: Home Assistant instance entry: Config entry with battery configuration @zara"""
         self.hass = hass
         self.entry = entry
 
-        # NEW v9.0.0: Watt-based sensors (preferred)
         self.battery_power_sensor = entry.options.get(CONF_BATTERY_POWER_SENSOR) or entry.data.get(
             CONF_BATTERY_POWER_SENSOR
         )
@@ -78,7 +80,6 @@ class BatteryDataCollector:
             CONF_BATTERY_TEMPERATURE_SENSOR
         ) or entry.data.get(CONF_BATTERY_TEMPERATURE_SENSOR)
 
-        # LEGACY v8.x: Old entity configuration (fallback for backwards compatibility)
         self.soc_entity = entry.options.get(CONF_BATTERY_SOC_ENTITY) or entry.data.get(
             CONF_BATTERY_SOC_ENTITY
         )
@@ -95,15 +96,12 @@ class BatteryDataCollector:
             CONF_BATTERY_TEMPERATURE_ENTITY
         ) or entry.data.get(CONF_BATTERY_TEMPERATURE_ENTITY)
 
-        # Get battery capacity
         self.battery_capacity = entry.options.get(CONF_BATTERY_CAPACITY) or entry.data.get(
             CONF_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY
         )
 
-        # Cache for log throttling (only log when value changes)
         self._last_logged_power = None
 
-        # Determine if using new v9.0 config or legacy v8.x
         self.using_new_config = bool(
             self.battery_power_sensor
             and self.battery_soc_sensor
@@ -135,7 +133,7 @@ class BatteryDataCollector:
             )
 
     def _get_entity_state(self, entity_id: Optional[str]) -> Optional[State]:
-        """Get state of an entity Args: entity_id: Entity ID to query Returns: State object or None"""
+        """Get state of an entity Args: entity_id: Entity ID to query Returns: State object or None @zara"""
         if not entity_id:
             return None
 
@@ -148,17 +146,13 @@ class BatteryDataCollector:
             )
             return None
 
-        # Check if state is unavailable or unknown
         if state.state in ("unavailable", "unknown", "none", "None"):
-            _LOGGER.debug(
-                f"Battery entity '{entity_id}' state is '{state.state}'. "
-                f"Entity may not be ready yet or device is offline."
-            )
+            pass
 
         return state
 
     def _get_numeric_state(self, entity_id: Optional[str], default: float = 0.0) -> float:
-        """Get numeric state value from entity Args: entity_id: Entity ID to query default: Default value if entity not found or invalid Returns: Numeric state value or default"""
+        """Get numeric state value from entity Args: entity_id: Entity ID to query default: Default value if entity not found or invalid Returns: Numeric state value or default @zara"""
         state = self._get_entity_state(entity_id)
 
         if state is None:
@@ -167,27 +161,11 @@ class BatteryDataCollector:
         try:
             return float(state.state)
         except (ValueError, TypeError):
-            _LOGGER.debug(
-                f"Invalid numeric state for {entity_id}: {state.state} - using default {default}"
-            )
+
             return default
 
     def _convert_to_kwh(self, value: float, entity_id: Optional[str]) -> float:
-        """Convert energy value to kWh if needed
-
-        Detects unit from entity attributes and converts Wh to kWh automatically.
-        Also handles sensors without unit_of_measurement by checking value range.
-
-        IMPORTANT: Uses heuristic fallback even when unit is set to "kWh" because
-        some integration sensors incorrectly label Wh values as kWh.
-
-        Args:
-            value: Energy value from sensor
-            entity_id: Entity ID to check unit
-
-        Returns:
-            Energy value in kWh
-        """
+        """Convert energy value to kWh if needed @zara"""
         if entity_id is None or value == 0.0:
             return value
 
@@ -195,18 +173,13 @@ class BatteryDataCollector:
         if state is None:
             return value
 
-        # Get unit from entity attributes
         unit = state.attributes.get("unit_of_measurement", "").lower()
 
-        # If unit explicitly says Wh or W·h, convert to kWh
         if unit in ["wh", "w·h", "watthour", "watthours"]:
             converted = value / 1000.0
             _LOGGER.debug(f"Converted {entity_id} from {value} Wh to {converted} kWh")
             return converted
 
-        # Heuristic check: Battery charge/discharge today is typically 0-50 kWh
-        # If value > 100, it's likely in Wh and needs conversion
-        # Apply this EVEN if unit says "kWh" because some sensors are misconfigured
         if value > 100.0:
             converted = value / 1000.0
 
@@ -223,19 +196,14 @@ class BatteryDataCollector:
                 )
             return converted
 
-        # Value is reasonable for kWh (0-100), keep as-is
         return value
 
     def get_state_of_charge(self) -> Optional[float]:
-        """Get current battery State of Charge (%)
+        """Get current battery State of Charge (%) @zara"""
 
-        Returns:
-            SOC percentage (0-100) or None
-        """
-        # v9.0.0: Use new sensor if available
         if self.battery_soc_sensor:
             soc = self._get_numeric_state(self.battery_soc_sensor)
-        # LEGACY v8.x: Fallback to old entity
+
         elif self.soc_entity:
             soc = self._get_numeric_state(self.soc_entity)
         else:
@@ -251,17 +219,11 @@ class BatteryDataCollector:
         return round(soc, 1)
 
     def get_battery_power(self) -> Optional[float]:
-        """Get current battery charge/discharge power (W)
+        """Get current battery charge/discharge power (W) @zara"""
 
-        Positive = charging, Negative = discharging
-
-        Returns:
-            Power in Watts or None
-        """
-        # v9.0.0: Use new sensor if available
         if self.battery_power_sensor:
             entity_id = self.battery_power_sensor
-        # LEGACY v8.x: Fallback to old entity
+
         elif self.power_entity:
             entity_id = self.power_entity
         else:
@@ -274,12 +236,12 @@ class BatteryDataCollector:
             return None
 
         if state.state in ("unknown", "unavailable", "none", "None"):
-            _LOGGER.debug(f"Battery power sensor '{entity_id}' state is: {state.state}")
+
             return None
 
         try:
             power = float(state.state)
-            # Only log when value changes significantly (avoid spam)
+
             if self._last_logged_power is None or abs(power - self._last_logged_power) > 5.0:
                 _LOGGER.debug(f"Battery power from '{entity_id}': {power} W")
                 self._last_logged_power = power
@@ -291,24 +253,24 @@ class BatteryDataCollector:
             return None
 
     def get_charge_today(self) -> float:
-        """Get total energy charged today (kWh) Returns: Energy in kWh"""
+        """Get total energy charged today (kWh) Returns: Energy in kWh @zara"""
         raw_value = self._get_numeric_state(self.charge_today_entity, 0.0)
         return self._convert_to_kwh(raw_value, self.charge_today_entity)
 
     def get_discharge_today(self) -> float:
-        """Get total energy discharged today (kWh) Returns: Energy in kWh"""
+        """Get total energy discharged today (kWh) Returns: Energy in kWh @zara"""
         raw_value = self._get_numeric_state(self.discharge_today_entity, 0.0)
         return self._convert_to_kwh(raw_value, self.discharge_today_entity)
 
     def get_battery_temperature(self) -> Optional[float]:
-        """Get battery temperature (°C) Returns: Temperature in °C or None"""
+        """Get battery temperature (°C) Returns: Temperature in °C or None @zara"""
         if not self.temperature_entity:
             return None
 
         return self._get_numeric_state(self.temperature_entity)
 
     def get_remaining_capacity(self) -> float:
-        """Calculate remaining battery capacity (kWh) Returns: Remaining capacity in kWh"""
+        """Calculate remaining battery capacity (kWh) Returns: Remaining capacity in kWh @zara"""
         soc = self.get_state_of_charge()
         if soc is None:
             return 0.0
@@ -316,7 +278,7 @@ class BatteryDataCollector:
         return round((soc / 100) * self.battery_capacity, 2)
 
     def get_empty_capacity(self) -> float:
-        """Calculate empty battery capacity (kWh) Returns: Empty capacity in kWh"""
+        """Calculate empty battery capacity (kWh) Returns: Empty capacity in kWh @zara"""
         soc = self.get_state_of_charge()
         if soc is None:
             return self.battery_capacity
@@ -324,17 +286,17 @@ class BatteryDataCollector:
         return round(((100 - soc) / 100) * self.battery_capacity, 2)
 
     def is_charging(self) -> bool:
-        """Check if battery is currently charging Returns: True if charging (power > 0)"""
+        """Check if battery is currently charging Returns: True if charging (power > 0) @zara"""
         power = self.get_battery_power()
-        return power is not None and power > 50  # > 50W threshold to avoid noise
+        return power is not None and power > 50
 
     def is_discharging(self) -> bool:
-        """Check if battery is currently discharging Returns: True if discharging (power < 0)"""
+        """Check if battery is currently discharging Returns: True if discharging (power < 0) @zara"""
         power = self.get_battery_power()
-        return power is not None and power < -50  # < -50W threshold to avoid noise
+        return power is not None and power < -50
 
     def get_runtime_remaining(self, consumption_watts: float) -> Optional[float]:
-        """Calculate remaining runtime based on current consumption Args: consumption_watts: Current consumption in Watts Returns: Remaining runtime in hours or None"""
+        """Calculate remaining runtime based on current consumption Args: consumption_watts: Current consumption in Watts Returns: Remaining runtime in hours or None @zara"""
         if consumption_watts <= 0:
             return None
 
@@ -342,13 +304,12 @@ class BatteryDataCollector:
         if remaining_kwh <= 0:
             return 0.0
 
-        # Runtime = Capacity (kWh) / Consumption (kW)
         runtime_hours = remaining_kwh / (consumption_watts / 1000)
 
         return round(runtime_hours, 1)
 
     def get_full_charge_time(self) -> Optional[float]:
-        """Calculate time until battery is fully charged Returns: Time in hours or None if not charging"""
+        """Calculate time until battery is fully charged Returns: Time in hours or None if not charging @zara"""
         if not self.is_charging():
             return None
 
@@ -360,13 +321,12 @@ class BatteryDataCollector:
         if empty_capacity <= 0:
             return 0.0
 
-        # Charge time = Empty capacity (kWh) / Charge power (kW)
         charge_time_hours = empty_capacity / (power / 1000)
 
         return round(charge_time_hours, 1)
 
     def get_battery_data(self) -> Dict[str, Any]:
-        """Get all battery data as dictionary Returns: Dictionary with all battery data"""
+        """Get all battery data as dictionary Returns: Dictionary with all battery data @zara"""
         soc = self.get_state_of_charge()
         power = self.get_battery_power()
 
@@ -387,21 +347,17 @@ class BatteryDataCollector:
         }
 
     def is_configured(self) -> bool:
-        """Check if battery is properly configured
+        """Check if battery is properly configured @zara"""
 
-        Returns:
-            True if at least SOC sensor is configured (v9.0.0 or LEGACY v8.x)
-        """
-        # v9.0.0: Check new config
         if self.battery_soc_sensor is not None:
             return True
-        # LEGACY v8.x: Check old config
+
         if self.soc_entity is not None:
             return True
         return False
 
     def validate_entities(self) -> Dict[str, bool]:
-        """Validate all configured entities exist Returns: Dictionary with entity validation results"""
+        """Validate all configured entities exist Returns: Dictionary with entity validation results @zara"""
         return {
             "soc": self._get_entity_state(self.soc_entity) is not None,
             "power": self._get_entity_state(self.power_entity) is not None,
@@ -415,7 +371,7 @@ class BatteryDataCollector:
         }
 
     def get_diagnostic_info(self) -> Dict[str, Any]:
-        """Get diagnostic information for troubleshooting Returns: Dictionary with diagnostic data"""
+        """Get diagnostic information for troubleshooting Returns: Dictionary with diagnostic data @zara"""
         info = {
             "configured_entities": {
                 "soc_entity": self.soc_entity,
@@ -429,7 +385,6 @@ class BatteryDataCollector:
             "battery_capacity": self.battery_capacity,
         }
 
-        # Get raw states
         for key, entity_id in info["configured_entities"].items():
             if entity_id:
                 state = self._get_entity_state(entity_id)
@@ -446,81 +401,49 @@ class BatteryDataCollector:
 
         return info
 
-    # ========================================================================
-    # NEW v9.0.0: Watt-based Power Sensor Getters
-    # ========================================================================
-
     def get_solar_production(self) -> float:
-        """Get current solar production (W)
-
-        Returns:
-            Solar production in Watts (≥0)
-        """
+        """Get current solar production (W) @zara"""
         if self.using_new_config:
             return max(0.0, self._get_numeric_state(self.solar_production_sensor, 0.0))
-        # Legacy fallback: No solar sensor in old config
+
         return 0.0
 
     def get_inverter_output(self) -> float:
-        """Get current inverter AC output (W)
-
-        Returns:
-            Inverter output in Watts (≥0) - AC power to house (Solar+Battery combined)
-        """
+        """Get current inverter AC output (W) @zara"""
         if self.using_new_config:
             return max(0.0, self._get_numeric_state(self.inverter_output_sensor, 0.0))
-        # Legacy fallback: No inverter sensor in old config
+
         return 0.0
 
     def get_house_consumption(self) -> float:
-        """Get current house consumption (W)
-
-        Returns:
-            House consumption in Watts (≥0)
-        """
+        """Get current house consumption (W) @zara"""
         if self.using_new_config:
             return max(0.0, self._get_numeric_state(self.house_consumption_sensor, 0.0))
-        # Legacy fallback: No house consumption sensor in old config
+
         return 0.0
 
     def get_grid_import(self) -> float:
-        """Get current grid import (W)
-
-        Returns:
-            Grid import power in Watts (≥0)
-        """
+        """Get current grid import (W) @zara"""
         if self.using_new_config:
             return max(0.0, self._get_numeric_state(self.grid_import_sensor, 0.0))
-        # Legacy fallback: No grid sensor in old config
+
         return 0.0
 
     def get_grid_export(self) -> float:
-        """Get current grid export (W)
-
-        Returns:
-            Grid export power in Watts (≥0)
-        """
+        """Get current grid export (W) @zara"""
         if self.using_new_config:
             return max(0.0, self._get_numeric_state(self.grid_export_sensor, 0.0))
-        # Legacy fallback: No grid sensor in old config
+
         return 0.0
 
     def get_grid_charge_power(self) -> float:
-        """Get current grid charge power (W)
-
-        Returns:
-            Grid charge power in Watts (≥0)
-        """
+        """Get current grid charge power (W) @zara"""
         if self.grid_charge_power_sensor:
             return max(0.0, self._get_numeric_state(self.grid_charge_power_sensor, 0.0))
         return 0.0
 
     def get_all_power_sensors(self) -> Dict[str, float]:
-        """Get all current power sensor values
-
-        Returns:
-            Dictionary with all power values in Watts
-        """
+        """Get all current power sensor values @zara"""
         return {
             "battery_power_w": self.get_battery_power() or 0.0,
             "soc_percent": self.get_state_of_charge() or 0.0,

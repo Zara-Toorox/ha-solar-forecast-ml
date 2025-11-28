@@ -1,5 +1,4 @@
-"""
-ML Sample Aggregator for Solar Forecast ML Integration
+"""ML Sample Aggregator for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -26,13 +25,12 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class MLSampleAggregator:
     """Aggregates and summarizes ML training samples"""
 
     @staticmethod
     def aggregate_by_hour(samples: List[Dict[str, Any]]) -> Dict[int, List[Dict[str, Any]]]:
-        """Group samples by hour of day"""
+        """Group samples by hour of day @zara"""
         hourly_samples = defaultdict(list)
 
         for sample in samples:
@@ -47,7 +45,7 @@ class MLSampleAggregator:
 
     @staticmethod
     def aggregate_by_day(samples: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        """Group samples by date"""
+        """Group samples by date @zara"""
         daily_samples = defaultdict(list)
 
         for sample in samples:
@@ -62,7 +60,7 @@ class MLSampleAggregator:
 
     @staticmethod
     def calculate_hourly_statistics(samples: List[Dict[str, Any]]) -> Dict[int, Dict[str, float]]:
-        """Calculate statistics for each hour"""
+        """Calculate statistics for each hour @zara"""
         hourly_samples = MLSampleAggregator.aggregate_by_hour(samples)
         statistics = {}
 
@@ -85,7 +83,7 @@ class MLSampleAggregator:
 
     @staticmethod
     def get_recent_samples(samples: List[Dict[str, Any]], days: int = 30) -> List[Dict[str, Any]]:
-        """Get samples from the last N days"""
+        """Get samples from the last N days @zara"""
         cutoff = dt_util.now() - timedelta(days=days)
         recent_samples = []
 
@@ -101,17 +99,15 @@ class MLSampleAggregator:
 
     @staticmethod
     def calculate_feature_statistics(samples: List[Dict[str, Any]]) -> Dict[str, Dict[str, float]]:
-        """Calculate statistics for each feature"""
+        """Calculate statistics for each feature @zara"""
         feature_values = defaultdict(list)
 
-        # Collect all feature values
         for sample in samples:
             features = sample.get("features", {})
             for feature_name, feature_value in features.items():
                 if isinstance(feature_value, (int, float)):
                     feature_values[feature_name].append(feature_value)
 
-        # Calculate statistics
         statistics = {}
         for feature_name, values in feature_values.items():
             if values:
@@ -127,7 +123,7 @@ class MLSampleAggregator:
 
     @staticmethod
     def _calculate_std(values: List[float]) -> float:
-        """Calculate standard deviation"""
+        """Calculate standard deviation @zara"""
         if not values:
             return 0.0
 
@@ -137,7 +133,7 @@ class MLSampleAggregator:
 
     @staticmethod
     def summarize_samples(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Create a comprehensive summary of samples"""
+        """Create a comprehensive summary of samples @zara"""
         if not samples:
             return {
                 "total_samples": 0,
@@ -146,7 +142,6 @@ class MLSampleAggregator:
                 "feature_statistics": {},
             }
 
-        # Get date range
         timestamps = []
         for sample in samples:
             try:
@@ -163,11 +158,9 @@ class MLSampleAggregator:
                 "days": (max(timestamps) - min(timestamps)).days + 1,
             }
 
-        # Calculate hourly coverage
         hourly_samples = MLSampleAggregator.aggregate_by_hour(samples)
         hourly_coverage = {hour: len(samples) for hour, samples in hourly_samples.items()}
 
-        # Feature statistics
         feature_stats = MLSampleAggregator.calculate_feature_statistics(samples)
 
         return {

@@ -1,5 +1,4 @@
-"""
-Sensor State Management
+"""Sensor State Management V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -31,10 +30,11 @@ from ..const import (
     CONF_HUMIDITY_SENSOR,
     CONF_LUX_SENSOR,
     CONF_POWER_ENTITY,
+    CONF_PRESSURE_SENSOR,
     CONF_RAIN_SENSOR,
+    CONF_SOLAR_RADIATION_SENSOR,
     CONF_SOLAR_YIELD_TODAY,
     CONF_TEMP_SENSOR,
-    CONF_UV_SENSOR,
     CONF_WIND_SENSOR,
     DOMAIN,
     INTEGRATION_MODEL,
@@ -44,21 +44,19 @@ from ..const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
-# --- Base Class for Entity State Sensors ---
 class BaseEntityStateSensor(SensorEntity):
     """Base class for sensors that track the state of another entity"""
 
     _attr_has_entity_name = True
-    _attr_should_poll = False  # Event-driven, no polling needed
-    # Default category is DIAGNOSTIC, can be overridden by subclasses
+    _attr_should_poll = False
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        source_entity_id_key: Optional[str],  # Key to look up in entry.data
+        source_entity_id_key: Optional[str],
         unique_id_key: str,
         translation_key: str,
         icon: str,
@@ -70,9 +68,8 @@ class BaseEntityStateSensor(SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_ml_{unique_id_key}"
         self._attr_translation_key = translation_key
         self._attr_icon = icon
-        self._source_entity_id: Optional[str] = None  # Will be set in async_added_to_hass
+        self._source_entity_id: Optional[str] = None
 
-        # Common device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name="Solar Forecast ML",
@@ -83,44 +80,44 @@ class BaseEntityStateSensor(SensorEntity):
 
     @property
     def source_entity_id(self) -> Optional[str]:
-        """Get the source entity ID from config entry data"""
+        """Get the source entity ID from config entry data @zara"""
         if self._source_entity_id is None and self._source_entity_id_key:
             entity_id_raw = self.entry.data.get(self._source_entity_id_key)
             if isinstance(entity_id_raw, str) and entity_id_raw.strip():
                 self._source_entity_id = entity_id_raw.strip()
             else:
-                # Explicitly set to empty string if not configured or invalid
+
                 self._source_entity_id = ""
-        # Return None if not configured, otherwise the stripped ID
+
         return self._source_entity_id if self._source_entity_id else None
 
     @property
     def available(self) -> bool:
-        """This sensor is always available to show the state or lack thereof"""
+        """This sensor is always available to show the state or lack thereof @zara"""
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Register state change listener"""
+        """Register state change listener @zara"""
         await super().async_added_to_hass()
-        source_id = self.source_entity_id  # Use property to get ID
+        source_id = self.source_entity_id
         if source_id:
             self.async_on_remove(
                 async_track_state_change_event(self.hass, [source_id], self._handle_sensor_update)
             )
-            # Fetch initial state - False = no async_update call, just write state
+
             self.async_schedule_update_ha_state(False)
         else:
-            # Update state to "Not configured" - False = no async_update call
+
             self.async_schedule_update_ha_state(False)
 
     @callback
     def _handle_sensor_update(self, event) -> None:
-        """Handle state update from the source entity"""
+        """Handle state update from the source entity @zara"""
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> str:
-        """Return the state of the source entity as a string"""
+        """Return the state of the source entity as a string @zara"""
         source_id = self.source_entity_id
         if not source_id:
             return "Not configured"
@@ -129,11 +126,11 @@ class BaseEntityStateSensor(SensorEntity):
         if state is None:
             return "Entity not found"
 
-        return state.state  # Return the raw state string
+        return state.state
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return attributes about the source entity"""
+        """Return attributes about the source entity @zara"""
         source_id = self.source_entity_id
         base_attrs = {
             "source_entity_id": source_id,
@@ -165,10 +162,6 @@ class BaseEntityStateSensor(SensorEntity):
         )
         return base_attrs
 
-
-# --- External Sensors Status Sensor ---
-
-
 class ExternalSensorsStatusSensor(SensorEntity):
     """Sensor showing status of all configured external sensors"""
 
@@ -177,7 +170,7 @@ class ExternalSensorsStatusSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """Initialize the external sensors status sensor"""
+        """Initialize the external sensors status sensor @zara"""
         self.hass = hass
         self.entry = entry
         self._attr_unique_id = f"{entry.entry_id}_ml_external_sensors_status"
@@ -198,17 +191,18 @@ class ExternalSensorsStatusSensor(SensorEntity):
             "humidity": CONF_HUMIDITY_SENSOR,
             "wind_speed": CONF_WIND_SENSOR,
             "rain": CONF_RAIN_SENSOR,
-            "uv_index": CONF_UV_SENSOR,
             "illuminance": CONF_LUX_SENSOR,
+            "pressure": CONF_PRESSURE_SENSOR,
+            "solar_radiation": CONF_SOLAR_RADIATION_SENSOR,
         }
 
     @property
     def available(self) -> bool:
-        """Sensor is always available"""
+        """Sensor is always available @zara"""
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Register state change listeners for all external sensors"""
+        """Register state change listeners for all external sensors @zara"""
         await super().async_added_to_hass()
 
         entity_ids_to_track = []
@@ -228,12 +222,12 @@ class ExternalSensorsStatusSensor(SensorEntity):
 
     @callback
     def _handle_sensor_update(self, event) -> None:
-        """Handle state update from external sensors"""
+        """Handle state update from external sensors @zara"""
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> str:
-        """Return overall status of external sensors"""
+        """Return overall status of external sensors @zara"""
         configured_count = 0
         ok_count = 0
         unavailable_count = 0
@@ -268,7 +262,7 @@ class ExternalSensorsStatusSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return detailed status of each external sensor"""
+        """Return detailed status of each external sensor @zara"""
         sensors_status = {}
 
         for sensor_name, sensor_key in self._sensor_config.items():
@@ -317,17 +311,11 @@ class ExternalSensorsStatusSensor(SensorEntity):
             "error_count": sum(1 for s in sensors_status.values() if s["status"] == "not_found"),
         }
 
-
-# --- State Sensors for Core Entities ---
-
-
 class PowerSensorStateSensor(BaseEntityStateSensor):
     """State sensor for the configured main power sensor"""
 
-    # FIXED: Changed to diagnostic
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    # FIXED: Added proper sensor attributes for POWER
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -343,10 +331,9 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
         )
         self._attr_name = "Power Sensor State"
 
-    # FIXED: Override to return float instead of string
     @property
     def native_value(self) -> float | None:
-        """Return the power value as float with units"""
+        """Return the power value as float with units @zara"""
         source_id = self.source_entity_id
         if not source_id:
             return None
@@ -356,21 +343,18 @@ class PowerSensorStateSensor(BaseEntityStateSensor):
             return None
 
         try:
-            # Parse state to float
+
             cleaned_state = str(state.state).split(" ")[0].replace(",", ".")
             return float(cleaned_state)
         except (ValueError, TypeError):
             _LOGGER.warning(f"Cannot parse power value from '{source_id}': {state.state}")
             return None
 
-
 class YieldSensorStateSensor(BaseEntityStateSensor):
     """State sensor for the configured daily yield sensor"""
 
-    # FIXED: Changed to diagnostic
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    # FIXED: Added proper sensor attributes
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_state_class = SensorStateClass.TOTAL
@@ -386,10 +370,9 @@ class YieldSensorStateSensor(BaseEntityStateSensor):
         )
         self._attr_name = "Yield Sensor State"
 
-    # FIXED: Override to return float instead of string
     @property
     def native_value(self) -> float | None:
-        """Return the yield value as float with units"""
+        """Return the yield value as float with units @zara"""
         source_id = self.source_entity_id
         if not source_id:
             return None
@@ -399,7 +382,7 @@ class YieldSensorStateSensor(BaseEntityStateSensor):
             return None
 
         try:
-            # Parse state to float
+
             cleaned_state = str(state.state).split(" ")[0].replace(",", ".")
             return float(cleaned_state)
         except (ValueError, TypeError):

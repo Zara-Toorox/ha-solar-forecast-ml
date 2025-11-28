@@ -1,5 +1,4 @@
-"""
-Task Scheduler for Solar Forecast ML Integration
+"""Task Scheduler for Solar Forecast ML Integration V10.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -28,12 +27,11 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class TaskScheduler:
     """Schedules and manages recurring tasks"""
 
     def __init__(self, hass: HomeAssistant):
-        """Initialize task scheduler"""
+        """Initialize task scheduler @zara"""
         self.hass = hass
         self._scheduled_tasks: Dict[str, Any] = {}
         self._listeners: Dict[str, Callable] = {}
@@ -47,11 +45,10 @@ class TaskScheduler:
         description: str = "",
     ) -> None:
         """Schedule a daily recurring task"""
-        # Remove existing listener if any
+
         if task_id in self._listeners:
             self.cancel_task(task_id)
 
-        # Schedule new listener
         listener_remove = async_track_time_change(
             self.hass,
             lambda now: self.hass.async_create_task(task_func()),
@@ -79,11 +76,10 @@ class TaskScheduler:
         description: str = "",
     ) -> None:
         """Schedule an hourly recurring task"""
-        # Remove existing listener if any
+
         if task_id in self._listeners:
             self.cancel_task(task_id)
 
-        # Schedule new listener
         listener_remove = async_track_time_change(
             self.hass, lambda now: self.hass.async_create_task(task_func()), minute=minute, second=0
         )
@@ -99,11 +95,10 @@ class TaskScheduler:
         _LOGGER.info(f"Scheduled hourly task: {task_id} at minute {minute} - {description}")
 
     def cancel_task(self, task_id: str) -> bool:
-        """Cancel a scheduled task"""
+        """Cancel a scheduled task @zara"""
         if task_id not in self._listeners:
             return False
 
-        # Call listener removal function
         self._listeners[task_id]()
 
         del self._listeners[task_id]
@@ -113,7 +108,7 @@ class TaskScheduler:
         return True
 
     def cancel_all_tasks(self) -> None:
-        """Cancel all scheduled tasks"""
+        """Cancel all scheduled tasks @zara"""
         task_ids = list(self._listeners.keys())
 
         for task_id in task_ids:
@@ -122,9 +117,9 @@ class TaskScheduler:
         _LOGGER.info("All scheduled tasks cancelled")
 
     def get_scheduled_tasks(self) -> Dict[str, Dict[str, Any]]:
-        """Get information about all scheduled tasks"""
+        """Get information about all scheduled tasks @zara"""
         return self._scheduled_tasks.copy()
 
     def is_task_scheduled(self, task_id: str) -> bool:
-        """Check if a task is currently scheduled"""
+        """Check if a task is currently scheduled @zara"""
         return task_id in self._scheduled_tasks
