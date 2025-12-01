@@ -178,6 +178,17 @@ class WeatherDataPipelineManager:
             self._listeners.append(astronomy_listener)
             _LOGGER.info("Scheduled: Daily astronomy cache update (06:00 LOCAL)")
 
+            # Pre-midnight refresh: Ensure fresh data before 00:15 corrected forecast
+            pre_midnight_listener = async_track_time_change(
+                self.hass,
+                self._scheduled_pre_midnight_refresh,
+                hour=0,
+                minute=10,
+                second=0,
+            )
+            self._listeners.append(pre_midnight_listener)
+            _LOGGER.info("Scheduled: Pre-midnight data refresh (00:10 LOCAL - fallback before 00:15)")
+
             forecast_listener = async_track_time_change(
                 self.hass,
                 self._scheduled_corrected_forecast,
@@ -198,18 +209,11 @@ class WeatherDataPipelineManager:
             self._listeners.append(midday_forecast_listener)
             _LOGGER.info("Scheduled: Mid-day corrected forecast refresh (12:15 LOCAL)")
 
-            precision_listener = async_track_time_change(
-                self.hass,
-                self._scheduled_precision_calculation,
-                hour=23,
-                minute=30,
-                second=0,
-            )
-            self._listeners.append(precision_listener)
-            _LOGGER.info("Scheduled: Daily precision calculation (23:30 LOCAL)")
+            # NOTE: Daily precision calculation (23:30) moved to End-of-Day Workflow
+            # in production_scheduled_tasks.py for better task coordination
 
             self._running = True
-            _LOGGER.info("Weather Data Pipeline started successfully (11 scheduled listeners)")
+            _LOGGER.info(f"Weather Data Pipeline started successfully ({len(self._listeners)} scheduled listeners)")
             return True
 
         except Exception as e:
@@ -585,6 +589,40 @@ class WeatherDataPipelineManager:
         except Exception as e:
             _LOGGER.error(f"Pipeline: Astronomy cache update error: {e}", exc_info=True)
 
+    async def _scheduled_pre_midnight_refresh(self, now):
+        """Scheduled task: Refresh Open-Meteo and Astronomy cache at 00:10 LOCAL @zara
+
+        This is a fallback to ensure fresh data is available before the 00:15
+        corrected forecast generation. Runs after midnight to get the new day's
+        forecast data.
+        """
+        try:
+            _LOGGER.info("Pipeline: Pre-midnight data refresh (00:10 LOCAL)")
+
+            # Update Open-Meteo forecast
+            if self.weather_service:
+                success = await self.weather_service.force_update()
+                if success:
+                    _LOGGER.info("Pipeline: Open-Meteo refreshed (00:10 fallback)")
+                else:
+                    _LOGGER.warning("Pipeline: Open-Meteo refresh failed (00:10)")
+            else:
+                _LOGGER.warning("Pipeline: Weather service not initialized for 00:10 refresh")
+
+            # Update Astronomy cache for new day
+            if self.astronomy_cache:
+                system_capacity_kwp = self.coordinator.solar_capacity if self.coordinator else None
+                if system_capacity_kwp and system_capacity_kwp > 0:
+                    await self.astronomy_cache.rebuild_cache(system_capacity_kwp=system_capacity_kwp, days_ahead=7)
+                    _LOGGER.info("Pipeline: Astronomy cache refreshed (00:10 fallback)")
+                else:
+                    _LOGGER.warning("Pipeline: Solar capacity not configured for 00:10 astronomy refresh")
+            else:
+                _LOGGER.warning("Pipeline: Astronomy cache not initialized for 00:10 refresh")
+
+        except Exception as e:
+            _LOGGER.error(f"Pipeline: Pre-midnight refresh error: {e}", exc_info=True)
+
     async def _scheduled_corrected_forecast(self, now):
         """Scheduled task: Create corrected forecast daily at 00:15 LOCAL @zara"""
         try:
@@ -603,7 +641,13 @@ class WeatherDataPipelineManager:
             _LOGGER.error(f"Pipeline: Corrected forecast generation error: {e}", exc_info=True)
 
     async def _scheduled_precision_calculation(self, now):
-        """Scheduled task: Calculate weather precision daily at 23:30 LOCAL @zara"""
+        """DEPRECATED: Precision calculation moved to End-of-Day Workflow.
+
+        This method is kept for backwards compatibility and manual service calls.
+        The scheduled 23:30 task now runs in production_scheduled_tasks.py
+        as part of the unified End-of-Day Workflow (Step 6).
+        @zara
+        """
         try:
             _LOGGER.info("Pipeline: Daily precision calculation (23:30 LOCAL)")
 

@@ -25,6 +25,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from ..core.core_user_messages import user_msg
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -170,7 +171,7 @@ class ProductionTimeCalculator:
         )
 
         if not self.power_entity:
-            _LOGGER.warning("No power entity configured - production time tracking disabled.")
+            _LOGGER.info(user_msg('PRODUCTION_TRACKING_DISABLED'))
             return
 
         max_retries = 3
@@ -193,14 +194,11 @@ class ProductionTimeCalculator:
                     )
                     await asyncio.sleep(retry_delay)
                 else:
-                    _LOGGER.error(
-                        f"[PRODUCTION_TRACKER] Power entity '{self.power_entity}' not found after {max_retries} retries! "
-                        f"Please check your configuration."
+                    _LOGGER.warning(
+                        user_msg('SENSOR_UNAVAILABLE', entity=self.power_entity)
                     )
-
-                    _LOGGER.info(
-                        f"[PRODUCTION_TRACKER] Check if entity name is correct. "
-                        f"Expected format: 'sensor.xxx' without spaces"
+                    _LOGGER.debug(
+                        f"Expected format: 'sensor.xxx' - check configuration"
                     )
                     return
 
@@ -562,11 +560,23 @@ class ProductionTimeCalculator:
                 await self._save_state_async()
 
             if self._state_listener_remove:
-                self._state_listener_remove()
+                try:
+                    self._state_listener_remove()
+                except ValueError:
+                    pass  # Listener already removed
+                self._state_listener_remove = None
             if self._midnight_listener_remove:
-                self._midnight_listener_remove()
+                try:
+                    self._midnight_listener_remove()
+                except ValueError:
+                    pass  # Listener already removed
+                self._midnight_listener_remove = None
             if self._periodic_save_listener_remove:
-                self._periodic_save_listener_remove()
+                try:
+                    self._periodic_save_listener_remove()
+                except ValueError:
+                    pass  # Listener already removed
+                self._periodic_save_listener_remove = None
 
             if self._is_active:
                 now_local = dt_util.now()

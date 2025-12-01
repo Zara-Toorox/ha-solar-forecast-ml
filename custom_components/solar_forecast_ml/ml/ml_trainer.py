@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.core_exceptions import MLModelException
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from ..core.core_user_messages import user_msg
 
 _np: Optional[Any] = None
 
@@ -144,9 +145,8 @@ class RidgeTrainer:
                             )
 
                     except np.linalg.LinAlgError:
-
-                        _LOGGER.warning(
-                            f"Linear algebra error during validation for lambda={lambda_val}. Skipping."
+                        _LOGGER.debug(
+                            f"Lambda validation: Numerical issue for lambda={lambda_val}, trying next value."
                         )
                         continue
             else:
@@ -192,8 +192,8 @@ class RidgeTrainer:
                         f"Training R-squared (raw)={r_squared_full:.4f}, Clamped Accuracy={final_accuracy:.4f}"
                     )
                 else:
-                    _LOGGER.warning(
-                        "Total Sum of Squares (TSS) is near zero, possibly constant target values. Accuracy set to 0.0."
+                    _LOGGER.info(
+                        user_msg('ML_TSS_ZERO')
                     )
 
                     if np.allclose(predictions_full, y_array):
@@ -203,10 +203,14 @@ class RidgeTrainer:
                         )
 
                 if final_accuracy == 0.0 and ss_tot_full > 1e-8:
-                    _LOGGER.critical(
-                        "Model training resulted in 0.0 accuracy! "
-                        f"Check input data quality and feature relevance. Samples={len(y_train)}, "
-                        f"Target Range=[{np.min(y_array):.2f}, {np.max(y_array):.2f}]"
+                    # This is normal for new installations or cloudy periods with little production variance
+                    _LOGGER.info(
+                        user_msg(
+                            'ML_LEARNING_PHASE',
+                            samples=len(y_train),
+                            min_val=float(np.min(y_array)),
+                            max_val=float(np.max(y_array))
+                        )
                     )
 
                 self.best_lambda = best_lambda_found
@@ -214,17 +218,19 @@ class RidgeTrainer:
                 duration = (training_end_time - training_start_time).total_seconds()
 
                 _LOGGER.info(
-                    f"Ridge Training completed in {duration:.2f}s. "
-                    f"Best Lambda={best_lambda_found:.4f}, Final Training Accuracy={final_accuracy:.4f}"
+                    user_msg(
+                        'ML_TRAINING_SUCCESS',
+                        accuracy=final_accuracy,
+                        samples=len(y_train),
+                        duration=duration
+                    )
                 )
 
                 return weights_dict_generic, float(bias), final_accuracy, best_lambda_found
 
             except np.linalg.LinAlgError as final_linalg_err:
-                _LOGGER.error(
-                    f"Linear algebra error during final model training: {final_linalg_err}",
-                    exc_info=True,
-                )
+                _LOGGER.warning(user_msg('ML_LINALG_ERROR'))
+                _LOGGER.debug(f"Technical details: {final_linalg_err}")
                 raise MLModelException(
                     f"Ridge training failed during final solve: {final_linalg_err}"
                 ) from final_linalg_err

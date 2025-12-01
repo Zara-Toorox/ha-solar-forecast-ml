@@ -36,12 +36,19 @@ class MLDataLoaderV3:
     """
 
     def __init__(self, data_dir: Path, hass: Optional["HomeAssistant"] = None):
+        """Initialize MLDataLoaderV3.
+
+        IMPORTANT: data_dir is expected to be the 'stats' subdirectory
+        (passed from ml_predictor.py as data_manager.data_dir / "stats")
+        All file paths are relative to this stats directory.
+        """
         self.data_dir = data_dir
         self.hass = hass
+        # All files are in the stats directory (data_dir already points to stats/)
         self.hourly_predictions_file = data_dir / "hourly_predictions.json"
         self.astronomy_cache_file = data_dir / "astronomy_cache.json"
         self.weather_corrected_file = data_dir / "weather_forecast_corrected.json"
-        self.weather_precision_file = data_dir / "stats" / "weather_precision_daily.json"
+        self.weather_precision_file = data_dir / "weather_precision_daily.json"
 
     def _read_json_sync(self, file_path: Path) -> Dict[str, Any]:
         """Synchronous JSON file read (for executor) @zara"""
@@ -433,6 +440,7 @@ class MLDataLoaderV3:
 
             return {
                 "sun_elevation_deg": hour_data.get("elevation_deg", -30.0),
+                "sun_azimuth_deg": hour_data.get("azimuth_deg", 180.0),
                 "theoretical_max_kwh": hour_data.get("theoretical_max_pv_kwh", 0.0),
                 "clear_sky_radiation_wm2": hour_data.get("clear_sky_solar_radiation_wm2", 0.0)
             }

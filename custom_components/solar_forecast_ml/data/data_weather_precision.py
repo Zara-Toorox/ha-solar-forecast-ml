@@ -35,6 +35,7 @@ from ..const import (
     CONF_WIND_SENSOR,
 )
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from ..core.core_user_messages import user_msg
 from .data_io import DataManagerIO
 
 _LOGGER = logging.getLogger(__name__)
@@ -148,12 +149,12 @@ class WeatherPrecisionTracker(DataManagerIO):
 
             today_forecast = weather_cache.get("forecasts", {}).get(today, {})
             if not today_forecast:
-                _LOGGER.warning(f"No weather forecast found for {today} in weather cache")
+                _LOGGER.debug(f"No weather forecast found for {today} in weather cache - will be fetched")
                 return False
 
             hourly_forecast = today_forecast.get("hourly", [])
             if not hourly_forecast:
-                _LOGGER.warning(f"No hourly forecast data for {today}")
+                _LOGGER.debug(f"No hourly forecast data for {today} - will be fetched")
                 return False
 
             for hour_data in hourly_forecast:
@@ -276,7 +277,7 @@ class WeatherPrecisionTracker(DataManagerIO):
             precision_data = await self._load_precision_data()
 
             if date_str not in precision_data["daily_tracking"]:
-                _LOGGER.warning(f"No tracking data found for {date_str}")
+                _LOGGER.debug(f"No tracking data found for {date_str} - data collection ongoing")
                 return False
 
             day_data = precision_data["daily_tracking"][date_str]
@@ -460,17 +461,19 @@ class WeatherPrecisionTracker(DataManagerIO):
 
             raw_forecast_file = self.data_dir / "data" / "open_meteo_cache.json"
             if not raw_forecast_file.exists():
-                _LOGGER.warning("open_meteo_cache.json not found - skipping precision calculation")
+                _LOGGER.debug(user_msg('WEATHER_CACHE_NOT_FOUND'))
                 return False
 
             raw_forecast_data = await self._read_json_file(raw_forecast_file, None)
             if not raw_forecast_data:
-                _LOGGER.warning("Could not read Open-Meteo cache - skipping")
+                _LOGGER.debug("Open-Meteo cache empty - will be populated on next update")
                 return False
 
             raw_forecast_by_hour = raw_forecast_data.get("forecast", {}).get(date_str, {})
             if not raw_forecast_by_hour:
-                _LOGGER.warning(f"No RAW forecast data for {date_str} in Open-Meteo cache")
+                _LOGGER.debug(
+                    user_msg('WEATHER_NO_FORECAST_DATA', date=date_str)
+                )
                 return False
 
             _LOGGER.info(f"Loaded RAW Open-Meteo forecast for {len(raw_forecast_by_hour)} hours")
@@ -493,7 +496,7 @@ class WeatherPrecisionTracker(DataManagerIO):
                     hourly_comparisons.append(comparison)
 
             if not hourly_comparisons:
-                _LOGGER.warning("No valid hour comparisons found")
+                _LOGGER.debug("No valid hour comparisons found - data collection ongoing")
                 return False
 
             _LOGGER.info(f"Compared {len(hourly_comparisons)} hours successfully")

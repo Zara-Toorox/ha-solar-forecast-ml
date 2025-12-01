@@ -181,17 +181,41 @@ class PatternLearner:
 
         return base_factor, confidence
 
-    def get_cloud_impact(self, hour: int, cloud_cover: float) -> Tuple[float, float]:
-        """Get cloud impact efficiency for specific hour and cloud coverage @zara"""
+    def get_cloud_impact(
+        self,
+        hour: int,
+        cloud_cover: float,
+        cloud_cover_variability: float = None
+    ) -> Tuple[float, float]:
+        """Get cloud impact efficiency for specific hour and cloud coverage @zara
+
+        Args:
+            hour: Hour of day (0-23)
+            cloud_cover: Cloud cover percentage (0-100)
+            cloud_cover_variability: Optional std dev of cloud cover over the hour.
+                                     High variability indicates potential for sun breakthroughs.
+        """
         if not self.patterns:
-            return self._default_cloud_efficiency(cloud_cover), 0.3
+            base_efficiency = self._default_cloud_efficiency(cloud_cover)
+            # Apply breakthrough factor for variable conditions
+            if cloud_cover_variability is not None and cloud_cover_variability > 15:
+                breakthrough_factor = self._calculate_breakthrough_factor(
+                    cloud_cover, cloud_cover_variability
+                )
+                base_efficiency = min(1.0, base_efficiency * breakthrough_factor)
+            return base_efficiency, 0.3
 
         hour_patterns = self.patterns.get("cloud_impacts", {}).get("hour_patterns", {})
         hour_data = hour_patterns.get(str(hour))
 
         if not hour_data:
-
-            return self._default_cloud_efficiency(cloud_cover), 0.3
+            base_efficiency = self._default_cloud_efficiency(cloud_cover)
+            if cloud_cover_variability is not None and cloud_cover_variability > 15:
+                breakthrough_factor = self._calculate_breakthrough_factor(
+                    cloud_cover, cloud_cover_variability
+                )
+                base_efficiency = min(1.0, base_efficiency * breakthrough_factor)
+            return base_efficiency, 0.3
 
         if cloud_cover < 30:
             bucket = "0_30"
@@ -205,7 +229,54 @@ class PatternLearner:
             "confidence": 0.3
         })
 
-        return cloud_data.get("efficiency", 0.5), cloud_data.get("confidence", 0.3)
+        efficiency = cloud_data.get("efficiency", 0.5)
+        confidence = cloud_data.get("confidence", 0.3)
+
+        # Apply breakthrough factor for variable/mixed conditions
+        if cloud_cover_variability is not None and cloud_cover_variability > 15:
+            breakthrough_factor = self._calculate_breakthrough_factor(
+                cloud_cover, cloud_cover_variability
+            )
+            efficiency = min(1.0, efficiency * breakthrough_factor)
+            _LOGGER.debug(
+                f"Cloud breakthrough factor applied: hour={hour}, "
+                f"cloud_cover={cloud_cover:.0f}%, variability={cloud_cover_variability:.1f}, "
+                f"factor={breakthrough_factor:.2f}, final_efficiency={efficiency:.2f}"
+            )
+
+        return efficiency, confidence
+
+    def _calculate_breakthrough_factor(
+        self,
+        cloud_cover: float,
+        variability: float
+    ) -> float:
+        """Calculate breakthrough factor for variable cloud conditions.
+
+        When clouds are variable (high std dev), there's potential for sun
+        to break through, increasing efficiency above what static cloud cover suggests.
+
+        Args:
+            cloud_cover: Average cloud cover (0-100%)
+            variability: Standard deviation of cloud cover
+
+        Returns:
+            Multiplier for efficiency (1.0 = no change, >1.0 = breakthrough potential)
+        """
+        # Only apply for partially cloudy conditions (40-90%)
+        if cloud_cover < 40 or cloud_cover > 90:
+            return 1.0
+
+        # Higher variability = more breakthrough potential
+        # variability of 20 gives ~1.15x, 30 gives ~1.25x, 40 gives ~1.35x
+        variability_factor = 1.0 + (variability - 15) * 0.01
+
+        # Less breakthrough potential at very high cloud cover
+        cloud_damping = 1.0 - (max(0, cloud_cover - 70) / 60)  # 1.0 at 70%, 0.67 at 90%
+
+        breakthrough = 1.0 + (variability_factor - 1.0) * cloud_damping
+
+        return min(1.5, max(1.0, breakthrough))  # Clamp to [1.0, 1.5]
 
     def _default_cloud_efficiency(self, cloud_cover: float) -> float:
         """Default cloud efficiency curve (bootstrap values) @zara"""
@@ -221,6 +292,8 @@ class PatternLearner:
 
         if cloud_cover > 80:
             return "cloudy"
+        elif cloud_cover > 40:
+            return "mixed"  # Wechselhaft - lernt sowohl Geometrie als auch Cloud-Impacts
         else:
             return "sunny"
 
@@ -230,7 +303,9 @@ class PatternLearner:
         actual_production_kwh: float,
         hourly_actuals: Dict[int, float],
         hourly_conditions: Dict[int, Dict],
-        astronomy_data: Dict
+        astronomy_data: Dict,
+        peak_power_w: float = None,
+        system_capacity_kwp: float = None
     ):
         """
         Update patterns based on a completed day's data
@@ -241,6 +316,8 @@ class PatternLearner:
             hourly_actuals: Production by hour {hour: kwh}
             hourly_conditions: Weather conditions by hour {hour: {clouds, temp, etc}}
             astronomy_data: Astronomy data for the day
+            peak_power_w: Peak power in Watts (used for breakthrough detection)
+            system_capacity_kwp: System capacity in kWp (for breakthrough ratio calculation)
         """
         if not self.patterns:
             await self.load_patterns()
@@ -251,20 +328,39 @@ class PatternLearner:
             h.get("cloud_cover_percent", 100) for h in hourly_conditions.values()
         ) / max(len(hourly_conditions), 1)
 
-        is_clear_sky = avg_clouds < 30
+        strategy_mode = self.get_strategy_mode(avg_clouds)
 
-        if is_clear_sky:
-
+        if strategy_mode == "sunny":
+            # Klarer Tag - nur Geometrie lernen
             await self._update_geometry_factors(
                 target_date, hourly_actuals, astronomy_data
             )
             self.patterns["metadata"]["clear_sky_days_detected"] = (
                 self.patterns["metadata"].get("clear_sky_days_detected", 0) + 1
             )
-        else:
-
+        elif strategy_mode == "mixed":
+            # Wechselhafter Tag - BEIDE Faktoren lernen (wichtig für Cloud-Durchbrüche!)
+            await self._update_geometry_factors(
+                target_date, hourly_actuals, astronomy_data
+            )
             await self._update_cloud_impacts(
-                hourly_actuals, hourly_conditions, astronomy_data
+                hourly_actuals, hourly_conditions, astronomy_data,
+                peak_power_w=peak_power_w,
+                system_capacity_kwp=system_capacity_kwp
+            )
+            self.patterns["metadata"]["mixed_days_detected"] = (
+                self.patterns["metadata"].get("mixed_days_detected", 0) + 1
+            )
+            _LOGGER.info(
+                f"Mixed day learning: Updated both geometry and cloud impacts "
+                f"(avg clouds: {avg_clouds:.0f}%, peak_power: {peak_power_w or 'N/A'}W)"
+            )
+        else:
+            # Bewölkter Tag - nur Cloud-Impacts lernen
+            await self._update_cloud_impacts(
+                hourly_actuals, hourly_conditions, astronomy_data,
+                peak_power_w=peak_power_w,
+                system_capacity_kwp=system_capacity_kwp
             )
             self.patterns["metadata"]["cloudy_days_detected"] = (
                 self.patterns["metadata"].get("cloudy_days_detected", 0) + 1
@@ -372,10 +468,36 @@ class PatternLearner:
         self,
         hourly_actuals: Dict[int, float],
         hourly_conditions: Dict[int, Dict],
-        astronomy_data: Dict
+        astronomy_data: Dict,
+        peak_power_w: float = None,
+        system_capacity_kwp: float = None
     ):
-        """Update cloud impact patterns from cloudy day"""
+        """Update cloud impact patterns from cloudy/mixed day
+
+        Args:
+            hourly_actuals: Actual production by hour
+            hourly_conditions: Weather conditions by hour
+            astronomy_data: Astronomy data for the day
+            peak_power_w: Peak power in Watts (for breakthrough detection)
+            system_capacity_kwp: System capacity for normalization
+        """
         hourly_astro = astronomy_data.get("hourly", {})
+
+        # Calculate if there was a significant peak (breakthrough indicator)
+        has_breakthrough = False
+        if peak_power_w and system_capacity_kwp:
+            # If peak was > 50% of capacity despite clouds, there was breakthrough
+            peak_ratio = peak_power_w / (system_capacity_kwp * 1000)
+            avg_clouds = sum(
+                h.get("cloud_cover_percent", 100) for h in hourly_conditions.values()
+            ) / max(len(hourly_conditions), 1)
+
+            if peak_ratio > 0.5 and avg_clouds > 60:
+                has_breakthrough = True
+                _LOGGER.info(
+                    f"Cloud breakthrough detected: peak={peak_power_w:.0f}W "
+                    f"({peak_ratio*100:.0f}% of capacity) with {avg_clouds:.0f}% avg clouds"
+                )
 
         for hour, actual_kwh in hourly_actuals.items():
             if actual_kwh < 0.01:
@@ -411,15 +533,27 @@ class PatternLearner:
             current = self.patterns["cloud_impacts"]["hour_patterns"][hour_str][bucket]
             samples = current["samples"]
 
+            # Use higher learning rate when breakthrough is detected
+            # This helps the model learn that high clouds don't always mean low production
+            if has_breakthrough and bucket == "70_100" and efficiency > current["efficiency"]:
+                alpha = 0.25  # Learn faster from positive surprises
+            else:
+                alpha = 0.15
+
             if samples == 0:
                 new_efficiency = efficiency
             else:
-                alpha = 0.15
                 new_efficiency = alpha * efficiency + (1 - alpha) * current["efficiency"]
 
             current["efficiency"] = round(new_efficiency, 3)
             current["samples"] = samples + 1
             current["confidence"] = min(0.95, 0.3 + samples * 0.05)
+
+            if has_breakthrough and bucket == "70_100":
+                _LOGGER.debug(
+                    f"Breakthrough learning hour {hour}: cloud={cloud_cover:.0f}%, "
+                    f"efficiency {current['efficiency']:.2f} → {new_efficiency:.2f} (alpha={alpha})"
+                )
 
     async def _save_patterns(self):
         """Save patterns to file @zara"""

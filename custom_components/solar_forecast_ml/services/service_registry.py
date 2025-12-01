@@ -89,9 +89,8 @@ class ServiceRegistry:
         for service in services:
             self.hass.services.async_register(DOMAIN, service.name, service.handler)
             self._registered_services.append(service.name)
-            _LOGGER.debug(f"Registered service: {service.name}")
 
-        _LOGGER.info(f"Registered {len(services)} services successfully")
+        _LOGGER.debug(f"Registered {len(services)} services")
 
     def unregister_all_services(self) -> None:
         """Unregister all services @zara"""
@@ -99,9 +98,7 @@ class ServiceRegistry:
             if self.hass.services.has_service(DOMAIN, service_name):
                 self.hass.services.async_remove(DOMAIN, service_name)
 
-        count = len(self._registered_services)
         self._registered_services.clear()
-        _LOGGER.info(f"Unregistered {count} services")
 
     def _build_service_definitions(self) -> List[ServiceDefinition]:
         """Build all service definitions @zara"""
@@ -182,33 +179,23 @@ class ServiceRegistry:
 
     async def _handle_retrain_model(self, call: ServiceCall) -> None:
         """Handle force_retrain service @zara"""
-        _LOGGER.info("Service: force_retrain")
         try:
             if self.coordinator.ml_predictor:
                 success = await self.coordinator.ml_predictor.force_training()
-                if success:
-                    _LOGGER.info("ML model retrained successfully")
-                else:
+                if not success:
                     _LOGGER.error("ML model retraining failed")
-            else:
-                _LOGGER.warning("ML predictor not available")
         except Exception as e:
-            _LOGGER.error(f"Error in force_retrain: {e}", exc_info=True)
+            _LOGGER.error(f"Error in force_retrain: {e}")
 
     async def _handle_reset_model(self, call: ServiceCall) -> None:
         """Handle reset_model service @zara"""
-        _LOGGER.info("Service: reset_model")
         try:
             if self.coordinator.ml_predictor:
                 success = await self.coordinator.ml_predictor.reset_model()
-                if success:
-                    _LOGGER.info("ML model reset successfully")
-                else:
+                if not success:
                     _LOGGER.error("ML model reset failed")
-            else:
-                _LOGGER.warning("ML predictor not available")
         except Exception as e:
-            _LOGGER.error(f"Error in reset_model: {e}", exc_info=True)
+            _LOGGER.error(f"Error in reset_model: {e}")
 
     # =========================================================================
     # Emergency Services
@@ -216,15 +203,11 @@ class ServiceRegistry:
 
     async def _handle_run_all_day_end_tasks(self, call: ServiceCall) -> None:
         """Handle run_all_day_end_tasks service @zara"""
-        _LOGGER.info("Service: run_all_day_end_tasks (EMERGENCY)")
         try:
             if hasattr(self.coordinator, "scheduled_tasks"):
                 await self.coordinator.scheduled_tasks.end_of_day_workflow(None)
-                _LOGGER.info("All day-end tasks completed")
-            else:
-                _LOGGER.error("Scheduled tasks manager not available")
         except Exception as e:
-            _LOGGER.error(f"Error in run_all_day_end_tasks: {e}", exc_info=True)
+            _LOGGER.error(f"Error in run_all_day_end_tasks: {e}")
 
     # =========================================================================
     # Testing Services
@@ -232,15 +215,11 @@ class ServiceRegistry:
 
     async def _handle_test_morning_routine(self, call: ServiceCall) -> None:
         """Handle test_morning_routine service - 100% IDENTICAL to scheduled routine @zara"""
-        _LOGGER.info("Service: test_morning_routine (calls morning_routine_complete)")
         try:
             if hasattr(self.coordinator, "scheduled_tasks"):
                 await self.coordinator.scheduled_tasks.morning_routine_complete(None)
-                _LOGGER.info("Morning routine completed")
-            else:
-                _LOGGER.error("Scheduled tasks manager not available")
         except Exception as e:
-            _LOGGER.error(f"Error in test_morning_routine: {e}", exc_info=True)
+            _LOGGER.error(f"Error in test_morning_routine: {e}")
 
     # =========================================================================
     # Weather Services
@@ -248,57 +227,39 @@ class ServiceRegistry:
 
     async def _handle_run_weather_correction(self, call: ServiceCall) -> None:
         """Handle run_weather_correction service - Manually trigger corrected forecast generation @zara"""
-        _LOGGER.info("=" * 80)
-        _LOGGER.info("SERVICE: run_weather_correction - Manual Corrected Forecast Generation")
-        _LOGGER.info("=" * 80)
-
         try:
             if not hasattr(self.coordinator, 'weather_pipeline_manager'):
-                _LOGGER.error("Pipeline Manager not available - ABORTING")
                 return
 
             pipeline = self.coordinator.weather_pipeline_manager
-            _LOGGER.info("Triggering corrected forecast generation NOW...")
-
             success = await pipeline.create_corrected_forecast()
 
-            if success:
-                _LOGGER.info("CORRECTED FORECAST CREATED SUCCESSFULLY!")
-                _LOGGER.info("File: weather_forecast_corrected.json")
-            else:
-                _LOGGER.warning("CORRECTED FORECAST GENERATION FAILED!")
+            if not success:
+                _LOGGER.warning("Corrected forecast generation failed")
 
         except Exception as e:
-            _LOGGER.error(f"ERROR in run_weather_correction: {e}", exc_info=True)
+            _LOGGER.error(f"Error in run_weather_correction: {e}")
 
     async def _handle_refresh_open_meteo_cache(self, call: ServiceCall) -> None:
         """Handle refresh_open_meteo_cache service - Refresh Open-Meteo direct radiation cache @zara"""
-        _LOGGER.info("=" * 80)
-        _LOGGER.info("SERVICE: refresh_open_meteo_cache - Refresh Open-Meteo Direct Radiation")
-        _LOGGER.info("=" * 80)
-
         try:
             if not hasattr(self.coordinator, 'weather_pipeline_manager'):
-                _LOGGER.error("Pipeline Manager not available!")
                 return
 
             pipeline = self.coordinator.weather_pipeline_manager
 
             if not pipeline.weather_corrector:
-                _LOGGER.error("Weather Corrector not initialized!")
                 return
 
             corrector = pipeline.weather_corrector
 
             if not corrector._open_meteo_client:
-                _LOGGER.error("Open-Meteo client not available!")
                 return
 
-            _LOGGER.info("Fetching direct radiation forecast from Open-Meteo API...")
             forecast = await corrector._open_meteo_client.get_hourly_forecast(hours=72)
 
             if not forecast:
-                _LOGGER.warning("OPEN-METEO FETCH FAILED!")
+                _LOGGER.warning("Open-Meteo fetch failed")
                 return
 
             corrector._open_meteo_cache.clear()
@@ -320,11 +281,8 @@ class ServiceRegistry:
                         "wind_speed": entry.get("wind_speed"),
                     }
 
-            _LOGGER.info(f"OPEN-METEO CACHE REFRESHED SUCCESSFULLY!")
-            _LOGGER.info(f"Fetched: {len(forecast)} hours, {len(corrector._open_meteo_cache)} days")
-
         except Exception as e:
-            _LOGGER.error(f"ERROR in refresh_open_meteo_cache: {e}", exc_info=True)
+            _LOGGER.error(f"Error in refresh_open_meteo_cache: {e}")
 
     async def _handle_bootstrap_from_history(self, call: ServiceCall) -> None:
         """Handle bootstrap_from_history service - Bootstrap pattern learning from HA history @zara"""
@@ -333,23 +291,12 @@ class ServiceRegistry:
         from homeassistant.components.recorder.history import state_changes_during_period
         from collections import defaultdict
 
-        _LOGGER.info("=" * 80)
-        _LOGGER.info("SERVICE: bootstrap_from_history - Bootstrap from HA History")
-        _LOGGER.info("=" * 80)
-
         days = call.data.get('days', 30)
-        cumulative_yield_sensor = call.data.get('cumulative_yield_sensor')  # Optional cumulative sensor
-        _LOGGER.info(f"Requested days: {days}")
-        if cumulative_yield_sensor:
-            _LOGGER.info(f"Using cumulative yield sensor: {cumulative_yield_sensor}")
+        cumulative_yield_sensor = call.data.get('cumulative_yield_sensor')
 
         tz = dt_util.get_default_time_zone()
 
         try:
-            # Step 1: Validate sensor configuration
-            _LOGGER.info("STEP 1/8: Validating sensor configuration...")
-
-            # Only power and yield are REQUIRED, others are optional
             required_sensors = {
                 'power': 'power_entity',
                 'yield': 'solar_yield_today',
@@ -371,45 +318,27 @@ class ServiceRegistry:
             missing_required = []
             configured_sensors = {}
 
-            # Check required sensors
             for sensor_name, config_key in required_sensors.items():
                 entity_id = config_data.get(config_key) or config_options.get(config_key)
                 if not entity_id:
                     missing_required.append(sensor_name)
-                    _LOGGER.error(f"  ✗ {sensor_name}: NOT CONFIGURED (required)")
                 else:
                     configured_sensors[sensor_name] = entity_id
-                    _LOGGER.info(f"  ✓ {sensor_name}: {entity_id}")
 
-            # Check optional sensors (don't fail if missing)
             for sensor_name, config_key in optional_sensors.items():
                 entity_id = config_data.get(config_key) or config_options.get(config_key)
                 if entity_id:
                     configured_sensors[sensor_name] = entity_id
-                    _LOGGER.info(f"  ✓ {sensor_name}: {entity_id} (optional)")
-                else:
-                    _LOGGER.info(f"  - {sensor_name}: not configured (optional)")
 
-            # Add cumulative sensor if provided via service call
             if cumulative_yield_sensor:
                 configured_sensors['cumulative_yield'] = cumulative_yield_sensor
-                _LOGGER.info(f"  ✓ cumulative_yield: {cumulative_yield_sensor} (service parameter)")
 
             if missing_required:
-                _LOGGER.error("BOOTSTRAP FAILED - Missing required sensors!")
-                _LOGGER.error(f"Missing: {', '.join(missing_required)}")
+                _LOGGER.error(f"Bootstrap failed - Missing: {', '.join(missing_required)}")
                 return
-
-            _LOGGER.info(f"Sensors configured: {len(configured_sensors)} ({len(required_sensors)} required, {len(configured_sensors) - len(required_sensors)} optional)")
-
-            # Step 2: Fetch history
-            _LOGGER.info(f"STEP 2/8: Fetching history from Recorder ({days} days)...")
 
             now = datetime.now(timezone.utc)
             start_time = now - timedelta(days=days)
-
-            entity_ids = list(configured_sensors.values())
-            _LOGGER.info(f"Fetching history for {len(entity_ids)} sensors...")
 
             history_data = {}
             for sensor_name, entity_id in configured_sensors.items():
@@ -428,13 +357,8 @@ class ServiceRegistry:
                     history_data[entity_id] = sensor_history[entity_id]
 
             if not history_data:
-                _LOGGER.warning("No history data found!")
+                _LOGGER.warning("No history data found")
                 return
-
-            _LOGGER.info(f"Found history data: {len(history_data)} sensors")
-
-            # Step 3: Aggregate hourly data
-            _LOGGER.info("STEP 3/8: Aggregating hourly data...")
 
             entity_to_sensor = {v: k for k, v in configured_sensors.items()}
             hourly_data = defaultdict(lambda: defaultdict(list))
@@ -480,20 +404,13 @@ class ServiceRegistry:
                     if avg_data:
                         aggregated[key] = {"date": date_str, "hour": hour, **avg_data}
 
-            _LOGGER.info(f"Aggregated {len(aggregated)} hourly records from daily sensors")
-
-            # ---------------------------------------------------------------
-            # Process CUMULATIVE yield sensor if provided (never resets)
-            # ---------------------------------------------------------------
             if cumulative_yield_sensor and 'cumulative_yield' in configured_sensors:
                 cumulative_entity = configured_sensors['cumulative_yield']
                 if cumulative_entity in history_data:
-                    _LOGGER.info("  Processing cumulative yield sensor (total kWh)...")
                     cumulative_states = history_data[cumulative_entity]
                     sorted_cumulative = sorted(cumulative_states, key=lambda s: s.last_changed)
 
-                    # Build hourly max values across ALL time
-                    hourly_cumulative = {}  # key = (date_str, hour) -> max cumulative value
+                    hourly_cumulative = {}
 
                     for state in sorted_cumulative:
                         if state.state in ("unavailable", "unknown", "none", None):
@@ -512,9 +429,7 @@ class ServiceRegistry:
                         except (ValueError, TypeError):
                             continue
 
-                    # Sort by time and calculate deltas
                     sorted_keys = sorted(hourly_cumulative.keys())
-                    _LOGGER.info(f"  → Found {len(sorted_keys)} hourly cumulative readings")
 
                     prev_value = None
                     cumulative_hours_added = 0
@@ -525,25 +440,16 @@ class ServiceRegistry:
 
                         if prev_value is not None:
                             delta = current_value - prev_value
-                            # Valid production: positive, not too large
                             if 0.001 < delta < 5.0:
                                 agg_key = f"{date_str}_{hour:02d}"
                                 if agg_key not in aggregated:
                                     aggregated[agg_key] = {"date": date_str, "hour": hour}
-                                # Only add if we don't already have yield or cumulative gives larger value
                                 existing = aggregated[agg_key].get("yield", 0)
                                 if delta > existing:
                                     aggregated[agg_key]["yield"] = delta
                                     cumulative_hours_added += 1
 
                         prev_value = current_value
-
-                    _LOGGER.info(f"  → Cumulative sensor added/updated {cumulative_hours_added} hourly records")
-
-            _LOGGER.info(f"TOTAL: {len(aggregated)} aggregated hourly records")
-
-            # Step 4: Build astronomy cache
-            _LOGGER.info("STEP 4/8: Building astronomy cache for historical dates...")
 
             dates_in_data = set(hour_data["date"] for hour_data in aggregated.values())
             astronomy_cache = {}

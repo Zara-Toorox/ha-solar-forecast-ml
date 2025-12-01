@@ -44,6 +44,7 @@ OPEN_METEO_STALE_CACHE_MAX_AGE = 86400
 
 OPEN_METEO_MAX_API_CALLS_PER_HOUR = 5
 OPEN_METEO_RATE_LIMIT_WINDOW = 3600
+OPEN_METEO_HISTORY_RETENTION_DAYS = 7
 
 DEFAULT_WEATHER = {
     "temperature": 15.0,
@@ -150,7 +151,19 @@ class OpenMeteoClient:
             return False
 
         try:
-            forecast_by_date: Dict[str, Dict[str, Dict[str, Any]]] = {}
+            # Load existing cache to preserve historical data
+            existing_forecast: Dict[str, Dict[str, Dict[str, Any]]] = {}
+            if self._cache_file.exists():
+                try:
+                    async with aiofiles.open(self._cache_file, 'r') as f:
+                        content = await f.read()
+                        existing_data = json.loads(content)
+                        existing_forecast = existing_data.get("forecast", {})
+                        _LOGGER.debug(f"Loaded {len(existing_forecast)} existing days from cache")
+                except Exception as e:
+                    _LOGGER.debug(f"Could not load existing cache: {e}")
+
+            forecast_by_date: Dict[str, Dict[str, Dict[str, Any]]] = existing_forecast.copy()
 
             for entry in hourly_data:
                 date_str = entry.get("date")
@@ -177,6 +190,16 @@ class OpenMeteoClient:
                     "ghi": ghi,  # DIRECT VALUE used as solar_radiation_wm2
                     "global_tilted_irradiance": entry.get("global_tilted_irradiance"),
                 }
+
+            # Remove data older than retention period
+            cutoff_date = (datetime.now() - timedelta(days=OPEN_METEO_HISTORY_RETENTION_DAYS)).strftime("%Y-%m-%d")
+            dates_to_remove = [d for d in forecast_by_date.keys() if d < cutoff_date]
+            for old_date in dates_to_remove:
+                del forecast_by_date[old_date]
+                _LOGGER.debug(f"Removed old forecast data for {old_date}")
+
+            if dates_to_remove:
+                _LOGGER.info(f"Cleaned up {len(dates_to_remove)} old days from Open-Meteo cache")
 
             cache_data = {
                 "version": "2.0",

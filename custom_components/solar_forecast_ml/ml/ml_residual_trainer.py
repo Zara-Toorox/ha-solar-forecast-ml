@@ -26,6 +26,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..core.core_user_messages import user_msg
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -267,8 +269,8 @@ class ResidualTrainer:
                 if actual_kwh is None or actual_kwh < 0:
                     continue
 
-                # Get weather data
-                weather = record.get("corrected_weather", record.get("weather", {}))
+                # Get weather data - support multiple key names from different sources
+                weather = record.get("weather_corrected", record.get("corrected_weather", record.get("weather", {})))
                 ghi = weather.get("ghi", weather.get("solar_radiation_wm2", 0)) or 0
                 dni = weather.get("direct_radiation", 0) or 0
                 dhi = weather.get("diffuse_radiation", 0) or 0
@@ -276,8 +278,9 @@ class ResidualTrainer:
 
                 # Get astronomy data
                 astro = record.get("astronomy", {})
-                elevation = astro.get("elevation_deg", 0) or 0
-                azimuth = astro.get("azimuth_deg", 180) or 180
+                # Support both naming conventions (sun_elevation_deg from predictions, elevation_deg from cache)
+                elevation = astro.get("sun_elevation_deg", astro.get("elevation_deg", 0)) or 0
+                azimuth = astro.get("sun_azimuth_deg", astro.get("azimuth_deg", 180)) or 180
 
                 # Skip if no meaningful irradiance
                 if ghi <= 0 and dni <= 0:
@@ -366,9 +369,8 @@ class ResidualTrainer:
             residual_data = self.compute_residuals(training_records)
 
             if len(residual_data) < 10:
-                _LOGGER.warning(
-                    "Not enough residual samples for training: %d < 10",
-                    len(residual_data),
+                _LOGGER.info(
+                    user_msg('ML_NOT_ENOUGH_RESIDUALS', count=len(residual_data))
                 )
                 return False, 0.0, "none"
 
@@ -399,7 +401,9 @@ class ResidualTrainer:
                     y_train.append(residual)
 
             if len(X_train) < 10:
-                _LOGGER.warning("Not enough valid feature vectors: %d", len(X_train))
+                _LOGGER.info(
+                    user_msg('ML_NOT_ENOUGH_RESIDUALS', count=len(X_train))
+                )
                 return False, 0.0, "none"
 
             # Train the model
@@ -464,8 +468,8 @@ class ResidualTrainer:
             Feature vector or None if invalid
         """
         try:
-            # Extract data
-            weather = record.get("corrected_weather", record.get("weather", {}))
+            # Extract data - consistent key order: weather_corrected (MLDataLoaderV3) -> corrected_weather -> weather
+            weather = record.get("weather_corrected", record.get("corrected_weather", record.get("weather", {})))
             astro = record.get("astronomy", {})
 
             # Parse datetime
@@ -505,11 +509,11 @@ class ResidualTrainer:
             # Feature 9: Humidity (normalized)
             humidity = (weather.get("humidity", 50) or 50) / 100.0
 
-            # Feature 10: Sun elevation (normalized)
-            elevation = (astro.get("elevation_deg", 0) or 0) / 90.0
+            # Feature 10: Sun elevation (normalized) - support both naming conventions
+            elevation = (astro.get("sun_elevation_deg", astro.get("elevation_deg", 0)) or 0) / 90.0
 
-            # Feature 11: Sun azimuth relative to South (normalized)
-            azimuth = astro.get("azimuth_deg", 180) or 180
+            # Feature 11: Sun azimuth relative to South (normalized) - support both naming conventions
+            azimuth = astro.get("sun_azimuth_deg", astro.get("azimuth_deg", 180)) or 180
             azimuth_dev = (azimuth - 180) / 180.0  # 0 at South, +/- at East/West
 
             # Feature 12: GHI/theoretical ratio (captures cloud/obstruction effects)

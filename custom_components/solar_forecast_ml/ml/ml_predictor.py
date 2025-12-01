@@ -75,15 +75,9 @@ def _ensure_numpy():
     if _np is None:
         try:
             import numpy as np
-
             _np = np
-            _LOGGER.info("NumPy library loaded successfully.")
         except ImportError as e:
-            _LOGGER.error(
-                "NumPy library is required but could not be imported. "
-                "Please ensure it is installed. Error: %s",
-                e,
-            )
+            _LOGGER.error("NumPy library required but not installed: %s", e)
             raise
     return _np
 
@@ -209,7 +203,7 @@ class MLPredictor:
 
         self._training_lock = asyncio.Lock()
 
-        _LOGGER.info("MLPredictor initialized.")
+        _LOGGER.debug("MLPredictor initialized")
 
     @property
     def can_predict(self) -> bool:
@@ -224,7 +218,7 @@ class MLPredictor:
 
     async def initialize(self) -> bool:
         """Initializes the ML Predictor by loading existing model data @zara"""
-        _LOGGER.info("Initializing ML Predictor...")
+        _LOGGER.debug("Initializing ML Predictor")
         init_success = False
         try:
             _ensure_numpy()
@@ -451,7 +445,7 @@ class MLPredictor:
             samples_count = await self._check_training_data_availability()
             _LOGGER.info(f"Current hourly samples available: {samples_count}")
 
-            _LOGGER.info("ML Predictor initialized successfully.")
+            _LOGGER.debug("ML Predictor ready")
             init_success = True
 
         except ImportError:

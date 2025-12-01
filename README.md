@@ -25,7 +25,7 @@ The integration adapts to your specific roof orientation, local weather conditio
 
 ---
 
-## New in Version 10.0.0 "Lyra" AI
+## New in Version 10.0.1 "Lyra" AI
 
 ### Physics-First Architecture
 The biggest update ever - a complete architectural redesign:
@@ -35,13 +35,15 @@ The biggest update ever - a complete architectural redesign:
 - **AI Neural Network** - Pure NumPy LSTM AI that captures temporal patterns
 - **Residual Learning** - ML learns the difference between physics and reality
 - **Weighted Ensemble** - Confidence-based blending of physics + ML predictions
+- **Captain`s LOG** - 1 Day of every months you will get a report of youe system (tilt / azimut/season-tracking,...)
+
 
 ### Intelligent Detection Systems
 - **Correlation-based Shadow Detection** - Distinguishes clouds from real obstructions
 - **Physics-based Frost Detection** - Uses Magnus formula (dew point) for accurate frost warnings
 - **Cloud Layer Physics** - Separate transmission models for low/mid/high clouds
 
-### Bootstrap Services
+### Bootstrap Services (Developers only or on advice)
 - **Bootstrap from History** - Train models instantly using up to 6 months of HA history
 - **No Cold Start** - Full accuracy from day 1 using historical data
 
@@ -108,7 +110,7 @@ The biggest update ever - a complete architectural redesign:
 
 ---
 
-## Services
+## Services (Dev-only!!)
 
 ### ML Services
 | Service | Description |
@@ -148,11 +150,13 @@ The biggest update ever - a complete architectural redesign:
 5. Select category: "Integration"
 6. Install "Solar Forecast ML"
 7. Restart Home Assistant
+8. After Setup pls wait 10-15 min and perform a 2nd Restart (needed to fill the caches)
 
 ### Manual Installation
 1. Download the latest release
 2. Copy `custom_components/solar_forecast_ml` to your `config/custom_components/`
 3. Restart Home Assistant
+4. After Setup pls wait 10-15 min and perform a 2nd Restart (needed to fill the caches)
 
 ### Configuration
 1. Go to Settings → Devices & Services
@@ -168,7 +172,7 @@ The biggest update ever - a complete architectural redesign:
 
 ## Quick Start After Installation
 
-For immediate full accuracy, run the bootstrap service:
+For immediate full accuracy, run the bootstrap service (Developers only or on advice):
 
 ```yaml
 service: solar_forecast_ml.bootstrap_physics_from_history
@@ -258,7 +262,7 @@ final = w_physics × physics_pred + w_ml × ml_residual
 
 ## Battery Management (Optional - BETA)
 
-Version 10.0.0 includes comprehensive battery support:
+Version 10.0.1 includes comprehensive battery support:
 
 - **Energy Flow Tracking** - Solar to battery, battery to house, grid interactions
 - **SOC Monitoring** - State of charge with historical trends
@@ -280,8 +284,9 @@ Supported integrations: Anker Solix, Huawei Solar, Fronius
 ### Common Issues
 
 **Predictions too low?**
-- Run `bootstrap_physics_from_history` to calibrate geometry
-- Check if `solar_capacity` is set correctly
+- Check if you have used the correct parameters (KWP = the summery of all your installed panels)
+- Check if `yield-sensor` is set correctly (kWh of your panels! musst reset at midnight)
+- Check if `power-sensor` is set correctly (W of your panels!)
 
 **ML not training?**
 - Need 10+ samples for Ridge, 100+ for TinyLSTM

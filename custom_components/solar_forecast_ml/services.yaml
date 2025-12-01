@@ -1,6 +1,26 @@
 # ============================================================================
 # Solar Forecast ML Integration - Service Definitions
 # ============================================================================
+#
+# ⚠️⚠️⚠️ WICHTIGE WARNUNG / IMPORTANT WARNING ⚠️⚠️⚠️
+#
+# Diese Services sind NUR für erfahrene Benutzer und Entwickler gedacht!
+# These services are intended for EXPERIENCED USERS and DEVELOPERS ONLY!
+#
+# ❌ RISIKEN / RISKS:
+#    - Datenverlust (ML-Modelle, Trainingsdaten, Konfigurationen)
+#    - Systeminstabilität durch fehlerhafte Konfiguration
+#    - Beschädigung der Integration, die Neuinstallation erfordert
+#    - Unerwartete Änderungen an Home Assistant Einstellungen
+#
+# ✅ EMPFEHLUNG / RECOMMENDATION:
+#    - NUR ausführen wenn vom Support/Entwickler angewiesen
+#    - IMMER vorher Backup erstellen (HA Snapshot)
+#    - Bei Unsicherheit: NICHT ausführen!
+#
+# 🔧 SUPPORT: github.com/your-repo/solar_forecast_ml/issues
+#
+# ============================================================================
 # Service categories:
 # - ML Services: Model training and management
 # - Emergency Services: Manual day-end task execution
@@ -12,11 +32,18 @@
 
 # ============================================================================
 # ML SERVICES - Machine Learning Model Management
+# ⚠️ DEVELOPER ONLY - Diese Services können das ML-System beschädigen!
 # ============================================================================
 
 force_retrain:
   name: "🚀 Retrain ML Model (V10.0.0 TinyML)"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Unsachgemäße Nutzung kann zu Datenverlust und Systeminstabilität führen.║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     🚀 V10.0.0 ADAPTIVE TRAINING - Ridge Regression + TinyLSTM Neural Network
 
     Forces immediate retraining of the Machine Learning model with adaptive algorithm selection.
@@ -59,6 +86,12 @@ force_retrain:
 reset_model:
   name: "⚠️ Reset ML Model"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ ALLE gelernten Daten werden UNWIDERRUFLICH gelöscht!                    ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     ⚠️ DESTRUCTIVE ACTION - Deletes all learned model weights!
 
     Resets the Machine Learning model to its initial untrained state.
@@ -89,12 +122,19 @@ reset_model:
 
 # ============================================================================
 # EMERGENCY SERVICES - Manual Day-End Task Execution
+# ⚠️ DEVELOPER ONLY - Nur bei Systemfehlern und auf Anweisung verwenden!
 # ============================================================================
 # Use these services if automated day-end tasks fail or need manual triggering
 
 run_all_day_end_tasks:
   name: "🌙 Run All Day-End Tasks"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Mehrfache Ausführung kann zu Datenkorruption führen!                    ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     🌙 EMERGENCY SERVICE - Manual execution of complete 23:30 day-end workflow!
 
     Executes the COMPLETE 8-step sequence that runs automatically at 23:30 daily.
@@ -139,6 +179,7 @@ run_all_day_end_tasks:
 
 # ============================================================================
 # TESTING SERVICES - Essential Testing and Simulation
+# ⚠️ DEVELOPER ONLY - Nur für Debugging und auf Anweisung verwenden!
 # ============================================================================
 # These services replicate EXACTLY what happens at specific times.
 # ⚠️ WARNING: Create backup before use - these modify forecast data!
@@ -147,6 +188,12 @@ run_all_day_end_tasks:
 test_morning_routine:
   name: "🧪 TEST: Analyze 6 AM Morning Predictions (Real Data)"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Dieser Service ist nur für Debugging-Zwecke gedacht.                    ║
+    ║ Keine Änderungen am System (read-only).                                 ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     ⚠️ ANALYSIS SERVICE - No backup needed (read-only!)
 
     Analyzes the ACTUAL data that was used at 6:00 AM today.
@@ -177,6 +224,7 @@ test_morning_routine:
 
 # ============================================================================
 # ASTRONOMY SERVICES - Independent Solar Calculations
+# ⚠️ DEVELOPER ONLY - Kann berechnete Astronomie-Daten überschreiben!
 # ============================================================================
 # These services manage the astronomy cache which provides sun positions,
 # solar radiation, and production windows independent of sun.sun entity.
@@ -185,6 +233,12 @@ test_morning_routine:
 build_astronomy_cache:
   name: "🌞 Build Astronomy Cache"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Überschreibt existierende Astronomie-Daten!                             ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     🌞 ASTRONOMY SERVICE - Build comprehensive solar position and radiation cache!
 
     Creates physics-based astronomical data cache for ML feature engineering and production validation.
@@ -249,6 +303,11 @@ build_astronomy_cache:
 refresh_cache_today:
   name: "🔄 Refresh Cache for Today"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     Refresh astronomy cache for today + next 7 days.
 
     This service updates the astronomy cache with fresh calculations
@@ -285,11 +344,18 @@ refresh_cache_today:
 
 # ============================================================================
 # WEATHER SERVICES - Weather Data Management
+# ⚠️ DEVELOPER ONLY - Kann Wetterdaten und Caches überschreiben!
 # ============================================================================
 
 run_weather_correction:
   name: "🔄 Rebuild Corrected Weather Forecast"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Überschreibt existierende Wettervorhersage-Korrekturen!                 ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     ⚠️ MANUAL TRIGGER - Rebuilds weather_forecast_corrected.json immediately!
 
     This service manually triggers the corrected weather forecast generation
@@ -318,6 +384,11 @@ run_weather_correction:
 refresh_open_meteo_cache:
   name: "Refresh Open-Meteo Direct Radiation Cache"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     Manually refresh Open-Meteo direct radiation data!
 
     This service fetches fresh radiation forecasts from Open-Meteo API
@@ -357,6 +428,13 @@ refresh_open_meteo_cache:
 bootstrap_physics_from_history:
   name: "🔬 Bootstrap Physics-First Models from History"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Kann existierende Modelle und gelernte Muster ÜBERSCHREIBEN!            ║
+    ║ Erstellen Sie VORHER ein Home Assistant Backup!                         ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     🔬 PHYSICS-FIRST BOOTSTRAP - Train GeometryLearner and ResidualTrainer from HA History!
 
     This service trains the Physics-First Architecture components using historical
@@ -439,6 +517,13 @@ bootstrap_physics_from_history:
 bootstrap_from_history:
   name: "🚀 Bootstrap Pattern Learning from History"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Kann existierende gelernte Muster ÜBERSCHREIBEN!                        ║
+    ║ Erstellen Sie VORHER ein Home Assistant Backup!                         ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     🚀 ADVANCED - Bootstrap pattern learning from Home Assistant history!
 
     ⚠️ REQUIREMENTS:
@@ -503,6 +588,11 @@ bootstrap_from_history:
 send_daily_briefing:
   name: Send Daily Solar Briefing
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ℹ️ SICHER / SAFE - Kann von Benutzern verwendet werden                   ║
+    ║ Dieser Service sendet nur Benachrichtigungen und ändert keine Daten.    ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     ☀️ Send a daily solar weather briefing notification with today's forecast.
 
     This service generates and sends a formatted notification with:
@@ -571,11 +661,18 @@ send_daily_briefing:
 
 # ============================================================================
 # BATTERY MANAGEMENT - Auto-Discovery Services
+# ⚠️ DEVELOPER ONLY - Kann Konfiguration automatisch ändern!
 # ============================================================================
 
 discover_battery_sensors:
   name: "Batterie-Sensoren automatisch erkennen"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Mit auto_apply=true wird die Konfiguration automatisch geändert!        ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     🔋 Erkennt automatisch kompatible Batterie-Sensoren von unterstützten Integrationen.
 
     Unterstützte Integrationen:
@@ -613,6 +710,13 @@ discover_battery_sensors:
 auto_configure_battery:
   name: "🚀 Batterie-Sensoren automatisch konfigurieren (1-Klick)"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ ÄNDERT AUTOMATISCH Ihre Home Assistant Konfiguration!                   ║
+    ║ Die Integration wird automatisch neu geladen!                           ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     🎯 ONE-CLICK LÖSUNG - Erkennt UND konfiguriert Batterie-Sensoren vollautomatisch!
 
     Was dieser Service macht:
@@ -651,6 +755,12 @@ auto_configure_battery:
 validate_battery_sensors:
   name: "Batterie-Sensoren validieren"
   description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Keine Änderungen am System (read-only).                                 ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
     ✅ Validiert die Konfiguration der Batterie-Sensoren.
 
     Prüft ob:

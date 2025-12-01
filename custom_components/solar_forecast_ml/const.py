@@ -22,11 +22,11 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "10.0.0"
-RELEASE_VERSION = "10.0.0"
+VERSION = "10.0.1"
+RELEASE_VERSION = "10.0.1"
 RELEASE_NAME = "Lyra"
-SOFTWARE_VERSION = "10.0.0"
-INTEGRATION_MODEL = "V10.0.0"
+SOFTWARE_VERSION = "10.0.1"
+INTEGRATION_MODEL = "V10.0.1"
 ML_VERSION = "10.0.0"
 
 PLATFORMS = [Platform.SENSOR]

@@ -20,6 +20,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
 import time
@@ -152,6 +153,12 @@ class DataManagerIO:
             suffix = f".tmp_{random.randint(100000, 999999)}"
             temp_file = file_path.parent / f"{file_path.stem}{suffix}"
         try:
+            # Ensure directory exists right before writing (race condition protection)
+            parent_dir = file_path.parent
+            if not await self.hass.async_add_executor_job(parent_dir.exists):
+                await self.hass.async_add_executor_job(
+                    lambda: parent_dir.mkdir(parents=True, exist_ok=True)
+                )
 
             async with aiofiles.open(temp_file, "w", encoding="utf-8") as f:
 
@@ -160,6 +167,12 @@ class DataManagerIO:
                 )
                 await f.write(json_data)
                 await f.flush()
+                # Ensure data is written to disk before move (fsync)
+                await self.hass.async_add_executor_job(os.fsync, f.fileno())
+
+            # Verify temp file exists before moving
+            if not await self.hass.async_add_executor_job(temp_file.exists):
+                raise FileNotFoundError(f"Temp file disappeared before move: {temp_file}")
 
             await self.hass.async_add_executor_job(shutil.move, str(temp_file), str(file_path))
 

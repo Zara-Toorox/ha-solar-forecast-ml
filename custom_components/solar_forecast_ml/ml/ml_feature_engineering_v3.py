@@ -231,7 +231,8 @@ class FeatureEngineerV3:
                 return False
 
         weather = record.get("weather_corrected", {})
-        required_weather = ["temperature", "lux", "wind", "humidity", "rain", "clouds"]
+        # Match actual feature extraction: solar_radiation_wm2 is used, not lux
+        required_weather = ["temperature", "solar_radiation_wm2", "wind", "humidity", "rain", "clouds"]
 
         for field in required_weather:
             if field not in weather:

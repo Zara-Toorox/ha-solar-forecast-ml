@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 from homeassistant.util import dt as dt_util
 
 from ..core.core_helpers import SafeDateTimeUtil as dt_util_safe
+from ..core.core_user_messages import user_msg
 from ..forecast.forecast_strategy_base import ForecastResult, ForecastStrategy
 from ..forecast.forecast_weather_calculator import WeatherCalculator
 
@@ -66,13 +67,11 @@ class RuleBasedForecastStrategy(ForecastStrategy):
             try:
                 base_capacity_kwp = float(sensor_data.get("solar_capacity", self.solar_capacity))
                 if base_capacity_kwp <= 0:
-                    _LOGGER.warning(
-                        f"Solar capacity ({base_capacity_kwp}kWp) is zero or negative. Using fallback 1.0 kWp."
-                    )
+                    _LOGGER.info(user_msg('CONFIG_SOLAR_CAPACITY_ZERO'))
                     base_capacity_kwp = 1.0
             except (ValueError, TypeError):
-                _LOGGER.warning(
-                    f"Invalid solar_capacity in sensor_data, using default {self.solar_capacity} kWp."
+                _LOGGER.debug(
+                    f"Using default solar capacity: {self.solar_capacity} kWp"
                 )
                 base_capacity_kwp = self.solar_capacity
 
@@ -87,13 +86,13 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 try:
                     hour_dt_local = hour_data.get("local_datetime")
                     if not hour_dt_local:
-                        _LOGGER.warning("Skipping hour, missing 'local_datetime'")
+                        _LOGGER.debug("Skipping hour - missing datetime")
                         continue
 
                     if isinstance(hour_dt_local, str):
                         hour_dt_local = dt_util_safe.parse_datetime(hour_dt_local)
                         if not hour_dt_local:
-                            _LOGGER.warning("Skipping hour, invalid 'local_datetime' format")
+                            _LOGGER.debug("Skipping hour - invalid datetime format")
                             continue
 
                     hour_date = hour_dt_local.date()
@@ -123,8 +122,8 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                         total_tomorrow_kwh += hourly_kwh
 
                 except Exception as e_inner:
-                    _LOGGER.warning(
-                        f"Failed to process hour {hour_data.get('local_hour')}: {e_inner}"
+                    _LOGGER.debug(
+                        f"Hour processing skipped: {hour_data.get('local_hour')} - {e_inner}"
                     )
                     continue
 
@@ -205,7 +204,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 exc_info=True,
             )
 
-            _LOGGER.warning("Using emergency fallback for Rule-based forecast.")
+            _LOGGER.info(user_msg('WEATHER_FALLBACK_ACTIVE'))
             fallback_capacity = self.solar_capacity if self.solar_capacity > 0 else 2.0
             emergency_yield = fallback_capacity * 1.5
 

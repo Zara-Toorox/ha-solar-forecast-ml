@@ -66,9 +66,7 @@ class WeatherActualTracker:
             }
 
             self.weather_entity_id = config.get(CONF_WEATHER_ENTITY)
-            _LOGGER.info("Weather Actual Tracker initialized with config_entry sensors")
         else:
-
             self.sensor_mapping = {
                 "temperature_c": "sensor.outdoor_temperature",
                 "humidity_percent": "sensor.outdoor_humidity",
@@ -77,10 +75,8 @@ class WeatherActualTracker:
                 "pressure_hpa": "sensor.barometric_pressure",
                 "solar_radiation_wm2": "sensor.solar_radiation",
                 "condition": "weather.home",
-
             }
             self.weather_entity_id = "weather.home"
-            _LOGGER.warning("Weather Actual Tracker initialized WITHOUT config_entry - using hardcoded defaults!")
 
     async def track_current_weather(self) -> Dict[str, Any]:
         """Track current weather conditions from local sensors @zara"""
@@ -88,12 +84,9 @@ class WeatherActualTracker:
         date_str = now.strftime("%Y-%m-%d")
         hour = now.hour
 
-        _LOGGER.info(f"Tracking actual weather for {date_str} hour {hour}")
-
         weather_data = await self._read_sensors()
 
         if not weather_data:
-            _LOGGER.warning("No local weather sensors available - skipping tracking")
             return {}
 
         weather_data["timestamp"] = now.isoformat()
@@ -106,7 +99,6 @@ class WeatherActualTracker:
         )
         if cloud_cover is not None:
             weather_data["cloud_cover_percent"] = cloud_cover
-            _LOGGER.debug(f"Calculated cloud_cover_percent: {cloud_cover}% from W/m² sensor")
 
         frost_result = await self._detect_frost(weather_data, date_str, hour)
         if frost_result:
@@ -117,38 +109,12 @@ class WeatherActualTracker:
             if "frost_analysis" in frost_result:
                 weather_data["frost_analysis"] = frost_result["frost_analysis"]
 
-            if frost_result.get("frost_detected"):
-
-                frost_analysis = frost_result.get("frost_analysis", {})
-                dewpoint = frost_analysis.get("dewpoint_c")
-                frost_prob = frost_analysis.get("frost_probability", 0)
-                corr_diff = frost_analysis.get("correlation_diff_percent")
-
-                if dewpoint is not None:
-                    _LOGGER.warning(
-                        f"⚠️ FROST DETECTED (hour {hour}): {frost_result.get('reason')} "
-                        f"[dewpoint={dewpoint}°C, prob={frost_prob:.0%}, corr_diff={corr_diff}%]"
-                    )
-                else:
-                    _LOGGER.warning(
-                        f"⚠️ FROST DETECTED (hour {hour}): {frost_result.get('reason')}"
-                    )
-
         astronomy_fields = await self._get_astronomy_time_fields(date_str, hour)
         if astronomy_fields:
             weather_data["hours_after_sunrise"] = astronomy_fields.get("hours_after_sunrise")
             weather_data["hours_before_sunset"] = astronomy_fields.get("hours_before_sunset")
-            _LOGGER.debug(
-                f"Added astronomy fields: hours_after_sunrise={astronomy_fields.get('hours_after_sunrise')}, "
-                f"hours_before_sunset={astronomy_fields.get('hours_before_sunset')}"
-            )
 
         await self._save_hourly_data(date_str, hour, weather_data)
-
-        _LOGGER.info(
-            f"Saved actual weather for {date_str} {hour:02d}:00 "
-            f"(fields: {', '.join(k for k, v in weather_data.items() if v is not None and k not in ['timestamp', 'source'])})"
-        )
 
         return weather_data
 
@@ -165,35 +131,27 @@ class WeatherActualTracker:
                 state = self.hass.states.get(entity_id)
 
                 if state is None:
-                    _LOGGER.debug(f"Sensor {entity_id} not found (field: {field})")
                     continue
 
                 value = state.state
 
                 if value in ["unavailable", "unknown", None]:
-                    _LOGGER.debug(f"Sensor {entity_id} unavailable (field: {field})")
                     continue
 
                 if field == "condition":
                     data[field] = value
                     available_count += 1
-                    _LOGGER.debug(f"✓ {field}: {value} (from {entity_id})")
                 else:
-
                     try:
                         numeric_value = float(value)
                         data[field] = round(numeric_value, 2)
                         available_count += 1
-                        _LOGGER.debug(f"✓ {field}: {numeric_value} (from {entity_id})")
                     except (ValueError, TypeError):
-                        _LOGGER.debug(f"Could not convert {entity_id} value '{value}' to float")
                         continue
 
-            except Exception as e:
-                _LOGGER.debug(f"Error reading sensor {entity_id} (field: {field}): {e}")
+            except Exception:
                 continue
 
-        _LOGGER.info(f"Read {available_count} sensors successfully")
         return data if available_count > 0 else {}
 
     async def _calculate_cloud_cover_from_radiation(
@@ -220,15 +178,12 @@ class WeatherActualTracker:
             Cloud cover percentage (0-100) or None if calculation not possible
         """
         if measured_wm2 is None:
-            _LOGGER.debug("No solar radiation sensor - cannot calculate cloud cover")
             return None
 
         try:
-
             astronomy_file = self.stats_dir / "astronomy_cache.json"
 
             if not astronomy_file.exists():
-                _LOGGER.debug("Astronomy cache not found - cannot calculate cloud cover")
                 return None
 
             astronomy_data = await self.hass.async_add_executor_job(
@@ -241,32 +196,18 @@ class WeatherActualTracker:
             theoretical_max_wm2 = hour_data.get("clear_sky_solar_radiation_wm2")
 
             if theoretical_max_wm2 is None or theoretical_max_wm2 <= 0:
-                _LOGGER.debug(f"No theoretical max for {date_str} hour {hour} - cannot calculate cloud cover")
                 return None
 
             calibration_factor = await self._get_solar_radiation_correction_factor()
 
             calibrated_wm2 = measured_wm2 / calibration_factor if calibration_factor > 0 else measured_wm2
-
             ratio = calibrated_wm2 / theoretical_max_wm2
-
             ratio = max(0.0, min(1.0, ratio))
-
             cloud_cover = (1.0 - ratio) * 100.0
 
-            cloud_cover = round(cloud_cover, 1)
+            return round(cloud_cover, 1)
 
-            _LOGGER.debug(
-                f"Cloud cover calculation: measured={measured_wm2} W/m², "
-                f"calibration_factor={calibration_factor}, calibrated={calibrated_wm2:.1f} W/m², "
-                f"theoretical_max={theoretical_max_wm2} W/m², "
-                f"ratio={ratio:.2f}, cloud_cover={cloud_cover}%"
-            )
-
-            return cloud_cover
-
-        except Exception as e:
-            _LOGGER.warning(f"Error calculating cloud cover from radiation: {e}")
+        except Exception:
             return None
 
     async def _get_solar_radiation_correction_factor(self) -> float:
@@ -288,8 +229,7 @@ class WeatherActualTracker:
 
             return float(factor)
 
-        except Exception as e:
-            _LOGGER.debug(f"Could not load solar radiation correction factor: {e}")
+        except Exception:
             return 1.0
 
     async def _get_astronomy_time_fields(
@@ -299,19 +239,11 @@ class WeatherActualTracker:
     ) -> Optional[Dict[str, float]]:
         """
         Calculate hours_after_sunrise and hours_before_sunset from astronomy cache.
-
-        Args:
-            date_str: Date string (YYYY-MM-DD)
-            hour: Hour (0-23)
-
-        Returns:
-            Dict with hours_after_sunrise and hours_before_sunset, or None if not available
         """
         try:
             astronomy_file = self.stats_dir / "astronomy_cache.json"
 
             if not astronomy_file.exists():
-                _LOGGER.debug("Astronomy cache not found - cannot calculate time fields")
                 return None
 
             astronomy_data = await self.hass.async_add_executor_job(
@@ -321,20 +253,21 @@ class WeatherActualTracker:
             day_data = astronomy_data.get("days", {}).get(date_str, {})
 
             if not day_data:
-                _LOGGER.debug(f"No astronomy data for {date_str}")
                 return None
 
             sunrise_str = day_data.get("sunrise_local")
             sunset_str = day_data.get("sunset_local")
 
             if not sunrise_str or not sunset_str:
-                _LOGGER.debug(f"Missing sunrise/sunset for {date_str}")
                 return None
 
             sunrise = datetime.fromisoformat(sunrise_str)
             sunset = datetime.fromisoformat(sunset_str)
 
             current_dt = datetime.fromisoformat(f"{date_str}T{hour:02d}:00:00")
+            # Fix timezone mismatch by using timezone from sunrise
+            if sunrise.tzinfo is not None:
+                current_dt = current_dt.replace(tzinfo=sunrise.tzinfo)
 
             hours_after_sunrise = (current_dt - sunrise).total_seconds() / 3600.0
             hours_before_sunset = (sunset - current_dt).total_seconds() / 3600.0
@@ -344,8 +277,7 @@ class WeatherActualTracker:
                 "hours_before_sunset": round(hours_before_sunset, 2),
             }
 
-        except Exception as e:
-            _LOGGER.debug(f"Error calculating astronomy time fields: {e}")
+        except Exception:
             return None
 
     async def _detect_frost(
@@ -354,23 +286,11 @@ class WeatherActualTracker:
         date_str: str,
         hour: int
     ) -> Optional[Dict]:
-        """
-        Detect frost on solar panels using FrostDetector
-
-        Args:
-            weather_data: Current weather sensor data
-            date_str: Date string (YYYY-MM-D)
-            hour: Hour (0-23)
-
-        Returns:
-            Frost detection result dict or None if detection not possible
-        """
+        """Detect frost on solar panels using FrostDetector @zara"""
         try:
-
             astronomy_file = self.stats_dir / "astronomy_cache.json"
 
             if not astronomy_file.exists():
-                _LOGGER.debug("Astronomy cache not found - skipping frost detection")
                 return None
 
             astronomy_data = await self.hass.async_add_executor_job(
@@ -383,7 +303,6 @@ class WeatherActualTracker:
             theoretical_max_wm2 = hour_data.get("clear_sky_solar_radiation_wm2")
 
             if theoretical_max_wm2 is None:
-                _LOGGER.debug(f"No astronomy data for {date_str} hour {hour} - skipping frost detection")
                 return None
 
             cloud_cover = None
@@ -400,8 +319,8 @@ class WeatherActualTracker:
                         if forecast.get("local_hour") == hour:
                             cloud_cover = forecast.get("cloud_cover")
                             break
-            except Exception as e:
-                _LOGGER.debug(f"Could not load cloud cover from weather cache: {e}")
+            except Exception:
+                pass
 
             frost_result = self.frost_detector.detect_frost(
                 temperature_c=weather_data.get("temperature_c"),
@@ -415,13 +334,12 @@ class WeatherActualTracker:
             return frost_result
 
         except Exception as e:
-            _LOGGER.error(f"Error during frost detection: {e}", exc_info=True)
+            _LOGGER.error(f"Error during frost detection: {e}")
             return None
 
     async def _save_hourly_data(self, date_str: str, hour: int, weather_data: Dict[str, Any]):
         """Save hourly weather data to JSON file @zara"""
         try:
-
             if self.actual_file.exists():
                 data = await self.hass.async_add_executor_job(
                     self._read_json_sync, self.actual_file
@@ -449,10 +367,8 @@ class WeatherActualTracker:
                 self._write_json_sync, self.actual_file, data
             )
 
-            _LOGGER.debug(f"Saved to {self.actual_file}")
-
         except Exception as e:
-            _LOGGER.error(f"Error saving hourly weather data: {e}", exc_info=True)
+            _LOGGER.error(f"Error saving hourly weather data: {e}")
 
     def _read_json_sync(self, file_path: Path) -> Dict[str, Any]:
         """Synchronous JSON file read (for executor) @zara"""
@@ -477,24 +393,14 @@ class WeatherActualTracker:
 
             for date_str in dates_to_remove:
                 del data["hourly_data"][date_str]
-                _LOGGER.debug(f"Removed old data for {date_str}")
 
-        except Exception as e:
-            _LOGGER.warning(f"Error during cleanup: {e}")
+        except Exception:
+            pass
 
     async def get_actual_weather(
         self, date_str: str, hour: int
     ) -> Optional[Dict[str, Any]]:
-        """
-        Get actual weather data for specific date and hour.
-
-        Args:
-            date_str: Date string (YYYY-MM-DD)
-            hour: Hour (0-23)
-
-        Returns:
-            Weather data dict or None if not available
-        """
+        """Get actual weather data for specific date and hour @zara"""
         try:
             if not self.actual_file.exists():
                 return None
@@ -505,8 +411,7 @@ class WeatherActualTracker:
 
             return data.get("hourly_data", {}).get(date_str, {}).get(str(hour))
 
-        except Exception as e:
-            _LOGGER.error(f"Error reading actual weather for {date_str} {hour}: {e}")
+        except Exception:
             return None
 
     async def get_daily_actual_weather(self, date_str: str) -> Dict[int, Dict[str, Any]]:
@@ -523,6 +428,5 @@ class WeatherActualTracker:
 
             return {int(hour): weather for hour, weather in daily_data.items()}
 
-        except Exception as e:
-            _LOGGER.error(f"Error reading daily actual weather for {date_str}: {e}")
+        except Exception:
             return {}
