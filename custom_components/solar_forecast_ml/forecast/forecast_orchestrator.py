@@ -1,4 +1,4 @@
-"""Forecast Orchestrator for Solar Forecast ML Integration V10.0.0 @zara
+"""Forecast Orchestrator for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -47,12 +47,14 @@ class ForecastOrchestrator:
         data_manager: Any,
         solar_capacity: float,
         weather_calculator: WeatherCalculator,
+        panel_groups: Optional[List[Dict[str, Any]]] = None,
     ):
         """Initialize the ForecastOrchestrator"""
         self.hass = hass
         self.data_manager = data_manager
         self.solar_capacity = solar_capacity
         self.weather_calculator = weather_calculator
+        self.panel_groups = panel_groups or []
 
         self.ml_strategy: Optional[MLForecastStrategy] = None
         self.rule_based_strategy: Optional[RuleBasedForecastStrategy] = None
@@ -62,7 +64,12 @@ class ForecastOrchestrator:
 
         self.active_strategy_name: Optional[str] = None
 
-        _LOGGER.debug("ForecastOrchestrator initialized.")
+        if self.panel_groups:
+            _LOGGER.info(
+                f"ForecastOrchestrator initialized with {len(self.panel_groups)} panel groups."
+            )
+        else:
+            _LOGGER.debug("ForecastOrchestrator initialized.")
 
     def is_production_hour(self, target_dt: datetime) -> bool:
         """Checks if a given datetime is within realistic solar production hours @zara"""
@@ -124,8 +131,14 @@ class ForecastOrchestrator:
                 weather_calculator=self.weather_calculator,
                 solar_capacity=self.solar_capacity,
                 orchestrator=self,
+                panel_groups=self.panel_groups,
             )
-            _LOGGER.info("Rule-Based forecast strategy (iterative) initialized.")
+            if self.panel_groups:
+                _LOGGER.info(
+                    f"Rule-Based forecast strategy initialized with {len(self.panel_groups)} panel groups."
+                )
+            else:
+                _LOGGER.info("Rule-Based forecast strategy (iterative) initialized.")
 
         except Exception as e:
             _LOGGER.error(f"Failed to initialize RuleBasedForecastStrategy: {e}", exc_info=True)
@@ -497,14 +510,18 @@ class ForecastOrchestrator:
                     rule_kwh = rule_hour["production_kwh"]
                     blended_kwh = (ml_kwh * accuracy_weight) + (rule_kwh * rule_weight)
 
-                    hourly_values.append(
-                        {
-                            "hour": hour,
-                            "datetime": ml_hour["datetime"],
-                            "production_kwh": round(blended_kwh, 3),
-                            "date": ml_hour["date"],
-                        }
-                    )
+                    blended_entry = {
+                        "hour": hour,
+                        "datetime": ml_hour["datetime"],
+                        "production_kwh": round(blended_kwh, 3),
+                        "date": ml_hour["date"],
+                    }
+
+                    # Preserve panel_group_predictions from rule-based result (physics-based)
+                    if rule_hour.get("panel_group_predictions"):
+                        blended_entry["panel_group_predictions"] = rule_hour["panel_group_predictions"]
+
+                    hourly_values.append(blended_entry)
                 else:
 
                     hourly_values.append(ml_hour)

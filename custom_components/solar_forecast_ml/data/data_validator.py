@@ -1,4 +1,4 @@
-"""Data Validation Module for Solar Forecast ML Integration V10.0.0 @zara
+"""Data Validation Module for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -16,13 +16,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Copyright (C) 2025 Zara-Toorox
 """
 
+import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..const import DATA_VERSION, MIN_TRAINING_DATA_POINTS
 
 _LOGGER = logging.getLogger(__name__)
+
+# wttr.in cache settings (must match data_multi_weather_client.py)
+WTTR_CACHE_MAX_AGE = 6 * 3600  # 6 hours
 
 class DataValidator:
     """Validates data integrity for ML and forecast data"""
@@ -152,3 +157,187 @@ class DataValidator:
             and quality_score >= 0.8,
             "issues": issues,
         }
+
+    @staticmethod
+    def validate_wttr_cache(data: Dict[str, Any]) -> bool:
+        """Validate wttr.in cache data structure @zara
+
+        Args:
+            data: Cache data dict
+
+        Returns:
+            True if valid, False otherwise
+        """
+        # Check required top-level fields
+        if not isinstance(data, dict):
+            _LOGGER.error("wttr.in cache: data is not a dict")
+            return False
+
+        if "version" not in data:
+            _LOGGER.warning("wttr.in cache: missing version field")
+
+        if "metadata" not in data:
+            _LOGGER.error("wttr.in cache: missing metadata field")
+            return False
+
+        if "forecast" not in data:
+            _LOGGER.error("wttr.in cache: missing forecast field")
+            return False
+
+        # Validate metadata
+        metadata = data.get("metadata", {})
+        if not isinstance(metadata, dict):
+            _LOGGER.error("wttr.in cache: metadata is not a dict")
+            return False
+
+        if "fetched_at" not in metadata:
+            _LOGGER.error("wttr.in cache: missing fetched_at in metadata")
+            return False
+
+        # Validate fetched_at is valid ISO datetime (None is valid for new installation)
+        fetched_at = metadata["fetched_at"]
+        if fetched_at is not None:
+            try:
+                datetime.fromisoformat(fetched_at)
+            except (ValueError, TypeError) as e:
+                _LOGGER.error(f"wttr.in cache: invalid fetched_at format: {e}")
+                return False
+        else:
+            _LOGGER.debug("wttr.in cache: fetched_at is null (normal for new installation)")
+
+        # Validate forecast structure
+        forecast = data.get("forecast", {})
+        if not isinstance(forecast, dict):
+            _LOGGER.error("wttr.in cache: forecast is not a dict")
+            return False
+
+        if not forecast:
+            _LOGGER.debug("wttr.in cache: forecast is empty (normal for new installation)")
+            return True  # Empty but valid structure
+
+        # Validate at least one day entry
+        for date_str, hours in forecast.items():
+            # Validate date format
+            try:
+                datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                _LOGGER.warning(f"wttr.in cache: invalid date format: {date_str}")
+                continue
+
+            if not isinstance(hours, dict):
+                _LOGGER.error(f"wttr.in cache: hours for {date_str} is not a dict")
+                return False
+
+            # Validate hour entries
+            for hour_key, hour_data in hours.items():
+                if not isinstance(hour_data, dict):
+                    continue
+
+                # Check for required fields in hour data
+                if "cloud_cover" not in hour_data:
+                    _LOGGER.warning(
+                        f"wttr.in cache: missing cloud_cover for {date_str} hour {hour_key}"
+                    )
+
+        return True
+
+    @staticmethod
+    def validate_and_create_wttr_cache(
+        cache_file: Path,
+        latitude: float,
+        longitude: float,
+    ) -> Dict[str, Any]:
+        """Validate wttr.in cache file, create if missing or invalid @zara
+
+        Args:
+            cache_file: Path to the cache file
+            latitude: Location latitude
+            longitude: Location longitude
+
+        Returns:
+            Dict with validation result:
+            {
+                "valid": bool,
+                "created": bool,
+                "repaired": bool,
+                "message": str
+            }
+        """
+        result = {
+            "valid": False,
+            "created": False,
+            "repaired": False,
+            "message": "",
+        }
+
+        try:
+            # Ensure directory exists
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Check if file exists
+            if not cache_file.exists():
+                # Create empty cache file
+                empty_cache = DataValidator._create_empty_wttr_cache(latitude, longitude)
+                DataValidator._write_cache_file(cache_file, empty_cache)
+                result["created"] = True
+                result["valid"] = True
+                result["message"] = "Created new wttr.in cache file"
+                _LOGGER.info(f"Created new wttr.in cache file: {cache_file}")
+                return result
+
+            # File exists - validate it
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except json.JSONDecodeError as e:
+                _LOGGER.warning(f"wttr.in cache corrupted, recreating: {e}")
+                empty_cache = DataValidator._create_empty_wttr_cache(latitude, longitude)
+                DataValidator._write_cache_file(cache_file, empty_cache)
+                result["repaired"] = True
+                result["valid"] = True
+                result["message"] = "Repaired corrupted wttr.in cache file"
+                return result
+
+            # Validate structure
+            if DataValidator.validate_wttr_cache(data):
+                result["valid"] = True
+                result["message"] = "wttr.in cache is valid"
+                return result
+
+            # Invalid structure - repair it
+            _LOGGER.warning("wttr.in cache has invalid structure, recreating")
+            empty_cache = DataValidator._create_empty_wttr_cache(latitude, longitude)
+            DataValidator._write_cache_file(cache_file, empty_cache)
+            result["repaired"] = True
+            result["valid"] = True
+            result["message"] = "Repaired invalid wttr.in cache structure"
+            return result
+
+        except Exception as e:
+            result["message"] = f"Error validating wttr.in cache: {e}"
+            _LOGGER.error(result["message"])
+            return result
+
+    @staticmethod
+    def _create_empty_wttr_cache(latitude: float, longitude: float) -> Dict[str, Any]:
+        """Create empty wttr.in cache structure."""
+        return {
+            "version": "1.0",
+            "metadata": {
+                "fetched_at": datetime.now().isoformat(),
+                "source": "wttr.in",
+                "latitude": latitude,
+                "longitude": longitude,
+                "cache_max_age_hours": WTTR_CACHE_MAX_AGE / 3600,
+                "created_empty": True,
+            },
+            "forecast": {},
+        }
+
+    @staticmethod
+    def _write_cache_file(cache_file: Path, data: Dict[str, Any]) -> None:
+        """Write cache file atomically."""
+        temp_file = cache_file.with_suffix(".tmp")
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        temp_file.replace(cache_file)

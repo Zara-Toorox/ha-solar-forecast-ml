@@ -1,4 +1,4 @@
-"""TinyML LSTM - NumPy-only implementation for Home Assistant V10.0.0 @zara
+"""TinyML LSTM - NumPy-only implementation for Home Assistant V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -503,9 +503,46 @@ class TinyLSTM:
         }
 
     def predict(self, X_sequence: Any) -> float:
-        """Predict for single sequence (inference mode) @zara"""
+        """Predict for single sequence (inference mode) @zara
+
+        Args:
+            X_sequence: Input sequence. Accepts:
+                - 2D array (sequence_length, features) - PREFERRED
+                - 3D array (1, sequence_length, features) - will be squeezed
+
+        Returns:
+            Predicted value (float)
+
+        Raises:
+            ValueError: If input has wrong dimensions or shape
+        """
         np = _ensure_numpy()
         X_arr = np.array(X_sequence)
+
+        # Defensive: Handle both 2D and 3D inputs
+        if X_arr.ndim == 3:
+            if X_arr.shape[0] != 1:
+                raise ValueError(
+                    f"Batch prediction not supported. Expected batch_size=1, got {X_arr.shape[0]}"
+                )
+            X_arr = X_arr.squeeze(0)  # (1, 24, 14) -> (24, 14)
+            _LOGGER.debug("Squeezed 3D input to 2D for LSTM prediction")
+
+        if X_arr.ndim != 2:
+            raise ValueError(
+                f"Expected 2D sequence (seq_len, features), got {X_arr.ndim}D with shape {X_arr.shape}"
+            )
+
+        if X_arr.shape[0] != self.sequence_length:
+            raise ValueError(
+                f"Sequence length mismatch: expected {self.sequence_length}, got {X_arr.shape[0]}"
+            )
+
+        if X_arr.shape[1] != self.input_size:
+            raise ValueError(
+                f"Feature count mismatch: expected {self.input_size}, got {X_arr.shape[1]}"
+            )
+
         y_pred, _ = self.forward(X_arr, training=False)
         return float(y_pred[0, 0])
 

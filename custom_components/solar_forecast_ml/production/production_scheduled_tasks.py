@@ -1,4 +1,6 @@
-"""Scheduled Task Management for Production Tracking V10.0.0 @zara
+"""Scheduled Task Management for Production Tracking V10.3.0 @zara
+
+Dynamic scheduling based on sunrise time for optimal forecast accuracy.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,12 +19,14 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import asyncio
+import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.event import async_track_time_change, async_track_point_in_time
 
 from .production_morning_routine import MorningRoutineHandler
 
@@ -50,6 +54,10 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Minimum time for final forecast (ensures fresh weather data from 06:00 UTC model run)
+MINIMUM_FINAL_FORECAST_TIME = time(5, 0)
+
+
 class ScheduledTasksManager:
     """Manages scheduled tasks for the Solar Forecast ML integration"""
 
@@ -66,6 +74,7 @@ class ScheduledTasksManager:
         self.solar_yield_today_entity_id = solar_yield_today_entity_id
         self.data_manager = data_manager
         self._listeners = []
+        self._dynamic_listeners = []  # For sunrise-based dynamic tasks
 
         self.morning_routine_handler = MorningRoutineHandler(data_manager, coordinator)
 
@@ -76,12 +85,16 @@ class ScheduledTasksManager:
             data_manager=data_manager,
             solar_radiation_sensor=solar_rad_sensor,
             lux_sensor=lux_sensor,
+            solar_yield_entity=solar_yield_today_entity_id,
         )
 
         self._end_of_day_running = False
 
         self._pattern_learner = None
         self._weather_corrector = None
+
+        # Persistent yield cache file path
+        self._yield_cache_file = data_manager.data_dir / "stats" / "yield_cache.json"
 
         _LOGGER.debug("ScheduledTasksManager initialized")
 
@@ -102,36 +115,483 @@ class ScheduledTasksManager:
             )
         return self._weather_corrector
 
+    async def _load_yield_cache(self) -> Dict[str, Any]:
+        """Load persistent yield cache from file @zara"""
+        try:
+            if not self._yield_cache_file.exists():
+                return {}
+
+            def _read():
+                with open(self._yield_cache_file, "r") as f:
+                    return json.load(f)
+
+            return await self.hass.async_add_executor_job(_read)
+        except Exception as e:
+            _LOGGER.warning(f"Failed to load yield cache: {e}")
+            return {}
+
+    async def _save_yield_cache(self, cache_data: Dict[str, Any]) -> None:
+        """Save yield cache to persistent file @zara"""
+        try:
+            def _write():
+                with open(self._yield_cache_file, "w") as f:
+                    json.dump(cache_data, f, indent=2, default=str)
+
+            await self.hass.async_add_executor_job(_write)
+        except Exception as e:
+            _LOGGER.warning(f"Failed to save yield cache: {e}")
+
+    async def recover_missing_hourly_actuals(self) -> int:
+        """Recover missing hourly actuals using hourly yield deltas from sensor history @zara
+
+        This method reconstructs missing actual_kwh values by:
+        1. Reading the current cumulative yield from sensor
+        2. Finding the last known yield value from hourly_predictions
+        3. Distributing the delta across missing hours proportionally
+
+        Returns:
+            Number of hours recovered
+        """
+        current_time = dt_util.now()
+        today = current_time.date().isoformat()
+
+        try:
+            # Get current yield from sensor
+            current_yield = None
+            if self.solar_yield_today_entity_id:
+                yield_state = self.hass.states.get(self.solar_yield_today_entity_id)
+                if yield_state and yield_state.state not in (None, "unknown", "unavailable"):
+                    try:
+                        current_yield = float(yield_state.state)
+                    except (ValueError, TypeError):
+                        pass
+
+            if current_yield is None:
+                _LOGGER.warning("Cannot recover hourly actuals: yield sensor unavailable")
+                return 0
+
+            # Get today's predictions
+            predictions = await self.data_manager.hourly_predictions.get_predictions_for_date(today)
+            if not predictions:
+                _LOGGER.warning("Cannot recover hourly actuals: no predictions for today")
+                return 0
+
+            # Get production window
+            production_window = await self._get_production_window_from_cache(current_time.date())
+            if not production_window:
+                _LOGGER.warning("Cannot recover hourly actuals: no production window")
+                return 0
+
+            production_start, production_end = production_window
+            start_hour = production_start.hour
+            end_hour = min(current_time.hour, production_end.hour)
+
+            # Find missing hours and last known yield
+            missing_hours = []
+            last_known_yield = 0.0
+            last_known_hour = None
+
+            for pred in sorted(predictions, key=lambda x: x.get("target_hour", 0)):
+                hour = pred.get("target_hour")
+                if hour is None or hour < start_hour or hour > end_hour:
+                    continue
+
+                actual = pred.get("actual_kwh")
+                sensor_yield = pred.get("sensor_actual", {}).get("current_yield_kwh")
+
+                if actual is not None and sensor_yield is not None:
+                    last_known_yield = sensor_yield
+                    last_known_hour = hour
+                elif hour < current_time.hour:  # Only recover past hours
+                    missing_hours.append(hour)
+
+            if not missing_hours:
+                _LOGGER.debug("No missing hours to recover")
+                return 0
+
+            # Calculate total delta to distribute
+            total_delta = current_yield - last_known_yield
+            if total_delta <= 0:
+                _LOGGER.debug(f"No production delta to distribute (current={current_yield}, last_known={last_known_yield})")
+                return 0
+
+            # Get theoretical max for each missing hour to weight distribution
+            hour_weights = {}
+            total_weight = 0.0
+
+            for hour in missing_hours:
+                pred = next((p for p in predictions if p.get("target_hour") == hour), None)
+                if pred:
+                    # Use prediction or theoretical max as weight
+                    weight = pred.get("prediction_kwh", 0) or pred.get("astronomy", {}).get("theoretical_max_kwh", 0) or 1.0
+                    hour_weights[hour] = max(weight, 0.01)  # Minimum weight to avoid division by zero
+                    total_weight += hour_weights[hour]
+
+            if total_weight == 0:
+                total_weight = len(missing_hours)
+                hour_weights = {h: 1.0 for h in missing_hours}
+
+            # Distribute delta proportionally and update each hour
+            recovered_count = 0
+            cumulative_yield = last_known_yield
+
+            _LOGGER.info(
+                f"Recovering {len(missing_hours)} missing hours: {missing_hours}\n"
+                f"  Total delta: {total_delta:.3f} kWh (current={current_yield:.3f}, last_known={last_known_yield:.3f})"
+            )
+
+            for hour in sorted(missing_hours):
+                weight = hour_weights.get(hour, 1.0)
+                hour_kwh = round((weight / total_weight) * total_delta, 3)
+
+                cumulative_yield += hour_kwh
+
+                # Collect sensor data (may be empty for past hours)
+                sensor_data = {
+                    "temperature_c": None,
+                    "humidity_percent": None,
+                    "lux": None,
+                    "rain_mm": None,
+                    "uv_index": None,
+                    "wind_speed_ms": None,
+                    "current_yield_kwh": round(cumulative_yield, 3),
+                }
+
+                # Get weather actual if available
+                weather_actual = None
+                try:
+                    hourly_actual_file = self.data_manager.data_dir / "stats" / "hourly_weather_actual.json"
+                    if hourly_actual_file.exists():
+                        def _read_weather():
+                            with open(hourly_actual_file, "r") as f:
+                                return json.load(f)
+
+                        hourly_actual_data = await self.hass.async_add_executor_job(_read_weather)
+                        hour_data = hourly_actual_data.get("hourly_data", {}).get(today, {}).get(str(hour))
+                        if hour_data:
+                            weather_actual = {
+                                "temperature_c": hour_data.get("temperature_c"),
+                                "cloud_cover_percent": hour_data.get("cloud_cover_percent"),
+                                "humidity_percent": hour_data.get("humidity_percent"),
+                                "wind_speed_ms": hour_data.get("wind_speed_ms"),
+                                "precipitation_mm": hour_data.get("precipitation_mm"),
+                                "pressure_hpa": hour_data.get("pressure_hpa"),
+                                "solar_radiation_wm2": hour_data.get("solar_radiation_wm2"),
+                            }
+                except Exception:
+                    pass
+
+                # Update the hour
+                success = await self.data_manager.hourly_predictions.update_hourly_actual(
+                    date=today,
+                    hour=hour,
+                    actual_kwh=hour_kwh,
+                    sensor_data=sensor_data,
+                    weather_actual=weather_actual,
+                    astronomy_update=None,
+                )
+
+                if success:
+                    recovered_count += 1
+                    _LOGGER.debug(f"  Recovered hour {hour:02d}: {hour_kwh:.3f} kWh")
+
+            # Update yield cache with current value
+            await self._save_yield_cache({
+                "value": current_yield,
+                "time": current_time.isoformat(),
+                "date": today,
+            })
+
+            # Update coordinator cache
+            if recovered_count > 0:
+                try:
+                    hourly_data = await self.data_manager.hourly_predictions._read_json_async()
+                    self.coordinator._hourly_predictions_cache = hourly_data
+                except Exception:
+                    pass
+
+                self.coordinator.async_update_listeners()
+
+            _LOGGER.info(f"Recovered {recovered_count}/{len(missing_hours)} missing hourly actuals")
+            return recovered_count
+
+        except Exception as e:
+            _LOGGER.error(f"Error recovering missing hourly actuals: {e}", exc_info=True)
+            return 0
+
+    async def _get_sunrise_for_today(self) -> Optional[datetime]:
+        """Get sunrise time for today from astronomy cache @zara"""
+        try:
+            today = dt_util.now().date()
+            astronomy_cache_file = self.data_manager.data_dir / "stats" / "astronomy_cache.json"
+
+            if not astronomy_cache_file.exists():
+                _LOGGER.warning("Astronomy cache not found for dynamic scheduling")
+                return None
+
+            def _read_sync():
+                with open(astronomy_cache_file, "r") as f:
+                    return json.load(f)
+
+            cache = await self.hass.async_add_executor_job(_read_sync)
+            day_data = cache.get("days", {}).get(today.isoformat())
+
+            if not day_data:
+                _LOGGER.warning(f"No astronomy data for {today}")
+                return None
+
+            sunrise_str = day_data.get("sunrise_local")
+            if not sunrise_str:
+                return None
+
+            sunrise = datetime.fromisoformat(sunrise_str)
+
+            # DEFENSIVE: Ensure timezone-aware datetime to avoid comparison errors
+            # Old cache files from StartupInitializer may lack timezone info
+            if sunrise.tzinfo is None:
+                local_tz = dt_util.now().tzinfo
+                if local_tz:
+                    sunrise = sunrise.replace(tzinfo=local_tz)
+                    _LOGGER.debug(f"Added timezone {local_tz} to naive sunrise datetime")
+
+            return sunrise
+
+        except Exception as e:
+            _LOGGER.error(f"Error getting sunrise: {e}")
+            return None
+
+    def _calculate_dynamic_forecast_time(self, sunrise: datetime) -> datetime:
+        """Calculate the optimal time for final forecast based on sunrise @zara
+
+        Formula: max(05:00, sunrise - 30min)
+
+        This ensures:
+        - Fresh weather data (06:00 UTC model run available after ~05:00 local)
+        - Forecast is ready before production starts
+        """
+        forecast_time = sunrise - timedelta(minutes=30)
+
+        # Ensure minimum time of 05:00
+        min_time_today = datetime.combine(sunrise.date(), MINIMUM_FINAL_FORECAST_TIME)
+        if sunrise.tzinfo:
+            min_time_today = min_time_today.replace(tzinfo=sunrise.tzinfo)
+
+        if forecast_time < min_time_today:
+            forecast_time = min_time_today
+
+        return forecast_time
+
+    def _calculate_cloud_check_time(self, sunrise: datetime) -> datetime:
+        """Calculate cloud check time: sunrise + 4 hours @zara"""
+        return sunrise + timedelta(hours=4)
+
+    async def _schedule_dynamic_tasks_for_today(self) -> None:
+        """Schedule dynamic tasks based on today's sunrise @zara"""
+        # Cancel any existing dynamic listeners
+        for remove_listener in self._dynamic_listeners:
+            try:
+                remove_listener()
+            except Exception:
+                pass
+        self._dynamic_listeners = []
+
+        sunrise = await self._get_sunrise_for_today()
+        if not sunrise:
+            _LOGGER.warning("Could not get sunrise - using fallback times (05:30 forecast, 12:00 cloud check)")
+            # Fallback to reasonable defaults
+            now = dt_util.now()
+            sunrise = datetime.combine(now.date(), time(8, 0))
+            if now.tzinfo:
+                sunrise = sunrise.replace(tzinfo=now.tzinfo)
+
+        # Calculate dynamic times
+        final_forecast_time = self._calculate_dynamic_forecast_time(sunrise)
+        cloud_check_time = self._calculate_cloud_check_time(sunrise)
+
+        now = dt_util.now()
+
+        # Schedule final forecast if not yet passed
+        if final_forecast_time > now:
+            remove_final = async_track_point_in_time(
+                self.hass,
+                self._final_morning_forecast,
+                final_forecast_time
+            )
+            self._dynamic_listeners.append(remove_final)
+            _LOGGER.info(
+                f"🌅 Dynamic scheduling: Final forecast at {final_forecast_time.strftime('%H:%M')} "
+                f"(sunrise {sunrise.strftime('%H:%M')} - 30min)"
+            )
+        else:
+            _LOGGER.debug(f"Final forecast time {final_forecast_time.strftime('%H:%M')} already passed")
+
+        # Schedule cloud check if not yet passed
+        if cloud_check_time > now:
+            remove_cloud = async_track_point_in_time(
+                self.hass,
+                self._cloud_discrepancy_logging,
+                cloud_check_time
+            )
+            self._dynamic_listeners.append(remove_cloud)
+            _LOGGER.info(
+                f"☁️ Dynamic scheduling: Cloud check at {cloud_check_time.strftime('%H:%M')} "
+                f"(sunrise + 4h, logging only)"
+            )
+        else:
+            _LOGGER.debug(f"Cloud check time {cloud_check_time.strftime('%H:%M')} already passed")
+
+    async def _final_morning_forecast(self, now: datetime) -> None:
+        """Final morning forecast with fresh weather data @zara
+
+        This runs at max(05:00, sunrise - 30min) and:
+        1. Fetches fresh weather data (Multi-Weather Blending)
+        2. Creates the final locked forecast for today
+        """
+        current_time = now if now is not None else dt_util.now()
+
+        _LOGGER.info(f"🌅 Final morning forecast triggered at {current_time.strftime('%H:%M')}")
+
+        try:
+            # Step 1: Update weather cache with fresh data
+            if hasattr(self.coordinator, 'weather_pipeline_manager'):
+                pipeline = self.coordinator.weather_pipeline_manager
+                if hasattr(pipeline, 'multi_weather_blender') and pipeline.multi_weather_blender:
+                    blender = pipeline.multi_weather_blender
+                    blend_success = await blender.update_and_save_cache()
+                    if blend_success:
+                        stats = blender.get_blend_stats()
+                        _LOGGER.info(
+                            f"📡 Fresh weather data fetched: "
+                            f"weights=OM:{stats['weights'].get('open_meteo', 0.5):.0%}/"
+                            f"WWO:{stats['weights'].get('wwo', 0.5):.0%}"
+                        )
+                    else:
+                        _LOGGER.warning("Weather update failed, using cached data")
+
+            # Step 2: Run the complete morning routine
+            await self.morning_routine_complete(now)
+
+        except Exception as e:
+            _LOGGER.error(f"Final morning forecast failed: {e}", exc_info=True)
+
+    async def _cloud_discrepancy_logging(self, now: datetime) -> None:
+        """Log cloud discrepancy for weight learning (no correction) @zara
+
+        This runs at sunrise + 4h and:
+        1. Compares sensor cloud cover with forecast
+        2. Logs discrepancy for end-of-day weight learning
+        3. Does NOT apply any correction
+        """
+        current_time = now if now is not None else dt_util.now()
+
+        _LOGGER.info(f"☁️ Cloud discrepancy check at {current_time.strftime('%H:%M')} (logging only)")
+
+        try:
+            if not self.sensor_cloud_correction.cloud_sensors_enabled:
+                _LOGGER.debug("Cloud sensors not configured - skipping check")
+                return
+
+            # Get sensor cloud cover
+            sensor_cloud = await self.sensor_cloud_correction._get_sensor_cloud_estimate(datetime.now())
+            if sensor_cloud is None:
+                _LOGGER.debug("Could not read sensor cloud cover")
+                return
+
+            # Get forecast cloud cover (average for daylight hours)
+            forecast_cloud = await self.sensor_cloud_correction._get_forecast_cloud_average(current_time)
+            if forecast_cloud is None:
+                _LOGGER.debug("Could not get forecast cloud cover")
+                return
+
+            discrepancy = sensor_cloud - forecast_cloud
+
+            # Log for weight learning
+            log_entry = {
+                "timestamp": current_time.isoformat(),
+                "sensor_cloud_percent": round(sensor_cloud, 1),
+                "forecast_cloud_percent": round(forecast_cloud, 1),
+                "discrepancy_percent": round(discrepancy, 1),
+                "action": "logged_for_learning"
+            }
+
+            # Save to drift log for end-of-day analysis
+            drift_log_file = self.data_manager.data_dir / "stats" / "forecast_drift_log.json"
+            try:
+                def _update_log():
+                    existing = []
+                    if drift_log_file.exists():
+                        with open(drift_log_file, "r") as f:
+                            data = json.load(f)
+                            existing = data.get("entries", [])
+
+                    existing.append(log_entry)
+                    # Keep last 30 days
+                    existing = existing[-720:]  # ~30 days * 24 hours
+
+                    with open(drift_log_file, "w") as f:
+                        json.dump({"entries": existing}, f, indent=2)
+
+                await self.hass.async_add_executor_job(_update_log)
+            except Exception as e:
+                _LOGGER.debug(f"Could not save drift log: {e}")
+
+            if abs(discrepancy) > 25:
+                _LOGGER.info(
+                    f"☁️ Cloud discrepancy detected:\n"
+                    f"  Sensor: {sensor_cloud:.0f}%, Forecast: {forecast_cloud:.0f}%, "
+                    f"Diff: {discrepancy:+.0f}%\n"
+                    f"  → Logged for weight learning (no correction applied)"
+                )
+            else:
+                _LOGGER.debug(
+                    f"Cloud check: Sensor={sensor_cloud:.0f}%, Forecast={forecast_cloud:.0f}%, "
+                    f"Diff={discrepancy:+.0f}% (within tolerance)"
+                )
+
+        except Exception as e:
+            _LOGGER.error(f"Cloud discrepancy logging failed: {e}", exc_info=True)
+
     def setup_listeners(self) -> None:
-        """Register the time-based listeners with Home Assistant @zara"""
+        """Register the time-based listeners with Home Assistant @zara
+
+        Fixed tasks:
+        - 00:25: First forecast (locked)
+        - 00:00: Reset expected production
+        - XX:05: Hourly actuals update
+        - 23:30: End-of-day workflow
+        - 1st@07:30: Monthly report
+
+        Dynamic tasks (scheduled daily at 00:30):
+        - max(05:00, sunrise-30min): Final forecast with fresh weather
+        - sunrise+4h: Cloud discrepancy logging (for weight learning)
+        """
         self.cancel_listeners()
 
+        # 00:25 - First forecast
         remove_morning_1 = async_track_time_change(
             self.hass, self.morning_routine_complete, hour=0, minute=25, second=0
         )
         self._listeners.append(remove_morning_1)
 
-        remove_morning_2 = async_track_time_change(
-            self.hass, self.morning_routine_complete, hour=4, minute=15, second=0
+        # 00:30 - Schedule dynamic tasks for today
+        remove_dynamic_scheduler = async_track_time_change(
+            self.hass, self._schedule_dynamic_tasks_callback, hour=0, minute=30, second=0
         )
-        self._listeners.append(remove_morning_2)
+        self._listeners.append(remove_dynamic_scheduler)
 
+        # 00:00 - Reset expected production
         remove_reset_expected = async_track_time_change(
             self.hass, self.reset_expected_production, hour=0, minute=0, second=0
         )
         self._listeners.append(remove_reset_expected)
 
+        # XX:05 - Hourly actuals update
         remove_hourly_actuals = async_track_time_change(
             self.hass, self.update_hourly_actuals, minute=5, second=0
         )
         self._listeners.append(remove_hourly_actuals)
 
-        if self.sensor_cloud_correction.is_enabled:
-            remove_sensor_check = async_track_time_change(
-                self.hass, self.sensor_cloud_morning_check, hour=9, minute=5, second=0
-            )
-            self._listeners.append(remove_sensor_check)
-
+        # 23:30 - End-of-day workflow
         remove_end_of_day = async_track_time_change(
             self.hass, self.end_of_day_workflow, hour=23, minute=30, second=0
         )
@@ -143,7 +603,19 @@ class ScheduledTasksManager:
         )
         self._listeners.append(remove_monthly_report)
 
-        _LOGGER.debug("Scheduled tasks registered: morning(00:25,04:15), reset(00:00), hourly(:05), end-of-day(23:30), monthly-report(1st@07:30)")
+        _LOGGER.info(
+            "Scheduled tasks registered:\n"
+            "  Fixed: 00:25 (first forecast), 00:00 (reset), XX:05 (hourly), 23:30 (EOD)\n"
+            "  Dynamic: Scheduled at 00:30 based on sunrise"
+        )
+
+        # Also schedule dynamic tasks now (for startup/reload scenarios)
+        self.hass.async_create_task(self._schedule_dynamic_tasks_for_today())
+
+    @callback
+    async def _schedule_dynamic_tasks_callback(self, now: datetime) -> None:
+        """Callback to schedule dynamic tasks at 00:30 @zara"""
+        await self._schedule_dynamic_tasks_for_today()
 
     def cancel_listeners(self) -> None:
         """Remove any active time-based listeners @zara"""
@@ -153,6 +625,13 @@ class ScheduledTasksManager:
             except Exception as e:
                 _LOGGER.warning(f"Error removing scheduled task listener: {e}")
         self._listeners = []
+
+        for remove_listener in self._dynamic_listeners:
+            try:
+                remove_listener()
+            except Exception as e:
+                _LOGGER.warning(f"Error removing dynamic task listener: {e}")
+        self._dynamic_listeners = []
 
     async def calculate_yesterday_deviation_on_startup(self) -> None:
         """Calculates the forecast deviation from yesterday using daily_forecasts.json @zara"""
@@ -212,21 +691,6 @@ class ScheduledTasksManager:
             self.coordinator.avg_month_yield = 0.0
 
     @callback
-    async def sensor_cloud_morning_check(self, now: datetime) -> None:
-        """Callback for 09:05 sensor-based cloud correction @zara"""
-        current_time = now if now is not None else dt_util.now()
-
-        try:
-            result = await self.sensor_cloud_correction.run_morning_check(current_time)
-
-            if result.get("correction_applied"):
-                _LOGGER.info(f"Sensor correction applied: {result.get('reason')}")
-                await self.coordinator.async_request_refresh()
-
-        except Exception as e:
-            _LOGGER.error(f"Error in sensor cloud morning check: {e}")
-
-    @callback
     async def scheduled_morning_update(self, now: datetime) -> None:
         """Callback for the scheduled morning task Triggers a full forecast update @zara"""
         try:
@@ -249,64 +713,29 @@ class ScheduledTasksManager:
 
     @callback
     async def morning_routine_complete(self, now: datetime) -> None:
-        """COMPLETE MORNING ROUTINE - Runs 2x daily (00:25 + 04:15) @zara"""
+        """COMPLETE MORNING ROUTINE @zara"""
         current_time = now if now is not None else dt_util.now()
 
         try:
             await self.scheduled_morning_update(now)
             await asyncio.sleep(1.0)
             await self.create_morning_hourly_predictions(now)
-            _LOGGER.info("Morning routine completed")
+            _LOGGER.info(f"Morning routine completed at {current_time.strftime('%H:%M')}")
 
         except Exception as e:
             _LOGGER.error(f"Morning routine failed: {e}")
-
-    @callback
-    async def scheduled_night_cleanup(self, now: datetime) -> None:
-        """Night cleanup callback - redirects to end_of_day_workflow. @zara"""
-        await self._night_cleanup_internal(now)
 
     @callback
     async def reset_expected_production(self, now: datetime) -> None:
         """Reset expected daily production at midnight @zara"""
         try:
             await self.coordinator.reset_expected_daily_production()
+
+            # Reset sensor correction daily state
+            self.sensor_cloud_correction.reset_daily_state()
+
         except Exception as e:
             _LOGGER.error(f"Failed to reset expected daily production: {e}")
-
-    @callback
-    async def set_expected_production(self, now: datetime) -> None:
-        """Set expected daily production at 6 AM @zara"""
-        try:
-            if not self.coordinator:
-                return
-
-            if not self.coordinator.data:
-                await self.coordinator.async_request_refresh()
-
-            await self.coordinator.set_expected_daily_production()
-        except Exception as e:
-            _LOGGER.error(f"Failed to set expected daily production: {e}")
-
-    @callback
-    async def retry_forecast_setting(self, now: datetime, attempt: int) -> None:
-        """Retry mechanism for setting forecast if 0600 failed @zara"""
-        try:
-            current_forecast = await self.data_manager.get_current_day_forecast()
-
-            forecast_day = current_forecast.get("forecast_day", {}) if current_forecast else {}
-            if forecast_day.get("locked"):
-                return
-
-            success = await self.coordinator._recovery_forecast_process(
-                source=f"retry_06:{15*attempt:02d}"
-            )
-
-            if not success and attempt == 3:
-                _LOGGER.error("All retry attempts exhausted - daily forecast NOT set!")
-
-        except Exception as e:
-            _LOGGER.error(f"Error during retry attempt #{attempt}: {e}")
 
     @callback
     async def generate_monthly_report(self, now: datetime) -> None:
@@ -352,7 +781,7 @@ class ScheduledTasksManager:
         workflow_start = asyncio.get_event_loop().time()
 
         steps_completed = 0
-        total_steps = 11  # Added Weather Precision Calculation
+        total_steps = 12  # Includes Panel Group Efficiency Learning
         errors = []
 
         try:
@@ -558,14 +987,11 @@ class ScheduledTasksManager:
                                     start_hour = production_start_hour
                                     end_hour = production_end_hour
 
-                                battery_peak_soc = await self._get_battery_peak_soc_today(today_str, start_hour, end_hour)
-
                                 await pattern_learner.apply_aggressive_correction(
                                     target_date=today,
                                     forecast_raw=forecast_raw,
                                     actual_kwh=actual_production_kwh,
                                     avg_cloud_cover=avg_clouds,
-                                    battery_peak_soc=battery_peak_soc
                                 )
                             else:
                                 _LOGGER.debug("No raw forecast available for aggressive correction")
@@ -592,6 +1018,14 @@ class ScheduledTasksManager:
         except Exception as e:
             _LOGGER.error(f"Step 11 (ML main model training) failed: {e}")
             errors.append(f"ML main model: {str(e)}")
+
+        # Step 12: Panel Group Efficiency Learning (if panel groups with sensors configured)
+        try:
+            await self._train_panel_group_efficiency(current_time)
+            steps_completed += 1
+        except Exception as e:
+            _LOGGER.error(f"Step 12 (Panel Group Efficiency learning) failed: {e}")
+            errors.append(f"Panel Group Efficiency: {str(e)}")
 
         workflow_duration = asyncio.get_event_loop().time() - workflow_start
 
@@ -644,12 +1078,16 @@ class ScheduledTasksManager:
                 return
 
             solar_capacity = 2.0
+            panel_groups = None
             if self.coordinator:
                 solar_capacity = getattr(self.coordinator, 'solar_capacity', 2.0) or 2.0
+                panel_groups = getattr(self.coordinator, 'panel_groups', None)
 
+            # Pass panel_groups so ResidualTrainer uses correct geometry for multi-orientation systems
             residual_trainer = ResidualTrainer(
                 data_dir=data_dir,
                 system_capacity_kwp=solar_capacity,
+                panel_groups=panel_groups,
                 skip_load=True,  # Avoid blocking call in async context
             )
             await residual_trainer.async_load_state()  # Load state asynchronously
@@ -660,7 +1098,10 @@ class ScheduledTasksManager:
             )
 
             if success:
-                _LOGGER.debug(f"Residual model trained: accuracy={accuracy:.3f}, algo={algo}")
+                _LOGGER.debug(
+                    f"Residual model trained: accuracy={accuracy:.3f}, algo={algo}, "
+                    f"panel_groups={'yes' if panel_groups else 'no'}"
+                )
 
         except ImportError:
             pass
@@ -705,6 +1146,123 @@ class ScheduledTasksManager:
 
         except Exception as e:
             _LOGGER.error(f"ML main model training error: {e}")
+            raise
+
+    async def _train_panel_group_efficiency(self, now: datetime) -> None:
+        """Train panel group efficiency factors from today's data. @zara
+
+        This trains per-group efficiency factors when panel groups with energy sensors
+        are configured. Uses actual per-group production data stored in hourly_predictions.
+        """
+        try:
+            # Check if panel groups are configured
+            panel_groups = getattr(self.coordinator, 'panel_groups', [])
+            if not panel_groups:
+                _LOGGER.debug("Panel group efficiency training skipped: no panel groups configured")
+                return
+
+            # Check if any panel group has an energy sensor
+            has_any_sensor = any(g.get("energy_sensor") for g in panel_groups)
+            if not has_any_sensor:
+                _LOGGER.debug("Panel group efficiency training skipped: no energy sensors configured")
+                return
+
+            from ..physics import PanelGroupEfficiencyLearner
+            from pathlib import Path
+
+            data_dir = Path(self.data_manager.data_dir)
+
+            # Initialize the learner (skip_load=True to avoid blocking call)
+            efficiency_learner = PanelGroupEfficiencyLearner(
+                data_path=data_dir,
+                panel_groups=panel_groups,
+                skip_load=True,
+            )
+            await efficiency_learner.async_load_state()
+
+            # Get today's hourly predictions with panel_group_actuals
+            today_str = now.strftime("%Y-%m-%d")
+            predictions = await self.data_manager.hourly_predictions.get_predictions_for_date(today_str)
+
+            if not predictions:
+                _LOGGER.debug(f"Panel group efficiency training: no predictions for {today_str}")
+                return
+
+            # Count entries with panel_group_actuals
+            entries_with_actuals = 0
+            entries_added = 0
+
+            for pred in predictions:
+                panel_group_actuals = pred.get("panel_group_actuals")
+                if not panel_group_actuals:
+                    continue
+
+                entries_with_actuals += 1
+
+                # Extract data needed for learning
+                target_date = pred.get("target_date", today_str)
+                hour = pred.get("target_hour")  # Field is target_hour, not hour
+                actual_kwh = pred.get("actual_kwh")
+
+                if hour is None or actual_kwh is None:
+                    continue
+
+                # Get weather data from weather_corrected sub-dict
+                weather_corrected = pred.get("weather_corrected", {}) or {}
+                ghi = weather_corrected.get("ghi", 0) or 0
+                dni = weather_corrected.get("direct_radiation", 0) or 0
+                dhi = weather_corrected.get("diffuse_radiation", 0) or 0
+                temperature = weather_corrected.get("temperature", 15) or 15
+                cloud_cover = weather_corrected.get("clouds", 50) or 50
+
+                # Get astronomy data from astronomy sub-dict
+                astronomy = pred.get("astronomy", {}) or {}
+                sun_elevation = astronomy.get("elevation_deg", 0) or 0
+                sun_azimuth = astronomy.get("azimuth_deg", 180) or 180
+
+                # Build timestamp for the data point
+                timestamp = f"{target_date}T{hour:02d}:30:00"
+
+                try:
+                    efficiency_learner.add_data_point(
+                        timestamp=timestamp,
+                        hour=hour,
+                        sun_elevation_deg=sun_elevation,
+                        sun_azimuth_deg=sun_azimuth,
+                        actual_power_kwh=actual_kwh,
+                        ghi_wm2=ghi,
+                        dni_wm2=dni,
+                        dhi_wm2=dhi,
+                        ambient_temp_c=temperature,
+                        cloud_cover_percent=cloud_cover,
+                        per_group_actuals=panel_group_actuals,
+                    )
+                    entries_added += 1
+                except Exception as e:
+                    _LOGGER.debug(f"Could not add data point for hour {hour}: {e}")
+
+            if entries_added == 0:
+                _LOGGER.debug(
+                    f"Panel group efficiency training: no valid entries to add "
+                    f"(found {entries_with_actuals} entries with actuals)"
+                )
+                return
+
+            # Optimize efficiency factors (returns bool, not dict)
+            success = await efficiency_learner.optimize_efficiency()
+
+            if success:
+                _LOGGER.info(
+                    f"Panel group efficiency trained: {entries_added} samples, "
+                    f"{len(panel_groups)} groups"
+                )
+            else:
+                _LOGGER.debug(
+                    "Panel group efficiency optimization: not enough samples yet"
+                )
+
+        except Exception as e:
+            _LOGGER.error(f"Panel group efficiency training error: {e}")
             raise
 
     async def _calculate_weather_precision(self, now: datetime) -> None:
@@ -868,21 +1426,6 @@ class ScheduledTasksManager:
         """Night cleanup internal - legacy method retained for compatibility. @zara"""
         pass
 
-    @callback
-    async def finalize_day_task(self, now: datetime) -> None:
-        """Finalize day task - redirects to end_of_day_workflow. @zara"""
-        await self._finalize_day_internal(now)
-
-    @callback
-    async def move_to_history_task(self, now: datetime) -> None:
-        """Move to history task - redirects to end_of_day_workflow. @zara"""
-        await self._move_to_history_internal(now)
-
-    @callback
-    async def calculate_stats_task(self, now: datetime) -> None:
-        """Calculate stats task - redirects to end_of_day_workflow. @zara"""
-        await self._calculate_stats_internal(now)
-
     async def _save_actual_best_hour(self) -> None:
         """Calculate and save the actual best production hour from todays hourly samples @zara"""
         try:
@@ -913,7 +1456,7 @@ class ScheduledTasksManager:
 
     @callback
     async def create_morning_hourly_predictions(self, now: datetime) -> None:
-        """MORNING TASK (6:00 AM): Create hourly predictions for today @zara"""
+        """MORNING TASK: Create hourly predictions for today @zara"""
         current_time = now if now is not None else dt_util.now()
 
         try:
@@ -1138,7 +1681,10 @@ class ScheduledTasksManager:
 
     @callback
     async def update_hourly_actuals(self, now: datetime) -> None:
-        """HOURLY TASK (every hour at :05): Update actual values for previous hour @zara"""
+        """HOURLY TASK (every hour at :05): Update actual values for previous hour @zara
+
+        Uses persistent yield cache to survive restarts.
+        """
         current_time = now if now is not None else dt_util.now()
 
         production_window = await self._get_production_window_from_cache(current_time.date())
@@ -1169,20 +1715,55 @@ class ScheduledTasksManager:
             if current_yield is None:
                 return
 
-            if not hasattr(self.coordinator, "_last_yield_cache"):
-                self.coordinator._last_yield_cache = {}
+            # Load persistent yield cache (survives restarts)
+            yield_cache = await self._load_yield_cache()
 
-            previous_yield = self.coordinator._last_yield_cache.get("value", None)
-            previous_yield_time = self.coordinator._last_yield_cache.get("time", None)
+            # Check if cache is from today
+            cache_date = yield_cache.get("date")
+            if cache_date != today:
+                # New day - reset cache but still try to get previous yield from last hour's prediction
+                yield_cache = {}
 
+            previous_yield = yield_cache.get("value")
+
+            # If no cache, try to recover from hourly_predictions
+            if previous_yield is None:
+                predictions = await self.data_manager.hourly_predictions.get_predictions_for_date(today)
+                if predictions:
+                    # Find last hour with sensor data
+                    for pred in sorted(predictions, key=lambda x: x.get("target_hour", 0), reverse=True):
+                        hour = pred.get("target_hour", 99)
+                        if hour < current_time.hour:
+                            sensor_yield = pred.get("sensor_actual", {}).get("current_yield_kwh")
+                            if sensor_yield is not None:
+                                previous_yield = sensor_yield
+                                _LOGGER.debug(f"Recovered previous_yield={previous_yield} from hour {hour}")
+                                break
+
+            # Save current yield to persistent cache
+            await self._save_yield_cache({
+                "value": current_yield,
+                "time": current_time.isoformat(),
+                "date": today,
+            })
+
+            # Also keep in-memory for backwards compatibility
             self.coordinator._last_yield_cache = {"value": current_yield, "time": current_time}
 
             if previous_yield is None:
+                _LOGGER.debug(
+                    f"No previous yield available for hour {previous_hour} - "
+                    f"first run after restart, will be available next hour"
+                )
                 return
 
             if current_yield >= previous_yield:
                 actual_kwh = current_yield - previous_yield
             else:
+                _LOGGER.debug(
+                    f"Yield decreased (current={current_yield}, previous={previous_yield}) - "
+                    f"possibly sensor reset, skipping update"
+                )
                 return
 
             sensor_data_raw = self.coordinator.sensor_collector.collect_all_sensor_data_dict()
@@ -1201,7 +1782,6 @@ class ScheduledTasksManager:
                 hourly_actual_file = self.coordinator.data_manager.data_dir / "stats" / "hourly_weather_actual.json"
                 if hourly_actual_file.exists():
                     def _read_hourly_actual():
-                        import json
                         with open(hourly_actual_file, "r") as f:
                             return json.load(f)
 
@@ -1238,6 +1818,13 @@ class ScheduledTasksManager:
                     }
 
             astronomy_update = await self._calculate_astronomy_for_hour(current_time)
+
+            # Get inverter max power for clipping detection
+            inverter_max_power = getattr(self.coordinator, 'inverter_max_power', 0.0)
+
+            # Read panel group energy sensors if configured
+            panel_group_actuals = await self._read_panel_group_actuals()
+
             success = await self.coordinator.data_manager.hourly_predictions.update_hourly_actual(
                 date=today,
                 hour=previous_hour,
@@ -1245,9 +1832,12 @@ class ScheduledTasksManager:
                 sensor_data=sensor_data,
                 weather_actual=weather_actual,
                 astronomy_update=astronomy_update,
+                inverter_max_power=inverter_max_power,
+                panel_group_actuals=panel_group_actuals,
             )
 
             if success:
+                _LOGGER.debug(f"Updated hourly actual for {today} hour {previous_hour}: {actual_kwh:.3f} kWh")
                 try:
                     hourly_data = await self.coordinator.data_manager.hourly_predictions._read_json_async()
                     self.coordinator._hourly_predictions_cache = hourly_data
@@ -1257,7 +1847,7 @@ class ScheduledTasksManager:
                 self.coordinator.async_update_listeners()
 
         except Exception as e:
-            _LOGGER.error(f"Error in update_hourly_actuals: {e}")
+            _LOGGER.error(f"Error in update_hourly_actuals: {e}", exc_info=True)
 
     async def _calculate_astronomy_for_hour(self, dt: datetime) -> Dict[str, Any]:
         """Calculate astronomy features for ML training from astronomy_cache @zara"""
@@ -1317,86 +1907,43 @@ class ScheduledTasksManager:
         except Exception:
             return {}
 
-    async def _get_battery_peak_soc_today(
-        self,
-        date_str: str,
-        start_hour: int,
-        end_hour: int
-    ) -> float:
-        """
-        Get peak battery SOC during production hours to detect MPPT throttling.
-
-        Args:
-            date_str: Date in YYYY-MM-DD format
-            start_hour: Production window start hour
-            end_hour: Production window end hour
+    async def _read_panel_group_actuals(self) -> Optional[Dict[str, float]]:
+        """Read actual production from panel group energy sensors. @zara
 
         Returns:
-            Peak battery SOC (0-100%) or None if battery not configured/available
+            Dict mapping group_name to hourly production (kWh), or None if no sensors configured
         """
         try:
-            from ..const import CONF_BATTERY_SOC_SENSOR, CONF_BATTERY_ENABLED
+            # Get panel group sensor reader from coordinator
+            panel_group_sensor_reader = getattr(self.coordinator, 'panel_group_sensor_reader', None)
 
-            battery_enabled = self.coordinator.config_entry.options.get(
-                CONF_BATTERY_ENABLED,
-                self.coordinator.config_entry.data.get(CONF_BATTERY_ENABLED, False)
-            )
-
-            if not battery_enabled:
-                _LOGGER.debug("Battery not enabled - skipping SOC check")
+            if not panel_group_sensor_reader:
                 return None
 
-            battery_soc_sensor = self.coordinator.config_entry.options.get(
-                CONF_BATTERY_SOC_SENSOR,
-                self.coordinator.config_entry.data.get(CONF_BATTERY_SOC_SENSOR)
-            )
-
-            if not battery_soc_sensor:
-                _LOGGER.debug("Battery SOC sensor not configured")
+            if not panel_group_sensor_reader.has_any_sensor():
                 return None
 
-            from homeassistant.components.recorder import history
-            from datetime import datetime, timedelta
+            # Get hourly production for all groups with sensors
+            group_actuals = await panel_group_sensor_reader.get_all_hourly_productions()
 
-            date_obj = datetime.fromisoformat(date_str)
-            start_time = date_obj.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-            end_time = date_obj.replace(hour=end_hour, minute=59, second=59, microsecond=999999)
-
-            history_data = await self.hass.async_add_executor_job(
-                history.get_significant_states,
-                self.hass,
-                start_time,
-                end_time,
-                [battery_soc_sensor],
-                None,
-                True,
-                True,
-            )
-
-            if not history_data or battery_soc_sensor not in history_data:
-                _LOGGER.debug(f"No battery SOC history found for {date_str}")
+            if not group_actuals:
                 return None
 
-            states = history_data[battery_soc_sensor]
-            peak_soc = 0.0
+            _LOGGER.debug(f"Read panel group actuals: {group_actuals}")
 
-            for state in states:
-                try:
-                    soc_value = float(state.state)
-                    if soc_value > peak_soc:
-                        peak_soc = soc_value
-                except (ValueError, AttributeError):
-                    continue
+            # Optional: Check consistency with total yield
+            if self.solar_yield_today_entity_id:
+                yield_state = self.hass.states.get(self.solar_yield_today_entity_id)
+                if yield_state and yield_state.state not in (None, "unknown", "unavailable"):
+                    try:
+                        # Note: This is cumulative, not hourly delta - just log for reference
+                        current_total = float(yield_state.state)
+                        _LOGGER.debug(f"Total yield sensor: {current_total:.3f} kWh")
+                    except (ValueError, TypeError):
+                        pass
 
-            if peak_soc > 0:
-                _LOGGER.debug(
-                    f"Battery peak SOC during production ({start_hour}-{end_hour}h): {peak_soc:.1f}%"
-                )
-                return peak_soc
-            else:
-                _LOGGER.debug("No valid battery SOC values found in history")
-                return None
+            return group_actuals
 
         except Exception as e:
-            _LOGGER.warning(f"Failed to get battery peak SOC: {e}")
+            _LOGGER.warning(f"Error reading panel group sensors: {e}")
             return None

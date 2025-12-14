@@ -1,4 +1,4 @@
-"""Notification Service for Solar Forecast ML Integration V10.0.0 @zara
+"""Notification Service for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -25,6 +25,7 @@ from homeassistant.core import HomeAssistant
 
 from ..const import (
     CONF_NOTIFY_FORECAST,
+    CONF_NOTIFY_FROST,
     CONF_NOTIFY_LEARNING,
     CONF_NOTIFY_STARTUP,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
@@ -41,6 +42,7 @@ NOTIFICATION_ID_STARTUP = "solar_forecast_ml_startup"
 NOTIFICATION_ID_FORECAST = "solar_forecast_ml_forecast"
 NOTIFICATION_ID_LEARNING = "solar_forecast_ml_learning"
 NOTIFICATION_ID_RETRAINING = "solar_forecast_ml_retraining"
+NOTIFICATION_ID_FROST = "solar_forecast_ml_frost"
 
 class NotificationService:
     """Service for Persistent Notifications in Home Assistant"""
@@ -170,7 +172,7 @@ class NotificationService:
 
 **Mode:** Machine Learning (Full Feature Set)
 
-**Version:** "Lyra" - Named after the constellation containing Vega, one of the brightest stars in the night sky
+**Version:** "Sarpeidon" - Named after the planet from Star Trek where the Guardian of Forever resides
 
 **Author:** Zara-Toorox
 
@@ -180,21 +182,20 @@ class NotificationService:
 • Weather integration for accuracy
 • Peak production time detection
 • Autarky & self-sufficiency tracking
-• Daily Solar Briefing notifications
-• Battery management & cost optimization{installed_list}
+• Daily Solar Briefing notifications{installed_list}
 
 **System Status:** All systems operational ✓
 
 *"The future is not set in stone, but with data and logic, we can illuminate the path ahead."* — Inspired by Star Trek
 
 **Personal Note from Zara:**
-Thank you for using Solar Forecast ML! May your panels generate efficiently and your batteries stay charged. Live long and prosper! 🖖"""
+Thank you for using Solar Forecast ML! May your panels generate efficiently. Live long and prosper! 🖖"""
             else:
                 message = f"""**Solar Forecast ML Started in Fallback Mode** ⚠️
 
 **Mode:** Rule-Based Calculations (Limited Features)
 
-**Version:** "Lyra" - Named after the constellation containing Vega, one of the brightest stars in the night sky
+**Version:** "Sarpeidon" - Named after the planet from Star Trek where the Guardian of Forever resides
 
 **Author:** Zara-Toorox
 
@@ -359,6 +360,58 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
     async def dismiss_retraining_notification(self) -> bool:
         """Remove retraining notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_RETRAINING)
+
+    async def show_frost_warning(
+        self,
+        frost_score: int,
+        temperature_c: float,
+        dewpoint_c: float,
+        frost_margin_c: float,
+        hour: int,
+        confidence: float = 0.0,
+    ) -> bool:
+        """Show frost warning notification when heavy frost is detected @zara"""
+        if not self._should_notify(CONF_NOTIFY_FROST):
+            return False
+
+        try:
+            confidence_pct = int(confidence * 100)
+
+            message = f"""**Starker Frost auf Solarpanelen erkannt!** ❄️
+
+**Zeit:** {hour:02d}:00 Uhr
+**Frost-Score:** {frost_score}/10
+**Konfidenz:** {confidence_pct}%
+
+**Wetterbedingungen:**
+• Temperatur: {temperature_c:.1f}°C
+• Taupunkt: {dewpoint_c:.1f}°C
+• Frost-Margin: {frost_margin_c:.1f}°C
+
+**Auswirkungen:**
+• Die Solarproduktion ist wahrscheinlich reduziert
+• Diese Stunde wird vom ML-Training ausgeschlossen
+• Die Prognose-Genauigkeit kann beeinträchtigt sein
+
+**Hinweis:** Frost löst sich normalerweise auf, sobald die Sonne die Panele erwärmt.
+
+*"Even the coldest winter holds the promise of spring."* — Inspired by Star Trek"""
+
+            await self._safe_create_notification(
+                message=message,
+                title="❄️ Frost auf Solarpanelen",
+                notification_id=NOTIFICATION_ID_FROST,
+            )
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"[X] Error showing frost notification: {e}", exc_info=True)
+            return False
+
+    async def dismiss_frost_notification(self) -> bool:
+        """Remove frost notification @zara"""
+        return await self._safe_dismiss_notification(NOTIFICATION_ID_FROST)
 
 async def create_notification_service(
     hass: HomeAssistant, entry: ConfigEntry

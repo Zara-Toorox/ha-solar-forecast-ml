@@ -1,4 +1,4 @@
-"""ML Sample Aggregator for Solar Forecast ML Integration V10.0.0 @zara
+"""ML Sample Aggregator for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

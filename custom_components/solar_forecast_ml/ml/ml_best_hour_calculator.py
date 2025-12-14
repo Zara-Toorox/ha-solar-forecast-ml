@@ -1,4 +1,4 @@
-"""Best Hour Calculator - Weather-based calculation of peak production hour V10.0.0 @zara
+"""Best Hour Calculator - Weather-based calculation of peak production hour V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -111,7 +111,7 @@ class BestHourCalculator:
                 with open(open_meteo_file, 'r') as f:
                     return json.load(f)
 
-            cache = await self.hass.async_add_executor_job(_read_cache)
+            cache = await self.data_manager.hass.async_add_executor_job(_read_cache)
             forecast = cache.get("forecast", {})
 
             if not forecast:

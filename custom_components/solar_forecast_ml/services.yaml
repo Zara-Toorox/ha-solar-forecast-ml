@@ -36,7 +36,7 @@
 # ============================================================================
 
 force_retrain:
-  name: "🚀 Retrain ML Model (V10.0.0 TinyML)"
+  name: "🚀 Retrain ML Model"
   description: >
     ╔══════════════════════════════════════════════════════════════════════════╗
     ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
@@ -44,27 +44,15 @@ force_retrain:
     ║ Unsachgemäße Nutzung kann zu Datenverlust und Systeminstabilität führen.║
     ╚══════════════════════════════════════════════════════════════════════════╝
 
-    🚀 V10.0.0 ADAPTIVE TRAINING - Ridge Regression + TinyLSTM Neural Network
+    🚀 ADAPTIVE TRAINING - Ridge Regression + TinyLSTM Neural Network
 
     Forces immediate retraining of the Machine Learning model with adaptive algorithm selection.
 
-    What's new in V10.0.0 "TinyML":
-    - Adaptive algorithm selection (Ridge < 100 samples, TinyLSTM ≥ 100 samples)
-    - TinyLSTM: Pure NumPy LSTM with 24-hour lookback, 32 hidden neurons
-    - 14 optimized features (time, weather, astronomy, lag)
-    - Zero new dependencies (only NumPy required)
-    - Async-safe training (non-blocking event loop)
-
     Training behavior:
-    - < 100 samples → Ridge Regression (fast, stable, ~1 second)
-    - ≥ 100 samples → TinyLSTM (accurate, temporal, ~10-30 seconds)
-    - Automatic fallback to Ridge if LSTM fails or insufficient memory
-    - User can override via integration options (Automatic/Ridge/Neural Network)
-
-    Expected improvements vs V10.0.0:
-    - +5-10% accuracy with TinyLSTM (captures temporal patterns)
-    - Better handling of weather sequences (24-hour context)
-    - Improved early-morning and late-afternoon predictions
+    - < 100 samples → Ridge Regression (fast, stable)
+    - ≥ 100 samples → TinyLSTM (accurate, temporal)
+    - Automatic fallback to Ridge if LSTM fails
+    - User can override via integration options
 
     Data sources:
     - hourly_predictions.json (main source with actual production)
@@ -105,7 +93,7 @@ reset_model:
     Use this service:
     - After major configuration changes (solar_capacity, location)
     - If model produces consistently wrong predictions
-    - To start fresh ML training (debugging)
+    - To start fresh ML training
     - After corrupted model_state.json file
 
     What happens after reset:
@@ -147,7 +135,7 @@ run_all_day_end_tasks:
     5. Calculate Statistics (MAE, RMSE, R² metrics)
     6. Update RB Overall Correction (production-based factor)
     7. Night Cleanup (remove duplicates, zero samples)
-    8. Pattern Learning (V10.0.0 KI: geometry corrections)
+    8. Pattern Learning (geometry corrections)
 
     What this service does:
     - Saves today's final production data before midnight
@@ -161,7 +149,7 @@ run_all_day_end_tasks:
     Use this service:
     - ⚠️ If automatic 23:30 task failed
     - Before midnight to manually save today's data
-    - For debugging end-of-day workflow
+    - To trigger manually if automatic task failed
     - To trigger geometry learning manually
 
     Processing time: ~2-5 seconds (8 steps)
@@ -179,7 +167,7 @@ run_all_day_end_tasks:
 
 # ============================================================================
 # TESTING SERVICES - Essential Testing and Simulation
-# ⚠️ DEVELOPER ONLY - Nur für Debugging und auf Anweisung verwenden!
+# ⚠️ DEVELOPER ONLY - Nur auf Anweisung verwenden!
 # ============================================================================
 # These services replicate EXACTLY what happens at specific times.
 # ⚠️ WARNING: Create backup before use - these modify forecast data!
@@ -202,24 +190,23 @@ test_morning_routine:
 
     What this service does:
     1. Loads stored predictions from hourly_predictions.json (created at 06:00)
-    2. Loads weather data from weather_cache.json (fetched at 06:00)
+    2. Loads weather data from open_meteo_cache.json (fetched at 06:00)
     3. Analyzes predicted best hour vs actual best hour
     4. Shows prediction accuracy and errors
     5. Compares ML/Rule blending effectiveness
 
     This service is READ-ONLY and uses REAL stored data from this morning's
-    06:00 routine. Perfect for debugging why a certain hour was predicted
-    as best.
+    06:00 routine.
 
     Use cases:
-    - Debug: Why was hour X predicted as best?
-    - Verify: Did the 06:00 routine work correctly?
+    - Why was hour X predicted as best?
+    - Did the 06:00 routine work correctly?
     - Compare: Predicted vs actual production
-    - Analyze: ML contribution and blending weights
+    - ML contribution and blending weights
 
     Data sources:
     - /stats/hourly_predictions.json (predictions created at 06:00)
-    - /data/weather_cache.json (weather forecast from 06:00)
+    - /data/open_meteo_cache.json (weather forecast from Open-Meteo)
   fields: {}
 
 # ============================================================================
@@ -250,7 +237,7 @@ build_astronomy_cache:
     - Determines production windows (sunrise -30min to sunset +30min)
     - Generates solar noon, daylight hours, day progress ratios
 
-    ⚠️ V10.0.0 IMPORTANT: Uses your configured solar_capacity (e.g., 2.13 kWp)!
+    ⚠️ IMPORTANT: Uses your configured solar_capacity!
     All theoretical_max_pv values will be calculated for YOUR specific system size.
 
     The cache is used for:
@@ -362,14 +349,13 @@ run_weather_correction:
     which normally runs automatically at 02:00 daily.
 
     What this does:
-    1. Loads raw weather forecast from weather_cache.json
+    1. Loads raw weather forecast from open_meteo_cache.json
     2. Loads precision correction factors from weather_precision_daily.json
     3. Loads astronomy data for clear_sky calculations
     4. Applies physics-based corrections (clear_sky × cloud_factor)
     5. Saves corrected forecast to weather_forecast_corrected.json
 
     Use this service:
-    - After fixing bugs in weather correction code
     - To test weather correction logic immediately
     - If automatic 02:00 task failed
     - When you can't wait until 02:00 for new forecast
@@ -424,6 +410,67 @@ refresh_open_meteo_cache:
 
     API: api.open-meteo.com (free, no API key required)
   fields: {}
+
+refresh_multi_weather:
+  name: "🌤️ Refresh Multi-Weather Cache"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ℹ️ SICHER / SAFE - Kann von Benutzern verwendet werden                   ║
+    ║ Dieser Service aktualisiert nur Wetter-Caches.                          ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🌤️ Refresh Multi-Weather blended forecast (Open-Meteo + wttr.in)!
+
+    This service fetches weather data from multiple sources and blends
+    cloud cover predictions using learned accuracy weights.
+
+    What this does:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    1. Fetches 72-hour forecast from Open-Meteo (primary source)
+    2. If cloud_cover > 50%: Also fetches from wttr.in (World Weather Online)
+    3. Blends cloud_cover using learned weights (based on past accuracy)
+    4. Saves blended forecast to open_meteo_cache.json
+    5. Updates wttr_in_cache.json (6h cache, 12h fallback)
+
+    Multi-Source Blending:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    - Open-Meteo predicted 100% clouds, wttr.in predicted 35%
+    - With learned weights (30% OM, 70% WWO): Blended = 54%
+    - Actual was 10% → wttr.in was more accurate → Gets higher weight next time
+
+    Cache Strategy:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    - wttr.in cache: 6 hours (normal), 12 hours (fallback if API down)
+    - Reduces API calls (wttr.in has ~100 req/hour limit)
+    - Automatic retry with stale cache if API timeout
+
+    Automatic schedule:
+    - 06:00, 12:00, 18:00: Multi-Weather update (with trigger check)
+    - 23:30: Weight learning from daily actual data
+
+    Use this service when:
+    - Want immediate Multi-Weather refresh
+    - After configuration changes
+    - To test blending logic
+
+    Processing time: ~3-10 seconds (depends on API responses)
+
+    Result files:
+    - /config/solar_forecast_ml/data/open_meteo_cache.json (blended forecast)
+    - /config/solar_forecast_ml/data/wttr_in_cache.json (wttr.in cache)
+    - /config/solar_forecast_ml/data/weather_source_weights.json (learned weights)
+  fields:
+    force_wttr_refresh:
+      name: "Force wttr.in Refresh"
+      description: >
+        Force a fresh API call to wttr.in even if the cache is still valid.
+        Use this if you suspect the cache is outdated or want immediate fresh data.
+        Default: false (uses cache if < 6 hours old)
+      required: false
+      default: false
+      example: true
+      selector:
+        boolean:
 
 bootstrap_physics_from_history:
   name: "🔬 Bootstrap Physics-First Models from History"
@@ -660,185 +707,52 @@ send_daily_briefing:
               value: "en"
 
 # ============================================================================
-# BATTERY MANAGEMENT - Auto-Discovery Services
-# ⚠️ DEVELOPER ONLY - Kann Konfiguration automatisch ändern!
+# INSTALLATION SERVICES - Extra Features Management
 # ============================================================================
 
-discover_battery_sensors:
-  name: "Batterie-Sensoren automatisch erkennen"
+install_extra_features:
+  name: "📦 Install Extra Features"
   description: >
     ╔══════════════════════════════════════════════════════════════════════════╗
-    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
-    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
-    ║ Mit auto_apply=true wird die Konfiguration automatisch geändert!        ║
+    ║ ℹ️ SICHER / SAFE - Kann von Benutzern verwendet werden                   ║
+    ║ Dieser Service installiert zusätzliche Integrationen.                   ║
     ╚══════════════════════════════════════════════════════════════════════════╝
 
-    🔋 Erkennt automatisch kompatible Batterie-Sensoren von unterstützten Integrationen.
+    📦 Install extra feature integrations to your custom_components folder!
 
-    Unterstützte Integrationen:
-    - Anker Solix (anker_solix)
-    - Huawei Solar (huawei_solar)
-    - Fronius (fronius)
+    This service copies additional integrations from the extra_features folder
+    to your custom_components directory, making them available for configuration.
 
-    Wenn keine Integration angegeben wird, werden alle unterstützten Integrationen durchsucht.
+    Available features:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📊 grid_price_monitor
+       - Dynamic grid electricity price monitoring
+       - Tibber/Awattar/EPEX Spot integration
+       - Price-based automation triggers
 
-    Die erkannten Sensoren können dann manuell in der Integration konfiguriert oder mit
-    auto_apply=true automatisch eingetragen werden.
+    📈 sfml_stats
+       - Solar Forecast ML Statistics Dashboard
+       - Detailed accuracy metrics and charts
+       - Historical performance analysis
 
-    Tipp: Verwenden Sie stattdessen auto_configure_battery für eine vollautomatische Konfiguration!
-  fields:
-    integration:
-      name: "Integration"
-      description: "Name der Integration (optional). Wenn nicht angegeben, werden alle unterstützten Integrationen durchsucht."
-      required: false
-      example: "anker_solix"
-      selector:
-        select:
-          options:
-            - "anker_solix"
-            - "huawei_solar"
-            - "fronius"
-    auto_apply:
-      name: "Automatisch anwenden"
-      description: "Wenn aktiviert, werden die erkannten Sensoren automatisch in die Konfiguration eingetragen (Standard: false)"
-      required: false
-      default: false
-      example: true
-      selector:
-        boolean:
+    What this service does:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    1. Checks which features are available in extra_features/
+    2. Copies each feature to custom_components/
+    3. Creates a persistent notification with instructions
+    4. Reports success/failure for each feature
 
-auto_configure_battery:
-  name: "🚀 Batterie-Sensoren automatisch konfigurieren (1-Klick)"
-  description: >
-    ╔══════════════════════════════════════════════════════════════════════════╗
-    ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
-    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
-    ║ ÄNDERT AUTOMATISCH Ihre Home Assistant Konfiguration!                   ║
-    ║ Die Integration wird automatisch neu geladen!                           ║
-    ╚══════════════════════════════════════════════════════════════════════════╝
+    After installation:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ⚠️ RESTART HOME ASSISTANT to load the new integrations!
 
-    🎯 ONE-CLICK LÖSUNG - Erkennt UND konfiguriert Batterie-Sensoren vollautomatisch!
+    Then configure via:
+    Settings → Devices & Services → Add Integration → Search for feature name
 
-    Was dieser Service macht:
-    1. Sucht nach unterstützten Integrationen (Anker Solix, Huawei Solar, Fronius)
-    2. Erkennt automatisch alle kompatiblen Sensoren
-    3. Validiert die erkannten Sensoren
-    4. Trägt die Sensoren AUTOMATISCH in Ihre Solar Forecast ML Konfiguration ein
-    5. Lädt die Integration neu, um die Änderungen zu aktivieren
+    Processing time: ~1-2 seconds
 
-    ✨ Einfachste Methode - Nur 1 Klick!
-
-    Nach erfolgreicher Konfiguration:
-    - Batterie-Management ist aktiviert (v9.0.0 System)
-    - Energiefluss-Tracking ist aktiv
-    - Alle Batterie-Sensoren werden überwacht
-
-    WICHTIG: Dieser Service ändert Ihre Konfiguration. Die Integration wird automatisch neu geladen.
-
-    Unterstützte Integrationen:
-    - Anker Solix (anker_solix)
-    - Huawei Solar (huawei_solar)
-    - Fronius (fronius)
-  fields:
-    integration:
-      name: "Integration (optional)"
-      description: "Name der Integration. Wenn nicht angegeben, wird automatisch nach allen unterstützten Integrationen gesucht."
-      required: false
-      example: "anker_solix"
-      selector:
-        select:
-          options:
-            - "anker_solix"
-            - "huawei_solar"
-            - "fronius"
-
-validate_battery_sensors:
-  name: "Batterie-Sensoren validieren"
-  description: >
-    ╔══════════════════════════════════════════════════════════════════════════╗
-    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
-    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
-    ║ Keine Änderungen am System (read-only).                                 ║
-    ╚══════════════════════════════════════════════════════════════════════════╝
-
-    ✅ Validiert die Konfiguration der Batterie-Sensoren.
-
-    Prüft ob:
-    - Alle erforderlichen Sensoren vorhanden sind
-    - Die Sensoren in Home Assistant existieren
-    - Die Sensoren gültige Werte liefern
-
-    Nützlich nach der Auto-Discovery um sicherzustellen, dass alle Sensoren korrekt erkannt wurden.
-  fields:
-    battery_power_sensor:
-      name: "Batterie Leistungssensor"
-      description: "Sensor für Batterie-Leistung (W, positiv=laden, negativ=entladen)"
-      required: true
-      example: "sensor.anker_charging_power"
-      selector:
-        entity:
-          domain: sensor
-    battery_soc_sensor:
-      name: "Batterie SOC Sensor"
-      description: "Sensor für Ladezustand (State of Charge) in Prozent (0-100%)"
-      required: true
-      example: "sensor.anker_state_of_charge"
-      selector:
-        entity:
-          domain: sensor
-    solar_production_sensor:
-      name: "Solar Produktionssensor"
-      description: "Sensor für Solar-Produktion in Watt (≥0)"
-      required: true
-      example: "sensor.anker_input_power"
-      selector:
-        entity:
-          domain: sensor
-    inverter_output_sensor:
-      name: "Wechselrichter Ausgangssensor"
-      description: "Sensor für Wechselrichter AC-Ausgang in Watt (≥0)"
-      required: true
-      example: "sensor.anker_output_power"
-      selector:
-        entity:
-          domain: sensor
-    house_consumption_sensor:
-      name: "Hausverbrauchssensor"
-      description: "Sensor für Hausverbrauch in Watt (≥0)"
-      required: true
-      example: "sensor.anker_home_load_power"
-      selector:
-        entity:
-          domain: sensor
-    grid_import_sensor:
-      name: "Netzbezugssensor"
-      description: "Sensor für Netzbezug (Strom aus dem Netz) in Watt (≥0)"
-      required: true
-      example: "sensor.anker_grid_to_home_power"
-      selector:
-        entity:
-          domain: sensor
-    grid_export_sensor:
-      name: "Netzeinspeisung Sensor"
-      description: "Sensor für Netzeinspeisung (Strom ins Netz) in Watt (≥0)"
-      required: true
-      example: "sensor.anker_photovoltaic_to_grid_power"
-      selector:
-        entity:
-          domain: sensor
-    grid_charge_power_sensor:
-      name: "Netzladeleistung Sensor"
-      description: "Sensor für Netzladeleistung zur Batterie in Watt (≥0, optional)"
-      required: false
-      example: "sensor.anker_grid_to_battery_power"
-      selector:
-        entity:
-          domain: sensor
-    battery_temperature_sensor:
-      name: "Batterie Temperatursensor"
-      description: "Sensor für Batterie-Temperatur in °C (optional)"
-      required: false
-      example: "sensor.anker_temperature"
-      selector:
-        entity:
-          domain: sensor
+    Use this service:
+    - After fresh Solar Forecast ML installation
+    - To update extra features to latest version
+    - When new extra features become available
+  fields: {}

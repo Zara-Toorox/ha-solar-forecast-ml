@@ -1,4 +1,4 @@
-"""JSON Schema Validation and Migration for Solar Forecast ML Integration V10.0.0 @zara
+"""JSON Schema Validation and Migration for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -62,21 +62,25 @@ class DataSchemaValidator:
             success &= await self._validate_daily_summaries()
 
             success &= await self._validate_weather_forecast_corrected()
+            success &= await self._validate_forecast_drift_log()
             success &= await self._validate_weather_precision_daily()
             success &= await self._validate_hourly_weather_actual()
             success &= await self._validate_weather_cache()
             success &= await self._validate_open_meteo_cache()
+            success &= await self._validate_wttr_in_cache()
+            success &= await self._validate_weather_source_weights()
+            success &= await self._validate_weather_source_learning()
 
             success &= await self._validate_coordinator_state()
             success &= await self._validate_production_time_state()
 
             success &= await self._validate_astronomy_cache()
 
-            # Physics-First Architecture files (2025-11-28)
             success &= await self._validate_learned_geometry()
+            success &= await self._validate_learned_panel_group_efficiency()
+            success &= await self._validate_panel_group_sensor_state()
             success &= await self._validate_residual_model_state()
-
-            success &= await self._validate_battery_charge_history()
+            success &= await self._validate_yield_cache()
 
             if self.migration_log:
                 _LOGGER.info("=== Migration Summary ===")
@@ -104,6 +108,7 @@ class DataSchemaValidator:
             self.data_dir / "data",
             self.data_dir / "stats",
             self.data_dir / "ml",
+            self.data_dir / "physics",  # Physics-based learning (V12.0.0)
             self.data_dir / "logs",
             self.data_dir / "backups",
             self.data_dir / "backups" / "auto",
@@ -156,6 +161,27 @@ class DataSchemaValidator:
 
         except Exception as e:
             _LOGGER.error(f"Failed to write {file_path.name}: {e}")
+            return False
+
+    async def _file_exists(self, file_path: Path) -> bool:
+        """Check if file exists async @zara"""
+        return await self.hass.async_add_executor_job(file_path.exists)
+
+    async def _ensure_directory(self, dir_path: Path) -> None:
+        """Ensure directory exists @zara"""
+        if not await self.hass.async_add_executor_job(dir_path.exists):
+            await self.hass.async_add_executor_job(dir_path.mkdir, True, True)
+            _LOGGER.debug(f"Created directory: {dir_path}")
+
+    async def _migrate_file(self, old_path: Path, new_path: Path) -> bool:
+        """Migrate file from old to new location @zara"""
+        try:
+            import shutil
+            await self.hass.async_add_executor_job(shutil.move, str(old_path), str(new_path))
+            _LOGGER.info(f"Migrated {old_path.name} to {new_path.parent.name}/")
+            return True
+        except Exception as e:
+            _LOGGER.error(f"Failed to migrate {old_path.name}: {e}")
             return False
 
     async def _validate_learned_weights(self) -> bool:
@@ -551,7 +577,7 @@ class DataSchemaValidator:
         return modified
 
     def _create_default_daily_forecasts(self) -> Dict[str, Any]:
-        """Create complete default daily_forecasts structure - matches production V10.0.0 @zara"""
+        """Create complete default daily_forecasts structure - matches production V12.0.0 @zara"""
         return {
             "version": "3.0.0",
             "today": self._create_default_today_block(),
@@ -579,15 +605,18 @@ class DataSchemaValidator:
         }
 
     def _create_default_forecast_day(self) -> Dict[str, Any]:
-        """Create default forecast_day block - matches production V10.0.0 format @zara"""
+        """Create default forecast_day block - matches production V12.0.0 format @zara"""
         return {
             "prediction_kwh": None,
             "prediction_kwh_raw": None,
+            "prediction_kwh_display": None,  # For intraday corrections (09:05/12:05)
             "safeguard_applied": False,
             "safeguard_reduction_kwh": 0.0,
             "locked": False,
             "locked_at": None,
             "source": None,
+            "intraday_corrected": False,
+            "intraday_corrected_at": None,
         }
 
     def _create_default_forecast_tomorrow(self) -> Dict[str, Any]:
@@ -869,7 +898,6 @@ class DataSchemaValidator:
             if "cloud_model" in meta:
                 del meta["cloud_model"]
                 modified = True
-            # NOTE: radiation_source is NOT in master - do NOT add it!
 
             if "rb_overall_correction" not in meta:
                 meta["rb_overall_correction"] = {
@@ -932,7 +960,6 @@ class DataSchemaValidator:
                 "rain": 0.0,
                 "pressure": 0.0,
             },
-            # NOTE: radiation_source is NOT in master - removed 2025-11-28
             "rb_overall_correction": {
                 "factor": 1.0,
                 "confidence": 0.0,
@@ -957,6 +984,45 @@ class DataSchemaValidator:
             "last_fallback_used": None,
             "fallback_count_today": 0,
         }
+
+    async def _validate_forecast_drift_log(self) -> bool:
+        """Validate forecast_drift_log.json - Tracks forecast drift for analysis @zara
+
+        This file logs forecast drift data for future pattern analysis.
+        Used by the midday check V3.0 to understand forecast accuracy patterns.
+        """
+        file_path = self.data_dir / "stats" / "forecast_drift_log.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            # Create empty log file
+            self._log_migration("forecast_drift_log.json: Creating new file")
+            data = {
+                "version": "1.0",
+                "entries": [],
+            }
+            return await self._write_json(file_path, data)
+
+        modified = False
+
+        if "version" not in data:
+            data["version"] = "1.0"
+            modified = True
+
+        if "entries" not in data or not isinstance(data["entries"], list):
+            data["entries"] = []
+            modified = True
+
+        # Keep only last 30 entries (30 days of data)
+        if len(data["entries"]) > 30:
+            data["entries"] = data["entries"][-30:]
+            modified = True
+
+        if modified:
+            self._log_migration("forecast_drift_log.json: Schema updated")
+            return await self._write_json(file_path, data)
+
+        return True
 
     async def _validate_weather_precision_daily(self) -> bool:
         """Validate weather_precision_daily.json - Correction factors @zara"""
@@ -1216,7 +1282,7 @@ class DataSchemaValidator:
         return True
 
     def _create_default_frost_analysis(self) -> Dict[str, Any]:
-        """Create default frost_analysis structure for V10.0.0 enhanced frost detection @zara"""
+        """Create default frost_analysis structure for V12.0.0 enhanced frost detection @zara"""
         return {
             "dewpoint_c": None,
             "frost_margin_c": None,
@@ -1672,7 +1738,6 @@ class DataSchemaValidator:
             "hours_cached": 0,
             "days_cached": 0,
             "mode": "direct_radiation",
-            # NOTE: data_source and note are NOT in master - removed 2025-11-28
         }
 
     def _create_default_open_meteo_cache(self) -> Dict[str, Any]:
@@ -1832,64 +1897,19 @@ class DataSchemaValidator:
             }
         return peaks
 
-    async def _validate_battery_charge_history(self) -> bool:
-        """Validate battery_charge_history.json - Battery tracking data @zara"""
-        file_path = self.data_dir / "data" / "battery_charge_history.json"
-
-        data = await self._read_json(file_path)
-        if data is None:
-
-            return True
-
-        modified = False
-
-        if "version" not in data:
-            data["version"] = "1.0"
-            modified = True
-
-        if "battery_capacity" not in data:
-            data["battery_capacity"] = 0.0
-            modified = True
-
-        if "last_update" not in data:
-            data["last_update"] = None
-            modified = True
-
-        for block in ["daily", "monthly", "yearly"]:
-            if block not in data or not isinstance(data[block], dict):
-                data[block] = {}
-                modified = True
-
-        if modified:
-            self._log_migration("battery_charge_history.json: Schema updated and validated")
-            return await self._write_json(file_path, data)
-
-        return True
-
-    def _create_default_battery_charge_history(self) -> Dict[str, Any]:
-        """Create default battery_charge_history structure @zara"""
-        return {
-            "version": "1.0",
-            "battery_capacity": 0.0,
-            "last_update": None,
-            "daily": {},
-            "monthly": {},
-            "yearly": {},
-        }
-
-    # ==========================================================================
-    # PHYSICS-FIRST ARCHITECTURE FILES (2025-11-28)
-    # ==========================================================================
-
     async def _validate_learned_geometry(self) -> bool:
-        """Validate learned_geometry.json - Panel geometry learning data @zara
+        """Validate learned_geometry.json - Panel geometry learning data @zara"""
+        # New location in physics/ subdirectory (V12.0.0)
+        file_path = self.data_dir / "physics" / "learned_geometry.json"
+        old_file_path = self.data_dir / "learned_geometry.json"
 
-        This file stores the learned tilt/azimuth from the GeometryLearner module.
-        Part of the Physics-First Architecture (2025-11-28).
-
-        Location: data_dir/learned_geometry.json (NOT in ml/ subdirectory!)
-        """
-        file_path = self.data_dir / "learned_geometry.json"
+        # Migrate from old location if needed
+        if await self._file_exists(old_file_path) and not await self._file_exists(file_path):
+            await self._ensure_directory(file_path.parent)
+            await self._migrate_file(old_file_path, file_path)
+            self._log_migration(
+                "learned_geometry.json: Migrated to physics/ subdirectory"
+            )
 
         data = await self._read_json(file_path)
         if data is None:
@@ -1899,6 +1919,7 @@ class DataSchemaValidator:
                 "(Physics-First Architecture, requires clear-sky data collection)"
             )
             # Create default structure for immediate availability
+            await self._ensure_directory(file_path.parent)
             data = self._create_default_learned_geometry()
             return await self._write_json(file_path, data)
 
@@ -1976,7 +1997,6 @@ class DataSchemaValidator:
             "metadata": {
                 "system_capacity_kwp": None,
                 "saved_at": None,
-                # NOTE: description is NOT in master - removed 2025-11-28
             },
         }
 
@@ -1992,14 +2012,124 @@ class DataSchemaValidator:
             "error_metrics": {},
         }
 
-    async def _validate_residual_model_state(self) -> bool:
-        """Validate residual_model_state.json - ML Residual Trainer state @zara
+    async def _validate_learned_panel_group_efficiency(self) -> bool:
+        """Validate learned_panel_group_efficiency.json - Panel group efficiency learning data @zara
 
-        This file stores the residual model weights and statistics.
-        Part of the Physics-First Architecture (2025-11-28).
-
-        Location: data_dir/ml/residual_model_state.json
+        This file is only relevant when panel_groups are configured.
+        If the file doesn't exist and there are no panel groups, that's fine.
         """
+        # New location in physics/ subdirectory (V12.0.0)
+        file_path = self.data_dir / "physics" / "learned_panel_group_efficiency.json"
+        old_file_path = self.data_dir / "learned_panel_group_efficiency.json"
+
+        # Migrate from old location if needed
+        if await self._file_exists(old_file_path) and not await self._file_exists(file_path):
+            await self._ensure_directory(file_path.parent)
+            await self._migrate_file(old_file_path, file_path)
+            self._log_migration(
+                "learned_panel_group_efficiency.json: Migrated to physics/ subdirectory"
+            )
+
+        data = await self._read_json(file_path)
+        if data is None:
+            # File doesn't exist - will be created by PanelGroupEfficiencyLearner
+            # when panel groups are configured and bootstrap runs
+            self._log_migration(
+                "learned_panel_group_efficiency.json: File missing - will be created by "
+                "PanelGroupEfficiencyLearner when panel groups are configured"
+            )
+            return True  # Not an error - file is optional
+
+        modified = False
+
+        # Validate version
+        if data.get("version") != "2.0":
+            data["version"] = "2.0"
+            modified = True
+
+        # Validate mode
+        if data.get("mode") != "panel_groups":
+            data["mode"] = "panel_groups"
+            modified = True
+
+        # Validate panel_groups array
+        if "panel_groups" not in data or not isinstance(data["panel_groups"], list):
+            data["panel_groups"] = []
+            modified = True
+        else:
+            # Validate each panel group entry
+            for group in data["panel_groups"]:
+                if not isinstance(group, dict):
+                    continue
+
+                # Required fields with defaults
+                group_defaults = {
+                    "name": "Unknown",
+                    "configured_tilt_deg": 30.0,
+                    "configured_azimuth_deg": 180.0,
+                    "power_kwp": 0.0,
+                    "learned_efficiency_factor": 1.0,
+                    "learned_shadow_hours": [],
+                    "sample_count": 0,
+                    "confidence": 0.0,
+                    "hourly_efficiency": {},
+                }
+                for field, default in group_defaults.items():
+                    if field not in group:
+                        group[field] = default
+                        modified = True
+
+                # Validate ranges
+                if not (0 <= group.get("configured_tilt_deg", 30) <= 90):
+                    group["configured_tilt_deg"] = max(0, min(90, group.get("configured_tilt_deg", 30)))
+                    modified = True
+                if not (0 <= group.get("configured_azimuth_deg", 180) <= 360):
+                    group["configured_azimuth_deg"] = group.get("configured_azimuth_deg", 180) % 360
+                    modified = True
+                if not (0 <= group.get("confidence", 0) <= 1):
+                    group["confidence"] = max(0, min(1, group.get("confidence", 0)))
+                    modified = True
+                if not (0.1 <= group.get("learned_efficiency_factor", 1.0) <= 2.0):
+                    group["learned_efficiency_factor"] = max(0.1, min(2.0, group.get("learned_efficiency_factor", 1.0)))
+                    modified = True
+
+        # Validate data_points (optional - keep last 500)
+        if "data_points" not in data:
+            data["data_points"] = []
+            modified = True
+        elif not isinstance(data["data_points"], list):
+            data["data_points"] = []
+            modified = True
+        elif len(data["data_points"]) > 500:
+            data["data_points"] = data["data_points"][-500:]
+            modified = True
+
+        # Validate total_samples
+        if "total_samples" not in data or not isinstance(data["total_samples"], int):
+            data["total_samples"] = len(data.get("data_points", []))
+            modified = True
+
+        # Validate last_updated
+        if "last_updated" not in data:
+            data["last_updated"] = None
+            modified = True
+
+        # Validate metadata
+        if "metadata" not in data or not isinstance(data["metadata"], dict):
+            data["metadata"] = {
+                "total_capacity_kwp": 0.0,
+                "group_count": len(data.get("panel_groups", [])),
+            }
+            modified = True
+
+        if modified:
+            self._log_migration("learned_panel_group_efficiency.json: Schema updated (Panel-Gruppen V12.0.0)")
+            return await self._write_json(file_path, data)
+
+        return True
+
+    async def _validate_residual_model_state(self) -> bool:
+        """Validate residual_model_state.json - ML Residual Trainer state @zara"""
         file_path = self.data_dir / "ml" / "residual_model_state.json"
 
         data = await self._read_json(file_path)
@@ -2081,7 +2211,6 @@ class DataSchemaValidator:
             "model_type": "ridge",
             "saved_at": None,
             "system_capacity_kwp": None,
-            # NOTE: description is NOT in master - removed 2025-11-28
         }
 
     def _create_default_residual_stats(self) -> Dict[str, Any]:
@@ -2092,4 +2221,391 @@ class DataSchemaValidator:
             "min": -1.0,
             "max": 1.0,
             "sample_count": 0,
+        }
+
+    async def _validate_yield_cache(self) -> bool:
+        """Validate yield_cache.json - Persistent cache for hourly yield tracking @zara
+
+        Location: data_dir/stats/yield_cache.json
+        """
+        file_path = self.data_dir / "stats" / "yield_cache.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            # File doesn't exist - create empty template
+            # Will be populated by update_hourly_actuals() during production hours
+            self._log_migration(
+                "yield_cache.json: Creating new file - "
+                "will be populated during production hours"
+            )
+            data = self._create_default_yield_cache()
+            return await self._write_json(file_path, data)
+
+        modified = False
+
+        # Validate required fields
+        required_fields = {
+            "value": None,
+            "time": None,
+            "date": None,
+        }
+
+        for field, default in required_fields.items():
+            if field not in data:
+                data[field] = default
+                modified = True
+
+        # Validate value is numeric or None
+        if data.get("value") is not None:
+            try:
+                data["value"] = float(data["value"])
+                if data["value"] < 0:
+                    self._log_migration(
+                        f"yield_cache.json: Clamping negative value {data['value']} to 0"
+                    )
+                    data["value"] = 0.0
+                    modified = True
+            except (ValueError, TypeError):
+                self._log_migration(
+                    f"yield_cache.json: Invalid value '{data['value']}' - resetting to None"
+                )
+                data["value"] = None
+                modified = True
+
+        # Validate date format (YYYY-MM-DD)
+        if data.get("date") is not None:
+            try:
+                datetime.strptime(data["date"], "%Y-%m-%d")
+            except ValueError:
+                self._log_migration(
+                    f"yield_cache.json: Invalid date format '{data['date']}' - resetting"
+                )
+                data["date"] = None
+                data["value"] = None  # Invalidate value too
+                modified = True
+
+        # Check if cache is stale (from a different day)
+        if data.get("date"):
+            today = dt_util.now().date().isoformat()
+            if data["date"] != today:
+                self._log_migration(
+                    f"yield_cache.json: Stale cache from {data['date']} (today is {today}) - "
+                    "will be refreshed at next hourly update"
+                )
+                # Don't reset here - let update_hourly_actuals handle it
+                # This allows for proper day-transition handling
+
+        if modified:
+            self._log_migration("yield_cache.json: Schema validated and updated")
+            return await self._write_json(file_path, data)
+
+        return True
+
+    def _create_default_yield_cache(self) -> Dict[str, Any]:
+        """Create default yield_cache structure @zara
+
+        This cache stores the last known cumulative yield value
+        to enable correct delta calculation after HA restarts.
+        """
+        return {
+            "value": None,
+            "time": None,
+            "date": None,
+        }
+
+    async def _validate_wttr_in_cache(self) -> bool:
+        """Validate wttr_in_cache.json - wttr.in API cache for Multi-Weather Blending @zara
+
+        Location: data_dir/data/wttr_in_cache.json
+        """
+        file_path = self.data_dir / "data" / "wttr_in_cache.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            # File doesn't exist - create empty template
+            # Will be populated by MultiWeatherBlender on first weather fetch
+            self._log_migration(
+                "wttr_in_cache.json: Creating empty template - "
+                "will be populated when Multi-Weather Blending triggers"
+            )
+            data = self._create_default_wttr_in_cache()
+            return await self._write_json(file_path, data)
+
+        modified = False
+
+        # Validate version
+        if "version" not in data:
+            data["version"] = "1.0"
+            modified = True
+
+        # Validate metadata
+        if "metadata" not in data or not isinstance(data["metadata"], dict):
+            data["metadata"] = {
+                "fetched_at": None,
+                "source": "wttr.in",
+                "latitude": None,
+                "longitude": None,
+                "cache_max_age_hours": 6,
+                "created_empty": True,
+            }
+            modified = True
+        else:
+            meta = data["metadata"]
+            required_meta = {
+                "fetched_at": None,
+                "source": "wttr.in",
+            }
+            for field, default in required_meta.items():
+                if field not in meta:
+                    meta[field] = default
+                    modified = True
+
+        # Validate forecast structure
+        if "forecast" not in data or not isinstance(data["forecast"], dict):
+            data["forecast"] = {}
+            modified = True
+
+        if modified:
+            self._log_migration("wttr_in_cache.json: Schema validated and updated")
+            return await self._write_json(file_path, data)
+
+        return True
+
+    def _create_default_wttr_in_cache(self) -> Dict[str, Any]:
+        """Create default wttr_in_cache structure for Multi-Weather Blending @zara"""
+        return {
+            "version": "1.0",
+            "metadata": {
+                "fetched_at": None,
+                "source": "wttr.in",
+                "latitude": None,
+                "longitude": None,
+                "cache_max_age_hours": 6,
+                "created_empty": True,
+            },
+            "forecast": {},
+        }
+
+    async def _validate_weather_source_weights(self) -> bool:
+        """Validate weather_source_weights.json - Multi-Weather Blending weights @zara
+
+        CRITICAL: This file enables weight learning for weather source blending.
+        Without it, the WeatherSourceLearner cannot operate.
+
+        Location: data_dir/data/weather_source_weights.json
+        """
+        file_path = self.data_dir / "data" / "weather_source_weights.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            # CRITICAL: Create this file for Multi-Weather Blending to work
+            self._log_migration(
+                "weather_source_weights.json: CRITICAL - Creating file with default weights "
+                "(Required for Multi-Weather Blending weight learning)"
+            )
+            data = self._create_default_weather_source_weights()
+            return await self._write_json(file_path, data)
+
+        modified = False
+
+        # Validate version
+        if "version" not in data:
+            data["version"] = "1.0"
+            modified = True
+
+        # Validate weights structure
+        if "weights" not in data or not isinstance(data["weights"], dict):
+            data["weights"] = {
+                "open_meteo": 0.5,
+                "wwo": 0.5,
+            }
+            modified = True
+        else:
+            weights = data["weights"]
+            # Ensure default weights exist
+            if "open_meteo" not in weights:
+                weights["open_meteo"] = 0.5
+                modified = True
+            if "wwo" not in weights:
+                weights["wwo"] = 0.5
+                modified = True
+
+            # Validate weights are numeric and in valid range
+            for source in ["open_meteo", "wwo"]:
+                try:
+                    val = float(weights[source])
+                    if not (0.0 <= val <= 1.0):
+                        weights[source] = max(0.0, min(1.0, val))
+                        modified = True
+                except (ValueError, TypeError):
+                    weights[source] = 0.5
+                    modified = True
+
+        # Validate learning_metadata
+        if "learning_metadata" not in data or not isinstance(data["learning_metadata"], dict):
+            data["learning_metadata"] = {
+                "last_updated": None,
+                "learning_days": 0,
+                "created_at": dt_util.now().isoformat(),
+                "source": "schema_validator_default",
+            }
+            modified = True
+
+        if modified:
+            self._log_migration("weather_source_weights.json: Schema validated and updated")
+            return await self._write_json(file_path, data)
+
+        return True
+
+    def _create_default_weather_source_weights(self) -> Dict[str, Any]:
+        """Create default weather_source_weights structure for Multi-Weather Blending @zara
+
+        IMPORTANT: These are the initial weights before any learning occurs.
+        50/50 split gives equal weight to both sources until the system learns.
+        """
+        return {
+            "version": "1.0",
+            "weights": {
+                "open_meteo": 0.5,
+                "wwo": 0.5,
+            },
+            "learning_metadata": {
+                "last_updated": None,
+                "learning_days": 0,
+                "created_at": dt_util.now().isoformat(),
+                "source": "schema_validator_default",
+            },
+        }
+
+    async def _validate_weather_source_learning(self) -> bool:
+        """Validate weather_source_learning.json - Learning history for weight optimization @zara
+
+        Location: data_dir/stats/weather_source_learning.json
+        """
+        file_path = self.data_dir / "stats" / "weather_source_learning.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            # File doesn't exist - create empty template
+            # Will be populated by WeatherSourceLearner at 23:30 daily
+            self._log_migration(
+                "weather_source_learning.json: Creating empty template - "
+                "will be populated by WeatherSourceLearner at 23:30 daily"
+            )
+            data = self._create_default_weather_source_learning()
+            return await self._write_json(file_path, data)
+
+        modified = False
+
+        # Validate version
+        if "version" not in data:
+            data["version"] = "1.0"
+            modified = True
+
+        # Validate daily_history structure
+        if "daily_history" not in data or not isinstance(data["daily_history"], dict):
+            data["daily_history"] = {}
+            modified = True
+
+        # Validate metadata
+        if "metadata" not in data or not isinstance(data["metadata"], dict):
+            data["metadata"] = {
+                "total_learning_days": 0,
+                "last_learning_run": None,
+                "created_at": dt_util.now().isoformat(),
+            }
+            modified = True
+
+        # Keep only last 30 days of history
+        if len(data.get("daily_history", {})) > 30:
+            sorted_dates = sorted(data["daily_history"].keys())
+            dates_to_remove = sorted_dates[:-30]
+            for old_date in dates_to_remove:
+                del data["daily_history"][old_date]
+            modified = True
+            self._log_migration(
+                f"weather_source_learning.json: Trimmed history to last 30 days "
+                f"(removed {len(dates_to_remove)} old entries)"
+            )
+
+        if modified:
+            self._log_migration("weather_source_learning.json: Schema validated and updated")
+            return await self._write_json(file_path, data)
+
+        return True
+
+    def _create_default_weather_source_learning(self) -> Dict[str, Any]:
+        """Create default weather_source_learning structure @zara"""
+        return {
+            "version": "1.0",
+            "daily_history": {},
+            "metadata": {
+                "total_learning_days": 0,
+                "last_learning_run": None,
+                "created_at": dt_util.now().isoformat(),
+            },
+        }
+
+    async def _validate_panel_group_sensor_state(self) -> bool:
+        """Validate panel_group_sensor_state.json - State persistence for panel group energy sensors @zara
+
+        This file persists the last-known kWh values for panel group energy sensors.
+        Used for delta calculation across HA restarts.
+
+        Location: data_dir/stats/panel_group_sensor_state.json
+        """
+        file_path = self.data_dir / "stats" / "panel_group_sensor_state.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            # File doesn't exist - create empty template
+            # Will be populated by PanelGroupSensorReader when panel groups with energy sensors are configured
+            self._log_migration(
+                "panel_group_sensor_state.json: Creating empty template - "
+                "will be populated when panel groups with energy sensors are used"
+            )
+            data = self._create_default_panel_group_sensor_state()
+            return await self._write_json(file_path, data)
+
+        modified = False
+
+        # Validate last_updated field
+        if "last_updated" not in data:
+            data["last_updated"] = None
+            modified = True
+
+        # Validate last_values structure
+        if "last_values" not in data or not isinstance(data["last_values"], dict):
+            data["last_values"] = {}
+            modified = True
+        else:
+            # Validate all values are numeric
+            for group_name, value in list(data["last_values"].items()):
+                if value is not None:
+                    try:
+                        float_val = float(value)
+                        if float_val < 0:
+                            self._log_migration(
+                                f"panel_group_sensor_state.json: Clamping negative value for '{group_name}' to 0"
+                            )
+                            data["last_values"][group_name] = 0.0
+                            modified = True
+                    except (ValueError, TypeError):
+                        self._log_migration(
+                            f"panel_group_sensor_state.json: Invalid value for '{group_name}' - removing"
+                        )
+                        del data["last_values"][group_name]
+                        modified = True
+
+        if modified:
+            self._log_migration("panel_group_sensor_state.json: Schema validated and updated")
+            return await self._write_json(file_path, data)
+
+        return True
+
+    def _create_default_panel_group_sensor_state(self) -> Dict[str, Any]:
+        """Create default panel_group_sensor_state structure @zara"""
+        return {
+            "last_updated": None,
+            "last_values": {},
         }

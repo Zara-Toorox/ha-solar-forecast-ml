@@ -1,4 +1,4 @@
-"""Pattern-Based Learning for Adaptive Solar Forecasting V10.0.0 @zara
+"""Pattern-Based Learning for Adaptive Solar Forecasting V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -513,7 +513,9 @@ class PatternLearner:
                 continue
 
             efficiency = actual_kwh / theoretical_kwh
-            efficiency = max(0.05, min(1.0, efficiency))
+            # Allow efficiency > 1.0 for cases where diffuse light performs better than expected
+            # Cap at 3.0 to prevent extreme outliers from corrupting the model
+            efficiency = max(0.05, min(3.0, efficiency))
 
             if cloud_cover < 30:
                 bucket = "0_30"
@@ -576,28 +578,13 @@ class PatternLearner:
         forecast_raw: float,
         actual_kwh: float,
         avg_cloud_cover: float,
-        battery_peak_soc: float = None
     ) -> None:
-        """
-        Aggressive correction system - compares raw forecast vs actual and corrects geometry factors.
-
-        Args:
-            battery_peak_soc: Peak battery state of charge during production hours (0-100%)
-                             If >= 90%, learning is skipped due to MPPT throttling
-        """
+        """Aggressive correction system - compares raw forecast vs actual and corrects geometry factors."""
         if not self.patterns:
             await self.load_patterns()
 
         if forecast_raw <= 0 or actual_kwh <= 0:
             _LOGGER.debug("Skipping aggressive correction: zero values")
-            return
-
-        if battery_peak_soc is not None and battery_peak_soc >= 90.0:
-            _LOGGER.warning(
-                f"⚠️ Skipping learning for {target_date}: Battery reached {battery_peak_soc:.1f}% SOC "
-                f"(>= 90% threshold). MPPT throttling likely affected production. "
-                f"Forecast: {forecast_raw:.2f} kWh, Actual: {actual_kwh:.2f} kWh"
-            )
             return
 
         error_ratio = abs(forecast_raw - actual_kwh) / forecast_raw
@@ -660,9 +647,8 @@ class PatternLearner:
 
         await self._save_patterns()
 
-        _LOGGER.warning(
-            f"AGGRESSIVE CORRECTION APPLIED: "
-            f"Raw forecast {forecast_raw:.2f} kWh vs Actual {actual_kwh:.2f} kWh (error: {error_ratio:.0%}). "
-            f"Correction ratio: {correction_ratio:.2f} → Rolling 7d avg: {avg_correction:.2f} "
+        _LOGGER.info(
+            f"Correction learned: Forecast {forecast_raw:.2f} kWh vs Actual {actual_kwh:.2f} kWh (error: {error_ratio:.0%}). "
+            f"Ratio: {correction_ratio:.2f} → 7d avg: {avg_correction:.2f} "
             f"(month {month}, {len(history)}/7 samples, confidence {correction_data['confidence']:.0%})"
         )

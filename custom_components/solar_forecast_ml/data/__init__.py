@@ -1,4 +1,4 @@
-"""data package V10.0.0 @zara
+"""data package V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -15,3 +15,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Copyright (C) 2025 Zara-Toorox
 """
+
+from .data_multi_weather_client import (
+    MultiWeatherBlender,
+    WeatherSourceLearner,
+    WttrInClient,
+)
+from .data_panel_group_sensor_reader import PanelGroupSensorReader

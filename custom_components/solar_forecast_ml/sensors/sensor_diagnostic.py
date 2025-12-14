@@ -1,4 +1,4 @@
-"""Diagnostic Sensors - MIGRATED VERSION V10.0.0 @zara
+"""Diagnostic Sensors - MIGRATED VERSION V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -702,12 +702,10 @@ class ActivePredictionModelSensor(BaseSolarSensor):
     @property
     def native_value(self) -> str:
         """Return active model/strategy @zara"""
-        # FIX: Use forecast_orchestrator instead of orchestrator
         orchestrator = getattr(self.coordinator, "forecast_orchestrator", None)
         if not orchestrator:
             return "Unknown"
 
-        # FIX: Use active_strategy_name (string) instead of active_strategy (object)
         active_strategy_name = getattr(orchestrator, "active_strategy_name", None)
 
         # Check ML predictor for algorithm info
@@ -738,7 +736,6 @@ class ActivePredictionModelSensor(BaseSolarSensor):
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Provide detailed model information @zara"""
-        # FIX: Use forecast_orchestrator instead of orchestrator
         orchestrator = getattr(self.coordinator, "forecast_orchestrator", None)
         ml_predictor = self.coordinator.ml_predictor
 
@@ -747,7 +744,6 @@ class ActivePredictionModelSensor(BaseSolarSensor):
         }
 
         if orchestrator:
-            # FIX: Use active_strategy_name
             attrs["active_strategy_name"] = getattr(orchestrator, "active_strategy_name", "unknown")
 
             # Check strategy availability

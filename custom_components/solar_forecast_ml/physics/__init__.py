@@ -1,4 +1,4 @@
-"""Physics Module for Solar Forecast ML Integration V10.0.0 @zara
+"""Physics Module for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -24,7 +24,19 @@ from .physics_engine import (
     POAResult,
     PowerResult,
 )
-from .geometry_learner import GeometryLearner, GeometryEstimate, ClearSkyDataPoint
+from .geometry_learner import (
+    GeometryLearner,
+    GeometryEstimate,
+    ClearSkyDataPoint,
+    PanelGroupEfficiencyLearner,
+    PanelGroupEfficiency,
+)
+from .panel_group_calculator import (
+    PanelGroup,
+    PanelGroupResult,
+    MultiGroupResult,
+    PanelGroupCalculator,
+)
 
 __all__ = [
     "PhysicsEngine",
@@ -36,4 +48,10 @@ __all__ = [
     "GeometryLearner",
     "GeometryEstimate",
     "ClearSkyDataPoint",
+    "PanelGroupEfficiencyLearner",
+    "PanelGroupEfficiency",
+    "PanelGroup",
+    "PanelGroupResult",
+    "MultiGroupResult",
+    "PanelGroupCalculator",
 ]

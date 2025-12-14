@@ -1,4 +1,4 @@
-"""ML Residual Trainer - Train ML on residuals (actual - physics) V10.0.0 @zara
+"""ML Residual Trainer - Train ML on residuals (actual - physics) V12.0.0 @zara
 
 This is part of the Physics-First, ML-Enhanced architecture.
 
@@ -31,6 +31,12 @@ from ..core.core_user_messages import user_msg
 _LOGGER = logging.getLogger(__name__)
 
 
+def _get_panel_group_calculator(panel_groups: List[Dict[str, Any]]):
+    """Helper to lazily import and create PanelGroupCalculator. @zara"""
+    from ..physics import PanelGroupCalculator
+    return PanelGroupCalculator(panel_groups=panel_groups)
+
+
 class ResidualTrainer:
     """
     Trains ML model on residuals (actual - physics prediction).
@@ -46,6 +52,7 @@ class ResidualTrainer:
         self,
         data_dir: Path,
         system_capacity_kwp: float,
+        panel_groups: Optional[List[Dict[str, Any]]] = None,
         skip_load: bool = False,
     ):
         """
@@ -54,10 +61,13 @@ class ResidualTrainer:
         Args:
             data_dir: Directory for data files
             system_capacity_kwp: System capacity in kWp
+            panel_groups: Optional list of panel group configurations
             skip_load: If True, skip loading state (use async_load_state later)
         """
         self.data_dir = data_dir
         self.system_capacity_kwp = system_capacity_kwp
+        self._panel_groups_config = panel_groups or []
+        self._use_panel_groups = bool(panel_groups)
 
         # State file for residual model
         self.state_file = data_dir / "ml" / "residual_model_state.json"
@@ -65,6 +75,7 @@ class ResidualTrainer:
         # Physics engine for computing base predictions
         self._physics_engine = None
         self._geometry_learner = None
+        self._panel_group_calculator = None
 
         # Residual statistics for normalization
         self.residual_stats = {
@@ -160,30 +171,42 @@ class ResidualTrainer:
         except Exception as e:
             _LOGGER.error("Failed to save residual model state: %s", e)
 
+    def _get_panel_group_calculator(self):
+        """Get or create panel group calculator. @zara"""
+        if self._panel_group_calculator is None and self._use_panel_groups:
+            self._panel_group_calculator = _get_panel_group_calculator(
+                self._panel_groups_config
+            )
+            _LOGGER.info(
+                "ResidualTrainer: PanelGroupCalculator initialized with %d groups",
+                self._panel_group_calculator.group_count,
+            )
+        return self._panel_group_calculator
+
     def _get_physics_engine(self):
         """Get or create physics engine (sync version for compute methods).
 
         Note: This uses skip_load=True to avoid blocking. The state must be
         loaded separately via async_ensure_physics_engine() before calling
         any compute methods in async context.
+
+        If panel groups are configured, uses PanelGroupCalculator instead.
         """
+        if self._use_panel_groups:
+            return self._get_panel_group_calculator()
+
         if self._physics_engine is None:
             from ..physics import PhysicsEngine, GeometryLearner
 
-            # Try to load geometry learner with learned geometry
-            # Use skip_load=True to avoid blocking event loop
             try:
                 self._geometry_learner = GeometryLearner(
                     data_path=self.data_dir,
                     system_capacity_kwp=self.system_capacity_kwp,
-                    skip_load=True,  # Don't block event loop
+                    skip_load=True,
                 )
-                # Note: State needs to be loaded via async_ensure_physics_engine()
-                # For now, use default geometry - will be updated on async load
                 self._physics_engine = self._geometry_learner.get_physics_engine()
             except Exception as e:
                 _LOGGER.warning("Could not load geometry learner: %s", e)
-                # Fallback to default geometry
                 self._physics_engine = PhysicsEngine(
                     system_capacity_kwp=self.system_capacity_kwp,
                 )
@@ -192,6 +215,10 @@ class ResidualTrainer:
 
     async def async_ensure_physics_engine(self) -> None:
         """Ensure physics engine is loaded with state - use in async context @zara"""
+        if self._use_panel_groups:
+            self._get_panel_group_calculator()
+            return
+
         if self._physics_engine is None:
             from ..physics import PhysicsEngine, GeometryLearner
 
@@ -199,7 +226,7 @@ class ResidualTrainer:
                 self._geometry_learner = GeometryLearner(
                     data_path=self.data_dir,
                     system_capacity_kwp=self.system_capacity_kwp,
-                    skip_load=True,  # Don't block event loop
+                    skip_load=True,
                 )
                 await self._geometry_learner.async_load_state()
                 self._physics_engine = self._geometry_learner.get_physics_engine()
@@ -214,7 +241,6 @@ class ResidualTrainer:
                     system_capacity_kwp=self.system_capacity_kwp,
                 )
         elif self._geometry_learner is not None and not self._geometry_learner._state_loaded:
-            # Physics engine exists but state not loaded
             await self._geometry_learner.async_load_state()
             self._physics_engine = self._geometry_learner.get_physics_engine()
 
@@ -233,6 +259,14 @@ class ResidualTrainer:
         Returns:
             Physics prediction in kWh
         """
+        if self._use_panel_groups:
+            calculator = self._get_panel_group_calculator()
+            result = calculator.calculate_hourly_forecast(
+                weather_data=weather_data,
+                astronomy_data=astronomy_data,
+            )
+            return result.get("physics_prediction_kwh", 0.0)
+
         engine = self._get_physics_engine()
 
         result = engine.calculate_hourly_forecast(

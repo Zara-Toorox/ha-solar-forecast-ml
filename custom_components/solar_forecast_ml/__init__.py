@@ -1,4 +1,4 @@
-"""Solar Forecast ML Integration - Main Entry Point V10.0.0 @zara
+"""Solar Forecast ML Integration - Main Entry Point V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -31,7 +31,6 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
-    CONF_BATTERY_ENABLED,
     DOMAIN,
     PLATFORMS,
 )
@@ -117,16 +116,48 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {})
     return True
 
+async def _cleanup_orphaned_devices(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove orphaned devices from old versions (Battery Management, Electricity Price) @zara
+
+    These devices were removed in V10.x but may still exist in the device registry
+    for users upgrading from older versions.
+    """
+    from homeassistant.helpers import device_registry as dr
+
+    dev_reg = dr.async_get(hass)
+
+    # Old device identifiers that no longer exist
+    orphaned_identifiers = [
+        (DOMAIN, f"{entry.entry_id}_battery"),
+        (DOMAIN, f"{entry.entry_id}_electricity"),
+    ]
+
+    devices_removed = 0
+    for identifier in orphaned_identifiers:
+        device = dev_reg.async_get_device(identifiers={identifier})
+        if device:
+            _LOGGER.info(f"Removing orphaned device: {device.name} ({identifier})")
+            dev_reg.async_remove_device(device.id)
+            devices_removed += 1
+
+    if devices_removed > 0:
+        _LOGGER.info(f"Cleaned up {devices_removed} orphaned device(s) from previous versions")
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Solar Forecast ML from a config entry @zara"""
 
-    from .battery.battery_coordinator import BatteryCoordinator
-    from .const import CONF_BATTERY_ENABLED
     from .coordinator import SolarForecastMLCoordinator
     from .core.core_dependency_handler import DependencyHandler
     from .services.service_notification import create_notification_service
 
     await setup_file_logging(hass)
+
+    # Clean up orphaned devices from old versions (Battery Management, Electricity Price)
+    await _cleanup_orphaned_devices(hass, entry)
+
+    # Register update listener for option changes (diagnostic mode, etc.)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     dependency_handler = DependencyHandler()
     dependencies_ok = await dependency_handler.check_dependencies(hass)
@@ -173,7 +204,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await hass.async_add_executor_job(shutil.copytree, template_dir, data_dir)
 
             flag_content = (
-                f"Solar Forecast ML 'Lyra'\n"
+                f"Solar Forecast ML 'Sarpeidon'\n"
                 f"Installed: {dt_util.now().isoformat()}\n"
                 f"First stable production release\n"
                 f"Template-based installation - no legacy migrations\n"
@@ -198,8 +229,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "longitude": entry.data.get("longitude", hass.config.longitude),
         "solar_capacity": entry.data.get("solar_capacity", 2.0),
         "timezone": str(hass.config.time_zone),
-        "battery_enabled": entry.data.get(CONF_BATTERY_ENABLED, False),
-        "battery_capacity": entry.data.get("battery_capacity", 10.0),
     }
 
     initializer = StartupInitializer(data_dir, initializer_config)
@@ -222,31 +251,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    battery_coordinator = None
-    battery_enabled = entry.options.get(
-        CONF_BATTERY_ENABLED, entry.data.get(CONF_BATTERY_ENABLED, False)
-    )
-
-    if battery_enabled:
-        try:
-            _LOGGER.info("Battery management enabled - initializing BatteryCoordinator")
-            battery_coordinator = BatteryCoordinator(hass, entry)
-
-            battery_setup_ok = await battery_coordinator.async_setup()
-            if battery_setup_ok:
-                await battery_coordinator.async_config_entry_first_refresh()
-
-                hass.data[DOMAIN][f"{entry.entry_id}_battery"] = battery_coordinator
-                _LOGGER.info("BatteryCoordinator initialized successfully")
-            else:
-                _LOGGER.warning(
-                    "BatteryCoordinator setup failed, continuing without battery features"
-                )
-                battery_coordinator = None
-        except Exception as e:
-            _LOGGER.error(f"Error setting up BatteryCoordinator: {e}", exc_info=True)
-            battery_coordinator = None
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     await _async_register_services(hass, entry, coordinator)
@@ -259,9 +263,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "persistent_notification",
             "create",
             {
-                "title": "✅ Solar Forecast ML 'Lyra' installiert",
+                "title": "✅ Solar Forecast ML 'Sarpeidon' installiert",
                 "message": (
-                    "Die Installation von **Solar Forecast ML 'Lyra'** war erfolgreich!\n\n"
+                    "Die Installation von **Solar Forecast ML 'Sarpeidon'** war erfolgreich!\n\n"
                     "**Nächste Schritte:**\n"
                     "1. Führen Sie die Einrichtung durch (Konfiguration → Integrationen)\n"
                     "2. Warten Sie **10 Minuten** nach der Konfiguration\n"
@@ -302,14 +306,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning(f"Failed to show startup notification: {e}", exc_info=True)
 
     mode_str = "ML Mode (Full Features)" if dependencies_ok else "Fallback Mode (Rule-Based)"
-    battery_str = "Enabled" if battery_coordinator else "Disabled"
 
     _LOGGER.info(
         "=" * 70 + "\n"
-        'Solar Forecast ML "Lyra" 🌟 - Setup Complete! ✓\n'
-        f"Mode: {mode_str} | Battery Management: {battery_str}\n"
+        'Solar Forecast ML "Sarpeidon" - Setup Complete!\n'
+        f"Mode: {mode_str}\n"
         '"The future is not set in stone, but with data we illuminate the path."\n'
-        "Author: Zara-Toorox | Live long and prosper! 🖖\n" + "=" * 70
+        "Author: Zara-Toorox | Live long and prosper!\n" + "=" * 70
     )
 
     return True
@@ -326,17 +329,98 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         await coordinator.async_shutdown()
 
-        battery_key = f"{entry.entry_id}_battery"
-        if battery_key in hass.data[DOMAIN]:
-            battery_coordinator = hass.data[DOMAIN].pop(battery_key)
-
-            _LOGGER.info("BatteryCoordinator unloaded")
-
         if not hass.data[DOMAIN]:
             _async_unregister_services(hass)
 
     _LOGGER.info("Solar Forecast ML integration unloaded successfully")
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle removal of a config entry - clean up entity registry @zara
+
+    This is called when the user removes the integration completely.
+    It ensures all entities are removed from the entity registry.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    _LOGGER.info("Removing Solar Forecast ML integration and cleaning up entities...")
+
+    # Get the entity registry
+    ent_reg = er.async_get(hass)
+
+    # Find all entities for this config entry
+    entities_to_remove = [
+        entity_entry.entity_id
+        for entity_entry in ent_reg.entities.values()
+        if entity_entry.config_entry_id == entry.entry_id
+    ]
+
+    # Remove all entities
+    for entity_id in entities_to_remove:
+        _LOGGER.debug(f"Removing entity: {entity_id}")
+        ent_reg.async_remove(entity_id)
+
+    _LOGGER.info(f"Removed {len(entities_to_remove)} entities from registry")
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update - reload integration to apply changes @zara
+
+    This is called when the user changes options (diagnostic mode, etc.)
+    We need to reload the integration to properly add/remove sensors.
+    """
+    _LOGGER.info("Options updated, reloading integration to apply changes...")
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate old entry @zara
+
+    Handle config entry migration when VERSION changes.
+    Clean up orphaned entities from removed features.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    _LOGGER.debug(f"Migrating from version {config_entry.version}")
+
+    # Clean up any orphaned diagnostic entities if diagnostic mode was disabled
+    ent_reg = er.async_get(hass)
+
+    # List of diagnostic entity unique_id patterns
+    diagnostic_patterns = [
+        "diagnostic_status",
+        "external_sensors_status",
+        "next_production_start",
+        "ml_service_status",
+        "ml_metrics",
+        "ml_training_readiness",
+        "active_prediction_model",
+        "pattern_count",
+        "physics_samples",
+    ]
+
+    diagnostic_enabled = config_entry.options.get("diagnostic", True)
+
+    if not diagnostic_enabled:
+        # Remove diagnostic entities from registry
+        entities_removed = 0
+        for entity_entry in list(ent_reg.entities.values()):
+            if entity_entry.config_entry_id != config_entry.entry_id:
+                continue
+
+            # Check if this is a diagnostic entity that should be removed
+            for pattern in diagnostic_patterns:
+                if pattern in str(entity_entry.unique_id).lower():
+                    _LOGGER.debug(f"Removing orphaned diagnostic entity: {entity_entry.entity_id}")
+                    ent_reg.async_remove(entity_entry.entity_id)
+                    entities_removed += 1
+                    break
+
+        if entities_removed > 0:
+            _LOGGER.info(f"Removed {entities_removed} orphaned diagnostic entities")
+
+    return True
 
 async def _async_register_services(
     hass: HomeAssistant, entry: ConfigEntry, coordinator: "SolarForecastMLCoordinator"

@@ -1,4 +1,4 @@
-"""Data Forecast Handler for Solar Forecast ML Integration V10.0.0 @zara
+"""Data Forecast Handler for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -242,8 +242,8 @@ class DataForecastHandler(DataManagerIO):
             if force_overwrite and data["today"]["forecast_day"].get("locked"):
                 old_value = data["today"]["forecast_day"].get("prediction_kwh")
                 old_source = data["today"]["forecast_day"].get("source")
-                _LOGGER.warning(
-                    f"FORCE OVERWRITE: Replacing locked forecast "
+                _LOGGER.debug(
+                    f"Force overwrite: Replacing locked forecast "
                     f"(old: {old_value} kWh from {old_source}) with new value "
                     f"(new: {prediction_kwh:.2f} kWh from {source})"
                 )
@@ -251,11 +251,14 @@ class DataForecastHandler(DataManagerIO):
             data["today"]["forecast_day"] = {
                 "prediction_kwh": round(float(prediction_kwh), 2),
                 "prediction_kwh_raw": round(float(prediction_kwh_raw), 2) if prediction_kwh_raw is not None else None,
+                "prediction_kwh_display": round(float(prediction_kwh), 2),  # Initial = prediction_kwh
                 "safeguard_applied": safeguard_applied,
                 "safeguard_reduction_kwh": round(float(prediction_kwh_raw - prediction_kwh), 2) if prediction_kwh_raw is not None else 0.0,
                 "locked": lock,
                 "locked_at": now_local.isoformat() if lock else None,
                 "source": source,
+                "intraday_corrected": False,
+                "intraday_corrected_at": None,
             }
 
             await self._atomic_write_json(self.daily_forecasts_file, data)
@@ -270,6 +273,53 @@ class DataForecastHandler(DataManagerIO):
 
         except Exception as e:
             _LOGGER.error(f"Failed to save today's forecast: {e}", exc_info=True)
+            return False
+
+    async def update_intraday_display_forecast(
+        self,
+        display_value: float,
+        source: str,
+    ) -> bool:
+        """Update the display forecast value for intraday corrections (09:05/12:05) @zara
+
+        This ONLY updates prediction_kwh_display, leaving prediction_kwh and
+        prediction_kwh_raw unchanged for ML learning purposes.
+
+        Args:
+            display_value: The corrected forecast value to display
+            source: Source of the correction (e.g., "morning_sensor_correction", "midday_correction")
+
+        Returns:
+            True if update succeeded
+        """
+        try:
+            data = await self.load_daily_forecasts()
+            now_local = dt_util.now()
+            today_str = now_local.date().isoformat()
+
+            if "today" not in data or data["today"].get("date") != today_str:
+                _LOGGER.warning("Cannot update intraday display - no forecast for today")
+                return False
+
+            forecast_day = data["today"].get("forecast_day", {})
+            original_display = forecast_day.get("prediction_kwh_display") or forecast_day.get("prediction_kwh")
+
+            # Update only the display value
+            data["today"]["forecast_day"]["prediction_kwh_display"] = round(float(display_value), 2)
+            data["today"]["forecast_day"]["intraday_corrected"] = True
+            data["today"]["forecast_day"]["intraday_corrected_at"] = now_local.isoformat()
+
+            await self._atomic_write_json(self.daily_forecasts_file, data)
+
+            _LOGGER.info(
+                f"✓ Intraday display forecast updated: {original_display:.2f} → {display_value:.2f} kWh "
+                f"(source: {source})"
+            )
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to update intraday display forecast: {e}", exc_info=True)
             return False
 
     async def save_forecast_tomorrow(

@@ -1,4 +1,4 @@
-"""Machine Learning Predictor V10.0.0 @zara
+"""Machine Learning Predictor V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1071,6 +1071,12 @@ class MLPredictor:
                         duration_seconds=duration_seconds,
                     )
 
+                    # Update hourly profile after successful training
+                    try:
+                        await self._update_hourly_profile(training_records)
+                    except Exception as profile_err:
+                        _LOGGER.warning(f"Hourly profile update failed (non-critical): {profile_err}")
+
                     return result
 
                 except Exception as e:
@@ -1109,14 +1115,20 @@ class MLPredictor:
             for record in training_records:
                 try:
                     actual_kwh = record.get("actual_kwh")
-                    timestamp_str = record.get("timestamp")
-                    if actual_kwh is None or actual_kwh <= 0 or not timestamp_str:
+                    if actual_kwh is None or actual_kwh <= 0:
                         continue
 
-                    timestamp = dt_util.parse_datetime(timestamp_str)
-                    if not timestamp:
-                        continue
-                    hour = timestamp.hour
+                    # Try target_hour first (from MLDataLoaderV3), then parse from target_datetime
+                    hour = record.get("target_hour")
+                    if hour is None:
+                        # Fallback: try parsing from target_datetime or timestamp
+                        datetime_str = record.get("target_datetime") or record.get("timestamp")
+                        if not datetime_str:
+                            continue
+                        parsed_dt = dt_util.parse_datetime(datetime_str)
+                        if not parsed_dt:
+                            continue
+                        hour = parsed_dt.hour
 
                     hourly_data[hour].append(actual_kwh)
                     valid_sample_count += 1
@@ -1140,12 +1152,26 @@ class MLPredictor:
                 else:
                     hourly_averages_median[str(hour)] = 0.0
 
+            # Calculate hourly_factors as relative factors (hour average / daily average)
+            # These factors show how each hour compares to the daily average
+            hourly_factors: Dict[str, float] = {}
+            non_zero_averages = [v for v in hourly_averages_median.values() if v > 0]
+            if non_zero_averages:
+                daily_mean = sum(non_zero_averages) / len(non_zero_averages)
+                if daily_mean > 0:
+                    for hour_str, avg in hourly_averages_median.items():
+                        if avg > 0:
+                            hourly_factors[hour_str] = round(avg / daily_mean, 3)
+                        else:
+                            hourly_factors[hour_str] = 0.0
+
             confidence = min(1.0, max(0.1, valid_sample_count / 300.0))
             new_profile = HourlyProfile(
                 hourly_averages=hourly_averages_median,
                 samples_count=valid_sample_count,
                 last_updated=dt_util.now().isoformat(),
                 confidence=confidence,
+                hourly_factors=hourly_factors,
             )
 
             await self.data_manager.save_hourly_profile(new_profile)

@@ -1,4 +1,4 @@
-"""Geometry Learner for Solar Forecast ML Integration V10.0.0 @zara
+"""Geometry Learner for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -24,7 +24,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from .physics_engine import (
     PhysicsEngine,
@@ -32,6 +32,7 @@ from .physics_engine import (
     IrradianceData,
     PanelGeometry,
 )
+from .panel_group_calculator import PanelGroupCalculator, PanelGroup
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -150,8 +151,8 @@ class GeometryLearner:
         self.data_path = data_path
         self.system_capacity_kwp = system_capacity_kwp
 
-        # State file
-        self.state_file = data_path / "learned_geometry.json"
+        # State file (in physics/ subdirectory for better organization)
+        self.state_file = data_path / "physics" / "learned_geometry.json"
 
         # Current estimate
         self.estimate = GeometryEstimate(
@@ -597,4 +598,495 @@ class GeometryLearner:
             "total_data_points": len(self.data_points),
             "optimization_ran": optimization_result is not None,
             "current_estimate": self.estimate.to_dict(),
+        }
+
+
+@dataclass
+class PanelGroupEfficiency:
+    """Learned efficiency factors for a single panel group. @zara"""
+    name: str
+    configured_tilt_deg: float
+    configured_azimuth_deg: float
+    power_kwp: float
+    energy_sensor: Optional[str] = None  # Optional kWh sensor for per-group learning
+    learned_efficiency_factor: float = 1.0
+    learned_shadow_hours: List[int] = field(default_factory=list)
+    sample_count: int = 0
+    confidence: float = 0.0
+    hourly_efficiency: Dict[int, float] = field(default_factory=dict)
+    learning_history: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        result = {
+            "name": self.name,
+            "configured_tilt_deg": round(self.configured_tilt_deg, 2),
+            "configured_azimuth_deg": round(self.configured_azimuth_deg, 2),
+            "power_kwp": round(self.power_kwp, 3),
+            "learned_efficiency_factor": round(self.learned_efficiency_factor, 4),
+            "learned_shadow_hours": self.learned_shadow_hours,
+            "sample_count": self.sample_count,
+            "confidence": round(self.confidence, 4),
+            "hourly_efficiency": {str(k): round(v, 4) for k, v in self.hourly_efficiency.items()},
+            "learning_history": self.learning_history[-30:],  # Keep last 30 entries
+        }
+        if self.energy_sensor:
+            result["energy_sensor"] = self.energy_sensor
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PanelGroupEfficiency":
+        hourly_eff = data.get("hourly_efficiency", {})
+        hourly_eff_int = {int(k): v for k, v in hourly_eff.items()}
+        return cls(
+            name=data.get("name", "Unknown"),
+            configured_tilt_deg=data.get("configured_tilt_deg", 30.0),
+            configured_azimuth_deg=data.get("configured_azimuth_deg", 180.0),
+            power_kwp=data.get("power_kwp", 0.0),
+            energy_sensor=data.get("energy_sensor"),
+            learned_efficiency_factor=data.get("learned_efficiency_factor", 1.0),
+            learned_shadow_hours=data.get("learned_shadow_hours", []),
+            sample_count=data.get("sample_count", 0),
+            confidence=data.get("confidence", 0.0),
+            hourly_efficiency=hourly_eff_int,
+            learning_history=data.get("learning_history", []),
+        )
+
+
+class PanelGroupEfficiencyLearner:
+    """Learns efficiency factors per panel group from production data. @zara
+
+    When panel groups are configured, the geometry is KNOWN (user-provided).
+    This learner focuses on discovering:
+    - Per-group efficiency factors (shadows, soiling, degradation)
+    - Hourly efficiency patterns (morning shadows, evening shadows)
+    - Systematic deviations from physics model
+
+    This is complementary to GeometryLearner:
+    - GeometryLearner: Learns unknown geometry (tilt/azimuth) when not configured
+    - PanelGroupEfficiencyLearner: Learns efficiency when geometry IS configured
+    """
+
+    MIN_SAMPLES_FOR_ESTIMATE = 10  # Reduced for winter months @zara
+    MIN_SAMPLES_FOR_CONFIDENCE = 30
+    FULL_CONFIDENCE_SAMPLES = 100
+    MAX_CLOUD_COVER = 50.0  # Relaxed for winter - allow more cloudy days @zara
+    MIN_SUN_ELEVATION = 5.0  # Lowered for winter when sun is low @zara
+
+    def __init__(
+        self,
+        data_path: Path,
+        panel_groups: List[Dict[str, Any]],
+        skip_load: bool = False,
+    ):
+        """Initialize the panel group efficiency learner. @zara"""
+        self.data_path = data_path
+        # State file (in physics/ subdirectory for better organization)
+        self.state_file = data_path / "physics" / "learned_panel_group_efficiency.json"
+
+        self._panel_groups_config = panel_groups
+        self._panel_group_calculator = PanelGroupCalculator(panel_groups=panel_groups)
+
+        self.group_efficiencies: List[PanelGroupEfficiency] = []
+        for idx, group in enumerate(panel_groups):
+            self.group_efficiencies.append(PanelGroupEfficiency(
+                name=group.get("name", f"Gruppe {idx + 1}"),
+                configured_tilt_deg=float(group.get("tilt", 30)),
+                configured_azimuth_deg=float(group.get("azimuth", 180)),
+                power_kwp=float(group.get("power_wp", 0)) / 1000.0,
+                energy_sensor=group.get("energy_sensor"),
+            ))
+
+        self.data_points: List[ClearSkyDataPoint] = []
+        self.total_samples = 0
+        self.last_updated = ""
+        self._state_loaded = False
+
+        if not skip_load:
+            self._load_state()
+            self._state_loaded = True
+
+        _LOGGER.info(
+            "PanelGroupEfficiencyLearner initialized: %d groups, total %.2f kWp",
+            len(self.group_efficiencies),
+            self._panel_group_calculator.total_capacity_kwp,
+        )
+
+    async def async_load_state(self) -> None:
+        """Load state asynchronously. @zara"""
+        if self._state_loaded:
+            return
+
+        import asyncio
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._load_state_sync)
+        self._state_loaded = True
+
+    def _load_state(self) -> None:
+        """Load saved state from file. @zara"""
+        if not self.state_file.exists():
+            _LOGGER.debug("No existing panel group efficiency state found")
+            return
+
+        try:
+            self._load_state_sync()
+        except Exception as e:
+            _LOGGER.warning("Failed to load panel group efficiency state: %s", e)
+
+    def _load_state_sync(self) -> None:
+        """Synchronous state loading. @zara"""
+        if not self.state_file.exists():
+            return
+
+        with open(self.state_file, "r") as f:
+            data = json.load(f)
+
+        version = data.get("version", "1.0")
+        if version != "2.0":
+            _LOGGER.info("Old geometry state version, starting fresh for panel groups")
+            return
+
+        saved_groups = data.get("panel_groups", [])
+        for saved in saved_groups:
+            for eff in self.group_efficiencies:
+                if eff.name == saved.get("name"):
+                    eff.learned_efficiency_factor = saved.get("learned_efficiency_factor", 1.0)
+                    eff.learned_shadow_hours = saved.get("learned_shadow_hours", [])
+                    eff.sample_count = saved.get("sample_count", 0)
+                    eff.confidence = saved.get("confidence", 0.0)
+                    eff.hourly_efficiency = {
+                        int(k): v for k, v in saved.get("hourly_efficiency", {}).items()
+                    }
+                    break
+
+        self.data_points = [
+            ClearSkyDataPoint.from_dict(p)
+            for p in data.get("data_points", [])
+        ]
+        self.total_samples = data.get("total_samples", len(self.data_points))
+        self.last_updated = data.get("last_updated", "")
+
+        _LOGGER.info(
+            "Loaded panel group efficiency state: %d groups, %d samples",
+            len(self.group_efficiencies),
+            self.total_samples,
+        )
+
+    async def save_state(self) -> None:
+        """Save current state to file. @zara"""
+        try:
+            data = {
+                "version": "2.0",
+                "mode": "panel_groups",
+                "panel_groups": [g.to_dict() for g in self.group_efficiencies],
+                "data_points": [p.to_dict() for p in self.data_points[-500:]],
+                "total_samples": self.total_samples,
+                "last_updated": datetime.now().isoformat(),
+                "metadata": {
+                    "total_capacity_kwp": self._panel_group_calculator.total_capacity_kwp,
+                    "group_count": len(self.group_efficiencies),
+                },
+            }
+
+            def _write_sync():
+                self.data_path.mkdir(parents=True, exist_ok=True)
+                with open(self.state_file, "w") as f:
+                    json.dump(data, f, indent=2)
+
+            import asyncio
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, _write_sync)
+
+            _LOGGER.debug("Saved panel group efficiency state: %d samples", self.total_samples)
+
+        except Exception as e:
+            _LOGGER.error("Failed to save panel group efficiency state: %s", e)
+
+    def add_data_point(
+        self,
+        timestamp: str,
+        hour: int,
+        sun_elevation_deg: float,
+        sun_azimuth_deg: float,
+        actual_power_kwh: float,
+        ghi_wm2: float,
+        dni_wm2: float,
+        dhi_wm2: float,
+        ambient_temp_c: float,
+        cloud_cover_percent: float,
+        per_group_actuals: Optional[Dict[str, float]] = None,
+    ) -> bool:
+        """Add a data point for efficiency learning.
+
+        Args:
+            per_group_actuals: Optional dict mapping group_name to actual_kwh.
+                               When provided, enables per-group learning instead
+                               of distributing total actual by contribution %.
+
+        @zara
+        """
+        if sun_elevation_deg < self.MIN_SUN_ELEVATION:
+            return False
+
+        if actual_power_kwh <= 0.001:
+            return False
+
+        if cloud_cover_percent > self.MAX_CLOUD_COVER:
+            return False
+
+        if ghi_wm2 < 50:
+            return False
+
+        irradiance = IrradianceData(ghi=ghi_wm2, dni=dni_wm2, dhi=dhi_wm2)
+        sun = SunPosition(elevation_deg=sun_elevation_deg, azimuth_deg=sun_azimuth_deg)
+
+        physics_result = self._panel_group_calculator.calculate_total_power(
+            irradiance, sun, ambient_temp_c
+        )
+
+        if physics_result.total_power_kwh > 0.001:
+            if per_group_actuals:
+                # Per-group learning using actual sensor data
+                self._learn_from_per_group_actuals(
+                    hour=hour,
+                    physics_result=physics_result,
+                    per_group_actuals=per_group_actuals,
+                )
+            else:
+                # Fallback: Distribute total actual by contribution percentage
+                efficiency_ratio = actual_power_kwh / physics_result.total_power_kwh
+
+                for idx, group_result in enumerate(physics_result.group_results):
+                    if idx < len(self.group_efficiencies):
+                        eff = self.group_efficiencies[idx]
+                        if hour not in eff.hourly_efficiency:
+                            eff.hourly_efficiency[hour] = efficiency_ratio
+                        else:
+                            old_eff = eff.hourly_efficiency[hour]
+                            eff.hourly_efficiency[hour] = old_eff * 0.9 + efficiency_ratio * 0.1
+                        eff.sample_count += 1
+
+        point = ClearSkyDataPoint(
+            timestamp=timestamp,
+            sun_elevation_deg=sun_elevation_deg,
+            sun_azimuth_deg=sun_azimuth_deg,
+            actual_power_kwh=actual_power_kwh,
+            ghi_wm2=ghi_wm2,
+            dni_wm2=dni_wm2,
+            dhi_wm2=dhi_wm2,
+            ambient_temp_c=ambient_temp_c,
+            cloud_cover_percent=cloud_cover_percent,
+        )
+        self.data_points.append(point)
+        self.total_samples += 1
+
+        return True
+
+    def _learn_from_per_group_actuals(
+        self,
+        hour: int,
+        physics_result,
+        per_group_actuals: Dict[str, float],
+    ) -> None:
+        """Learn efficiency from per-group actual production data.
+
+        This is the preferred learning method when energy sensors are
+        configured per panel group.
+
+        @zara
+        """
+        for idx, group_result in enumerate(physics_result.group_results):
+            if idx >= len(self.group_efficiencies):
+                continue
+
+            eff = self.group_efficiencies[idx]
+            group_name = eff.name
+
+            # Get actual production for this group
+            group_actual_kwh = per_group_actuals.get(group_name)
+
+            if group_actual_kwh is None or group_actual_kwh <= 0:
+                continue
+
+            # Get physics prediction for this group
+            group_predicted_kwh = group_result.power_kwh
+
+            if group_predicted_kwh <= 0.001:
+                continue
+
+            # Calculate efficiency ratio for this specific group
+            efficiency_ratio = group_actual_kwh / group_predicted_kwh
+
+            # Sanity check: efficiency should be reasonable (0.1 to 2.0)
+            if not (0.1 < efficiency_ratio < 2.0):
+                _LOGGER.debug(
+                    "Unusual efficiency ratio for %s: %.3f (actual=%.4f, predicted=%.4f)",
+                    group_name, efficiency_ratio, group_actual_kwh, group_predicted_kwh
+                )
+                continue
+
+            # Update hourly efficiency with exponential moving average
+            if hour not in eff.hourly_efficiency:
+                eff.hourly_efficiency[hour] = efficiency_ratio
+            else:
+                old_eff = eff.hourly_efficiency[hour]
+                # Use stronger weight (0.2) for actual sensor data vs. distributed data (0.1)
+                eff.hourly_efficiency[hour] = old_eff * 0.8 + efficiency_ratio * 0.2
+
+            eff.sample_count += 1
+
+            _LOGGER.debug(
+                "Per-group learning for %s @ %02d:00: actual=%.4f, predicted=%.4f, eff=%.3f",
+                group_name, hour, group_actual_kwh, group_predicted_kwh, efficiency_ratio
+            )
+
+    async def optimize_efficiency(self) -> bool:
+        """Calculate optimal efficiency factors per group. @zara"""
+        if self.total_samples < self.MIN_SAMPLES_FOR_ESTIMATE:
+            _LOGGER.debug(
+                "Not enough samples for efficiency optimization: %d < %d",
+                self.total_samples,
+                self.MIN_SAMPLES_FOR_ESTIMATE,
+            )
+            return False
+
+        for eff in self.group_efficiencies:
+            if eff.hourly_efficiency:
+                valid_efficiencies = [
+                    e for e in eff.hourly_efficiency.values()
+                    if 0.3 < e < 1.5
+                ]
+                if valid_efficiencies:
+                    eff.learned_efficiency_factor = sum(valid_efficiencies) / len(valid_efficiencies)
+
+                shadow_hours = []
+                for hour, hour_eff in eff.hourly_efficiency.items():
+                    if hour_eff < 0.7:
+                        shadow_hours.append(hour)
+                eff.learned_shadow_hours = sorted(shadow_hours)
+
+            sample_confidence = min(1.0, eff.sample_count / self.FULL_CONFIDENCE_SAMPLES)
+            eff.confidence = sample_confidence
+
+        self.last_updated = datetime.now().isoformat()
+
+        await self.save_state()
+
+        _LOGGER.info(
+            "Panel group efficiency optimized: %d groups, %d total samples",
+            len(self.group_efficiencies),
+            self.total_samples,
+        )
+
+        return True
+
+    def get_efficiency_for_hour(self, group_index: int, hour: int) -> float:
+        """Get learned efficiency factor for a group at a specific hour. @zara"""
+        if group_index >= len(self.group_efficiencies):
+            return 1.0
+
+        eff = self.group_efficiencies[group_index]
+
+        if hour in eff.hourly_efficiency:
+            return eff.hourly_efficiency[hour]
+
+        return eff.learned_efficiency_factor
+
+    def get_panel_group_calculator(self) -> PanelGroupCalculator:
+        """Get the panel group calculator. @zara"""
+        return self._panel_group_calculator
+
+    def has_groups_with_sensors(self) -> bool:
+        """Check if any panel group has an energy sensor configured. @zara"""
+        return any(eff.energy_sensor for eff in self.group_efficiencies)
+
+    def get_groups_with_sensors(self) -> List[PanelGroupEfficiency]:
+        """Get list of panel groups that have energy sensors configured. @zara"""
+        return [eff for eff in self.group_efficiencies if eff.energy_sensor]
+
+    def get_current_estimate(self) -> dict:
+        """Get the current efficiency estimates. @zara"""
+        return {
+            "mode": "panel_groups",
+            "total_samples": self.total_samples,
+            "last_updated": self.last_updated,
+            "groups": [g.to_dict() for g in self.group_efficiencies],
+        }
+
+    async def bulk_add_historical_data(
+        self,
+        historical_samples: List[Dict[str, Any]],
+    ) -> dict:
+        """Add multiple historical data points for bulk training. @zara"""
+        accepted_count = 0
+        rejected_count = 0
+
+        _LOGGER.info(
+            f"Processing {len(historical_samples)} historical samples "
+            f"for PanelGroupEfficiencyLearner..."
+        )
+
+        for sample in historical_samples:
+            try:
+                required_fields = [
+                    "timestamp", "sun_elevation_deg", "sun_azimuth_deg",
+                    "actual_power_kwh", "ghi_wm2", "dni_wm2", "dhi_wm2",
+                    "ambient_temp_c", "cloud_cover_percent"
+                ]
+
+                if not all(sample.get(f) is not None for f in required_fields):
+                    rejected_count += 1
+                    continue
+
+                hour = 12
+                ts = sample.get("timestamp", "")
+                if "T" in ts:
+                    try:
+                        hour = int(ts.split("T")[1].split(":")[0])
+                    except (ValueError, IndexError):
+                        pass
+
+                # Extract per_group_actuals if available in the sample
+                per_group_actuals = sample.get("panel_group_actuals")
+
+                was_accepted = self.add_data_point(
+                    timestamp=sample["timestamp"],
+                    hour=hour,
+                    sun_elevation_deg=sample["sun_elevation_deg"],
+                    sun_azimuth_deg=sample["sun_azimuth_deg"],
+                    actual_power_kwh=sample["actual_power_kwh"],
+                    ghi_wm2=sample["ghi_wm2"],
+                    dni_wm2=sample["dni_wm2"],
+                    dhi_wm2=sample["dhi_wm2"],
+                    ambient_temp_c=sample["ambient_temp_c"],
+                    cloud_cover_percent=sample["cloud_cover_percent"],
+                    per_group_actuals=per_group_actuals,
+                )
+
+                if was_accepted:
+                    accepted_count += 1
+                else:
+                    rejected_count += 1
+
+            except Exception as e:
+                _LOGGER.debug(f"Error processing sample: {e}")
+                rejected_count += 1
+
+        _LOGGER.info(
+            f"Bulk import complete: {accepted_count} accepted, {rejected_count} rejected"
+        )
+
+        optimization_result = None
+        if accepted_count > 0 and self.total_samples >= self.MIN_SAMPLES_FOR_ESTIMATE:
+            _LOGGER.info("Running efficiency optimization after bulk import...")
+            success = await self.optimize_efficiency()
+            if success:
+                optimization_result = self.get_current_estimate()
+
+        return {
+            "samples_processed": len(historical_samples),
+            "accepted": accepted_count,
+            "rejected": rejected_count,
+            "total_data_points": self.total_samples,
+            "optimization_ran": optimization_result is not None,
+            "current_estimate": self.get_current_estimate(),
         }

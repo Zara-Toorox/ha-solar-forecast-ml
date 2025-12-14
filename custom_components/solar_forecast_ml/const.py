@@ -1,4 +1,4 @@
-"""Constants for Solar Forecast ML Integration V10.0.0 @zara
+"""Constants for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -22,12 +22,12 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "10.0.1"
-RELEASE_VERSION = "10.0.1"
-RELEASE_NAME = "Lyra"
-SOFTWARE_VERSION = "10.0.1"
-INTEGRATION_MODEL = "V10.0.1"
-ML_VERSION = "10.0.0"
+VERSION = "12.0.0"
+RELEASE_VERSION = "12.0.0"
+RELEASE_NAME = "Sarpeidon"
+SOFTWARE_VERSION = "12.0.0"
+INTEGRATION_MODEL = "V12.0.0"
+ML_VERSION = "12.0.0"
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -46,6 +46,23 @@ CONF_WIND_SENSOR = "wind_sensor"
 CONF_HUMIDITY_SENSOR = "humidity_sensor"
 CONF_PRESSURE_SENSOR = "pressure_sensor"
 CONF_SOLAR_RADIATION_SENSOR = "solar_radiation_sensor"
+
+# Panel Groups Configuration
+CONF_PANEL_GROUPS = "panel_groups"
+CONF_PANEL_GROUP_POWER = "power_wp"
+CONF_PANEL_GROUP_AZIMUTH = "azimuth"
+CONF_PANEL_GROUP_TILT = "tilt"
+CONF_PANEL_GROUP_NAME = "name"
+CONF_PANEL_GROUP_ENERGY_SENSOR = "energy_sensor"
+
+# Inverter Clipping Configuration
+CONF_INVERTER_MAX_POWER = "inverter_max_power"
+DEFAULT_INVERTER_MAX_POWER = 0.0  # 0 = disabled (no clipping)
+INVERTER_CLIPPING_THRESHOLD = 0.95  # 95% of max = considered clipped
+
+# Default Panel Group Values
+DEFAULT_PANEL_AZIMUTH = 180  # South
+DEFAULT_PANEL_TILT = 30  # 30 degrees
 
 EXTERNAL_SENSOR_MAPPING = {
     "temperature": CONF_TEMP_SENSOR,
@@ -70,6 +87,7 @@ CONF_NOTIFY_STARTUP = "notify_startup"
 CONF_NOTIFY_FORECAST = "notify_forecast"
 CONF_NOTIFY_LEARNING = "notify_learning"
 CONF_NOTIFY_SUCCESSFUL_LEARNING = "notify_successful_learning"
+CONF_NOTIFY_FROST = "notify_frost"
 CONF_LEARNING_ENABLED = "learning_enabled"
 
 CONF_ML_ALGORITHM = "ml_algorithm"
@@ -164,6 +182,7 @@ SERVICE_REFRESH_CACHE_TODAY = "refresh_cache_today"
 # Weather Services
 SERVICE_RUN_WEATHER_CORRECTION = "run_weather_correction"
 SERVICE_REFRESH_OPEN_METEO_CACHE = "refresh_open_meteo_cache"
+SERVICE_REFRESH_MULTI_WEATHER = "refresh_multi_weather"
 SERVICE_BOOTSTRAP_FROM_HISTORY = "bootstrap_from_history"
 
 # Physics Services
@@ -171,6 +190,9 @@ SERVICE_BOOTSTRAP_PHYSICS_FROM_HISTORY = "bootstrap_physics_from_history"
 
 # Notification Services
 SERVICE_SEND_DAILY_BRIEFING = "send_daily_briefing"
+
+# Installation Services
+SERVICE_INSTALL_EXTRA_FEATURES = "install_extra_features"
 
 ICON_SOLAR = "mdi:solar-power"
 ICON_FORECAST = "mdi:weather-sunny"
@@ -213,98 +235,3 @@ SUN_BUFFER_HOURS = 1.5
 FALLBACK_PRODUCTION_START_HOUR = 5
 FALLBACK_PRODUCTION_END_HOUR = 21
 
-CONF_BATTERY_POWER_SENSOR = "battery_power_sensor"
-CONF_BATTERY_SOC_SENSOR = "battery_soc_sensor"
-CONF_BATTERY_CAPACITY = "battery_capacity"
-CONF_SOLAR_PRODUCTION_SENSOR = "solar_production_sensor"
-CONF_INVERTER_OUTPUT_SENSOR = "inverter_output_sensor"
-CONF_HOUSE_CONSUMPTION_SENSOR = "house_consumption_sensor"
-CONF_GRID_IMPORT_SENSOR = "grid_import_sensor"
-CONF_GRID_EXPORT_SENSOR = "grid_export_sensor"
-
-CONF_GRID_CHARGE_POWER_SENSOR = "grid_charge_power_sensor"
-CONF_BATTERY_TEMPERATURE_SENSOR = "battery_temperature_sensor"
-
-CONF_BATTERY_ENABLED = "battery_enabled"
-CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
-CONF_BATTERY_POWER_ENTITY = "battery_power_entity"
-CONF_BATTERY_GRID_CHARGE_POWER_ENTITY = "battery_grid_charge_power_entity"
-CONF_BATTERY_CHARGE_TODAY_ENTITY = "battery_charge_today_entity"
-CONF_BATTERY_DISCHARGE_TODAY_ENTITY = "battery_discharge_today_entity"
-CONF_BATTERY_TEMPERATURE_ENTITY = "battery_temperature_entity"
-
-CONF_ELECTRICITY_COUNTRY = "electricity_country"
-CONF_ELECTRICITY_ENABLED = "electricity_enabled"
-
-DEFAULT_BATTERY_CAPACITY = 10.0
-MIN_BATTERY_CAPACITY = 0.5
-MAX_BATTERY_CAPACITY = 1000.0
-DEFAULT_ELECTRICITY_COUNTRY = "DE"
-
-ELECTRICITY_PRICE_UPDATE_HOUR = 13
-ELECTRICITY_PRICE_CACHE_FILE = "electricity_prices.json"
-MAX_ELECTRICITY_PRICE_HISTORY = 90
-
-ICON_BATTERY = "mdi:battery"
-ICON_BATTERY_CHARGING = "mdi:battery-charging"
-ICON_BATTERY_DISCHARGING = "mdi:battery-minus"
-ICON_ELECTRICITY_PRICE = "mdi:currency-eur"
-ICON_CHARGING_RECOMMENDATION = "mdi:lightbulb-on"
-
-BATTERY_STATE_FILE = "battery_state.json"
-BATTERY_STATISTICS_FILE = "battery_statistics.json"
-
-CHARGING_PRICE_PERCENTILE_CHEAP = 25
-CHARGING_PRICE_PERCENTILE_EXPENSIVE = 75
-MIN_CHARGING_DURATION_HOURS = 2
-
-DEFAULT_BATTERY_EFFICIENCY = 0.9
-BATTERY_SELF_DISCHARGE_RATE = 0.02
-
-UNIT_EURO_PER_KWH = "€/kWh"
-UNIT_CENT_PER_KWH = "ct/kWh"
-UNIT_WATT = "W"
-UNIT_HOURS = "h"
-
-BATTERY_SOC_SENSOR = "soc"
-BATTERY_POWER_SENSOR = "power"
-BATTERY_RUNTIME_REMAINING_SENSOR = "runtime_remaining"
-BATTERY_EFFICIENCY_SENSOR = "efficiency"
-
-BATTERY_EXPECTED_CHARGE_SOLAR_SENSOR = "expected_charge_solar"
-BATTERY_CHARGE_FROM_SOLAR_SENSOR = "charge_from_solar"
-BATTERY_CHARGE_FROM_GRID_SENSOR = "charge_from_grid"
-
-ELECTRICITY_PRICE_CURRENT_SENSOR = "price_current"
-ELECTRICITY_PRICE_NEXT_HOUR_SENSOR = "price_next_hour"
-ELECTRICITY_PRICE_AVG_TODAY_SENSOR = "price_avg_today"
-ELECTRICITY_PRICE_AVG_WEEK_SENSOR = "price_avg_week"
-ELECTRICITY_PRICE_MIN_TODAY_SENSOR = "price_min_today"
-ELECTRICITY_PRICE_MAX_TODAY_SENSOR = "price_max_today"
-ELECTRICITY_CHEAPEST_HOUR_TODAY_SENSOR = "cheapest_hour_today"
-ELECTRICITY_MOST_EXPENSIVE_HOUR_TODAY_SENSOR = "most_expensive_hour_today"
-ELECTRICITY_CHARGING_RECOMMENDATION_SENSOR = "charging_recommendation"
-ELECTRICITY_SAVINGS_TODAY_SENSOR = "savings_today"
-
-BATTERY_SOLAR_DISCHARGE_TODAY_SENSOR = "solar_discharge_today"
-BATTERY_GRID_DISCHARGE_TODAY_SENSOR = "grid_discharge_today"
-BATTERY_GRID_CHARGE_COST_TODAY_SENSOR = "grid_charge_cost_today"
-BATTERY_SOLAR_SAVINGS_TODAY_SENSOR = "solar_savings_today"
-BATTERY_GRID_ARBITRAGE_PROFIT_TODAY_SENSOR = "grid_arbitrage_profit_today"
-BATTERY_TOTAL_PROFIT_TODAY_SENSOR = "total_profit_today"
-BATTERY_GRID_CHARGE_MONTH_SENSOR = "grid_charge_month"
-BATTERY_TOTAL_PROFIT_MONTH_SENSOR = "total_profit_month"
-BATTERY_TOTAL_PROFIT_YEAR_SENSOR = "total_profit_year"
-
-AUTARKY_WITH_BATTERY_SENSOR = "autarky_with_battery"
-SELF_CONSUMPTION_WITH_BATTERY_SENSOR = "self_consumption_with_battery"
-GRID_EXPORT_TODAY_SENSOR = "grid_export_today"
-GRID_IMPORT_TODAY_SENSOR = "grid_import_today"
-DIRECT_SOLAR_CONSUMPTION_SENSOR = "direct_solar_consumption"
-
-SOLAR_TO_HOUSE_SENSOR = "solar_to_house"
-SOLAR_TO_BATTERY_SENSOR = "solar_to_battery"
-SOLAR_TO_GRID_SENSOR = "solar_to_grid"
-GRID_TO_HOUSE_SENSOR = "grid_to_house"
-GRID_TO_BATTERY_SENSOR = "grid_to_battery"
-BATTERY_TO_HOUSE_SENSOR = "battery_to_house"

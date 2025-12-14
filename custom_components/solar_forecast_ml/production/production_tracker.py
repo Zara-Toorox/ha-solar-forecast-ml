@@ -1,4 +1,4 @@
-"""Production Tracking and Monitoring V10.0.0 @zara
+"""Production Tracking and Monitoring V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -164,6 +164,41 @@ class ProductionTimeCalculator:
             _LOGGER.error(f"Failed to save persistent production time state: {e}")
             return False
 
+    async def _sync_to_daily_forecasts(self) -> None:
+        """Sync production time state to daily_forecasts.json immediately after restore.
+
+        This fixes the race condition where the ProductionTimeSensor reads from
+        daily_forecasts.json before the periodic save (every 30s) updates it.
+        Without this sync, users see 00:00:00 for up to 30 seconds after restart.
+        """
+        if not self.data_manager:
+            return
+
+        try:
+            now_local = dt_util.now()
+            duration_seconds = int(self._accumulated_hours * 3600)
+
+            if self._is_active and self._start_time:
+                active_duration = (now_local - self._start_time).total_seconds()
+                duration_seconds += int(active_duration)
+
+            await self.data_manager.update_production_time(
+                active=self._is_active,
+                duration_seconds=duration_seconds,
+                start_time=self._start_time,
+                end_time=self._end_time,
+                last_power_above_10w=self._last_power_above_10w,
+                zero_power_since=self._zero_power_start,
+            )
+
+            _LOGGER.info(
+                f"[OK] Synced production time to daily_forecasts.json: "
+                f"duration={duration_seconds}s ({self.get_production_time()})"
+            )
+
+        except Exception as e:
+            _LOGGER.warning(f"Failed to sync production time to daily_forecasts: {e}")
+
     async def start_tracking(self) -> None:
         """Starts the live tracking listeners and initializes state @zara"""
         _LOGGER.info(
@@ -212,6 +247,8 @@ class ProductionTimeCalculator:
                     f"accumulated={self._accumulated_hours:.2f}h, "
                     f"active={self._is_active}"
                 )
+                # CRITICAL: Immediately sync to daily_forecasts.json so sensor shows correct value
+                await self._sync_to_daily_forecasts()
             else:
                 _LOGGER.info("No persistent state found - will initialize from sensor")
 

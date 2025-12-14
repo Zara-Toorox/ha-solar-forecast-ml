@@ -1,4 +1,4 @@
-"""Base Sensor Class V10.0.0 @zara
+"""Base Sensor Class V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -512,10 +512,15 @@ class ExpectedDailyProductionSensor(FileBasedSensorMixin, SensorEntity):
         )
 
     def extract_value_from_file(self, forecast_data: dict) -> Optional[float]:
-        """Extract expected daily production from daily_forecasts.json @zara"""
+        """Extract expected daily production from daily_forecasts.json @zara
+
+        Uses prediction_kwh_display if available (intraday-corrected value),
+        otherwise falls back to prediction_kwh (original forecast).
+        """
         today = forecast_data.get("today", {})
         forecast_day = today.get("forecast_day", {})
-        return forecast_day.get("prediction_kwh")
+        # Prefer display value (intraday-corrected), fallback to original
+        return forecast_day.get("prediction_kwh_display") or forecast_day.get("prediction_kwh")
 
 class ProductionTimeSensor(FileBasedSensorMixin, SensorEntity):
     """Sensor for production time today - reads directly from daily_forecastsjson"""

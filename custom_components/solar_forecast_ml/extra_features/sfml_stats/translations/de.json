@@ -1,0 +1,275 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SFML Stats - Grundeinstellungen",
+        "description": "Konfiguriere die Statistik-Generierung für Solar Forecast ML.",
+        "data": {
+          "auto_generate": "Automatische Generierung",
+          "generate_weekly": "Wöchentliche Reports",
+          "generate_monthly": "Monatliche Reports",
+          "theme": "Farbschema"
+        },
+        "data_description": {
+          "auto_generate": "Reports automatisch nach Zeitplan generieren",
+          "generate_weekly": "Jeden Sonntag einen Wochenbericht erstellen",
+          "generate_monthly": "Am 1. jeden Monats einen Monatsbericht erstellen",
+          "theme": "Dark oder Light Theme für die Charts"
+        }
+      },
+      "energy_flow": {
+        "title": "Energiefluss-Sensoren",
+        "description": "Wähle die Sensoren für das Energiefluss-Diagramm.\n\nAlle Felder sind optional! Du musst nur die Sensoren auswählen, die du hast.\n\nDie Sensoren müssen die aktuelle Leistung in Watt (W) liefern.",
+        "data": {
+          "sensor_solar_power": "Solar Leistung",
+          "sensor_solar_to_house": "Solar zu Haus",
+          "sensor_solar_to_battery": "Solar zu Akku",
+          "sensor_grid_to_house": "Netz zu Haus",
+          "sensor_grid_to_battery": "Netz zu Akku",
+          "sensor_house_to_grid": "Einspeisung"
+        },
+        "data_description": {
+          "sensor_solar_power": "Aktuelle PV-Leistung in Watt. Kommt direkt vom Wechselrichter.",
+          "sensor_solar_to_house": "Leistung die direkt von PV ins Haus fließt (ohne Akku/Netz).",
+          "sensor_solar_to_battery": "Leistung die von PV in die Batterie lädt.",
+          "sensor_grid_to_house": "Netzbezug für direkten Hausverbrauch (ohne Akkuladung).",
+          "sensor_grid_to_battery": "Netzbezug für Akkuladung.",
+          "sensor_house_to_grid": "Einspeisung ins Netz."
+        }
+      },
+      "battery": {
+        "title": "Batterie & Verbrauch",
+        "description": "Sensoren für Batterie-Status und Hausverbrauch.\n\nAlle Felder sind optional!\n\nSOC in Prozent (%), Leistung in Watt (W).",
+        "data": {
+          "sensor_battery_soc": "Akkustand (SOC %)",
+          "sensor_battery_power": "Akku Lade-/Entladeleistung",
+          "sensor_battery_to_house": "Akku Entladung → Haus",
+          "sensor_battery_to_grid": "Akku Entladung → Netz",
+          "sensor_home_consumption": "Hausverbrauch gesamt"
+        },
+        "data_description": {
+          "sensor_battery_soc": "State of Charge in Prozent (0-100%). Ladestand des Akkus.",
+          "sensor_battery_power": "Aktuelle Lade- oder Entladeleistung in Watt. Wird unter dem Akku-Symbol angezeigt.",
+          "sensor_battery_to_house": "Nur die Entladeleistung die ins Haus fließt (in Watt). Für den Flow Akku → Haus.",
+          "sensor_battery_to_grid": "Einspeisung aus dem Akku ins Netz (in Watt). Für den Flow Akku → Netz.",
+          "sensor_home_consumption": "Gesamter aktueller Hausverbrauch in Watt. Wird im Haus-Symbol angezeigt."
+        }
+      },
+      "statistics": {
+        "title": "Statistik-Sensoren & Wetter (optional)",
+        "description": "Sensoren für Tages- und Jahresstatistiken.\n\nAlle Felder sind optional!\n\nPeaks und Produktionsdaten werden automatisch aus den Solar Forecast ML Daten gelesen!",
+        "data": {
+          "sensor_solar_yield_daily": "Tagesertrag Solar",
+          "sensor_grid_import_daily": "Netzbezug heute",
+          "sensor_grid_import_yearly": "Netzbezug Jahr",
+          "sensor_battery_charge_solar_daily": "Akkuladung Sonne heute",
+          "sensor_battery_charge_grid_daily": "Akkuladung Netz heute",
+          "sensor_price_total": "Aktueller Preis Brutto",
+          "weather_entity": "Wetter-Entity (HA)"
+        },
+        "data_description": {
+          "sensor_solar_yield_daily": "Gesamte PV-Produktion heute in kWh (z.B. vom Wechselrichter).",
+          "sensor_grid_import_daily": "Gesamter Netzbezug heute in kWh.",
+          "sensor_grid_import_yearly": "Gesamter Netzbezug dieses Jahr in kWh.",
+          "sensor_battery_charge_solar_daily": "Energie die heute vom PV in den Akku geladen wurde (kWh).",
+          "sensor_battery_charge_grid_daily": "Energie die heute vom Netz in den Akku geladen wurde (kWh).",
+          "sensor_price_total": "Aktueller Strompreis Brutto inkl. aller Abgaben in ct/kWh.",
+          "weather_entity": "HA Wetter-Integration für Vergleich mit KI-korrigierten Daten."
+        }
+      },
+      "panels": {
+        "title": "PV-Panel Sensoren (optional)",
+        "description": "Konfiguriere bis zu 4 individuelle PV-Panels.\n\nAlle Felder sind optional!\n\nFür jedes Panel kannst du einen Namen und einen Live-Watt-Sensor angeben.",
+        "data": {
+          "panel1_name": "Panel 1 Name",
+          "sensor_panel1_power": "Panel 1 Live Leistung",
+          "panel2_name": "Panel 2 Name",
+          "sensor_panel2_power": "Panel 2 Live Leistung",
+          "panel3_name": "Panel 3 Name",
+          "sensor_panel3_power": "Panel 3 Live Leistung",
+          "panel4_name": "Panel 4 Name",
+          "sensor_panel4_power": "Panel 4 Live Leistung"
+        },
+        "data_description": {
+          "panel1_name": "Name des Panels (z.B. 'Süd-Ost' oder 'Garage')",
+          "sensor_panel1_power": "Aktuelle Leistung in Watt",
+          "panel2_name": "Name des Panels",
+          "sensor_panel2_power": "Aktuelle Leistung in Watt",
+          "panel3_name": "Name des Panels",
+          "sensor_panel3_power": "Aktuelle Leistung in Watt",
+          "panel4_name": "Name des Panels",
+          "sensor_panel4_power": "Aktuelle Leistung in Watt"
+        }
+      },
+      "billing": {
+        "title": "Stromrechnung & Abrechnungszeitraum",
+        "description": "Konfiguriere deinen Abrechnungszeitraum für die Jahresbilanz.\n\nGib das Startdatum deiner Stromrechnung ein (z.B. wenn dein Anbieter am 15. Januar abrechnet, wähle Tag=15, Monat=Januar).\n\nDie kWh-Sensoren müssen 'total_increasing' sein - die Differenz zum Startwert wird berechnet.",
+        "data": {
+          "billing_start_day": "Abrechnungstag",
+          "billing_start_month": "Abrechnungsmonat",
+          "billing_price_mode": "Preismodus",
+          "billing_fixed_price": "Fixpreis",
+          "sensor_smartmeter_import_kwh": "Netzbezug Zähler (kWh total)",
+          "sensor_smartmeter_export_kwh": "Einspeisung Zähler (kWh total)",
+          "sensor_solar_yield_total_kwh": "Solarertrag Zähler (kWh total)"
+        },
+        "data_description": {
+          "billing_start_day": "Tag im Monat an dem dein Abrechnungszeitraum beginnt (1-28).",
+          "billing_start_month": "Monat in dem dein Abrechnungszeitraum beginnt.",
+          "billing_price_mode": "Dynamisch = tatsächliche Stundenpreise aus Grid Price Monitor. Fixpreis = dein Tarifpreis.",
+          "billing_fixed_price": "Dein Stromtarif-Preis in Cent pro kWh (nur bei Fixpreis-Modus).",
+          "sensor_smartmeter_import_kwh": "Zählerstand Netzbezug in kWh (total_increasing). Startwert wird aus Recorder geholt.",
+          "sensor_smartmeter_export_kwh": "Zählerstand Einspeisung in kWh (total_increasing). Startwert wird aus Recorder geholt.",
+          "sensor_solar_yield_total_kwh": "Gesamter Solarertrag in kWh (total_increasing). Startwert wird aus Recorder geholt."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "SFML Stats ist bereits konfiguriert.",
+      "raspberry_pi_not_supported": "Installation auf Raspberry Pi wird nicht unterstützt. Die Integration verwendet matplotlib für Chart-Generierung, was auf Raspberry Pi zu Performance-Problemen und hoher CPU-Last führt. Bitte verwenden Sie ein leistungsstärkeres System (x86_64 oder einen leistungsstarken ARM-Server).",
+      "proxmox_not_recommended": "Installation auf Proxmox VE Host erkannt. Bitte beachten Sie: Home Assistant sollte in einer VM oder LXC-Container laufen, nicht direkt auf dem Proxmox-Host. Die matplotlib-basierte Chart-Generierung kann auf dem Proxmox-Host zu Performance-Problemen führen. Bitte installieren Sie Home Assistant in einer dedizierten VM oder einem LXC-Container."
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen",
+      "unknown": "Unbekannter Fehler"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SFML Stats Optionen",
+        "description": "Wähle welche Einstellungen du ändern möchtest.",
+        "menu_options": {
+          "general": "Grundeinstellungen",
+          "energy_flow": "Energiefluss-Sensoren",
+          "battery": "Batterie & Verbrauch",
+          "statistics": "Statistik-Sensoren",
+          "panels": "PV-Panel Sensoren",
+          "billing": "Stromrechnung & Abrechnung"
+        }
+      },
+      "general": {
+        "title": "Grundeinstellungen",
+        "description": "Report-Generierung und Theme anpassen.",
+        "data": {
+          "auto_generate": "Automatische Generierung",
+          "generate_weekly": "Wöchentliche Reports",
+          "generate_monthly": "Monatliche Reports",
+          "theme": "Farbschema"
+        },
+        "data_description": {
+          "auto_generate": "Reports automatisch nach Zeitplan generieren",
+          "generate_weekly": "Jeden Sonntag einen Wochenbericht erstellen",
+          "generate_monthly": "Am 1. jeden Monats einen Monatsbericht erstellen",
+          "theme": "Dark oder Light Theme für die Charts"
+        }
+      },
+      "energy_flow": {
+        "title": "Energiefluss-Sensoren",
+        "description": "Sensoren für das Energiefluss-Diagramm. Alle Werte in Watt (W).",
+        "data": {
+          "sensor_solar_power": "Solar Leistung",
+          "sensor_solar_to_house": "Solar zu Haus",
+          "sensor_solar_to_battery": "Solar zu Akku",
+          "sensor_grid_to_house": "Netz zu Haus",
+          "sensor_grid_to_battery": "Netz zu Akku",
+          "sensor_house_to_grid": "Einspeisung"
+        },
+        "data_description": {
+          "sensor_solar_power": "Aktuelle PV-Leistung in Watt.",
+          "sensor_solar_to_house": "Leistung die direkt von PV ins Haus fließt.",
+          "sensor_solar_to_battery": "Leistung die von PV in die Batterie lädt.",
+          "sensor_grid_to_house": "Netzbezug für direkten Hausverbrauch.",
+          "sensor_grid_to_battery": "Netzbezug für Akkuladung.",
+          "sensor_house_to_grid": "Einspeisung ins Netz."
+        }
+      },
+      "battery": {
+        "title": "Batterie & Verbrauch",
+        "description": "Sensoren für Batterie und Hausverbrauch.",
+        "data": {
+          "sensor_battery_soc": "Akkustand (SOC %)",
+          "sensor_battery_power": "Akku Lade-/Entladeleistung",
+          "sensor_battery_to_house": "Akku Entladung → Haus",
+          "sensor_battery_to_grid": "Akku Entladung → Netz",
+          "sensor_home_consumption": "Hausverbrauch gesamt"
+        },
+        "data_description": {
+          "sensor_battery_soc": "Ladestand des Akkus in Prozent.",
+          "sensor_battery_power": "Aktuelle Lade-/Entladeleistung in Watt.",
+          "sensor_battery_to_house": "Entladeleistung ins Haus (für Flow).",
+          "sensor_battery_to_grid": "Einspeisung aus Akku ins Netz (für Flow).",
+          "sensor_home_consumption": "Gesamter Hausverbrauch in Watt."
+        }
+      },
+      "statistics": {
+        "title": "Statistik-Sensoren & Wetter",
+        "description": "Optionale Sensoren für erweiterte Statistiken.",
+        "data": {
+          "sensor_solar_yield_daily": "Tagesertrag Solar",
+          "sensor_grid_import_daily": "Netzbezug heute",
+          "sensor_grid_import_yearly": "Netzbezug Jahr",
+          "sensor_battery_charge_solar_daily": "Akkuladung Sonne heute",
+          "sensor_battery_charge_grid_daily": "Akkuladung Netz heute",
+          "sensor_price_total": "Aktueller Preis Brutto",
+          "weather_entity": "Wetter-Entity (HA)"
+        },
+        "data_description": {
+          "sensor_solar_yield_daily": "Gesamte PV-Produktion heute in kWh.",
+          "sensor_grid_import_daily": "Gesamter Netzbezug heute in kWh.",
+          "sensor_grid_import_yearly": "Gesamter Netzbezug dieses Jahr in kWh.",
+          "sensor_battery_charge_solar_daily": "Energie die heute vom PV in den Akku geladen wurde.",
+          "sensor_battery_charge_grid_daily": "Energie die heute vom Netz in den Akku geladen wurde.",
+          "sensor_price_total": "Aktueller Strompreis Brutto inkl. aller Abgaben in ct/kWh.",
+          "weather_entity": "HA Wetter-Integration für Vergleich mit KI-korrigierten Daten."
+        }
+      },
+      "panels": {
+        "title": "PV-Panel Sensoren",
+        "description": "Konfiguriere bis zu 4 individuelle PV-Panels mit Live-Leistung.",
+        "data": {
+          "panel1_name": "Panel 1 Name",
+          "sensor_panel1_power": "Panel 1 Live Leistung",
+          "panel2_name": "Panel 2 Name",
+          "sensor_panel2_power": "Panel 2 Live Leistung",
+          "panel3_name": "Panel 3 Name",
+          "sensor_panel3_power": "Panel 3 Live Leistung",
+          "panel4_name": "Panel 4 Name",
+          "sensor_panel4_power": "Panel 4 Live Leistung"
+        },
+        "data_description": {
+          "panel1_name": "Name des Panels (z.B. 'Süd-Ost' oder 'Garage')",
+          "sensor_panel1_power": "Aktuelle Leistung in Watt",
+          "panel2_name": "Name des Panels",
+          "sensor_panel2_power": "Aktuelle Leistung in Watt",
+          "panel3_name": "Name des Panels",
+          "sensor_panel3_power": "Aktuelle Leistung in Watt",
+          "panel4_name": "Name des Panels",
+          "sensor_panel4_power": "Aktuelle Leistung in Watt"
+        }
+      },
+      "billing": {
+        "title": "Stromrechnung & Abrechnungszeitraum",
+        "description": "Konfiguriere deinen Abrechnungszeitraum für die Jahresbilanz.\n\nDie kWh-Sensoren müssen 'total_increasing' sein - die Differenz zum Startwert wird berechnet.",
+        "data": {
+          "billing_start_day": "Abrechnungstag",
+          "billing_start_month": "Abrechnungsmonat",
+          "billing_price_mode": "Preismodus",
+          "billing_fixed_price": "Fixpreis",
+          "sensor_smartmeter_import_kwh": "Netzbezug Zähler (kWh total)",
+          "sensor_smartmeter_export_kwh": "Einspeisung Zähler (kWh total)",
+          "sensor_solar_yield_total_kwh": "Solarertrag Zähler (kWh total)"
+        },
+        "data_description": {
+          "billing_start_day": "Tag im Monat an dem dein Abrechnungszeitraum beginnt (1-28).",
+          "billing_start_month": "Monat in dem dein Abrechnungszeitraum beginnt.",
+          "billing_price_mode": "Dynamisch = tatsächliche Stundenpreise. Fixpreis = dein Tarifpreis.",
+          "billing_fixed_price": "Dein Stromtarif-Preis in Cent pro kWh.",
+          "sensor_smartmeter_import_kwh": "Zählerstand Netzbezug in kWh (total_increasing). Startwert wird aus Recorder geholt.",
+          "sensor_smartmeter_export_kwh": "Zählerstand Einspeisung in kWh (total_increasing). Startwert wird aus Recorder geholt.",
+          "sensor_solar_yield_total_kwh": "Gesamter Solarertrag in kWh (total_increasing). Startwert wird aus Recorder geholt."
+        }
+      }
+    }
+  }
+}

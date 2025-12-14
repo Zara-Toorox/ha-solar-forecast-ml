@@ -1,4 +1,4 @@
-"""Astronomy module for solar calculations and caching V10.0.0 @zara
+"""Astronomy module for solar calculations and caching V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

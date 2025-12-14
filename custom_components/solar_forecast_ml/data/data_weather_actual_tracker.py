@@ -1,4 +1,4 @@
-"""Weather Actual Tracker V10.0.0 @zara
+"""Weather Actual Tracker V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -23,6 +23,7 @@ from typing import Dict, Optional, Any
 import json
 
 from .data_frost_detection import FrostDetector
+from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +40,9 @@ class WeatherActualTracker:
         self.actual_file = self.stats_dir / "hourly_weather_actual.json"
 
         self.frost_detector = FrostDetector()
+
+        # Track last frost notification hour to avoid spam
+        self._last_frost_notification_hour: Optional[str] = None
 
         if config_entry:
             from ..const import (
@@ -108,6 +112,10 @@ class WeatherActualTracker:
 
             if "frost_analysis" in frost_result:
                 weather_data["frost_analysis"] = frost_result["frost_analysis"]
+
+            # Send notification for heavy frost
+            if frost_result.get("frost_detected") == "heavy_frost":
+                await self._send_frost_notification(frost_result, weather_data, date_str, hour)
 
         astronomy_fields = await self._get_astronomy_time_fields(date_str, hour)
         if astronomy_fields:
@@ -307,18 +315,16 @@ class WeatherActualTracker:
 
             cloud_cover = None
             try:
-                weather_cache_file = self.data_dir / "data" / "weather_cache.json"
+                # Use open_meteo_cache.json (primary source) with correct format
+                weather_cache_file = self.data_dir / "data" / "open_meteo_cache.json"
                 if weather_cache_file.exists():
                     cache_data = await self.hass.async_add_executor_job(
                         self._read_json_sync, weather_cache_file
                     )
-                    forecast_day = cache_data.get("forecasts", {}).get(date_str, {})
-                    hourly_forecasts = forecast_day.get("hourly", [])
-
-                    for forecast in hourly_forecasts:
-                        if forecast.get("local_hour") == hour:
-                            cloud_cover = forecast.get("cloud_cover")
-                            break
+                    # Format: forecast[date][hour] (hour as string)
+                    forecast_day = cache_data.get("forecast", {}).get(date_str, {})
+                    hour_data_forecast = forecast_day.get(str(hour), {})
+                    cloud_cover = hour_data_forecast.get("cloud_cover")
             except Exception:
                 pass
 
@@ -430,3 +436,40 @@ class WeatherActualTracker:
 
         except Exception:
             return {}
+
+    async def _send_frost_notification(
+        self,
+        frost_result: Dict[str, Any],
+        weather_data: Dict[str, Any],
+        date_str: str,
+        hour: int
+    ) -> None:
+        """Send notification when heavy frost is detected @zara"""
+        try:
+            # Avoid duplicate notifications for same hour
+            hour_key = f"{date_str}_{hour}"
+            if self._last_frost_notification_hour == hour_key:
+                return
+
+            # Get notification service from hass.data
+            notification_service = self.hass.data.get(DOMAIN, {}).get("notification_service")
+            if not notification_service:
+                _LOGGER.debug("Notification service not available for frost warning")
+                return
+
+            frost_analysis = frost_result.get("frost_analysis", {})
+
+            await notification_service.show_frost_warning(
+                frost_score=frost_result.get("frost_score", 0),
+                temperature_c=weather_data.get("temperature_c", 0.0),
+                dewpoint_c=frost_analysis.get("dewpoint_c", 0.0),
+                frost_margin_c=frost_analysis.get("frost_margin_c", 0.0),
+                hour=hour,
+                confidence=frost_result.get("confidence", 0.0),
+            )
+
+            self._last_frost_notification_hour = hour_key
+            _LOGGER.info(f"Frost warning notification sent for {date_str} {hour:02d}:00")
+
+        except Exception as e:
+            _LOGGER.error(f"Error sending frost notification: {e}")

@@ -1,4 +1,4 @@
-"""Physics Engine for Solar Forecast ML Integration V10.0.0 @zara
+"""Physics Engine for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -167,13 +167,7 @@ class PhysicsEngine:
         # Geometry confidence (0 = default, 1 = fully learned)
         self._geometry_confidence = 0.0 if panel_tilt_deg is None else 1.0
 
-        _LOGGER.debug(
-            "PhysicsEngine initialized: %.2f kWp, tilt=%.1f, azimuth=%.1f, efficiency=%.2f",
-            system_capacity_kwp,
-            self._geometry.tilt_deg,
-            self._geometry.azimuth_deg,
-            system_efficiency,
-        )
+        # PhysicsEngine initialization logging removed to reduce log spam
 
     @property
     def geometry(self) -> PanelGeometry:

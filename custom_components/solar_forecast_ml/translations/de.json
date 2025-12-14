@@ -3,116 +3,86 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML",
-        "description": "Pflicht: Leistungs-Sensor, Tagesertrag\nOptional: Wetter-Sensor (Open-Meteo liefert alle Wetterdaten), Alle anderen Felder\n\n🔋 Batterie-Management v9.0.0 (optional):\n• Watt-basiertes System für präzise Energiefluss-Analyse\n• 8 klare Sensoren (alle positiv außer Batterie: +/-)\n• Benötigt: Batterie-Leistung, SOC, Solar-Produktion, Wechselrichter, Netzbezug, Netzexport, Hausverbrauch",
+        "description": "Pflicht: Leistungs-Sensor, Tagesertrag\nOptional: Alle anderen Felder\n\nWetterdaten werden automatisch via Open-Meteo API bereitgestellt (keine Konfiguration erforderlich)",
         "data": {
-          "weather_entity": "Wetter-Sensor (Optional)",
           "power_entity": "Leistungs-Sensor (W)",
           "solar_yield_today": "Tagesertrag (kWh)",
           "total_consumption_today": "Tagesverbrauch (kWh)",
-          "grid_import_today": "Netzbezug Heute (kWh)",
-          "grid_export_today": "Netzeinspeisung Heute (kWh)",
           "solar_capacity": "Anlagenleistung (kWp)",
+          "inverter_max_power": "Wechselrichter Max-Leistung (kW)",
           "rain_sensor": "Regen-Sensor",
           "lux_sensor": "Helligkeits-Sensor (lx)",
           "temp_sensor": "Temperatur-Sensor",
           "wind_sensor": "Wind-Sensor",
           "humidity_sensor": "Luftfeuchtigkeits-Sensor",
           "pressure_sensor": "Luftdruck-Sensor (hPa)",
-          "solar_radiation_sensor": "Solarstrahlung-Sensor (W/m²)",
-          "battery_capacity": "Batterie-Kapazität (kWh)",
-          "battery_power_sensor": "Batterie-Leistung (W, +/-) - v9.0.0",
-          "battery_soc_sensor": "Batterie Ladezustand (%) - v9.0.0",
-          "solar_production_sensor": "Solarzellenleistung (W) - v9.0.0",
-          "inverter_output_sensor": "Wechselrichter-Leistung (W) - v9.0.0",
-          "grid_import_sensor": "Netzbezug (W) - v9.0.0",
-          "house_consumption_sensor": "Hausverbrauch (W) - v9.0.0",
-          "grid_export_sensor": "Netzeinspeisung (W) - v9.0.0",
-          "grid_charge_power_sensor": "Akkunetzbezug (W) - v9.0.0 Optional",
-          "battery_temperature_sensor": "Batterie-Temperatur (°C) - v9.0.0 Optional",
-          "electricity_country": "Land (DE/AT)"
+          "solar_radiation_sensor": "Solarstrahlung-Sensor (W/m²)"
         },
         "data_description": {
-          "weather_entity": "Wetter-Entität für zusätzliche Daten (Optional - Open-Meteo liefert alle Wetter-/Strahlungsdaten)",
           "power_entity": "Aktuelle Leistung in Watt (Pflicht)",
           "solar_yield_today": "Tagesertrag in kWh - MUSS um Mitternacht zurückgesetzt werden (Pflicht)",
           "total_consumption_today": "Tagesverbrauch in kWh (Optional)",
-          "grid_import_today": "Netzbezug in kWh - Strom aus dem Netz (Optional, verbessert Autarkie-Berechnung)",
-          "grid_export_today": "Netzeinspeisung in kWh - Strom ins Netz (Optional)",
           "solar_capacity": "Spitzenleistung in kWp, z.B. 5.5 (Optional, Standard: 5.0)",
+          "inverter_max_power": "Maximale AC-Leistung des Wechselrichters in kW. Prognosen werden gekappt, gedrosselte Stunden vom Training ausgeschlossen. 0 = deaktiviert. (Optional)",
           "rain_sensor": "Externer Regen-Sensor (Optional)",
           "lux_sensor": "Externe Helligkeit in Lux (Optional)",
           "temp_sensor": "Externe Temperatur (Optional)",
           "wind_sensor": "Externe Windgeschwindigkeit (Optional)",
           "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)",
           "pressure_sensor": "Externer Luftdruck in hPa (Optional)",
-          "solar_radiation_sensor": "Externe Solarstrahlung in W/m² (Optional, bevorzugt gegenüber Lux)",
-          "battery_capacity": "Batterie-Kapazität in kWh (Optional, für Batterie-Management)",
-          "battery_power_sensor": "[v9.0.0] Batterie-Leistung in W (Positiv=Laden, Negativ=Entladen)",
-          "battery_soc_sensor": "[v9.0.0] Batterie-Ladezustand in % (0-100)",
-          "solar_production_sensor": "[v9.0.0] DC-Leistung der Solarzellen in W (≥0)",
-          "inverter_output_sensor": "[v9.0.0] AC-Ausgang des Wechselrichters in W (≥0) - Solar+Batterie kombiniert",
-          "grid_import_sensor": "[v9.0.0] Netzbezug in W (≥0) - Strom vom öffentlichen Netz",
-          "house_consumption_sensor": "[v9.0.0] Gesamt-Hausverbrauch in W (≥0)",
-          "grid_export_sensor": "[v9.0.0] Netzeinspeisung in W (≥0) - Strom ins öffentliche Netz",
-          "grid_charge_power_sensor": "[v9.0.0 Optional] Akkunetzbezug in W (≥0) - Falls nicht vorhanden, wird automatisch berechnet",
-          "battery_temperature_sensor": "[v9.0.0 Optional] Batterie-Temperatur in °C - Für erweiterte Analyse",
-          "electricity_country": "Land für Strompreise - DE oder AT (Optional)"
+          "solar_radiation_sensor": "Externe Solarstrahlung in W/m² (Optional, bevorzugt gegenüber Lux)"
+        }
+      },
+      "panel_groups": {
+        "title": "Panel-Gruppen konfigurieren (optional)",
+        "description": "⚠️ NUR AUSFÜLLEN wenn Du Panels/Strings in verschiedenen Ausrichtungen oder Winkeln hast!\nAnsonsten leer lassen.\n\n⚠️ SYSTEMANFORDERUNGEN:\n• Natives x64 Home Assistant: Empfohlen (unbegrenzte Gruppen)\n• Proxmox VM: Max. 2 Gruppen empfohlen\n• SD-Karten-Systeme (RPi): NICHT empfohlen (hohe I/O-Last)\n\nFormat pro Gruppe: Leistung(Wp)/Azimut(°)/Neigung(°)/[Energy-Sensor]\nGruppen können kommagetrennt oder untereinander eingegeben werden.\n\nBeispiel:\n1425/180/9/sensor.pv1_kwh_tag, 870/180/47/sensor.pv2_kwh_tag\n\nAzimut: 0°=Nord, 90°=Ost, 180°=Süd, 270°=West\nNeigung: 0°=horizontal, 90°=vertikal\n\nEnergy-Sensor (optional): Täglicher kWh-Sensor der um Mitternacht zurückgesetzt wird.",
+        "data": {
+          "panel_groups_input": "Panel-Gruppen"
+        },
+        "data_description": {
+          "panel_groups_input": "Format: Leistung/Azimut/Neigung/[Tages-kWh-Sensor] - kommagetrennt oder untereinander"
+        }
+      },
+      "reconfigure_panel_groups": {
+        "title": "Panel-Gruppen neu konfigurieren",
+        "description": "⚠️ NUR AUSFÜLLEN wenn Du Panels/Strings in verschiedenen Ausrichtungen oder Winkeln hast!\nAnsonsten leer lassen.\n\n⚠️ SYSTEMANFORDERUNGEN:\n• Natives x64 Home Assistant: Empfohlen (unbegrenzte Gruppen)\n• Proxmox VM: Max. 2 Gruppen empfohlen\n• SD-Karten-Systeme (RPi): NICHT empfohlen (hohe I/O-Last)\n\nFormat: Leistung(Wp)/Azimut(°)/Neigung(°)/[Energy-Sensor]\nKommagetrennt oder untereinander.\n\nEnergy-Sensor: Täglicher kWh-Sensor (Reset um Mitternacht)\n\nLeer lassen für einfache Kapazitätsberechnung.",
+        "data": {
+          "panel_groups_input": "Panel-Gruppen"
+        },
+        "data_description": {
+          "panel_groups_input": "Format: Leistung/Azimut/Neigung/[Tages-kWh-Sensor] - kommagetrennt oder untereinander"
         }
       },
       "reconfigure": {
         "title": "Solar Forecast ML neu konfigurieren",
-        "description": "Konfiguration aktualisieren\nLeere optionale Felder löschen den aktuellen Wert\n\n🔋 Batterie-Management v9.0.0:\n• Alle 8 Sensoren für Energiefluss-Analyse konfigurieren\n• Alle Werte positiv außer Batterie-Leistung (+/-)\n• Alte LEGACY Felder werden automatisch ignoriert",
+        "description": "Konfiguration aktualisieren\nLeere optionale Felder löschen den aktuellen Wert\n\nWetterdaten werden automatisch via Open-Meteo API bereitgestellt",
         "data": {
-          "weather_entity": "Wetter-Sensor (Optional)",
           "power_entity": "Leistungs-Sensor (W)",
           "solar_yield_today": "Tagesertrag (kWh)",
           "total_consumption_today": "Tagesverbrauch (kWh)",
-          "grid_import_today": "Netzbezug Heute (kWh)",
-          "grid_export_today": "Netzeinspeisung Heute (kWh)",
           "solar_capacity": "Anlagenleistung (kWp)",
+          "inverter_max_power": "Wechselrichter Max-Leistung (kW)",
           "rain_sensor": "Regen-Sensor",
           "lux_sensor": "Helligkeits-Sensor (lx)",
           "temp_sensor": "Temperatur-Sensor",
           "wind_sensor": "Wind-Sensor",
           "humidity_sensor": "Luftfeuchtigkeits-Sensor",
           "pressure_sensor": "Luftdruck-Sensor (hPa)",
-          "solar_radiation_sensor": "Solarstrahlung-Sensor (W/m²)",
-          "battery_capacity": "Batterie-Kapazität (kWh)",
-          "battery_power_sensor": "Batterie-Leistung (W, +/-) - v9.0.0",
-          "battery_soc_sensor": "Batterie Ladezustand (%) - v9.0.0",
-          "solar_production_sensor": "Solarzellenleistung (W) - v9.0.0",
-          "inverter_output_sensor": "Wechselrichter-Leistung (W) - v9.0.0",
-          "grid_import_sensor": "Netzbezug (W) - v9.0.0",
-          "house_consumption_sensor": "Hausverbrauch (W) - v9.0.0",
-          "grid_export_sensor": "Netzeinspeisung (W) - v9.0.0",
-          "grid_charge_power_sensor": "Akkunetzbezug (W) - v9.0.0 Optional",
-          "battery_temperature_sensor": "Batterie-Temperatur (°C) - v9.0.0 Optional",
-          "electricity_country": "Land (DE/AT)"
+          "solar_radiation_sensor": "Solarstrahlung-Sensor (W/m²)"
         },
         "data_description": {
-          "weather_entity": "Wetter-Entität für zusätzliche Daten (Optional - Open-Meteo liefert alle Wetter-/Strahlungsdaten)",
           "power_entity": "Aktuelle Leistung in Watt (Pflicht)",
           "solar_yield_today": "Tagesertrag in kWh - MUSS um Mitternacht zurückgesetzt werden (Pflicht)",
           "total_consumption_today": "Tagesverbrauch in kWh (Optional)",
-          "solar_capacity": "Spitzenleistung in kWp, z.B. 5.5 (Optional, Standard: 5.0 kWp)",
+          "solar_capacity": "Spitzenleistung in kWp, z.B. 5.5 (Optional, wird bei Panel-Gruppen automatisch berechnet)",
+          "inverter_max_power": "Maximale AC-Leistung des Wechselrichters in kW. Prognosen werden gekappt, gedrosselte Stunden vom Training ausgeschlossen. 0 = deaktiviert. (Optional)",
           "rain_sensor": "Externer Regen-Sensor (Optional)",
           "lux_sensor": "Externe Helligkeit in Lux (Optional)",
           "temp_sensor": "Externe Temperatur (Optional)",
           "wind_sensor": "Externe Windgeschwindigkeit (Optional)",
           "humidity_sensor": "Externe Luftfeuchtigkeit (Optional)",
           "pressure_sensor": "Externer Luftdruck in hPa (Optional)",
-          "solar_radiation_sensor": "Externe Solarstrahlung in W/m² (Optional, bevorzugt gegenüber Lux)",
-          "battery_capacity": "Batteriekapazität in kWh (z.B. 10.0 für Anker Solix)",
-          "battery_power_sensor": "[v9.0.0] Batterie-Leistung in W (Positiv=Laden, Negativ=Entladen)",
-          "battery_soc_sensor": "[v9.0.0] Batterie-Ladezustand in % (0-100)",
-          "solar_production_sensor": "[v9.0.0] DC-Leistung der Solarzellen in W (≥0)",
-          "inverter_output_sensor": "[v9.0.0] AC-Ausgang des Wechselrichters in W (≥0) - Solar+Batterie kombiniert",
-          "grid_import_sensor": "[v9.0.0] Netzbezug in W (≥0) - Strom vom öffentlichen Netz",
-          "house_consumption_sensor": "[v9.0.0] Gesamt-Hausverbrauch in W (≥0)",
-          "grid_export_sensor": "[v9.0.0] Netzeinspeisung in W (≥0) - Strom ins öffentliche Netz",
-          "grid_charge_power_sensor": "[v9.0.0 Optional] Akkunetzbezug in W (≥0) - Falls nicht vorhanden, wird automatisch berechnet",
-          "battery_temperature_sensor": "[v9.0.0 Optional] Batterie-Temperatur in °C - Für erweiterte Analyse",
-          "electricity_country": "Land für Strompreise (aWATTar) - Deutschland (DE) oder Österreich (AT)"
+          "solar_radiation_sensor": "Externe Solarstrahlung in W/m² (Optional, bevorzugt gegenüber Lux)"
         }
       }
     },
@@ -125,7 +95,8 @@
       "required": "Feld erforderlich",
       "already_configured": "Wetter-Entität bereits in Verwendung",
       "sensor_not_found": "Sensor-Entität nicht gefunden",
-      "invalid_sensor_state": "Sensor-Status ungültig oder nicht verfügbar"
+      "invalid_sensor_state": "Sensor-Status ungültig oder nicht verfügbar",
+      "invalid_panel_format": "Ungültiges Format. Bitte verwenden Sie: Leistung/Azimut/Neigung (z.B. 1200/180/30)"
     },
     "abort": {
       "already_configured": "Integration bereits konfiguriert",
@@ -138,7 +109,7 @@
     "step": {
       "init": {
         "title": "Erweiterte Optionen",
-        "description": "Update-Intervalle und Benachrichtigungen konfigurieren\nBatterie-Sensoren werden über 'Neu konfigurieren' eingestellt",
+        "description": "Update-Intervalle und Benachrichtigungen konfigurieren",
         "data": {
           "update_interval": "Update-Intervall (s)",
           "diagnostic": "Diagnose-Modus",
@@ -147,8 +118,6 @@
           "notify_forecast": "Prognose-Benachrichtigungen",
           "notify_learning": "Trainings-Benachrichtigungen",
           "notify_successful_learning": "Erfolgs-Benachrichtigungen",
-          "battery_enabled": "Batterie-Management aktivieren",
-          "electricity_enabled": "Strompreise aktivieren (aWATTar)",
           "ml_algorithm": "Modus",
           "enable_tiny_lstm": "KI aktivieren / deaktivieren"
         },
@@ -160,8 +129,6 @@
           "notify_forecast": "Bei Prognose-Updates benachrichtigen",
           "notify_learning": "Bei Trainingsstart benachrichtigen",
           "notify_successful_learning": "Bei erfolgreichem Training benachrichtigen",
-          "battery_enabled": "Batterie-Überwachung und -Prognosen aktivieren (Sensoren über Neu konfigurieren)",
-          "electricity_enabled": "Strompreise von aWATTar aktivieren (Land über Neu konfigurieren)",
           "ml_algorithm": "Wähle den Algorithmus: 'Automatisch' entscheidet basierend auf der Datenmenge (empfohlen). 'Ridge' ist schnell und stabil. 'Neuronales Netz' bietet 5-10% bessere Genauigkeit ab 100+ Samples.",
           "enable_tiny_lstm": "Erlaubt Nutzung des Neuronalen Netzes (benötigt 100+ Samples, 200+ MB RAM). Fällt automatisch auf Ridge zurück wenn Anforderungen nicht erfüllt. Empfehlung: Aktiviert lassen."
         }
@@ -169,7 +136,9 @@
     },
     "error": {
       "invalid_interval": "Intervall muss zwischen 300 und 86400 Sekunden liegen",
-      "invalid_input": "Ungültiges Eingabeformat"
+      "invalid_input": "Ungültiges Eingabeformat",
+      "energy_sensor_not_found": "Energy-Sensor nicht gefunden",
+      "energy_sensor_not_numeric": "Energy-Sensor ist nicht numerisch"
     }
   },
   "services": {
@@ -392,317 +361,15 @@
       },
       "next_production_start": {
         "name": "Nächster Produktionsbeginn"
-      },
-      "battery_soc": {
-        "name": "Batterie Ladezustand",
-        "state_attributes": {
-          "capacity_kwh": {
-            "name": "Kapazität"
-          },
-          "remaining_kwh": {
-            "name": "Verbleibend"
-          },
-          "empty_kwh": {
-            "name": "Leer"
-          },
-          "is_charging": {
-            "name": "Lädt"
-          },
-          "is_discharging": {
-            "name": "Entlädt"
-          }
-        }
-      },
-      "battery_power": {
-        "name": "Batterie Leistung"
-      },
-      "battery_charge_today": {
-        "name": "Batterie Ladung Heute"
-      },
-      "battery_discharge_today": {
-        "name": "Batterie Entladung Heute"
-      },
-      "battery_runtime_remaining": {
-        "name": "Batterie Restlaufzeit",
-        "state_attributes": {
-          "remaining_capacity_kwh": {
-            "name": "Verbleibende Kapazität"
-          },
-          "current_consumption_w": {
-            "name": "Aktueller Verbrauch"
-          }
-        }
-      },
-      "battery_efficiency": {
-        "name": "Batterie Effizienz",
-        "state_attributes": {
-          "total_charge_today_kwh": {
-            "name": "Gesamt-Ladung Heute"
-          },
-          "total_discharge_today_kwh": {
-            "name": "Gesamt-Entladung Heute"
-          },
-          "solar_charge_kwh": {
-            "name": "Solar-Ladung"
-          },
-          "grid_charge_kwh": {
-            "name": "Netz-Ladung"
-          }
-        }
-      },
-      "battery_solar_to_house": {
-        "name": "Solar → Haus"
-      },
-      "battery_solar_to_battery": {
-        "name": "Solar → Batterie"
-      },
-      "battery_solar_to_grid": {
-        "name": "Solar → Netz"
-      },
-      "battery_grid_to_house": {
-        "name": "Netz → Haus"
-      },
-      "battery_grid_to_battery": {
-        "name": "Netz → Batterie"
-      },
-      "battery_battery_to_house": {
-        "name": "Batterie → Haus"
-      },
-      "battery_forecast_expected_charge_solar": {
-        "name": "Erwartete Ladung aus Solar",
-        "state_attributes": {
-          "remaining_solar_forecast": {
-            "name": "Verbleibende Solar-Prognose"
-          },
-          "empty_capacity": {
-            "name": "Leere Kapazität"
-          },
-          "current_soc": {
-            "name": "Aktueller Ladezustand"
-          }
-        }
-      },
-      "battery_forecast_charge_from_solar": {
-        "name": "Ladung aus Solar"
-      },
-      "battery_forecast_charge_from_grid": {
-        "name": "Ladung aus Netz"
-      },
-      "battery_forecast_grid_export_today": {
-        "name": "Netzeinspeisung Heute"
-      },
-      "battery_forecast_grid_import_today": {
-        "name": "Netzbezug Heute"
-      },
-      "battery_forecast_direct_solar_consumption": {
-        "name": "Direkter Solar-Verbrauch"
-      },
-      "battery_forecast_autarky_with_battery": {
-        "name": "Autarkie mit Batterie"
-      },
-      "battery_forecast_self_consumption_with_battery": {
-        "name": "Eigenverbrauch mit Batterie"
-      },
-      "battery_cost_solar_discharge_today": {
-        "name": "Solar-Entladung Heute"
-      },
-      "battery_cost_grid_discharge_today": {
-        "name": "Netz-Entladung Heute"
-      },
-      "battery_cost_grid_charge_cost_today": {
-        "name": "Netz-Ladekosten Heute",
-        "state_attributes": {
-          "grid_charge_kwh": {
-            "name": "Netz-Ladung (kWh)"
-          },
-          "avg_price_cent_kwh": {
-            "name": "Ø Preis (Cent/kWh)"
-          }
-        }
-      },
-      "battery_cost_solar_savings_today": {
-        "name": "Solar-Ersparnis Heute",
-        "state_attributes": {
-          "solar_discharge_kwh": {
-            "name": "Solar-Entladung (kWh)"
-          },
-          "avg_discharge_price": {
-            "name": "Ø Entladungspreis"
-          }
-        }
-      },
-      "battery_cost_grid_arbitrage_profit_today": {
-        "name": "Netz-Arbitrage-Gewinn Heute",
-        "state_attributes": {
-          "grid_discharge_kwh": {
-            "name": "Netz-Entladung (kWh)"
-          },
-          "avg_charge_price": {
-            "name": "Ø Ladepreis"
-          },
-          "avg_discharge_price": {
-            "name": "Ø Entladungspreis"
-          }
-        }
-      },
-      "battery_cost_total_profit_today": {
-        "name": "Gesamt-Gewinn Heute",
-        "state_attributes": {
-          "solar_savings": {
-            "name": "Solar-Ersparnis"
-          },
-          "grid_arbitrage_profit": {
-            "name": "Arbitrage-Gewinn"
-          },
-          "grid_charge_cost": {
-            "name": "Ladekosten"
-          },
-          "breakdown": {
-            "name": "Aufschlüsselung"
-          }
-        }
-      },
-      "battery_cost_grid_charge_month": {
-        "name": "Netz-Ladung Monat",
-        "state_attributes": {
-          "year_month": {
-            "name": "Jahr-Monat"
-          },
-          "days_tracked": {
-            "name": "Erfasste Tage"
-          },
-          "grid_charge_cost": {
-            "name": "Ladekosten"
-          }
-        }
-      },
-      "battery_cost_total_profit_month": {
-        "name": "Gesamt-Gewinn Monat",
-        "state_attributes": {
-          "year_month": {
-            "name": "Jahr-Monat"
-          },
-          "days_tracked": {
-            "name": "Erfasste Tage"
-          },
-          "solar_savings": {
-            "name": "Solar-Ersparnis"
-          },
-          "grid_arbitrage_profit": {
-            "name": "Arbitrage-Gewinn"
-          },
-          "grid_charge_cost": {
-            "name": "Ladekosten"
-          }
-        }
-      },
-      "battery_cost_total_profit_year": {
-        "name": "Gesamt-Gewinn Jahr",
-        "state_attributes": {
-          "year": {
-            "name": "Jahr"
-          },
-          "months_tracked": {
-            "name": "Erfasste Monate"
-          },
-          "solar_savings": {
-            "name": "Solar-Ersparnis"
-          },
-          "grid_arbitrage_profit": {
-            "name": "Arbitrage-Gewinn"
-          },
-          "grid_charge_cost": {
-            "name": "Ladekosten"
-          }
-        }
-      },
-      "electricity_price_current": {
-        "name": "Strompreis Aktuell",
-        "state_attributes": {
-          "currency": {
-            "name": "Währung"
-          },
-          "country": {
-            "name": "Land"
-          },
-          "difference_from_average": {
-            "name": "Abweichung vom Durchschnitt"
-          },
-          "is_below_average": {
-            "name": "Unter Durchschnitt"
-          }
-        }
-      },
-      "electricity_price_next_hour": {
-        "name": "Strompreis Nächste Stunde"
-      },
-      "electricity_price_avg_today": {
-        "name": "Ø Strompreis Heute"
-      },
-      "electricity_price_avg_week": {
-        "name": "Ø Strompreis Woche"
-      },
-      "electricity_price_min_today": {
-        "name": "Min. Strompreis Heute"
-      },
-      "electricity_price_max_today": {
-        "name": "Max. Strompreis Heute"
-      },
-      "electricity_cheapest_hour_today": {
-        "name": "Günstigste Stunde Heute",
-        "state_attributes": {
-          "hour": {
-            "name": "Stunde"
-          },
-          "price": {
-            "name": "Preis"
-          },
-          "price_unit": {
-            "name": "Einheit"
-          }
-        }
-      },
-      "electricity_most_expensive_hour_today": {
-        "name": "Teuerste Stunde Heute",
-        "state_attributes": {
-          "hour": {
-            "name": "Stunde"
-          },
-          "price": {
-            "name": "Preis"
-          },
-          "price_unit": {
-            "name": "Einheit"
-          }
-        }
-      },
-      "electricity_charging_recommendation": {
-        "name": "Lade-Empfehlung",
-        "state_attributes": {
-          "current_price": {
-            "name": "Aktueller Preis"
-          },
-          "average_price": {
-            "name": "Durchschnittspreis"
-          },
-          "should_charge": {
-            "name": "Jetzt laden"
-          },
-          "cheapest_hours": {
-            "name": "Günstigste Stunden"
-          }
-        }
-      },
-      "electricity_savings_today": {
-        "name": "Ersparnis Heute",
-        "state_attributes": {
-          "charge_from_grid_today": {
-            "name": "Ladung aus Netz Heute"
-          },
-          "avg_price_today": {
-            "name": "Ø Preis Heute"
-          }
-        }
+      }
+    }
+  },
+  "selector": {
+    "ml_algorithm": {
+      "options": {
+        "auto": "Automatisch (Empfohlen)",
+        "ridge": "Ridge Regression (Schnell)",
+        "tiny_lstm": "Neuronales Netz (Höhere Genauigkeit)"
       }
     }
   }

@@ -1,4 +1,4 @@
-"""Handler for hourly prediction data - ML optimized structure V10.0.0 @zara
+"""Handler for hourly prediction data - ML optimized structure V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -93,6 +93,7 @@ class HourlyPredictionsHandler:
         weather_forecast: List[Dict[str, Any]],
         astronomy_data: Dict[str, Any],
         sensor_config: Dict[str, bool],
+        inverter_max_power: float = 0.0,
     ) -> bool:
         """
         Create all hourly predictions for a day (called at 6:00 AM)
@@ -103,6 +104,7 @@ class HourlyPredictionsHandler:
             weather_forecast: Weather service hourly forecast
             astronomy_data: Sun position data
             sensor_config: Which sensors are available
+            inverter_max_power: Max AC power in kW. If > 0, forecasts are capped to this value.
 
         Returns:
             True if successful
@@ -168,6 +170,17 @@ class HourlyPredictionsHandler:
 
                 astro = self._get_astronomy_for_hour(astronomy_data, hour)
 
+                # Get raw prediction and apply inverter clipping if configured
+                raw_prediction_kwh = hour_data.get("production_kwh", 0.0)
+                if inverter_max_power > 0 and raw_prediction_kwh > inverter_max_power:
+                    capped_prediction_kwh = inverter_max_power
+                    _LOGGER.debug(
+                        f"Forecast capped for hour {hour}: {raw_prediction_kwh:.2f} -> {capped_prediction_kwh:.2f} kWh "
+                        f"(inverter max: {inverter_max_power} kW)"
+                    )
+                else:
+                    capped_prediction_kwh = raw_prediction_kwh
+
                 prediction = {
 
                     "id": f"{date}_{hour}",
@@ -181,7 +194,8 @@ class HourlyPredictionsHandler:
                     "target_month": datetime.fromisoformat(date).month,
                     "target_season": self._get_season(datetime.fromisoformat(date).month),
 
-                    "prediction_kwh": hour_data.get("production_kwh", 0.0),
+                    "prediction_kwh": capped_prediction_kwh,
+                    "prediction_kwh_uncapped": raw_prediction_kwh if inverter_max_power > 0 else None,
                     "prediction_method": "blended",
                     "ml_contribution_percent": 0,
                     "model_version": "1.0",
@@ -213,6 +227,9 @@ class HourlyPredictionsHandler:
                         "cumulative_today_kwh": None,
                     },
 
+                    # Per-panel-group predictions (only when panel groups are configured)
+                    "panel_group_predictions": hour_data.get("panel_group_predictions"),
+
                     "flags": {
                         "is_production_hour": hour_data.get("production_kwh", 0) > 0,
                         "is_peak_hour": False,
@@ -222,6 +239,8 @@ class HourlyPredictionsHandler:
                         "sensor_data_complete": False,
                         "weather_forecast_updated": False,
                         "manual_override": False,
+                        "inverter_clipped": False,  # Set to True if actual >= 95% of inverter max
+                        "has_panel_group_predictions": hour_data.get("panel_group_predictions") is not None,
                     },
 
                     "quality": {
@@ -271,11 +290,19 @@ class HourlyPredictionsHandler:
         sensor_data: Dict[str, Any],
         weather_actual: Optional[Dict[str, Any]] = None,
         astronomy_update: Optional[Dict[str, Any]] = None,
+        inverter_max_power: float = 0.0,
+        panel_group_actuals: Optional[Dict[str, float]] = None,
     ) -> bool:
         """
         Update actual values for a specific hour
 
         Called every hour (e.g. at 12:05 to update 11:00-12:00)
+
+        Args:
+            inverter_max_power: Max AC power in kW. If > 0 and actual >= 95% of max,
+                               the hour is flagged as clipped and excluded from ML training.
+            panel_group_actuals: Optional dict mapping group_name to actual_kwh for per-group learning.
+                                e.g. {"Gruppe 1": 0.42, "Gruppe 2": 0.58}
         """
         try:
             data = await self._read_json_async()
@@ -291,6 +318,20 @@ class HourlyPredictionsHandler:
 
             prediction["actual_kwh"] = actual_kwh
             prediction["actual_measured_at"] = dt_util.now().isoformat()
+
+            # Inverter clipping detection
+            # If actual production is >= 95% of inverter max, mark as clipped
+            # Clipped hours are excluded from ML training to prevent bias
+            is_clipped = False
+            if inverter_max_power > 0:
+                clipping_threshold = inverter_max_power * 0.95
+                if actual_kwh >= clipping_threshold:
+                    is_clipped = True
+                    _LOGGER.debug(
+                        f"Inverter clipping detected for {prediction_id}: "
+                        f"{actual_kwh:.2f} kWh >= {clipping_threshold:.2f} kWh (95% of {inverter_max_power} kW)"
+                    )
+            prediction["flags"]["inverter_clipped"] = is_clipped
 
             if prediction["prediction_kwh"] > 0:
 
@@ -322,6 +363,66 @@ class HourlyPredictionsHandler:
 
             if weather_actual:
                 prediction["weather_actual"] = weather_actual
+
+            # Store per-panel-group actual production for group-specific learning
+            if panel_group_actuals:
+                prediction["panel_group_actuals"] = panel_group_actuals
+                prediction["flags"]["has_panel_group_actuals"] = True
+                _LOGGER.debug(
+                    f"Stored panel group actuals for {prediction_id}: {panel_group_actuals}"
+                )
+
+                # Calculate per-group accuracy if predictions exist
+                panel_group_predictions = prediction.get("panel_group_predictions")
+
+                # Backfill: If predictions are missing, estimate from total prediction
+                # This enables accuracy calculation even for hours created before per-group feature
+                if not panel_group_predictions and prediction.get("prediction_kwh", 0) > 0:
+                    total_pred = prediction["prediction_kwh"]
+                    # Distribute proportionally based on actuals (best available approximation)
+                    total_actual = sum(panel_group_actuals.values())
+                    if total_actual > 0.001:
+                        panel_group_predictions = {
+                            name: (actual / total_actual) * total_pred
+                            for name, actual in panel_group_actuals.items()
+                        }
+                        prediction["panel_group_predictions"] = panel_group_predictions
+                        prediction["flags"]["has_panel_group_predictions"] = True
+                        prediction["flags"]["panel_group_predictions_backfilled"] = True
+                        _LOGGER.debug(
+                            f"Backfilled panel_group_predictions for {prediction_id} from total prediction"
+                        )
+
+                if panel_group_predictions:
+                    panel_group_accuracy = {}
+                    for group_name, actual_kwh_group in panel_group_actuals.items():
+                        pred_kwh_group = panel_group_predictions.get(group_name)
+                        if pred_kwh_group is not None and pred_kwh_group > 0:
+                            error_kwh = actual_kwh_group - pred_kwh_group
+                            error_percent = (error_kwh / pred_kwh_group) * 100
+                            accuracy = max(0.0, 100.0 - abs(error_percent))
+                            panel_group_accuracy[group_name] = {
+                                "prediction_kwh": round(pred_kwh_group, 4),
+                                "actual_kwh": round(actual_kwh_group, 4),
+                                "error_kwh": round(error_kwh, 4),
+                                "error_percent": round(error_percent, 1),
+                                "accuracy_percent": round(accuracy, 1),
+                            }
+                        elif actual_kwh_group < 0.001:
+                            # Both near zero - perfect accuracy
+                            panel_group_accuracy[group_name] = {
+                                "prediction_kwh": round(pred_kwh_group or 0, 4),
+                                "actual_kwh": round(actual_kwh_group, 4),
+                                "error_kwh": 0.0,
+                                "error_percent": 0.0,
+                                "accuracy_percent": 100.0,
+                            }
+                    if panel_group_accuracy:
+                        prediction["panel_group_accuracy"] = panel_group_accuracy
+                        _LOGGER.debug(
+                            f"Calculated panel group accuracy for {prediction_id}: "
+                            f"{list(panel_group_accuracy.keys())}"
+                        )
 
             if astronomy_update and prediction.get("astronomy"):
                 prediction["astronomy"].update(astronomy_update)
@@ -772,3 +873,18 @@ class HourlyPredictionsHandler:
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _do_write)
+
+    def _ensure_file_exists(self):
+        """Ensure the hourly predictions file exists with initial structure @zara"""
+        if not self.hourly_file.parent.exists():
+            self.hourly_file.parent.mkdir(parents=True, exist_ok=True)
+
+        if not self.hourly_file.exists():
+            initial_data = {
+                "version": "2.0",
+                "last_updated": datetime.now().isoformat(),
+                "best_hour_today": None,
+                "predictions": [],
+            }
+            with open(self.hourly_file, "w") as f:
+                json.dump(initial_data, f, indent=2)

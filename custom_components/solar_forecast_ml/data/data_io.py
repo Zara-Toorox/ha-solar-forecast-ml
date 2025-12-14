@@ -1,4 +1,4 @@
-"""Low-Level Data IO Operations V10.0.0 @zara
+"""Low-Level Data IO Operations V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -122,12 +122,6 @@ class DataManagerIO:
     async def _atomic_write_json_unlocked(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Internal function for atomic JSON writing Assumes the caller holds _file_lock @zara"""
 
-        try:
-            import aiofiles
-        except ImportError:
-            _LOGGER.error("AIOFiles ist nicht installiert. Dateischreiben fehlgeschlagen.")
-            raise DataIntegrityException("AIOFiles dependency missing, cannot write file")
-
         parent_dir = file_path.parent
         await self._ensure_directory_exists(parent_dir)
 
@@ -160,21 +154,21 @@ class DataManagerIO:
                     lambda: parent_dir.mkdir(parents=True, exist_ok=True)
                 )
 
-            async with aiofiles.open(temp_file, "w", encoding="utf-8") as f:
+            # Write atomically using synchronous I/O in executor to prevent race conditions
+            # with Python 3.13's aggressive temp file cleanup
+            def _write_and_move():
+                """Synchronous write + move to prevent file handle race conditions."""
+                # Write to temp file
+                with open(temp_file, "w", encoding="utf-8") as f:
+                    json.dump(
+                        data, f, cls=DateTimeEncoder, indent=2, ensure_ascii=False, sort_keys=False
+                    )
+                    f.flush()
+                    os.fsync(f.fileno())
+                # File is still in scope here - safe to move immediately
+                shutil.move(str(temp_file), str(file_path))
 
-                json_data = json.dumps(
-                    data, cls=DateTimeEncoder, indent=2, ensure_ascii=False, sort_keys=False
-                )
-                await f.write(json_data)
-                await f.flush()
-                # Ensure data is written to disk before move (fsync)
-                await self.hass.async_add_executor_job(os.fsync, f.fileno())
-
-            # Verify temp file exists before moving
-            if not await self.hass.async_add_executor_job(temp_file.exists):
-                raise FileNotFoundError(f"Temp file disappeared before move: {temp_file}")
-
-            await self.hass.async_add_executor_job(shutil.move, str(temp_file), str(file_path))
+            await self.hass.async_add_executor_job(_write_and_move)
 
         except Exception as e:
             _LOGGER.error("Atomic write failed for %s: %s", file_path.name, e)
@@ -225,14 +219,6 @@ class DataManagerIO:
     ) -> Dict[str, Any]:
         """Reads JSON data from a file asynchronously Non-blocking file read"""
 
-        try:
-            import aiofiles
-        except ImportError:
-            _LOGGER.error("AIOFiles ist nicht installiert. Dateilesen fehlgeschlagen.")
-            if default_structure is None:
-                return {}
-            return default_structure
-
         if default_structure is None:
             default_structure = {}
 
@@ -242,14 +228,21 @@ class DataManagerIO:
 
                 return default_structure
 
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                content = await f.read()
+            def _read_file():
+                """Synchronous file read in executor."""
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    if not content:
+                        return None
+                    return content
 
-                if not content:
-                    _LOGGER.warning(
-                        "File %s is empty, returning default structure.", file_path.name
-                    )
-                    return default_structure
+            content = await self.hass.async_add_executor_job(_read_file)
+
+            if content is None:
+                _LOGGER.warning(
+                    "File %s is empty, returning default structure.", file_path.name
+                )
+                return default_structure
 
             try:
                 data = await self.hass.async_add_executor_job(json.loads, content)

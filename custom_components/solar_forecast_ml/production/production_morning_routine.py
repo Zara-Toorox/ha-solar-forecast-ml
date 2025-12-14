@@ -1,4 +1,4 @@
-"""Bulletproof Morning Routine Handler V10.0.0 @zara
+"""Bulletproof Morning Routine Handler V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -67,12 +67,16 @@ class MorningRoutineHandler:
                     if not await self._validate_prerequisites(date, hourly_forecast, weather_hourly, astronomy_data):
                         raise ValueError("Prerequisites validation failed")
 
+                    # Get inverter max power for forecast capping
+                    inverter_max_power = getattr(self.coordinator, 'inverter_max_power', 0.0)
+
                     success = await self.data_manager.hourly_predictions.create_daily_predictions(
                         date=date,
                         hourly_forecast=hourly_forecast,
                         weather_forecast=weather_hourly,
                         astronomy_data=astronomy_data,
                         sensor_config=sensor_config,
+                        inverter_max_power=inverter_max_power,
                     )
 
                     if not success:

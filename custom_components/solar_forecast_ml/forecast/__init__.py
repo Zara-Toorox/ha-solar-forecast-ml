@@ -1,4 +1,4 @@
-"""forecast package V10.0.0 @zara
+"""forecast package V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

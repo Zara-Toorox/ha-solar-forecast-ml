@@ -1,4 +1,4 @@
-"""Startup Initializer - Guarantees all critical JSON files exist BEFORE async operations V10.0.0 @zara
+"""Startup Initializer - Guarantees all critical JSON files exist BEFORE async operations V12.0.0 @zara
 
 IMPORTANT: All JSON structures created here MUST match the MASTER files in production!
 Master location: /Volumes/config/solar_forecast_ml/
@@ -22,9 +22,10 @@ Copyright (C) 2025 Zara-Toorox
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from pathlib import Path
 from typing import Any, Dict
+from zoneinfo import ZoneInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +41,31 @@ class StartupInitializer:
         self.longitude = config.get("longitude", 13.40)
         self.solar_capacity_kwp = config.get("solar_capacity", 2.0)
         self.timezone_str = config.get("timezone", "Europe/Berlin")
+
+        # Parse timezone for datetime operations
+        try:
+            self.timezone = ZoneInfo(self.timezone_str)
+        except Exception:
+            _LOGGER.warning(f"Invalid timezone '{self.timezone_str}', falling back to Europe/Berlin")
+            self.timezone = ZoneInfo("Europe/Berlin")
+            self.timezone_str = "Europe/Berlin"
+
+    def _make_tz_aware_iso(self, date_obj, hour: int, minute: int = 0) -> str:
+        """Create timezone-aware ISO string for astronomy cache @zara
+
+        CRITICAL: All datetime strings in astronomy_cache.json MUST include timezone
+        to avoid 'can't compare offset-naive and offset-aware datetimes' errors.
+
+        Args:
+            date_obj: date object
+            hour: hour (0-23)
+            minute: minute (0-59)
+
+        Returns:
+            ISO string with timezone, e.g. "2025-12-12T06:00:00+01:00"
+        """
+        dt = datetime.combine(date_obj, time(hour, minute), tzinfo=self.timezone)
+        return dt.isoformat()
 
     def initialize_all(self) -> bool:
         """Initialize ALL critical JSON files synchronously @zara"""
@@ -66,12 +92,6 @@ class StartupInitializer:
             success = False
         else:
             _LOGGER.info("✅ weather_forecast_corrected.json - Ready")
-
-        if self.config.get("battery_enabled", False):
-            if not self._ensure_battery_charge_history():
-                _LOGGER.warning("⚠️  Failed to create battery_charge_history.json")
-            else:
-                _LOGGER.info("✅ battery_charge_history.json - Ready")
 
         _LOGGER.info("=" * 80)
         if success:
@@ -237,12 +257,14 @@ class StartupInitializer:
                     }
 
                 # MASTER structure for day entry
+                # CRITICAL: All datetime strings MUST include timezone to avoid
+                # "can't compare offset-naive and offset-aware datetimes" errors
                 days_data[date_str] = {
-                    "sunrise_local": f"{date_str}T06:00:00",
-                    "sunset_local": f"{date_str}T18:00:00",
-                    "solar_noon_local": f"{date_str}T12:00:00",
-                    "production_window_start": f"{date_str}T06:00:00",
-                    "production_window_end": f"{date_str}T18:00:00",
+                    "sunrise_local": self._make_tz_aware_iso(target_date, 6, 0),
+                    "sunset_local": self._make_tz_aware_iso(target_date, 18, 0),
+                    "solar_noon_local": self._make_tz_aware_iso(target_date, 12, 0),
+                    "production_window_start": self._make_tz_aware_iso(target_date, 6, 0),
+                    "production_window_end": self._make_tz_aware_iso(target_date, 18, 0),
                     "daylight_hours": 12.0,
                     "hourly": hourly_data,
                 }
@@ -471,39 +493,3 @@ class StartupInitializer:
                 "last_error": None,
             },
         }
-
-    def _ensure_battery_charge_history(self) -> bool:
-        """Create battery_charge_history.json matching MASTER structure @zara
-
-        MASTER structure (from /Volumes/config/solar_forecast_ml/data/battery_charge_history.json):
-        - version: "1.0"
-        - battery_capacity, last_update, daily, monthly, yearly
-        """
-        battery_file = self.data_dir / "data" / "battery_charge_history.json"
-
-        if battery_file.exists():
-            _LOGGER.debug("battery_charge_history.json already exists, skipping")
-            return True
-
-        try:
-            battery_file.parent.mkdir(parents=True, exist_ok=True)
-
-            # MASTER structure for battery_charge_history.json
-            battery_data = {
-                "version": "1.0",
-                "battery_capacity": self.config.get("battery_capacity", 10.0),
-                "last_update": None,
-                "daily": {},
-                "monthly": {},
-                "yearly": {},
-            }
-
-            with open(battery_file, "w", encoding="utf-8") as f:
-                json.dump(battery_data, f, indent=2, ensure_ascii=False)
-
-            _LOGGER.info("Created battery_charge_history.json (MASTER structure)")
-            return True
-
-        except Exception as e:
-            _LOGGER.error(f"Failed to create battery_charge_history.json: {e}", exc_info=True)
-            return False

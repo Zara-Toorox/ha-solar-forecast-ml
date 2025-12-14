@@ -1,4 +1,4 @@
-"""ML Type Definitions and Data Classes V10.0.0 @zara
+"""ML Type Definitions and Data Classes V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -111,8 +111,8 @@ class LearnedWeights:
             )
 
         if not (0.0 <= self.accuracy <= 1.0):
-            _LOGGER.warning(
-                f"LearnedWeights accuracy {self.accuracy} outside [0, 1] range. Clamping."
+            _LOGGER.debug(
+                f"LearnedWeights accuracy {self.accuracy} outside [0, 1] range. Clamping to valid range."
             )
             self.accuracy = max(0.0, min(1.0, self.accuracy))
 

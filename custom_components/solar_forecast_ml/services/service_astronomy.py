@@ -1,4 +1,4 @@
-"""Astronomy Services for Solar Forecast ML Integration V10.0.0 @zara
+"""Astronomy Services for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -56,6 +56,14 @@ class AstronomyServiceHandler:
         elevation_m = self.hass.config.elevation or 0
 
         self.astronomy_cache.initialize_location(latitude, longitude, timezone_str, elevation_m)
+
+        # Set panel groups for per-group theoretical max calculations @zara
+        panel_groups = getattr(self.coordinator, 'panel_groups', [])
+        if panel_groups:
+            self.astronomy_cache.set_panel_groups(panel_groups)
+            _LOGGER.info(
+                f"AstronomyCache: Panel groups configured ({len(panel_groups)} groups)"
+            )
 
         self.max_peak_tracker = MaxPeakTracker(self.astronomy_cache)
 

@@ -1,4 +1,4 @@
-"""Data Update Coordinator for Solar Forecast ML Integration V10.0.0 @zara
+"""Data Update Coordinator for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -92,6 +92,8 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self.solar_capacity = config.solar_capacity
         self.learning_enabled = config.learning_enabled
         self.enable_hourly = config.enable_hourly
+        self.panel_groups = config.panel_groups  # Multi-orientation panel groups
+        self.inverter_max_power = config.inverter_max_power  # Inverter clipping (0 = disabled)
 
         self.power_entity = self.sensor_collector.strip_entity_id(config.power_entity)
         self.solar_yield_today = self.sensor_collector.strip_entity_id(config.solar_yield_today)
@@ -119,6 +121,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             data_manager=self.data_manager,
             solar_capacity=self.solar_capacity,
             weather_calculator=self.weather_calculator,
+            panel_groups=self.panel_groups,
         )
         self.scheduled_tasks = ScheduledTasksManager(
             hass=hass,
@@ -167,16 +170,10 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self._recovery_lock = asyncio.Lock()
         self._recovery_in_progress = False
 
-        self.battery_enabled = config.battery_enabled
-        self.electricity_enabled = config.electricity_enabled
-        self.battery_collector = CoordinatorInitHelpers.initialize_battery_collector(
-            hass, entry, config.battery_enabled
-        )
-        self.electricity_service = CoordinatorInitHelpers.initialize_electricity_service(
-            config.electricity_enabled, config.electricity_country
-        )
-
         self.system_status_sensor = None
+
+        # Panel group sensor reader for per-group learning
+        self.panel_group_sensor_reader = None
 
         _LOGGER.debug("SolarForecastMLCoordinator initialized")
 
@@ -274,6 +271,12 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     data_manager=self.data_manager,
                 )
 
+                if self.panel_groups:
+                    astronomy_cache.set_panel_groups(self.panel_groups)
+                    _LOGGER.info(
+                        f"AstronomyCache: Panel groups set ({len(self.panel_groups)} groups)"
+                    )
+
                 latitude = self.hass.config.latitude
                 longitude = self.hass.config.longitude
                 timezone_str = str(self.hass.config.time_zone)
@@ -326,6 +329,9 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
             await self._load_persistent_state()
 
+            # Initialize panel group sensor reader if any group has an energy sensor
+            await self._initialize_panel_group_sensor_reader()
+
             try:
                 await self.production_time_calculator.start_tracking()
             except Exception as track_err:
@@ -374,6 +380,94 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             self.scheduled_tasks.cancel_listeners()
         except Exception as e:
             _LOGGER.error(f"Error during coordinator shutdown: {e}")
+
+    async def _initialize_panel_group_sensor_reader(self) -> None:
+        """Initialize the panel group sensor reader if any group has an energy sensor. @zara"""
+        try:
+            if not self.panel_groups:
+                return
+
+            # Check if any panel group has an energy sensor configured
+            has_energy_sensor = any(
+                g.get("energy_sensor") for g in self.panel_groups
+            )
+
+            if not has_energy_sensor:
+                _LOGGER.debug("No panel group energy sensors configured - skipping sensor reader init")
+                return
+
+            from .data.data_panel_group_sensor_reader import PanelGroupSensorReader
+
+            self.panel_group_sensor_reader = PanelGroupSensorReader(
+                hass=self.hass,
+                data_dir=self.data_manager.data_dir,
+                panel_groups=self.panel_groups,
+            )
+
+            await self.panel_group_sensor_reader.initialize()
+
+            # Debug: Log panel groups configuration
+            _LOGGER.info(
+                f"Panel groups configuration: {len(self.panel_groups)} groups"
+            )
+            for idx, pg in enumerate(self.panel_groups):
+                _LOGGER.debug(
+                    f"  Group {idx}: name={pg.get('name')}, "
+                    f"energy_sensor={pg.get('energy_sensor')}"
+                )
+
+            # Validate sensors with retry (entities might not be available at startup)
+            await self._validate_panel_group_sensors_with_retry()
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to initialize panel group sensor reader: {e}")
+            self.panel_group_sensor_reader = None
+
+    async def _validate_panel_group_sensors_with_retry(self) -> None:
+        """Validate panel group sensors with retry for startup race condition. @zara"""
+        import asyncio
+
+        max_retries = 3
+        retry_delay_seconds = 30
+
+        for attempt in range(1, max_retries + 1):
+            validation_results = await self.panel_group_sensor_reader.validate_sensors()
+            valid_count = sum(1 for r in validation_results.values() if r.get("valid"))
+            total_count = len(validation_results)
+
+            if valid_count == total_count:
+                _LOGGER.info(
+                    f"Panel group sensor reader initialized: {total_count} energy sensors validated"
+                )
+                return
+
+            # Not all sensors valid
+            invalid_sensors = [
+                (name, result.get("error", "Unknown"))
+                for name, result in validation_results.items()
+                if not result.get("valid")
+            ]
+
+            if attempt < max_retries:
+                _LOGGER.debug(
+                    f"Panel group sensor validation: {valid_count}/{total_count} valid (attempt {attempt}/{max_retries}). "
+                    f"Retrying in {retry_delay_seconds}s... (Utility Meters load later)"
+                )
+                for name, error in invalid_sensors:
+                    _LOGGER.debug(f"  - {name}: {error}")
+
+                await asyncio.sleep(retry_delay_seconds)
+            else:
+                # Final attempt failed
+                _LOGGER.warning(
+                    f"Panel group sensor reader: {valid_count}/{total_count} sensors valid after {max_retries} attempts"
+                )
+                for name, error in invalid_sensors:
+                    _LOGGER.warning(f"  - {name}: {error}")
+                _LOGGER.warning(
+                    "Panel groups with invalid sensors will use fallback (proportional distribution). "
+                    "Check entity IDs in configuration."
+                )
 
     async def _setup_power_peak_tracking(self) -> None:
         """Setup event listener for power peak tracking @zara"""
@@ -450,8 +544,6 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
             if not self._startup_sensors_ready:
                 self._startup_sensors_ready = True
-
-            await helpers.update_electricity_prices()
 
             return result
 

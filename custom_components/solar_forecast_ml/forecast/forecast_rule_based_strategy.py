@@ -1,4 +1,4 @@
-"""Rule-Based Forecast Strategy V10.0.0 @zara
+"""Rule-Based Forecast Strategy V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -29,7 +29,7 @@ from ..core.core_helpers import SafeDateTimeUtil as dt_util_safe
 from ..data.data_weather_corrector import WeatherForecastCorrector
 from ..ml.ml_pattern_learner import PatternLearner
 from ..ml.ml_residual_trainer import ResidualTrainer
-from ..physics import PhysicsEngine, GeometryLearner
+from ..physics import PhysicsEngine, GeometryLearner, PanelGroupCalculator, PanelGroupEfficiencyLearner
 from .forecast_strategy_base import ForecastResult, ForecastStrategy
 from .forecast_weather_calculator import WeatherCalculator
 
@@ -48,6 +48,7 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         weather_calculator: WeatherCalculator,
         solar_capacity: float,
         orchestrator: Optional[Any] = None,
+        panel_groups: Optional[List[Dict[str, Any]]] = None,
     ):
         """Initialize the Rule-Based Forecast Strategy"""
         super().__init__("rule_based")
@@ -66,19 +67,29 @@ class RuleBasedForecastStrategy(ForecastStrategy):
         self.pattern_learner: Optional[PatternLearner] = None
         self._pattern_learner_init_attempted = False
 
-        # Physics Engine for accurate POA calculation (2025-11-28 Physics-First Architecture)
         self.physics_engine: Optional[PhysicsEngine] = None
         self.geometry_learner: Optional[GeometryLearner] = None
         self._physics_init_attempted = False
 
-        # Residual Trainer for ML enhancement (2025-11-28 Phase 4)
+        self.panel_group_calculator: Optional[PanelGroupCalculator] = None
+        self._panel_groups_config = panel_groups or []
+        self._panel_groups_init_attempted = False
+
+        self.panel_group_efficiency_learner: Optional[PanelGroupEfficiencyLearner] = None
+        self._efficiency_learner_init_attempted = False
+
         self.residual_trainer: Optional[ResidualTrainer] = None
         self._residual_init_attempted = False
 
         # Feature flags
         self.use_physics_engine = True      # Use physics-based POA calculation
         self.use_ml_residual = True         # Use ML residual enhancement
+        self.use_panel_groups = bool(panel_groups)  # Use panel group calculation
 
+        if panel_groups:
+            _LOGGER.info(
+                f"RuleBasedForecastStrategy initialized with {len(panel_groups)} panel groups"
+            )
         _LOGGER.debug("RuleBasedForecastStrategy (Physics-First + ML-Enhanced) initialized.")
 
     def is_available(self) -> bool:
@@ -150,8 +161,46 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 else:
                     _LOGGER.warning("Pattern learner not available - using baseline only")
 
-            # Initialize Physics Engine (2025-11-28 Physics-First Architecture)
-            if self.physics_engine is None and not self._physics_init_attempted:
+            if self.panel_group_calculator is None and not self._panel_groups_init_attempted:
+                self._panel_groups_init_attempted = True
+                if self._panel_groups_config:
+                    try:
+                        self.panel_group_calculator = PanelGroupCalculator(
+                            panel_groups=self._panel_groups_config
+                        )
+                        self.use_panel_groups = True
+                        _LOGGER.info(
+                            "PanelGroupCalculator initialized: %d groups, total %.2f kWp",
+                            self.panel_group_calculator.group_count,
+                            self.panel_group_calculator.total_capacity_kwp,
+                        )
+                    except Exception as e:
+                        _LOGGER.warning(f"Could not initialize PanelGroupCalculator: {e}")
+                        self.use_panel_groups = False
+
+            # Initialize PanelGroupEfficiencyLearner for per-group efficiency factors
+            if (self.panel_group_efficiency_learner is None
+                and not self._efficiency_learner_init_attempted
+                and self.use_panel_groups):
+                self._efficiency_learner_init_attempted = True
+                try:
+                    if self.orchestrator and hasattr(self.orchestrator, 'data_manager'):
+                        data_dir = Path(self.orchestrator.data_manager.data_dir)
+                        self.panel_group_efficiency_learner = PanelGroupEfficiencyLearner(
+                            data_path=data_dir,
+                            panel_groups=self._panel_groups_config,
+                            skip_load=True,
+                        )
+                        await self.panel_group_efficiency_learner.async_load_state()
+                        _LOGGER.info(
+                            "PanelGroupEfficiencyLearner loaded: %d groups, %d total samples",
+                            len(self._panel_groups_config),
+                            self.panel_group_efficiency_learner.total_samples,
+                        )
+                except Exception as e:
+                    _LOGGER.warning(f"Could not initialize PanelGroupEfficiencyLearner: {e}")
+
+            if self.physics_engine is None and not self._physics_init_attempted and not self.use_panel_groups:
                 self._physics_init_attempted = True
                 try:
                     if self.orchestrator and hasattr(self.orchestrator, 'data_manager'):
@@ -191,17 +240,20 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                     if self.orchestrator and hasattr(self.orchestrator, 'data_manager'):
                         data_dir = Path(self.orchestrator.data_manager.data_dir)
                         # Use skip_load=True and async_load_state to avoid blocking event loop
+                        # Pass panel_groups so ResidualTrainer uses correct geometry
                         self.residual_trainer = ResidualTrainer(
                             data_dir=data_dir,
                             system_capacity_kwp=base_capacity_kwp,
+                            panel_groups=self._panel_groups_config if self.use_panel_groups else None,
                             skip_load=True,  # Don't block event loop
                         )
                         await self.residual_trainer.async_load_state()
                         model_info = self.residual_trainer.get_model_info()
                         _LOGGER.info(
-                            "ResidualTrainer initialized: %d samples, model=%s",
+                            "ResidualTrainer initialized: %d samples, model=%s, panel_groups=%s",
                             model_info.get("sample_count", 0),
                             model_info.get("model_type", "none"),
+                            "yes" if self.use_panel_groups else "no",
                         )
                 except Exception as e:
                     _LOGGER.warning(f"Could not initialize ResidualTrainer: {e}")
@@ -271,8 +323,27 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                     temperature = corrected_weather.get("temperature", 15) or 15
 
                     if ghi <= 0 and solar_radiation_wm2 <= 0:
-                        hourly_kwh = 0.0
-                    else:
+                        cache_manager = get_cache_manager()
+                        hour_astro = None
+                        if cache_manager:
+                            hour_astro = cache_manager.get_hourly_data(hour_date.isoformat(), hour_local)
+
+                        sun_elevation = hour_astro.get("elevation_deg", 0) if hour_astro else 0
+                        clear_sky_rad = hour_astro.get("clear_sky_solar_radiation_wm2", 0) if hour_astro else 0
+
+                        if sun_elevation > 0 and clear_sky_rad > 0:
+                            ghi = clear_sky_rad
+                            solar_radiation_wm2 = clear_sky_rad
+                            _LOGGER.debug(
+                                f"Hour {hour_local}: GHI=0 but sun_elevation={sun_elevation:.1f}° - "
+                                f"using clear_sky fallback: {clear_sky_rad:.1f} W/m²"
+                            )
+                        else:
+                            hourly_kwh = 0.0
+                            panel_group_predictions = None
+                            continue
+
+                    if ghi > 0 or solar_radiation_wm2 > 0:
                         # Get astronomy data for this hour
                         cache_manager = get_cache_manager()
                         hour_astro = None
@@ -285,13 +356,99 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                             sun_elevation = hour_astro.get("elevation_deg", 0) or 0
                             sun_azimuth = hour_astro.get("azimuth_deg", 180) or 180
 
-                        # ============================================================
-                        # PHYSICS-FIRST CALCULATION (2025-11-28)
-                        # Uses POA (Plane of Array) irradiance with learned geometry
-                        # NO DOUBLE-SCALING: GHI already contains time/cloud effects!
-                        # ============================================================
-                        if self.use_physics_engine and self.physics_engine and dni > 0:
-                            # Use Physics Engine for accurate POA calculation
+                        # Initialize per-group predictions (will be populated if panel groups are used)
+                        panel_group_predictions = None
+
+                        if self.use_panel_groups and self.panel_group_calculator:
+                            # Calculate using panel groups
+                            group_result = self.panel_group_calculator.calculate_hourly_forecast(
+                                weather_data={
+                                    "ghi": ghi or solar_radiation_wm2,
+                                    "direct_radiation": dni,
+                                    "diffuse_radiation": dhi,
+                                    "temperature": temperature,
+                                },
+                                astronomy_data={
+                                    "elevation_deg": sun_elevation,
+                                    "azimuth_deg": sun_azimuth,
+                                },
+                            )
+
+                            # Apply per-group learned efficiency factors if available
+                            physics_pred = 0.0
+                            efficiency_applied = False
+
+                            if self.panel_group_efficiency_learner:
+                                # Calculate with per-group efficiency factors
+                                for idx, grp in enumerate(group_result.get("groups", [])):
+                                    group_kwh = grp.get("power_kwh", 0)
+                                    efficiency = self.panel_group_efficiency_learner.get_efficiency_for_hour(
+                                        group_index=idx,
+                                        hour=hour_local,
+                                    )
+                                    if efficiency != 1.0:
+                                        efficiency_applied = True
+                                    physics_pred += group_kwh * efficiency
+
+                                # Panel Groups efficiency logging removed to reduce log spam
+                            else:
+                                # Fallback: Use raw physics prediction without efficiency factors
+                                physics_pred = group_result["physics_prediction_kwh"]
+
+                            # Panel Groups calculation logging removed to reduce log spam
+
+                            # For panel groups, we store the group breakdown in physics_result
+                            physics_result = {
+                                "physics_prediction_kwh": physics_pred,
+                                "poa_irradiance": {"poa_total_wm2": 0},  # Average not applicable
+                                "groups": group_result.get("groups", []),
+                            }
+
+                            seasonal_factor = 1.0
+                            if self.pattern_learner:
+                                strategy_mode = self.pattern_learner.get_strategy_mode(cloud_cover)
+                                # Apply cloud_impacts for both "cloudy" (>80%) and "mixed" (40-80%) conditions
+                                if strategy_mode in ("cloudy", "mixed"):
+                                    cloud_efficiency, _ = self.pattern_learner.get_cloud_impact(
+                                        hour_local, cloud_cover
+                                    )
+                                    # cloud_efficiency can be > 1.0 (boost) or < 1.0 (dampen)
+                                    # Blend with physics: use learned efficiency directly but dampen extreme values
+                                    if cloud_efficiency >= 1.0:
+                                        # Boost case: diffuse light better than expected
+                                        seasonal_factor = 1.0 + 0.5 * (cloud_efficiency - 1.0)
+                                    else:
+                                        # Dampen case: worse than expected
+                                        seasonal_factor = 0.7 + 0.3 * cloud_efficiency
+
+                            # Apply final corrections to panel group result
+                            hourly_kwh = (
+                                physics_pred
+                                * correction_factor       # User/learned correction
+                                * rb_overall_correction   # RB overall learned factor
+                                * seasonal_factor         # Seasonal/local adjustment
+                            )
+
+                            # Panel Groups corrections logging removed to reduce log spam
+
+                            # Build per-group predictions for storage and later comparison
+                            # Apply same correction factors to each group proportionally
+                            total_correction = correction_factor * rb_overall_correction * seasonal_factor
+                            panel_group_predictions = {}
+                            for idx, grp in enumerate(group_result.get("groups", [])):
+                                group_name = grp.get("group_name", f"Group {idx+1}")
+                                raw_kwh = grp.get("power_kwh", 0)
+                                # Apply learned efficiency if available
+                                if self.panel_group_efficiency_learner:
+                                    eff = self.panel_group_efficiency_learner.get_efficiency_for_hour(idx, hour_local)
+                                else:
+                                    eff = 1.0
+                                # Final prediction for this group
+                                group_pred_kwh = raw_kwh * eff * total_correction
+                                panel_group_predictions[group_name] = round(group_pred_kwh, 4)
+
+                        elif self.use_physics_engine and self.physics_engine:
+                            # Use Physics Engine for accurate POA calculation (single orientation)
                             physics_result = self.physics_engine.calculate_hourly_forecast(
                                 weather_data={
                                     "ghi": ghi or solar_radiation_wm2,
@@ -308,11 +465,6 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                             # Base physics prediction
                             physics_pred = physics_result["physics_prediction_kwh"]
 
-                            # ============================================================
-                            # ML RESIDUAL ENHANCEMENT (2025-11-28 Phase 4)
-                            # Adds learned residual to physics prediction
-                            # Captures: shadows, local effects, systematic errors
-                            # ============================================================
                             ml_residual = 0.0
                             ml_weight = 0.0
                             if self.use_ml_residual and self.residual_trainer:
@@ -351,12 +503,19 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                             seasonal_factor = 1.0
                             if self.pattern_learner:
                                 strategy_mode = self.pattern_learner.get_strategy_mode(cloud_cover)
-                                if strategy_mode == "cloudy":
+                                # Apply cloud_impacts for both "cloudy" (>80%) and "mixed" (40-80%) conditions
+                                if strategy_mode in ("cloudy", "mixed"):
                                     cloud_efficiency, _ = self.pattern_learner.get_cloud_impact(
                                         hour_local, cloud_cover
                                     )
-                                    # Only apply partial correction (physics already handles some)
-                                    seasonal_factor = 0.7 + 0.3 * cloud_efficiency
+                                    # cloud_efficiency can be > 1.0 (boost) or < 1.0 (dampen)
+                                    # Blend with physics: use learned efficiency directly but dampen extreme values
+                                    if cloud_efficiency >= 1.0:
+                                        # Boost case: diffuse light better than expected
+                                        seasonal_factor = 1.0 + 0.5 * (cloud_efficiency - 1.0)
+                                    else:
+                                        # Dampen case: worse than expected
+                                        seasonal_factor = 0.7 + 0.3 * cloud_efficiency
 
                             # Apply final corrections
                             hourly_kwh = (
@@ -429,7 +588,12 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                                 )
 
                         # Apply hourly cap to prevent unrealistic values
-                        max_hourly_kwh = base_capacity_kwp * self.PEAK_KW_PER_KWP * 0.95
+                        # Use panel group total capacity if available, otherwise base capacity
+                        if self.use_panel_groups and self.panel_group_calculator:
+                            effective_capacity_kwp = self.panel_group_calculator.total_capacity_kwp
+                        else:
+                            effective_capacity_kwp = base_capacity_kwp
+                        max_hourly_kwh = effective_capacity_kwp * self.PEAK_KW_PER_KWP * 0.95
                         if hourly_kwh > max_hourly_kwh:
                             _LOGGER.debug(
                                 f"Hourly cap: {hourly_kwh:.3f} kWh → {max_hourly_kwh:.3f} kWh "
@@ -439,14 +603,19 @@ class RuleBasedForecastStrategy(ForecastStrategy):
 
                     hourly_kwh = max(0.0, hourly_kwh)
 
-                    hourly_values.append(
-                        {
-                            "hour": hour_local,
-                            "datetime": hour_dt_local.isoformat(),
-                            "production_kwh": round(hourly_kwh, 3),
-                            "date": hour_date.isoformat(),
-                        }
-                    )
+                    # Build hourly value entry
+                    hourly_entry = {
+                        "hour": hour_local,
+                        "datetime": hour_dt_local.isoformat(),
+                        "production_kwh": round(hourly_kwh, 3),
+                        "date": hour_date.isoformat(),
+                    }
+
+                    # Add per-group predictions if available (panel groups mode)
+                    if panel_group_predictions:
+                        hourly_entry["panel_group_predictions"] = panel_group_predictions
+
+                    hourly_values.append(hourly_entry)
 
                     if hour_date == today_date:
                         total_today_kwh += hourly_kwh
@@ -464,19 +633,63 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                     )
                     continue
 
-            _LOGGER.debug(
-                f"Rule-based iteration complete. "
-                f"Today (raw): {total_today_kwh:.2f} kWh, "
-                f"Tomorrow (raw): {total_tomorrow_kwh:.2f} kWh, "
-                f"Day After (raw): {total_day_after_kwh:.2f} kWh"
-            )
+            # Rule-based iteration complete logging removed to reduce log spam
 
-            total_tomorrow_kwh *= self.TOMORROW_DISCOUNT_FACTOR
-            total_day_after_kwh *= self.TOMORROW_DISCOUNT_FACTOR * 0.95
+            # Store raw values BEFORE any discounts or caps (for ForecastResult)
+            raw_today_kwh = total_today_kwh
+            raw_tomorrow_kwh = total_tomorrow_kwh
+            raw_day_after_kwh = total_day_after_kwh
 
-            today_forecast_kwh = total_today_kwh
-            tomorrow_forecast_kwh = total_tomorrow_kwh
-            day_after_forecast_kwh = total_day_after_kwh
+            # Apply discount factors for future days (weather uncertainty)
+            tomorrow_discount = self.TOMORROW_DISCOUNT_FACTOR
+            day_after_discount = self.TOMORROW_DISCOUNT_FACTOR * 0.95
+
+            total_tomorrow_kwh *= tomorrow_discount
+            total_day_after_kwh *= day_after_discount
+
+            # Apply discount factors to hourly values as well (consistency fix)
+            tomorrow_date_str = tomorrow_date.isoformat()
+            day_after_date_str = day_after_tomorrow_date.isoformat()
+            for entry in hourly_values:
+                entry_date = entry.get("date")
+                if entry_date == tomorrow_date_str:
+                    entry["production_kwh"] = round(entry["production_kwh"] * tomorrow_discount, 3)
+                    # Also scale panel_group_predictions if present
+                    if "panel_group_predictions" in entry:
+                        for grp_name in entry["panel_group_predictions"]:
+                            entry["panel_group_predictions"][grp_name] = round(
+                                entry["panel_group_predictions"][grp_name] * tomorrow_discount, 4
+                            )
+                elif entry_date == day_after_date_str:
+                    entry["production_kwh"] = round(entry["production_kwh"] * day_after_discount, 3)
+                    if "panel_group_predictions" in entry:
+                        for grp_name in entry["panel_group_predictions"]:
+                            entry["panel_group_predictions"][grp_name] = round(
+                                entry["panel_group_predictions"][grp_name] * day_after_discount, 4
+                            )
+
+            # Apply daily plausibility cap (max realistic kWh per day)
+            # Use effective capacity for panel groups, otherwise base capacity
+            if self.use_panel_groups and self.panel_group_calculator:
+                cap_capacity_kwp = self.panel_group_calculator.total_capacity_kwp
+            else:
+                cap_capacity_kwp = base_capacity_kwp
+            max_realistic_daily_kwh = cap_capacity_kwp * self.MAX_REALISTIC_DAILY_KWH_PER_KWP
+
+            today_forecast_kwh = min(total_today_kwh, max_realistic_daily_kwh)
+            tomorrow_forecast_kwh = min(total_tomorrow_kwh, max_realistic_daily_kwh)
+            day_after_forecast_kwh = min(total_day_after_kwh, max_realistic_daily_kwh)
+
+            # Log if daily cap was applied
+            if (total_today_kwh > max_realistic_daily_kwh or
+                total_tomorrow_kwh > max_realistic_daily_kwh or
+                total_day_after_kwh > max_realistic_daily_kwh):
+                _LOGGER.warning(
+                    f"Daily plausibility cap applied (max {max_realistic_daily_kwh:.2f} kWh): "
+                    f"Today {total_today_kwh:.2f}→{today_forecast_kwh:.2f}, "
+                    f"Tomorrow {total_tomorrow_kwh:.2f}→{tomorrow_forecast_kwh:.2f}, "
+                    f"DayAfter {total_day_after_kwh:.2f}→{day_after_forecast_kwh:.2f}"
+                )
 
             try:
                 current_yield = sensor_data.get("current_yield")
@@ -535,12 +748,12 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                     best_hour_production if best_hour_today is not None else None
                 ),
                 hourly_values=hourly_values,
-                forecast_today_raw=total_today_kwh,
-                forecast_tomorrow_raw=total_tomorrow_kwh,
-                forecast_day_after_raw=total_day_after_kwh,
-                safeguard_applied_today=False,
-                safeguard_applied_tomorrow=False,
-                safeguard_applied_day_after=False,
+                forecast_today_raw=raw_today_kwh,
+                forecast_tomorrow_raw=raw_tomorrow_kwh,
+                forecast_day_after_raw=raw_day_after_kwh,
+                safeguard_applied_today=today_forecast_kwh < total_today_kwh,
+                safeguard_applied_tomorrow=tomorrow_forecast_kwh < total_tomorrow_kwh,
+                safeguard_applied_day_after=day_after_forecast_kwh < total_day_after_kwh,
             )
 
             _LOGGER.info(

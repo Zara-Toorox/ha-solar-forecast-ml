@@ -1,4 +1,4 @@
-"""ML Data Loader V3 - Load training data with corrected weather V10.0.0 @zara
+"""ML Data Loader V3 - Load training data with corrected weather V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -107,15 +107,16 @@ class MLDataLoaderV3:
             non_frost_predictions = []
             for p in valid_predictions:
 
-                weather_actual = p.get("weather_actual", {})
+                weather_actual = p.get("weather_actual") or {}
                 frost_detected = weather_actual.get("frost_detected")
 
                 if frost_detected == "heavy_frost":
                     frost_excluded_count += 1
                     frost_score = weather_actual.get("frost_score", 'N/A')
                     frost_confidence = weather_actual.get("frost_confidence", 0)
+                    sample_id = f"{p.get('target_date')} {p.get('target_hour', '?'):02d}:00" if p.get('target_date') else p.get('id', 'unknown')
                     _LOGGER.info(
-                        f"Excluding sample {p.get('datetime')} - heavy frost detected "
+                        f"Excluding sample {sample_id} - heavy frost detected "
                         f"(score: {frost_score}, confidence: {frost_confidence:.0%})"
                     )
                 else:
@@ -128,6 +129,33 @@ class MLDataLoaderV3:
                 )
 
             valid_predictions = non_frost_predictions
+
+            # Filter out inverter-clipped hours
+            # These hours are excluded because actual production was limited by hardware,
+            # not by weather/solar conditions, which would bias the ML model
+            clipped_excluded_count = 0
+            non_clipped_predictions = []
+            for p in valid_predictions:
+                flags = p.get("flags") or {}
+                is_clipped = flags.get("inverter_clipped", False)
+
+                if is_clipped:
+                    clipped_excluded_count += 1
+                    sample_id = f"{p.get('target_date')} {p.get('target_hour', '?'):02d}:00" if p.get('target_date') else p.get('id', 'unknown')
+                    _LOGGER.debug(
+                        f"Excluding sample {sample_id} - inverter clipping detected "
+                        f"(actual: {p.get('actual_kwh', 'N/A')} kWh)"
+                    )
+                else:
+                    non_clipped_predictions.append(p)
+
+            if clipped_excluded_count > 0:
+                _LOGGER.info(
+                    f"Excluded {clipped_excluded_count} inverter-clipped samples from training "
+                    f"({len(non_clipped_predictions)} clean samples remaining)"
+                )
+
+            valid_predictions = non_clipped_predictions
 
             if len(valid_predictions) < min_samples:
                 _LOGGER.warning(
@@ -369,7 +397,7 @@ class MLDataLoaderV3:
                 if weather_corrected:
                     return weather_corrected
 
-            weather_forecast = prediction.get("weather_forecast", {})
+            weather_forecast = prediction.get("weather_forecast") or {}
 
             if not weather_forecast:
                 return None

@@ -1,4 +1,4 @@
-"""Coordinator Initialization Helpers - Extract __init__ logic V10.0.0 @zara
+"""Coordinator Initialization Helpers - Extract __init__ logic V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,29 +17,26 @@ Copyright (C) 2025 Zara-Toorox
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from ..const import (
-    CONF_BATTERY_ENABLED,
-    CONF_ELECTRICITY_COUNTRY,
-    CONF_ELECTRICITY_ENABLED,
     CONF_HOURLY,
+    CONF_INVERTER_MAX_POWER,
     CONF_LEARNING_ENABLED,
+    CONF_PANEL_GROUPS,
     CONF_POWER_ENTITY,
     CONF_SOLAR_CAPACITY,
     CONF_SOLAR_YIELD_TODAY,
     CONF_TOTAL_CONSUMPTION_TODAY,
-    CONF_UPDATE_INTERVAL,
     CONF_WEATHER_ENTITY,
-    DEFAULT_ELECTRICITY_COUNTRY,
+    DEFAULT_INVERTER_MAX_POWER,
     DEFAULT_SOLAR_CAPACITY,
     DOMAIN,
-    UPDATE_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,9 +54,21 @@ class CoordinatorConfiguration:
     primary_weather_entity: Optional[str]
     total_consumption_today: Optional[str]
 
-    battery_enabled: bool
-    electricity_enabled: bool
-    electricity_country: str
+    # Panel groups configuration (optional)
+    panel_groups: list[dict[str, Any]] = field(default_factory=list)
+
+    # Inverter clipping configuration (optional)
+    inverter_max_power: float = 0.0  # 0 = disabled
+
+    @property
+    def has_panel_groups(self) -> bool:
+        """Check if panel groups are configured. @zara"""
+        return len(self.panel_groups) > 0
+
+    @property
+    def has_inverter_clipping(self) -> bool:
+        """Check if inverter clipping is enabled. @zara"""
+        return self.inverter_max_power > 0.0
 
 class CoordinatorInitHelpers:
     """Helper methods for coordinator initialization"""
@@ -78,6 +87,23 @@ class CoordinatorInitHelpers:
                     f"Please reconfigure to update."
                 )
 
+        # Extract panel groups if configured
+        panel_groups = entry.data.get(CONF_PANEL_GROUPS, [])
+        if panel_groups:
+            _LOGGER.info(
+                "Panel groups configured: %d groups, total %.2f kWp",
+                len(panel_groups),
+                float(solar_capacity_value),
+            )
+
+        # Extract inverter max power for clipping
+        inverter_max_power = entry.data.get(CONF_INVERTER_MAX_POWER, DEFAULT_INVERTER_MAX_POWER)
+        if inverter_max_power and inverter_max_power > 0:
+            _LOGGER.info(
+                "Inverter clipping enabled: max %.2f kW (forecasts capped, clipped hours excluded from training)",
+                float(inverter_max_power),
+            )
+
         return CoordinatorConfiguration(
             solar_capacity=float(solar_capacity_value),
             learning_enabled=entry.options.get(CONF_LEARNING_ENABLED, True),
@@ -86,46 +112,9 @@ class CoordinatorInitHelpers:
             solar_yield_today=entry.data.get(CONF_SOLAR_YIELD_TODAY),
             primary_weather_entity=entry.data.get(CONF_WEATHER_ENTITY),
             total_consumption_today=entry.data.get(CONF_TOTAL_CONSUMPTION_TODAY),
-            battery_enabled=entry.options.get(CONF_BATTERY_ENABLED, False),
-            electricity_enabled=entry.options.get(CONF_ELECTRICITY_ENABLED, False),
-            electricity_country=entry.options.get(CONF_ELECTRICITY_COUNTRY)
-            or entry.data.get(CONF_ELECTRICITY_COUNTRY, DEFAULT_ELECTRICITY_COUNTRY),
+            panel_groups=panel_groups,
+            inverter_max_power=float(inverter_max_power) if inverter_max_power else 0.0,
         )
-
-    @staticmethod
-    def initialize_battery_collector(hass: HomeAssistant, entry: ConfigEntry, enabled: bool):
-        """Initialize battery data collector if enabled @zara"""
-        if not enabled:
-            return None
-
-        try:
-            from ..battery.battery_data_collector import BatteryDataCollector
-
-            collector = BatteryDataCollector(hass, entry)
-            _LOGGER.info("BatteryDataCollector initialized successfully")
-            return collector
-        except Exception as e:
-            _LOGGER.error(f"Failed to initialize BatteryDataCollector: {e}")
-            return None
-
-    @staticmethod
-    def initialize_electricity_service(enabled: bool, country: str):
-        """Initialize electricity price service if enabled @zara"""
-        if not enabled:
-            return None
-
-        try:
-            from ..battery.electricity_price_service import ElectricityPriceService
-
-            service = ElectricityPriceService(country=country)
-            _LOGGER.info(
-                f"ElectricityPriceService initialized for {country} "
-                f"using aWATTar API (free, no registration)"
-            )
-            return service
-        except Exception as e:
-            _LOGGER.error(f"Failed to initialize ElectricityPriceService: {e}")
-            return None
 
     @staticmethod
     def setup_data_directory(hass: HomeAssistant) -> Path:

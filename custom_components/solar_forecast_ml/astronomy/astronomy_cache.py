@@ -1,4 +1,4 @@
-"""Astronomy Cache - Independent solar position and radiation calculations V10.0.0 @zara
+"""Astronomy Cache - Independent solar position and radiation calculations V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -22,10 +22,36 @@ import logging
 import math
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 _LOGGER = logging.getLogger(__name__)
+
+
+from dataclasses import dataclass
+
+
+@dataclass
+class PanelGroupTheoreticalMax:
+    """Theoretical max output for a single panel group. @zara"""
+    name: str
+    power_kwp: float
+    azimuth_deg: float
+    tilt_deg: float
+    theoretical_kwh: float
+    poa_wm2: float
+    aoi_deg: float
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "power_kwp": round(self.power_kwp, 3),
+            "azimuth_deg": self.azimuth_deg,
+            "tilt_deg": self.tilt_deg,
+            "theoretical_kwh": round(self.theoretical_kwh, 4),
+            "poa_wm2": round(self.poa_wm2, 2),
+            "aoi_deg": round(self.aoi_deg, 1),
+        }
 
 class AstronomyCache:
     """Calculate and cache astronomy data for solar forecasting"""
@@ -40,6 +66,16 @@ class AstronomyCache:
         self.longitude: Optional[float] = None
         self.elevation_m: Optional[float] = None
         self.timezone: Optional[ZoneInfo] = None
+
+        self._panel_groups: List[Dict[str, Any]] = []
+
+    def set_panel_groups(self, panel_groups: List[Dict[str, Any]]) -> None:
+        """Set panel groups for theoretical max calculations. @zara"""
+        self._panel_groups = panel_groups or []
+        if self._panel_groups:
+            _LOGGER.info(
+                f"AstronomyCache: Panel groups configured ({len(self._panel_groups)} groups)"
+            )
 
     def initialize_location(
         self, latitude: float, longitude: float, timezone_str: str, elevation_m: float = 0
@@ -241,6 +277,130 @@ class AstronomyCache:
 
         return max(0, pv_output_kwh)
 
+    def _calculate_theoretical_pv_per_group(
+        self,
+        clear_sky_radiation_wm2: float,
+        sun_elevation_deg: float,
+        sun_azimuth_deg: float,
+        efficiency: float = 0.95,
+    ) -> Tuple[float, List[PanelGroupTheoreticalMax]]:
+        """Calculate theoretical PV output per panel group based on orientation. @zara
+
+        Uses proper physics calculations for each panel group's orientation
+        relative to the sun position.
+
+        Args:
+            clear_sky_radiation_wm2: Clear sky GHI in W/m²
+            sun_elevation_deg: Sun elevation angle in degrees
+            sun_azimuth_deg: Sun azimuth angle in degrees
+            efficiency: System efficiency (default 0.95)
+
+        Returns:
+            Tuple of (total_kwh, list of per-group results)
+        """
+        if not self._panel_groups or sun_elevation_deg <= 0:
+            return 0.0, []
+
+        group_results: List[PanelGroupTheoreticalMax] = []
+        total_kwh = 0.0
+
+        for idx, group in enumerate(self._panel_groups):
+            group_name = group.get("name", f"Gruppe {idx + 1}")
+            power_wp = float(group.get("power_wp", 0))
+            power_kwp = power_wp / 1000.0
+            azimuth_deg = float(group.get("azimuth", 180))
+            tilt_deg = float(group.get("tilt", 30))
+
+            if power_kwp <= 0:
+                continue
+
+            aoi_deg = self._calculate_aoi(
+                sun_elevation_deg, sun_azimuth_deg, tilt_deg, azimuth_deg
+            )
+
+            poa_wm2 = self._calculate_poa_from_ghi(
+                clear_sky_radiation_wm2, sun_elevation_deg, sun_azimuth_deg,
+                tilt_deg, azimuth_deg, aoi_deg
+            )
+
+            stc_radiation = 1000.0
+            theoretical_kwh = power_kwp * (poa_wm2 / stc_radiation) * efficiency
+
+            group_results.append(PanelGroupTheoreticalMax(
+                name=group_name,
+                power_kwp=power_kwp,
+                azimuth_deg=azimuth_deg,
+                tilt_deg=tilt_deg,
+                theoretical_kwh=theoretical_kwh,
+                poa_wm2=poa_wm2,
+                aoi_deg=aoi_deg,
+            ))
+            total_kwh += theoretical_kwh
+
+        return total_kwh, group_results
+
+    def _calculate_aoi(
+        self,
+        sun_elevation_deg: float,
+        sun_azimuth_deg: float,
+        panel_tilt_deg: float,
+        panel_azimuth_deg: float,
+    ) -> float:
+        """Calculate Angle of Incidence (AOI) between sun and panel. @zara"""
+        sun_zenith = 90.0 - sun_elevation_deg
+        sun_zenith_rad = math.radians(sun_zenith)
+        panel_tilt_rad = math.radians(panel_tilt_deg)
+        azimuth_diff_rad = math.radians(sun_azimuth_deg - panel_azimuth_deg)
+
+        cos_aoi = (
+            math.cos(sun_zenith_rad) * math.cos(panel_tilt_rad)
+            + math.sin(sun_zenith_rad) * math.sin(panel_tilt_rad) * math.cos(azimuth_diff_rad)
+        )
+
+        cos_aoi = max(-1.0, min(1.0, cos_aoi))
+        aoi_deg = math.degrees(math.acos(cos_aoi))
+
+        return aoi_deg
+
+    def _calculate_poa_from_ghi(
+        self,
+        ghi_wm2: float,
+        sun_elevation_deg: float,
+        sun_azimuth_deg: float,
+        panel_tilt_deg: float,
+        panel_azimuth_deg: float,
+        aoi_deg: float,
+        albedo: float = 0.2,
+    ) -> float:
+        """Calculate Plane of Array irradiance from GHI for a specific panel orientation. @zara
+
+        For clear sky conditions, we estimate DNI and DHI from GHI.
+        """
+        if ghi_wm2 <= 0 or sun_elevation_deg <= 0:
+            return 0.0
+
+        sun_elevation_rad = math.radians(sun_elevation_deg)
+
+        dni_estimated = ghi_wm2 / max(0.01, math.sin(sun_elevation_rad)) * 0.85
+        dhi_estimated = ghi_wm2 * 0.15
+
+        dni_estimated = min(dni_estimated, 1000.0)
+        dhi_estimated = max(dhi_estimated, ghi_wm2 * 0.1)
+
+        if aoi_deg < 90:
+            poa_beam = dni_estimated * math.cos(math.radians(aoi_deg))
+        else:
+            poa_beam = 0.0
+
+        panel_tilt_rad = math.radians(panel_tilt_deg)
+        poa_diffuse = dhi_estimated * (1 + math.cos(panel_tilt_rad)) / 2
+
+        poa_ground = ghi_wm2 * albedo * (1 - math.cos(panel_tilt_rad)) / 2
+
+        poa_total = poa_beam + poa_diffuse + poa_ground
+
+        return max(0.0, poa_total)
+
     async def build_cache_for_date(
         self, target_date: date, system_capacity_kwp: float
     ) -> Optional[Dict]:
@@ -288,9 +448,16 @@ class AstronomyCache:
 
                     clear_sky_sr = self._calculate_clear_sky_solar_radiation(elevation, day_of_year)
 
-                    theoretical_pv = self._calculate_theoretical_pv_output(
-                        clear_sky_sr, system_capacity_kwp
-                    )
+                    if self._panel_groups:
+                        total_theoretical, group_results = self._calculate_theoretical_pv_per_group(
+                            clear_sky_sr, elevation, azimuth
+                        )
+                        theoretical_pv = total_theoretical
+                    else:
+                        theoretical_pv = self._calculate_theoretical_pv_output(
+                            clear_sky_sr, system_capacity_kwp
+                        )
+                        group_results = []
 
                     hours_since_noon = (hour_time - solar_noon).total_seconds() / 3600.0
 
@@ -301,7 +468,7 @@ class AstronomyCache:
                     else:
                         day_progress = 0.0 if hour_time < sunrise else 1.0
 
-                    hourly_data[str(hour)] = {
+                    hour_data = {
                         "elevation_deg": round(elevation, 2),
                         "azimuth_deg": round(azimuth, 2),
                         "clear_sky_solar_radiation_wm2": round(clear_sky_sr, 1),
@@ -309,6 +476,13 @@ class AstronomyCache:
                         "hours_since_solar_noon": round(hours_since_noon, 2),
                         "day_progress_ratio": round(day_progress, 3),
                     }
+
+                    if group_results:
+                        hour_data["theoretical_max_per_group"] = [
+                            g.to_dict() for g in group_results
+                        ]
+
+                    hourly_data[str(hour)] = hour_data
 
                 return {
                     "sunrise_local": sunrise.isoformat(),

@@ -1,4 +1,4 @@
-"""ML Prediction Strategy Implementations V10.0.0 @zara
+"""ML Prediction Strategy Implementations V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -120,7 +120,7 @@ class MLModelStrategy(PredictionStrategy):
                     feature_mean = self.weights.feature_means.get("theoretical_max_kwh", 0.0)
                     feature_std = self.weights.feature_stds.get("theoretical_max_kwh", 1.0)
                     theoretical_max_kwh = (theoretical_max_scaled * feature_std) + feature_mean
-                    _LOGGER.debug(f"🌞 Astronomy-based theoretical_max: {theoretical_max_kwh:.4f} kWh (from scaled={theoretical_max_scaled:.3f})")
+                    # Reduced logging - only log at TRACE level (commented out to reduce log spam)
             except (ValueError, AttributeError, KeyError) as e:
                 _LOGGER.debug(f"Could not extract theoretical_max from features: {e}")
 
@@ -131,15 +131,12 @@ class MLModelStrategy(PredictionStrategy):
             theoretical_max_with_margin = theoretical_max_kwh * 1.2
             effective_max = min(self.max_hourly_kwh, theoretical_max_with_margin)
 
-            if theoretical_max_with_margin < self.max_hourly_kwh:
-                _LOGGER.debug(f"🛡️  PHYSICS CAP ACTIVE: Using astronomy-based max={theoretical_max_with_margin:.4f} kWh "
-                            f"instead of system max={self.max_hourly_kwh:.2f} kWh (sun elevation is low)")
+            # Physics cap is applied silently - reduces log spam
 
         prediction_before_cap = prediction
         prediction = max(0.0, min(prediction, effective_max))
 
-        if abs(prediction_before_cap - prediction) > 0.01:
-            _LOGGER.debug(f"🔧 CAPPED prediction: {prediction_before_cap:.4f} → {prediction:.4f} kWh (max={effective_max:.4f})")
+        # Capping applied silently - reduces log spam
 
         confidence = self._calculate_confidence(features)
 
@@ -207,8 +204,8 @@ class MLModelStrategy(PredictionStrategy):
                             feature_names=feature_names
                         )
                         if real_sequence is not None:
-
-                            sequence = real_sequence.reshape(1, self._lstm_trainer.sequence_length, -1)
+                            # Use directly - TinyLSTM.forward() expects (seq_len, features), not (batch, seq_len, features)
+                            sequence = real_sequence  # Shape: (24, 14)
                             sequence_source = "real_24h_history"
                             _LOGGER.debug(
                                 f"LSTM using real 24h sequence from {len(self._historical_sequence)} historical hours"
@@ -229,8 +226,8 @@ class MLModelStrategy(PredictionStrategy):
                     raise MLModelException(f"Unsupported features type: {type(features)}")
 
                 sequence_length = self._lstm_trainer.sequence_length
-                sequence = np.tile(feature_array, (sequence_length, 1))
-                sequence = sequence.reshape(1, sequence_length, -1)
+                # Create (seq_len, features) directly - NO batch dimension
+                sequence = np.tile(feature_array, (sequence_length, 1))  # Shape: (24, 14)
                 sequence_source = "pseudo_sequence"
 
                 if self._historical_sequence:

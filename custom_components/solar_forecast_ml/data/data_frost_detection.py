@@ -1,4 +1,4 @@
-"""Frost Detection Module for Solar Forecast ML Integration V10.0.0 @zara
+"""Frost Detection Module for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -26,7 +26,7 @@ class FrostDetector:
     """
     Detects frost/ice on solar panels based on meteorological conditions.
 
-    V10.0.0 Enhanced Algorithm:
+    V12.0.0 Enhanced Algorithm:
     1. Dewpoint calculation (Magnus formula) for physical frost probability
     2. Frost margin analysis (temperature - dewpoint)
     3. Correlation-based detection: Compare actual radiation drop vs expected cloud drop
@@ -62,7 +62,7 @@ class FrostDetector:
         """
         Detect frost on solar panels using enhanced correlation-based algorithm
 
-        V10.0.0 Enhanced Algorithm:
+        V12.0.0 Enhanced Algorithm:
         1. Calculate dewpoint from temperature and humidity (Magnus formula)
         2. Determine frost probability from frost margin (temp - dewpoint)
         3. Correlate actual radiation drop with expected cloud drop
@@ -85,7 +85,7 @@ class FrostDetector:
                 - actual_vs_expected_pct: Radiation comparison
                 - indicators: Dict with individual metrics
                 - reason: Human-readable explanation
-                - frost_analysis: Dict with correlation analysis (V10.0.0)
+                - frost_analysis: Dict with correlation analysis (V12.0.0)
         """
 
         result = {

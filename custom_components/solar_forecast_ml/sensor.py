@@ -1,4 +1,4 @@
-"""Sensor Platform for Solar Forecast ML Integration V10.0.0 @zara
+"""Sensor Platform for Solar Forecast ML Integration V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -20,12 +20,11 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    CONF_BATTERY_ENABLED,
     CONF_DIAGNOSTIC,
-    CONF_ELECTRICITY_ENABLED,
     CONF_HOURLY,
     DOMAIN,
 )
@@ -46,10 +45,6 @@ from .sensors.sensor_base import (
     WeeklyYieldSensor,
 )
 
-from .sensors.sensor_battery import BATTERY_SENSORS
-from .sensors.sensor_battery_cost import BATTERY_COST_SENSORS
-from .sensors.sensor_battery_forecast import BATTERY_FORECAST_SENSORS
-
 from .sensors.sensor_diagnostic import (
     ActivePredictionModelSensor,
     DataFilesStatusSensor,
@@ -61,8 +56,6 @@ from .sensors.sensor_diagnostic import (
     PatternCountSensor,
     PhysicsSamplesSensor,
 )
-
-from .sensors.sensor_electricity_price import ELECTRICITY_PRICE_SENSORS
 
 from .sensors.sensor_states import (
     ExternalSensorsStatusSensor,
@@ -91,6 +84,9 @@ async def async_setup_entry(
         f"Setting up sensors: Diagnostic Mode={'Enabled' if diagnostic_mode_enabled else 'Disabled'}, "
         f"Hourly Sensor={'Enabled' if enable_hourly else 'Disabled'}"
     )
+
+    # Clean up entities that should no longer exist based on current config
+    await _cleanup_orphaned_entities(hass, entry, diagnostic_mode_enabled)
 
     system_status_sensor = SystemStatusSensor(coordinator, entry.entry_id)
     coordinator.system_status_sensor = system_status_sensor
@@ -142,50 +138,6 @@ async def async_setup_entry(
         entities_to_add.extend(diagnostic_entities)
         _LOGGER.info(f"Diagnostic mode enabled - Adding {len(diagnostic_entities)} advanced diagnostic sensors.")
 
-    battery_enabled = entry.options.get(CONF_BATTERY_ENABLED, False)
-    electricity_enabled = entry.options.get(CONF_ELECTRICITY_ENABLED, False)
-
-    if battery_enabled:
-
-        battery_coordinator_key = f"{entry.entry_id}_battery"
-        battery_coordinator = hass.data[DOMAIN].get(battery_coordinator_key)
-
-        if battery_coordinator:
-
-            battery_entities = [
-                sensor_class(coordinator, entry) for sensor_class in BATTERY_SENSORS
-            ]
-            battery_forecast_entities = [
-                sensor_class(coordinator, entry) for sensor_class in BATTERY_FORECAST_SENSORS
-            ]
-
-            battery_cost_entities = [
-                sensor_class(battery_coordinator, entry) for sensor_class in BATTERY_COST_SENSORS
-            ]
-
-            entities_to_add.extend(battery_entities)
-            entities_to_add.extend(battery_forecast_entities)
-            entities_to_add.extend(battery_cost_entities)
-
-            _LOGGER.info(
-                f"Battery Management enabled - Adding {len(battery_entities)} battery sensors, "
-                f"{len(battery_forecast_entities)} forecast sensors, "
-                f"{len(battery_cost_entities)} cost sensors"
-            )
-        else:
-            _LOGGER.warning(
-                "Battery enabled but BatteryCoordinator not found - skipping battery sensors"
-            )
-
-    if electricity_enabled:
-        electricity_entities = [
-            sensor_class(coordinator, entry) for sensor_class in ELECTRICITY_PRICE_SENSORS
-        ]
-        entities_to_add.extend(electricity_entities)
-        _LOGGER.info(
-            f"Electricity Prices enabled - Adding {len(electricity_entities)} electricity price sensors"
-        )
-
     shadow_detection_entities = [
         sensor_class(coordinator, entry) for sensor_class in SHADOW_DETECTION_SENSORS
     ]
@@ -195,8 +147,54 @@ async def async_setup_entry(
     )
 
     async_add_entities(entities_to_add, True)
-    _LOGGER.info(
-        f"Successfully added {len(entities_to_add)} total sensors (Solar + Battery Management)."
-    )
+    _LOGGER.info(f"Successfully added {len(entities_to_add)} total sensors.")
 
     return True
+
+
+async def _cleanup_orphaned_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    diagnostic_enabled: bool,
+) -> None:
+    """Remove entities from registry that should no longer exist based on config @zara
+
+    This ensures that when a user disables diagnostic mode, the diagnostic sensors
+    are properly removed and don't reappear after restart.
+    """
+    ent_reg = er.async_get(hass)
+
+    # Patterns for diagnostic entities that should be removed when diagnostic mode is disabled
+    diagnostic_patterns = [
+        "diagnostic_status",
+        "external_sensors_status",
+        "next_production_start",
+        "ml_service_status",
+        "ml_metrics",
+        "ml_training_readiness",
+        "active_prediction_model",
+        "pattern_count",
+        "physics_samples",
+    ]
+
+    entities_removed = 0
+
+    for entity_entry in list(ent_reg.entities.values()):
+        # Only process entities for this config entry
+        if entity_entry.config_entry_id != entry.entry_id:
+            continue
+
+        # Check if this is a diagnostic entity
+        unique_id_lower = str(entity_entry.unique_id).lower()
+
+        if not diagnostic_enabled:
+            # Remove diagnostic entities when diagnostic mode is disabled
+            for pattern in diagnostic_patterns:
+                if pattern in unique_id_lower:
+                    _LOGGER.debug(f"Removing disabled diagnostic entity: {entity_entry.entity_id}")
+                    ent_reg.async_remove(entity_entry.entity_id)
+                    entities_removed += 1
+                    break
+
+    if entities_removed > 0:
+        _LOGGER.info(f"Cleaned up {entities_removed} orphaned entities based on current config")

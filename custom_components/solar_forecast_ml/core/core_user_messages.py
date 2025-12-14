@@ -1,4 +1,4 @@
-"""User-Friendly Log Messages V10.0.0 @zara
+"""User-Friendly Log Messages V12.0.0 @zara
 
 This module provides user-friendly log messages in German for Home Assistant users.
 Technical messages are translated into understandable language with context
@@ -301,24 +301,6 @@ class UserMessages:
     SENSOR_INVALID_VALUE = (
         "Ungueltiger Wert von Sensor '{entity}': {value}. "
         "Wird fuer Berechnung uebersprungen."
-    )
-
-    # ==========================================================================
-    # BATTERY MESSAGES
-    # ==========================================================================
-
-    BATTERY_TRACKING_STARTED = (
-        "Batterie-Ueberwachung gestartet."
-    )
-
-    BATTERY_SOC_INVALID = (
-        "Ungueltiger Batterie-Ladezustand: {soc}%. "
-        "Wert wird ignoriert."
-    )
-
-    BATTERY_SENSOR_MISSING = (
-        "Batterie-Sensor '{entity}' nicht gefunden. "
-        "Batterie-Statistiken nicht verfuegbar."
     )
 
     # ==========================================================================

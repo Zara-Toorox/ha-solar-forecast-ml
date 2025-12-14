@@ -1,4 +1,4 @@
-"""Forecast Strategy Implementation V10.0.0 @zara
+"""Forecast Strategy Implementation V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -263,16 +263,8 @@ class MLForecastStrategy(ForecastStrategy):
                                         ),
                                         "day_progress_ratio": hour_astro.get("day_progress_ratio"),
                                     }
-                                    _LOGGER.debug(
-                                        f"Loaded astronomy for {date_key} {hour_local:02d}:00 - "
-                                        f"elevation={astronomy_advanced.get('elevation_deg', 'N/A')}°"
-                                    )
-                                else:
-                                    _LOGGER.debug(
-                                        f"No hourly astronomy data for {date_key} hour {hour_local}"
-                                    )
-                            else:
-                                _LOGGER.debug(f"No astronomy cache for date {date_key}")
+                                    # Astronomy loading logging removed to reduce log spam
+                                    pass
                     except Exception as e:
                         _LOGGER.warning(f"Failed to load astronomy data for prediction: {e}")
 
@@ -388,13 +380,7 @@ class MLForecastStrategy(ForecastStrategy):
                 self.TOMORROW_DISCOUNT_FACTOR * 0.95
             )
 
-            correction_info = f", correction_factor={correction_factor:.2f}" if correction_factor != 1.0 else ""
-            _LOGGER.debug(
-                f"ML (Iterative) iteration complete. "
-                f"Today (raw): {total_today_kwh:.2f} kWh, "
-                f"Tomorrow (raw): {total_tomorrow_kwh:.2f} kWh, "
-                f"Day After (raw): {total_day_after_kwh:.2f} kWh{correction_info}"
-            )
+            # ML iteration complete logging removed to reduce log spam
 
             try:
                 current_yield = sensor_data.get("current_yield")

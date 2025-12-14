@@ -1,4 +1,4 @@
-"""Shadow Detection & Performance Loss Analysis V10.0.0 @zara
+"""Shadow Detection & Performance Loss Analysis V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -33,13 +33,19 @@ class ShadowDetector:
     2. Correlation-Based Detection - Compare Lux drop vs Production drop (accurate)
     3. Ensemble - Weighted combination of both methods
 
-    V10.0.0: Uses correlation between Lux sensor and production to distinguish
+    V12.0.0: Uses correlation between Lux sensor and production to distinguish
     between cloud cover (affects both equally) and local shadows (only affects panels).
     """
 
-    def __init__(self, data_manager=None):
+    def __init__(
+        self,
+        data_manager=None,
+        panel_groups: Optional[List[Dict[str, Any]]] = None,
+    ):
         """Initialize shadow detector @zara"""
         self.data_manager = data_manager
+        self._panel_groups = panel_groups or []
+        self._use_panel_groups = bool(panel_groups)
 
         self.SHADOW_THRESHOLD_LIGHT = 0.05
         self.SHADOW_THRESHOLD_MODERATE = 0.15
@@ -50,7 +56,12 @@ class ShadowDetector:
         self.WEIGHT_THEORY = 0.60
         self.WEIGHT_SENSOR = 0.40
 
-        _LOGGER.info("Shadow Detector initialized (V10.0.0: Correlation-Based Detection)")
+        if self._use_panel_groups:
+            _LOGGER.info(
+                f"Shadow Detector initialized with {len(self._panel_groups)} panel groups"
+            )
+        else:
+            _LOGGER.info("Shadow Detector initialized (V12.0.0: Correlation-Based Detection)")
 
     async def detect_shadow_theory_ratio(
         self,
@@ -111,7 +122,7 @@ class ShadowDetector:
 
             loss_kwh = theoretical_max - actual_kwh
 
-            return {
+            result = {
                 "method": "theory_ratio",
                 "shadow_type": shadow_type,
                 "shadow_percent": round(shadow_percent, 1),
@@ -125,6 +136,15 @@ class ShadowDetector:
                 "actual_kwh": actual_kwh
             }
 
+            per_group_data = astronomy.get("theoretical_max_per_group", [])
+            if per_group_data and self._use_panel_groups:
+                per_group_analysis = self._analyze_per_group_shadows(
+                    actual_kwh, theoretical_max, per_group_data
+                )
+                result["per_group_analysis"] = per_group_analysis
+
+            return result
+
         except Exception as e:
             _LOGGER.error(f"Theory ratio shadow detection failed: {e}", exc_info=True)
             return {
@@ -134,12 +154,71 @@ class ShadowDetector:
                 "confidence": 0.0
             }
 
+    def _analyze_per_group_shadows(
+        self,
+        actual_kwh: float,
+        theoretical_max_total: float,
+        per_group_data: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Analyze shadow detection per panel group. @zara
+
+        Since we only have total actual_kwh, we estimate per-group performance
+        by assuming the ratio is proportional to theoretical max per group.
+        """
+        per_group_analysis = []
+
+        if not per_group_data or theoretical_max_total <= 0:
+            return per_group_analysis
+
+        total_group_theoretical = sum(
+            g.get("theoretical_kwh", 0) for g in per_group_data
+        )
+        if total_group_theoretical <= 0:
+            return per_group_analysis
+
+        overall_efficiency = actual_kwh / theoretical_max_total if theoretical_max_total > 0 else 0
+
+        for group in per_group_data:
+            group_name = group.get("name", "Unknown")
+            group_theoretical = group.get("theoretical_kwh", 0)
+            group_tilt = group.get("tilt_deg", 30)
+            group_azimuth = group.get("azimuth_deg", 180)
+
+            estimated_actual = group_theoretical * overall_efficiency
+            group_shadow_percent = (1.0 - overall_efficiency) * 100 if overall_efficiency < 1.0 else 0
+
+            if group_shadow_percent < 5:
+                shadow_type = "none"
+                interpretation = "Normale Produktion"
+            elif group_shadow_percent < 15:
+                shadow_type = "light"
+                interpretation = "Leichte Verschattung"
+            elif group_shadow_percent < 30:
+                shadow_type = "moderate"
+                interpretation = "Mäßige Verschattung"
+            else:
+                shadow_type = "heavy"
+                interpretation = "Starke Verschattung"
+
+            per_group_analysis.append({
+                "name": group_name,
+                "tilt_deg": group_tilt,
+                "azimuth_deg": group_azimuth,
+                "theoretical_kwh": round(group_theoretical, 4),
+                "estimated_actual_kwh": round(estimated_actual, 4),
+                "shadow_type": shadow_type,
+                "shadow_percent": round(group_shadow_percent, 1),
+                "interpretation": interpretation,
+            })
+
+        return per_group_analysis
+
     async def detect_shadow_sensor_fusion(
         self,
         prediction: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Method 2: Correlation-Based Detection - High Accuracy (V10.0.0)
+        Method 2: Correlation-Based Detection - High Accuracy (V12.0.0)
 
         Uses CORRELATION between Lux drop and Production drop to distinguish:
         - CLOUDS: Affect both Lux sensor AND panels equally (correlated drops)
@@ -212,7 +291,7 @@ class ShadowDetector:
         temperature: float
     ) -> Dict[str, Any]:
         """
-        V10.0.0: CORRELATION-BASED shadow detection WITH Lux sensor
+        V12.0.0: CORRELATION-BASED shadow detection WITH Lux sensor
 
         Key insight: The Lux sensor is usually NOT at the solar panels!
 
@@ -362,7 +441,7 @@ class ShadowDetector:
         Estimates expected production based on cloud cover and compares with actual.
         Less accurate than correlation-based detection but still useful.
 
-        V10.0.0: cloud_cover is now correctly read from "clouds" field.
+        V12.0.0: cloud_cover is now correctly read from "clouds" field.
         """
 
         cloud_factor = math.exp(-0.035 * cloud_cover)
@@ -716,11 +795,20 @@ class PerformanceLossAnalyzer:
 _shadow_detector = None
 _performance_analyzer = None
 
-def get_shadow_detector(data_manager=None) -> ShadowDetector:
+def get_shadow_detector(
+    data_manager=None,
+    panel_groups: Optional[List[Dict[str, Any]]] = None,
+) -> ShadowDetector:
     """Get or create shadow detector instance @zara"""
     global _shadow_detector
     if _shadow_detector is None:
-        _shadow_detector = ShadowDetector(data_manager)
+        _shadow_detector = ShadowDetector(
+            data_manager=data_manager,
+            panel_groups=panel_groups,
+        )
+    elif panel_groups and not _shadow_detector._use_panel_groups:
+        _shadow_detector._panel_groups = panel_groups
+        _shadow_detector._use_panel_groups = True
     return _shadow_detector
 
 def get_performance_analyzer(data_manager=None) -> PerformanceLossAnalyzer:

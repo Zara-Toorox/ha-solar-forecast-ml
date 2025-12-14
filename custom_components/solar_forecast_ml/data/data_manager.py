@@ -1,4 +1,4 @@
-"""Data Manager for Solar Forecast ML Integration - FACADE V10.0.0 @zara
+"""Data Manager for Solar Forecast ML Integration - FACADE V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -142,6 +142,16 @@ class DataManager(DataManagerIO):
         """Save todays daily forecast"""
         return await self.forecast_handler.save_forecast_day(
             prediction_kwh, source, lock, force_overwrite, prediction_kwh_raw, safeguard_applied
+        )
+
+    async def update_intraday_display_forecast(
+        self,
+        display_value: float,
+        source: str,
+    ) -> bool:
+        """Update intraday display forecast (09:05/12:05 corrections) @zara"""
+        return await self.forecast_handler.update_intraday_display_forecast(
+            display_value, source
         )
 
     async def save_forecast_tomorrow(
@@ -307,6 +317,23 @@ class DataManager(DataManagerIO):
     async def clear_expected_daily_production(self) -> bool:
         """Clear expected daily production @zara"""
         return await self.state_handler.clear_expected_daily_production()
+
+    async def save_intraday_correction(
+        self,
+        original_forecast: float,
+        corrected_forecast: float,
+        correction_factor: float,
+        source: str,
+        applied_at: datetime,
+    ) -> bool:
+        """Save intraday correction metadata @zara"""
+        return await self.state_handler.save_intraday_correction(
+            original_forecast=original_forecast,
+            corrected_forecast=corrected_forecast,
+            correction_factor=correction_factor,
+            source=source,
+            applied_at=applied_at,
+        )
 
     async def save_weather_cache(self, weather_data: Dict[str, Any]) -> bool:
         """Legacy method - Open-Meteo cache is the primary data source. @zara"""

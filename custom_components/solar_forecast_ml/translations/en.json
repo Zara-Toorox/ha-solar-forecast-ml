@@ -3,74 +3,86 @@
     "step": {
       "user": {
         "title": "Solar Forecast ML",
-        "description": "Required: Power Sensor, Daily Yield\nOptional: Weather Sensor (Open-Meteo provides all weather data), All other fields",
+        "description": "Required: Power Sensor, Daily Yield\nOptional: All other fields\n\nWeather data is provided automatically via Open-Meteo API (no configuration needed)",
         "data": {
-          "weather_entity": "Weather Sensor (Optional)",
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
           "solar_capacity": "System Capacity (kWp)",
+          "inverter_max_power": "Inverter Max Power (kW)",
           "rain_sensor": "Rain Sensor",
           "lux_sensor": "Illuminance Sensor (lx)",
           "temp_sensor": "Temperature Sensor",
           "wind_sensor": "Wind Sensor",
-          "uv_sensor": "UV Sensor",
-          "humidity_sensor": "Humidity Sensor"
+          "humidity_sensor": "Humidity Sensor",
+          "pressure_sensor": "Pressure Sensor (hPa)",
+          "solar_radiation_sensor": "Solar Radiation Sensor (W/m²)"
         },
         "data_description": {
-          "weather_entity": "Weather entity for additional data (Optional - Open-Meteo provides all weather/radiation data)",
           "power_entity": "Current power in Watts (Required)",
           "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
           "total_consumption_today": "Daily consumption in kWh (Optional)",
-          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, default: 5.0)",
+          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, auto-calculated with panel groups)",
+          "inverter_max_power": "Max AC power of inverter in kW. Forecasts are capped and clipped hours excluded from training. 0 = disabled. (Optional)",
           "rain_sensor": "External rain sensor (Optional)",
           "lux_sensor": "External illuminance in Lux (Optional)",
           "temp_sensor": "External temperature (Optional)",
           "wind_sensor": "External wind speed (Optional)",
-          "uv_sensor": "External UV index (Optional)",
-          "humidity_sensor": "External humidity (Optional)"
+          "humidity_sensor": "External humidity (Optional)",
+          "pressure_sensor": "External barometric pressure in hPa (Optional)",
+          "solar_radiation_sensor": "External solar radiation in W/m² (Optional, preferred over Lux)"
+        }
+      },
+      "panel_groups": {
+        "title": "Configure Panel Groups (optional)",
+        "description": "⚠️ ONLY FILL IN if you have panels/strings with different orientations or tilt angles!\nOtherwise leave empty.\n\n⚠️ SYSTEM REQUIREMENTS:\n• Native x64 Home Assistant: Recommended (unlimited groups)\n• Proxmox VM: Max. 2 groups recommended\n• SD card systems (RPi): NOT recommended (high I/O load)\n\nFormat per group: Power(Wp)/Azimuth(°)/Tilt(°)/[Energy-Sensor]\nGroups can be entered comma-separated or on separate lines.\n\nExample:\n1425/180/9/sensor.pv1_kwh_day, 870/180/47/sensor.pv2_kwh_day\n\nAzimuth: 0°=North, 90°=East, 180°=South, 270°=West\nTilt: 0°=horizontal, 90°=vertical\n\nEnergy sensor (optional): Daily kWh sensor that resets at midnight.",
+        "data": {
+          "panel_groups_input": "Panel Groups"
+        },
+        "data_description": {
+          "panel_groups_input": "Format: Power/Azimuth/Tilt/[Daily-kWh-Sensor] - comma or newline separated"
+        }
+      },
+      "reconfigure_panel_groups": {
+        "title": "Reconfigure Panel Groups",
+        "description": "⚠️ ONLY FILL IN if you have panels/strings with different orientations or tilt angles!\nOtherwise leave empty.\n\n⚠️ SYSTEM REQUIREMENTS:\n• Native x64 Home Assistant: Recommended (unlimited groups)\n• Proxmox VM: Max. 2 groups recommended\n• SD card systems (RPi): NOT recommended (high I/O load)\n\nFormat: Power(Wp)/Azimuth(°)/Tilt(°)/[Energy-Sensor]\nComma-separated or one per line.\n\nEnergy sensor: Daily kWh sensor (resets at midnight)\n\nLeave empty for simple capacity calculation.",
+        "data": {
+          "panel_groups_input": "Panel Groups"
+        },
+        "data_description": {
+          "panel_groups_input": "Format: Power/Azimuth/Tilt/[Daily-kWh-Sensor] - comma or newline separated"
         }
       },
       "reconfigure": {
         "title": "Reconfigure Solar Forecast ML",
-        "description": "Update configuration\nEmpty optional fields will clear their value",
+        "description": "Update configuration\nEmpty optional fields will clear their value\n\nWeather data is provided automatically via Open-Meteo API",
         "data": {
-          "weather_entity": "Weather Sensor (Optional)",
           "power_entity": "Power Sensor (W)",
           "solar_yield_today": "Daily Yield (kWh)",
           "total_consumption_today": "Daily Consumption (kWh)",
           "solar_capacity": "System Capacity (kWp)",
+          "inverter_max_power": "Inverter Max Power (kW)",
           "rain_sensor": "Rain Sensor",
           "lux_sensor": "Illuminance Sensor (lx)",
           "temp_sensor": "Temperature Sensor",
           "wind_sensor": "Wind Sensor",
-          "uv_sensor": "UV Sensor",
           "humidity_sensor": "Humidity Sensor",
-          "battery_capacity": "Battery Capacity (kWh)",
-          "battery_soc_entity": "Battery State of Charge Sensor",
-          "battery_power_entity": "Battery Power Sensor (W)",
-          "battery_charge_today_entity": "Battery Charge Today (kWh)",
-          "battery_discharge_today_entity": "Battery Discharge Today (kWh)",
-          "electricity_country": "Country (DE/AT)"
+          "pressure_sensor": "Pressure Sensor (hPa)",
+          "solar_radiation_sensor": "Solar Radiation Sensor (W/m²)"
         },
         "data_description": {
-          "weather_entity": "Weather entity for additional data (Optional - Open-Meteo provides all weather/radiation data)",
           "power_entity": "Current power in Watts (Required)",
           "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
           "total_consumption_today": "Daily consumption in kWh (Optional)",
-          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, default: 5.0 kWp)",
+          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, auto-calculated with panel groups)",
+          "inverter_max_power": "Max AC power of inverter in kW. Forecasts are capped and clipped hours excluded from training. 0 = disabled. (Optional)",
           "rain_sensor": "External rain sensor (Optional)",
           "lux_sensor": "External illuminance in Lux (Optional)",
           "temp_sensor": "External temperature (Optional)",
           "wind_sensor": "External wind speed (Optional)",
-          "uv_sensor": "External UV index (Optional)",
           "humidity_sensor": "External humidity (Optional)",
-          "battery_capacity": "Total battery capacity in kWh",
-          "battery_soc_entity": "Sensor showing battery state of charge (%)",
-          "battery_power_entity": "Sensor showing current battery power (W, positive=charging)",
-          "battery_charge_today_entity": "Sensor showing energy charged today (kWh)",
-          "battery_discharge_today_entity": "Sensor showing energy discharged today (kWh)",
-          "electricity_country": "Country for electricity prices - Germany or Austria"
+          "pressure_sensor": "External barometric pressure in hPa (Optional)",
+          "solar_radiation_sensor": "External solar radiation in W/m² (Optional, preferred over Lux)"
         }
       }
     },
@@ -83,7 +95,8 @@
       "required": "Field required",
       "already_configured": "Weather entity already in use",
       "sensor_not_found": "Sensor entity not found",
-      "invalid_sensor_state": "Sensor state invalid or unavailable"
+      "invalid_sensor_state": "Sensor state invalid or unavailable",
+      "invalid_panel_format": "Invalid format. Please use: Power/Azimuth/Tilt (e.g., 1200/180/30)"
     },
     "abort": {
       "already_configured": "Integration already configured",
@@ -96,7 +109,7 @@
     "step": {
       "init": {
         "title": "Advanced Options",
-        "description": "Configure update intervals and notifications\nBattery sensors are configured via 'Reconfigure'",
+        "description": "Configure update intervals and notifications",
         "data": {
           "update_interval": "Update Interval (s)",
           "diagnostic": "Diagnostic Mode",
@@ -105,8 +118,8 @@
           "notify_forecast": "Forecast Notifications",
           "notify_learning": "Training Notifications",
           "notify_successful_learning": "Success Notifications",
-          "battery_enabled": "Enable Battery Management",
-          "electricity_enabled": "Enable Electricity Prices (aWATTar)"
+          "ml_algorithm": "Mode",
+          "enable_tiny_lstm": "Enable / Disable AI"
         },
         "data_description": {
           "update_interval": "Forecast update interval (300-86400s, default: 3600)",
@@ -116,14 +129,16 @@
           "notify_forecast": "Notify on forecast updates",
           "notify_learning": "Notify on training start",
           "notify_successful_learning": "Notify on training success",
-          "battery_enabled": "Enable battery monitoring and forecasts (configure sensors via Reconfigure)",
-          "electricity_enabled": "Enable electricity spot prices from aWATTar (configure country via Reconfigure)"
+          "ml_algorithm": "Choose algorithm: 'Automatic' lets system decide based on available data (recommended). 'Ridge' is fast and stable. 'Neural Network' provides 5-10% better accuracy with 100+ samples.",
+          "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled."
         }
       }
     },
     "error": {
       "invalid_interval": "Interval must be 300-86400 seconds",
-      "invalid_input": "Invalid input format"
+      "invalid_input": "Invalid input format",
+      "energy_sensor_not_found": "Energy sensor not found",
+      "energy_sensor_not_numeric": "Energy sensor is not numeric"
     }
   },
   "services": {
@@ -287,74 +302,6 @@
           }
         }
       },
-      "battery_cost_grid_charge_today": {
-        "name": "Grid Charge Today"
-      },
-      "battery_cost_solar_charge_today": {
-        "name": "Solar Charge Today"
-      },
-      "battery_cost_grid_charge_cost_today": {
-        "name": "Grid Charge Cost Today"
-      },
-      "battery_cost_grid_discharge_today": {
-        "name": "Grid Discharge Today"
-      },
-      "battery_cost_solar_discharge_today": {
-        "name": "Solar Discharge Today"
-      },
-      "battery_cost_solar_savings_today": {
-        "name": "Solar Savings Today",
-        "state_attributes": {
-          "solar_discharge_kwh": {
-            "name": "Solar Discharge Energy"
-          },
-          "avg_price_cent_kwh": {
-            "name": "Average Price"
-          }
-        }
-      },
-      "battery_cost_grid_arbitrage_profit_today": {
-        "name": "Grid Arbitrage Profit Today",
-        "state_attributes": {
-          "grid_discharge_kwh": {
-            "name": "Grid Discharge Energy"
-          },
-          "avg_charge_price": {
-            "name": "Average Charge Price"
-          },
-          "avg_discharge_price": {
-            "name": "Average Discharge Price"
-          }
-        }
-      },
-      "battery_cost_net_cost_today": {
-        "name": "Net Cost Today",
-        "state_attributes": {
-          "grid_charge_cost": {
-            "name": "Grid Charge Cost"
-          },
-          "solar_savings": {
-            "name": "Solar Savings"
-          },
-          "grid_arbitrage_profit": {
-            "name": "Grid Arbitrage Profit"
-          }
-        }
-      },
-      "battery_cost_total_profit_today": {
-        "name": "Total Profit Today",
-        "state_attributes": {
-          "solar_savings": {
-            "name": "Solar Savings"
-          },
-          "grid_arbitrage_profit": {
-            "name": "Grid Arbitrage Profit"
-          },
-          "grid_charge_cost": {
-            "name": "Grid Charge Cost"
-          }
-        }
-      },
       "shadow_current": {
         "name": "Shadow Current",
         "state": {
@@ -372,6 +319,15 @@
       },
       "performance_loss_today": {
         "name": "Performance Loss Today"
+      }
+    }
+  },
+  "selector": {
+    "ml_algorithm": {
+      "options": {
+        "auto": "Automatic (Recommended)",
+        "ridge": "Ridge Regression (Fast)",
+        "tiny_lstm": "Neural Network (Better Accuracy)"
       }
     }
   }

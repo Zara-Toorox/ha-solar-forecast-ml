@@ -1,4 +1,4 @@
-"""Weather Data Provider - Open-Meteo ONLY V10.0.0 @zara
+"""Weather Data Provider - Open-Meteo ONLY V12.0.0 @zara
 
 IMPORTANT: This module now uses Open-Meteo as the ONLY data source.
 - NO HA Weather Entity dependency for forecasts
@@ -51,7 +51,11 @@ DEFAULT_WEATHER_DATA = {
 
 
 class WeatherService:
-    """Weather Service using Open-Meteo as SINGLE data source"""
+    """Weather Service using Open-Meteo as SINGLE data source
+
+    IMPORTANT: All cache updates should go through the MultiWeatherBlender
+    when available to ensure blend_info is preserved for weight learning.
+    """
 
     def __init__(
         self,
@@ -75,6 +79,10 @@ class WeatherService:
 
         self._cached_forecast: List[Dict[str, Any]] = []
         self._background_update_task: Optional[asyncio.Task] = None
+
+        # Reference to MultiWeatherBlender for proper cache updates
+        # Set by WeatherDataPipelineManager after initialization
+        self._multi_weather_blender = None
 
         _LOGGER.info(
             f"WeatherService initialized - Open-Meteo ONLY "
@@ -246,13 +254,51 @@ class WeatherService:
         """Get all forecast entries for a specific date"""
         return self._open_meteo.get_forecast_for_date(date)
 
+    def set_multi_weather_blender(self, blender) -> None:
+        """Set reference to MultiWeatherBlender for proper cache updates.
+
+        Args:
+            blender: MultiWeatherBlender instance
+        """
+        self._multi_weather_blender = blender
+        _LOGGER.debug("MultiWeatherBlender reference set in WeatherService")
+
     async def force_update(self) -> bool:
-        """Force immediate forecast update from Open-Meteo"""
+        """Force immediate forecast update - uses MultiWeatherBlender if available.
+
+        IMPORTANT: When MultiWeatherBlender is available, all updates go through it
+        to ensure blend_info is preserved for weight learning. This prevents the
+        cache from being overwritten with data lacking blend_info.
+        """
         try:
-            _LOGGER.info("Force update - fetching from Open-Meteo API...")
+            # Prefer MultiWeatherBlender for cache updates (preserves blend_info)
+            if self._multi_weather_blender:
+                _LOGGER.info("Force update - using MultiWeatherBlender for proper blend_info...")
+                success = await self._multi_weather_blender.update_and_save_cache()
+
+                if success:
+                    # Refresh internal cache from the blended data
+                    forecast = await self._open_meteo.get_hourly_forecast(hours=72)
+                    if forecast:
+                        self._cached_forecast = self._transform_open_meteo_forecast(forecast)
+                    _LOGGER.info(
+                        f"Force update via Blender successful: {len(self._cached_forecast)} hours"
+                    )
+                    return True
+                else:
+                    _LOGGER.warning("Blender update failed - falling back to direct Open-Meteo")
+                    # Fall through to direct update
+
+            # Fallback: Direct Open-Meteo update
+            # Note: Even without blending, data will have blend_info from _parse_hourly_response
+            _LOGGER.info("Force update - fetching directly from Open-Meteo API...")
             forecast = await self._open_meteo.get_hourly_forecast(hours=72)
 
             if forecast:
+                # Ensure cache is saved (auto_save might be disabled by Blender)
+                # This ensures blend_info is persisted even in fallback mode
+                await self._open_meteo._save_file_cache(forecast)
+
                 self._cached_forecast = self._transform_open_meteo_forecast(forecast)
                 _LOGGER.info(f"Force update successful: {len(self._cached_forecast)} hours")
                 return True
@@ -265,7 +311,10 @@ class WeatherService:
             return False
 
     async def _background_forecast_update(self):
-        """Background task to periodically update forecast"""
+        """Background task to periodically update forecast.
+
+        Uses MultiWeatherBlender when available to preserve blend_info.
+        """
         update_interval = 3600
 
         while True:
@@ -273,12 +322,13 @@ class WeatherService:
                 await asyncio.sleep(update_interval)
 
                 _LOGGER.debug("Background forecast update starting...")
-                forecast = await self._open_meteo.get_hourly_forecast(hours=72)
 
-                if forecast:
-                    self._cached_forecast = self._transform_open_meteo_forecast(forecast)
-                    _LOGGER.info(
-                        f"Background update: {len(self._cached_forecast)} hours from Open-Meteo"
+                # Use force_update which routes through Blender when available
+                success = await self.force_update()
+
+                if success:
+                    _LOGGER.debug(
+                        f"Background update complete: {len(self._cached_forecast)} hours"
                     )
                 else:
                     _LOGGER.debug("Background update: No new data")

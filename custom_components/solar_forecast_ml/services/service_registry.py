@@ -1,4 +1,4 @@
-"""Service Registry for Solar Forecast ML Integration V10.0.0 @zara
+"""Service Registry for Solar Forecast ML Integration V10.3.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -30,8 +30,10 @@ from ..const import (
     SERVICE_BOOTSTRAP_FROM_HISTORY,
     SERVICE_BOOTSTRAP_PHYSICS_FROM_HISTORY,
     SERVICE_BUILD_ASTRONOMY_CACHE,
+    SERVICE_INSTALL_EXTRA_FEATURES,
     SERVICE_RUN_WEATHER_CORRECTION,
     SERVICE_REFRESH_OPEN_METEO_CACHE,
+    SERVICE_REFRESH_MULTI_WEATHER,
     SERVICE_REFRESH_CACHE_TODAY,
     SERVICE_RESET_LEARNING_DATA,
     SERVICE_RETRAIN_MODEL,
@@ -79,10 +81,6 @@ class ServiceRegistry:
         from ..services.service_daily_briefing import DailyBriefingService
 
         self._daily_briefing_handler = DailyBriefingService(self.hass, self.coordinator)
-
-        from ..services.service_battery_discovery import async_setup_services as setup_battery_discovery
-
-        await setup_battery_discovery(self.hass)
 
         services = self._build_service_definitions()
 
@@ -141,6 +139,11 @@ class ServiceRegistry:
                 description="Refresh Open-Meteo cloud cover cache",
             ),
             ServiceDefinition(
+                name=SERVICE_REFRESH_MULTI_WEATHER,
+                handler=self._handle_refresh_multi_weather,
+                description="Refresh Multi-Weather cache (Open-Meteo + wttr.in)",
+            ),
+            ServiceDefinition(
                 name=SERVICE_BOOTSTRAP_FROM_HISTORY,
                 handler=self._handle_bootstrap_from_history,
                 description="Bootstrap pattern learning from Home Assistant history",
@@ -170,6 +173,13 @@ class ServiceRegistry:
                 name=SERVICE_SEND_DAILY_BRIEFING,
                 handler=self._handle_send_daily_briefing,
                 description="Send daily solar weather briefing notification",
+            ),
+
+            # Installation Services
+            ServiceDefinition(
+                name=SERVICE_INSTALL_EXTRA_FEATURES,
+                handler=self._handle_install_extra_features,
+                description="Install extra feature components (grid_price_monitor, sfml_stats)",
             ),
         ]
 
@@ -241,48 +251,118 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in run_weather_correction: {e}")
 
     async def _handle_refresh_open_meteo_cache(self, call: ServiceCall) -> None:
-        """Handle refresh_open_meteo_cache service - Refresh Open-Meteo direct radiation cache @zara"""
+        """Handle refresh_open_meteo_cache service - Refresh weather cache via MultiWeatherBlender @zara
+
+        NOTE: This service now goes through the MultiWeatherBlender to ensure
+        blend_info is preserved for weight learning. The internal corrector cache
+        is also updated.
+        """
         try:
             if not hasattr(self.coordinator, 'weather_pipeline_manager'):
+                _LOGGER.warning("Weather pipeline manager not available")
                 return
 
             pipeline = self.coordinator.weather_pipeline_manager
 
-            if not pipeline.weather_corrector:
+            # Use WeatherService.force_update() which routes through Blender
+            if pipeline.weather_service:
+                success = await pipeline.weather_service.force_update()
+                if success:
+                    _LOGGER.info("Weather cache refreshed via Blender")
+                else:
+                    _LOGGER.warning("Weather cache refresh failed")
+                    return
+            else:
+                _LOGGER.warning("Weather service not available")
                 return
 
-            corrector = pipeline.weather_corrector
+            # Also update the corrector's internal cache
+            if pipeline.weather_corrector and pipeline.weather_corrector._open_meteo_client:
+                corrector = pipeline.weather_corrector
+                # Read from memory cache (already updated by force_update)
+                forecast = corrector._open_meteo_client._cache.get("hourly_forecast", [])
 
-            if not corrector._open_meteo_client:
-                return
+                if forecast:
+                    corrector._open_meteo_cache.clear()
+                    for entry in forecast:
+                        date = entry.get("date")
+                        hour = entry.get("hour")
 
-            forecast = await corrector._open_meteo_client.get_hourly_forecast(hours=72)
-
-            if not forecast:
-                _LOGGER.warning("Open-Meteo fetch failed")
-                return
-
-            corrector._open_meteo_cache.clear()
-            for entry in forecast:
-                date = entry.get("date")
-                hour = entry.get("hour")
-
-                if date and hour is not None:
-                    if date not in corrector._open_meteo_cache:
-                        corrector._open_meteo_cache[date] = {}
-                    corrector._open_meteo_cache[date][hour] = {
-                        "direct_radiation": entry.get("direct_radiation", 0),
-                        "diffuse_radiation": entry.get("diffuse_radiation", 0),
-                        "ghi": entry.get("ghi", 0),
-                        "cloud_cover": entry.get("cloud_cover", 0),
-                        "temperature": entry.get("temperature"),
-                        "humidity": entry.get("humidity"),
-                        "precipitation": entry.get("precipitation", 0),
-                        "wind_speed": entry.get("wind_speed"),
-                    }
+                        if date and hour is not None:
+                            if date not in corrector._open_meteo_cache:
+                                corrector._open_meteo_cache[date] = {}
+                            corrector._open_meteo_cache[date][hour] = {
+                                "direct_radiation": entry.get("direct_radiation", 0),
+                                "diffuse_radiation": entry.get("diffuse_radiation", 0),
+                                "ghi": entry.get("ghi", 0),
+                                "cloud_cover": entry.get("cloud_cover", 0),
+                                "temperature": entry.get("temperature"),
+                                "humidity": entry.get("humidity"),
+                                "precipitation": entry.get("precipitation", 0),
+                                "wind_speed": entry.get("wind_speed"),
+                            }
+                    _LOGGER.info(f"Corrector cache updated: {len(corrector._open_meteo_cache)} days")
 
         except Exception as e:
-            _LOGGER.error(f"Error in refresh_open_meteo_cache: {e}")
+            _LOGGER.error(f"Error in refresh_open_meteo_cache: {e}", exc_info=True)
+
+    async def _handle_refresh_multi_weather(self, call: ServiceCall) -> None:
+        """Handle refresh_multi_weather service - Refresh Multi-Weather cache (Open-Meteo + wttr.in) @zara
+
+        Parameters (optional):
+            force_wttr_refresh: bool - Force wttr.in API call even if cache is valid (default: False)
+            migrate_cache: bool - Force migration of existing cache entries (default: False)
+
+        This service:
+        1. Ensures weather_source_weights.json exists
+        2. Optionally migrates existing cache entries with blend_info
+        3. Fetches fresh data from Open-Meteo (and wttr.in if cloud_cover > 50%)
+        4. Saves to cache with blend_info for weight learning
+        """
+        try:
+            if not hasattr(self.coordinator, 'weather_pipeline_manager'):
+                _LOGGER.warning("Weather pipeline manager not available")
+                return
+
+            pipeline = self.coordinator.weather_pipeline_manager
+
+            if not hasattr(pipeline, 'multi_weather_blender') or not pipeline.multi_weather_blender:
+                _LOGGER.warning("Multi-Weather blender not available")
+                return
+
+            blender = pipeline.multi_weather_blender
+            force_wttr = call.data.get("force_wttr_refresh", False)
+            migrate_cache = call.data.get("migrate_cache", False)
+
+            _LOGGER.info(f"Service: refresh_multi_weather (force_wttr={force_wttr}, migrate={migrate_cache})")
+
+            # Optionally run migration first (adds blend_info to existing entries)
+            if migrate_cache:
+                _LOGGER.info("Running cache migration to add blend_info...")
+                await blender._migrate_cache_blend_info()
+
+            # Invalidate wttr.in cache if forced
+            if force_wttr and blender.wttr_client:
+                blender.wttr_client.invalidate_cache()
+                _LOGGER.info("wttr.in cache invalidated")
+
+            # Fetch blended forecast and save to cache
+            # This also ensures weights file exists
+            success = await blender.update_and_save_cache()
+
+            if success:
+                stats = blender.get_blend_stats()
+                _LOGGER.info(
+                    f"Multi-Weather refresh complete: "
+                    f"weights=OM:{stats['weights'].get('open_meteo', 0.5):.0%}/"
+                    f"WWO:{stats['weights'].get('wwo', 0.5):.0%}, "
+                    f"blended_fetches={stats.get('blended_fetches', 0)}"
+                )
+            else:
+                _LOGGER.warning("Multi-Weather refresh failed")
+
+        except Exception as e:
+            _LOGGER.error(f"Error in refresh_multi_weather: {e}", exc_info=True)
 
     async def _handle_bootstrap_from_history(self, call: ServiceCall) -> None:
         """Handle bootstrap_from_history service - Bootstrap pattern learning from HA history @zara"""
@@ -401,6 +481,12 @@ class ServiceRegistry:
                         else:
                             avg_data[sensor] = sum(values) / len(values)
 
+                    # Calculate yield from power if power is available
+                    # Average power (W) over 1 hour = kWh
+                    if "power" in avg_data and avg_data["power"] > 0:
+                        power_based_yield = avg_data["power"] / 1000.0  # W to kWh for 1 hour
+                        avg_data["power_based_yield"] = power_based_yield
+
                     if avg_data:
                         aggregated[key] = {"date": date_str, "hour": hour, **avg_data}
 
@@ -409,6 +495,7 @@ class ServiceRegistry:
                 if cumulative_entity in history_data:
                     cumulative_states = history_data[cumulative_entity]
                     sorted_cumulative = sorted(cumulative_states, key=lambda s: s.last_changed)
+                    _LOGGER.debug(f"Processing {len(cumulative_states)} cumulative yield states")
 
                     hourly_cumulative = {}
 
@@ -432,7 +519,9 @@ class ServiceRegistry:
                     sorted_keys = sorted(hourly_cumulative.keys())
 
                     prev_value = None
+                    prev_key = None
                     cumulative_hours_added = 0
+                    large_deltas = []
 
                     for key in sorted_keys:
                         date_str, hour = key
@@ -440,6 +529,8 @@ class ServiceRegistry:
 
                         if prev_value is not None:
                             delta = current_value - prev_value
+                            if delta > 2.5:
+                                large_deltas.append((prev_key, key, delta))
                             if 0.001 < delta < 5.0:
                                 agg_key = f"{date_str}_{hour:02d}"
                                 if agg_key not in aggregated:
@@ -450,6 +541,9 @@ class ServiceRegistry:
                                     cumulative_hours_added += 1
 
                         prev_value = current_value
+                        prev_key = key
+
+                    _LOGGER.debug(f"Added {cumulative_hours_added} hourly cumulative deltas")
 
             dates_in_data = set(hour_data["date"] for hour_data in aggregated.values())
             astronomy_cache = {}
@@ -474,6 +568,12 @@ class ServiceRegistry:
                 elev = self.hass.config.elevation
 
                 astro_cache.initialize_location(lat, lon, tz_str, elev)
+
+                # Set panel groups for per-group theoretical max @zara
+                panel_groups = getattr(self.coordinator, 'panel_groups', [])
+                if panel_groups:
+                    astro_cache.set_panel_groups(panel_groups)
+
                 solar_capacity = self.coordinator.solar_capacity or 5.0
 
                 await astro_cache.rebuild_cache(
@@ -669,17 +769,23 @@ class ServiceRegistry:
             # Step 7: Calculate statistics
             _LOGGER.info("STEP 7/8: Calculating statistics...")
 
+            # SIMPLE AND RELIABLE: Calculate daily yield from POWER sensor
+            # Average power (W) per hour / 1000 = kWh per hour
+            # Sum all hourly kWh = daily kWh
+            # This is more reliable than cumulative yield sensors which can have reset issues
+
             daily_yields = defaultdict(float)
             peak_power = {"power_w": 0.0, "date": None, "at": None}
 
             for key, hour_data in aggregated.items():
                 date_str = hour_data["date"]
                 hour_num = hour_data["hour"]
-                yield_kwh = hour_data.get("yield", 0) or 0
                 power_w = hour_data.get("power", 0) or 0
 
-                if yield_kwh > daily_yields[date_str]:
-                    daily_yields[date_str] = yield_kwh
+                # Use power_based_yield (calculated from average power per hour)
+                # This is the most reliable method
+                power_based_yield = hour_data.get("power_based_yield", 0) or 0
+                daily_yields[date_str] += power_based_yield
 
                 if power_w > peak_power["power_w"]:
                     peak_power["power_w"] = round(power_w, 1)
@@ -740,9 +846,26 @@ class ServiceRegistry:
                 "calculated_at": dt_util.now().isoformat()
             }
 
-            existing_history_dates = {h.get("date") for h in forecasts.get("history", [])}
+            # Build lookup of existing history entries by date
+            existing_history_by_date = {h.get("date"): i for i, h in enumerate(forecasts.get("history", []))}
+
             for date_str, yield_kwh in sorted_days:
-                if date_str not in existing_history_dates:
+                if yield_kwh <= 0:
+                    continue  # Skip days with no production
+
+                if date_str in existing_history_by_date:
+                    # Update existing entry if it was from bootstrap (has yield_kwh, not actual_kwh)
+                    idx = existing_history_by_date[date_str]
+                    existing_entry = forecasts["history"][idx]
+                    # Only overwrite bootstrap entries (those with yield_kwh), not finalized entries (those with actual_kwh)
+                    if "yield_kwh" in existing_entry and "actual_kwh" not in existing_entry:
+                        forecasts["history"][idx] = {
+                            "date": date_str,
+                            "yield_kwh": round(yield_kwh, 2),
+                            "source": "bootstrap_from_history"
+                        }
+                else:
+                    # Add new entry
                     forecasts["history"].append({
                         "date": date_str,
                         "yield_kwh": round(yield_kwh, 2),
@@ -1092,6 +1215,12 @@ class ServiceRegistry:
             elev = self.hass.config.elevation
             astro_cache.initialize_location(lat, lon, tz_str, elev)
 
+            # Set panel groups for per-group theoretical max @zara
+            panel_groups = getattr(self.coordinator, 'panel_groups', [])
+            if panel_groups:
+                astro_cache.set_panel_groups(panel_groups)
+                _LOGGER.info(f"AstronomyCache: Panel groups set ({len(panel_groups)} groups)")
+
             solar_capacity = self.coordinator.solar_capacity or 5.0
 
             # Rebuild cache including historical dates
@@ -1192,30 +1321,54 @@ class ServiceRegistry:
             _LOGGER.info(f"Built {len(geometry_samples)} training samples")
 
             # =================================================================
-            # STEP 7: Train GeometryLearner
+            # STEP 7: Train GeometryLearner or PanelGroupEfficiencyLearner
             # =================================================================
-            _LOGGER.info("STEP 7/8: Training GeometryLearner...")
+            panel_groups = getattr(self.coordinator, 'panel_groups', [])
+            use_panel_groups = bool(panel_groups)
 
-            from ..physics import GeometryLearner
+            if use_panel_groups:
+                _LOGGER.info(f"STEP 7/8: Training PanelGroupEfficiencyLearner ({len(panel_groups)} groups)...")
+                from ..physics import PanelGroupEfficiencyLearner
 
-            geometry_learner = GeometryLearner(
-                data_path=self.coordinator.data_manager.data_dir,
-                system_capacity_kwp=solar_capacity,
-                skip_load=True,  # Avoid blocking event loop
-            )
-            await geometry_learner.async_load_state()  # Load state asynchronously
+                efficiency_learner = PanelGroupEfficiencyLearner(
+                    data_path=self.coordinator.data_manager.data_dir,
+                    panel_groups=panel_groups,
+                    skip_load=True,
+                )
+                await efficiency_learner.async_load_state()
 
-            geometry_result = await geometry_learner.bulk_add_historical_data(geometry_samples)
+                geometry_result = await efficiency_learner.bulk_add_historical_data(geometry_samples)
 
-            _LOGGER.info(f"GeometryLearner result:")
-            _LOGGER.info(f"  - Samples processed: {geometry_result['samples_processed']}")
-            _LOGGER.info(f"  - Accepted (clear-sky): {geometry_result['accepted']}")
-            _LOGGER.info(f"  - Rejected: {geometry_result['rejected']}")
-            if geometry_result['optimization_ran']:
-                estimate = geometry_result['current_estimate']
-                _LOGGER.info(f"  - Learned tilt: {estimate['tilt_deg']:.1f}°")
-                _LOGGER.info(f"  - Learned azimuth: {estimate['azimuth_deg']:.1f}°")
-                _LOGGER.info(f"  - Confidence: {estimate['confidence']:.2%}")
+                _LOGGER.info(f"PanelGroupEfficiencyLearner result:")
+                _LOGGER.info(f"  - Samples processed: {geometry_result['samples_processed']}")
+                _LOGGER.info(f"  - Accepted: {geometry_result['accepted']}")
+                _LOGGER.info(f"  - Rejected: {geometry_result['rejected']}")
+                if geometry_result['optimization_ran']:
+                    for group in geometry_result['current_estimate'].get('groups', []):
+                        _LOGGER.info(f"  - {group['name']}: efficiency={group['learned_efficiency_factor']:.3f}, "
+                                   f"shadow_hours={group['learned_shadow_hours']}")
+            else:
+                _LOGGER.info("STEP 7/8: Training GeometryLearner...")
+                from ..physics import GeometryLearner
+
+                geometry_learner = GeometryLearner(
+                    data_path=self.coordinator.data_manager.data_dir,
+                    system_capacity_kwp=solar_capacity,
+                    skip_load=True,
+                )
+                await geometry_learner.async_load_state()
+
+                geometry_result = await geometry_learner.bulk_add_historical_data(geometry_samples)
+
+                _LOGGER.info(f"GeometryLearner result:")
+                _LOGGER.info(f"  - Samples processed: {geometry_result['samples_processed']}")
+                _LOGGER.info(f"  - Accepted (clear-sky): {geometry_result['accepted']}")
+                _LOGGER.info(f"  - Rejected: {geometry_result['rejected']}")
+                if geometry_result['optimization_ran']:
+                    estimate = geometry_result['current_estimate']
+                    _LOGGER.info(f"  - Learned tilt: {estimate['tilt_deg']:.1f}°")
+                    _LOGGER.info(f"  - Learned azimuth: {estimate['azimuth_deg']:.1f}°")
+                    _LOGGER.info(f"  - Confidence: {estimate['confidence']:.2%}")
 
             # =================================================================
             # STEP 8: Train ResidualTrainer
@@ -1227,9 +1380,10 @@ class ServiceRegistry:
             residual_trainer = ResidualTrainer(
                 data_dir=self.coordinator.data_manager.data_dir,
                 system_capacity_kwp=solar_capacity,
-                skip_load=True,  # Avoid blocking event loop
+                panel_groups=panel_groups if use_panel_groups else None,
+                skip_load=True,
             )
-            await residual_trainer.async_load_state()  # Load state asynchronously
+            await residual_trainer.async_load_state()
 
             if len(residual_samples) >= 10:
                 success, accuracy, algo = await residual_trainer.train_residual_model(
@@ -1251,10 +1405,17 @@ class ServiceRegistry:
             _LOGGER.info(f"  - Days processed: {days}")
             _LOGGER.info(f"  - Total hourly samples: {len(geometry_samples)}")
             _LOGGER.info(f"  - Historical weather hours: {len(weather_index)}")
-            _LOGGER.info(f"  - GeometryLearner samples: {geometry_result['total_data_points']}")
+            _LOGGER.info(f"  - Learner samples: {geometry_result['total_data_points']}")
             if geometry_result.get('optimization_ran'):
-                _LOGGER.info(f"  - Learned geometry: tilt={geometry_result['current_estimate']['tilt_deg']:.1f}°, "
-                           f"azimuth={geometry_result['current_estimate']['azimuth_deg']:.1f}°")
+                if use_panel_groups:
+                    # Panel Groups Mode: Log efficiency factors @zara
+                    for group in geometry_result['current_estimate'].get('groups', []):
+                        _LOGGER.info(f"  - {group['name']}: efficiency={group['learned_efficiency_factor']:.3f}, "
+                                   f"shadow_hours={group.get('learned_shadow_hours', [])}")
+                else:
+                    # Legacy Mode: Log learned geometry
+                    _LOGGER.info(f"  - Learned geometry: tilt={geometry_result['current_estimate']['tilt_deg']:.1f}°, "
+                               f"azimuth={geometry_result['current_estimate']['azimuth_deg']:.1f}°")
             _LOGGER.info("=" * 80)
 
         except Exception as e:
@@ -1301,3 +1462,71 @@ class ServiceRegistry:
 
         except Exception as err:
             _LOGGER.error(f"Error in send_daily_briefing service: {err}", exc_info=True)
+
+    # =========================================================================
+    # Installation Services
+    # =========================================================================
+
+    async def _handle_install_extra_features(self, call: ServiceCall) -> None:
+        """Handle install_extra_features service - Install extra components @zara
+
+        This service copies the extra feature components from the extra_features
+        folder to the custom_components folder. After installation, Home Assistant
+        needs to be restarted for the new integrations to be available.
+
+        Available features:
+        - grid_price_monitor: Dynamic grid price monitoring
+        - sfml_stats: Solar Forecast ML statistics dashboard
+        """
+        from ..services.service_extra_features import ExtraFeaturesInstaller
+
+        _LOGGER.info("=" * 60)
+        _LOGGER.info("SERVICE: install_extra_features")
+        _LOGGER.info("=" * 60)
+
+        try:
+            installer = ExtraFeaturesInstaller(self.hass)
+
+            # Show current status
+            status = installer.get_installation_status()
+            _LOGGER.info("Current installation status:")
+            for feature, state in status.items():
+                _LOGGER.info(f"  - {feature}: {state}")
+
+            # Install all features
+            installed, failed = await installer.install_all()
+
+            if installed:
+                _LOGGER.info(f"✓ Successfully installed: {', '.join(installed)}")
+
+            if failed:
+                _LOGGER.error(f"✗ Failed to install: {', '.join(failed)}")
+
+            if installed and not failed:
+                _LOGGER.info("=" * 60)
+                _LOGGER.info("IMPORTANT: Restart Home Assistant to activate the new integrations!")
+                _LOGGER.info("After restart, configure them via Settings → Devices & Services → Add Integration")
+                _LOGGER.info("=" * 60)
+
+                # Send notification
+                try:
+                    await self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": "Extra Features Installed",
+                            "message": (
+                                f"Die folgenden Integrationen wurden installiert:\n"
+                                f"- {chr(10).join(installed)}\n\n"
+                                f"**Bitte Home Assistant neu starten!**\n\n"
+                                f"Nach dem Neustart unter Einstellungen → Geräte & Dienste → Integration hinzufügen konfigurieren."
+                            ),
+                            "notification_id": "solar_forecast_ml_extra_features",
+                        },
+                    )
+                except Exception as notify_err:
+                    _LOGGER.debug(f"Could not send notification: {notify_err}")
+
+        except Exception as err:
+            _LOGGER.error(f"Error in install_extra_features service: {err}", exc_info=True)
+

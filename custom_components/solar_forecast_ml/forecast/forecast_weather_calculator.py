@@ -1,4 +1,4 @@
-"""Weather Calculation Utilities V10.0.0 @zara
+"""Weather Calculation Utilities V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -151,11 +151,9 @@ class WeatherCalculator:
 
         This replaces the unreliable lux values from weather APIs with a physics-based calculation.
 
-        Formula (FINAL CALIBRATION):
+        Formula:
             cloud_factor = e^(-0.008 × cloud_percent)
             effective_radiation = clear_sky × cloud_factor
-
-        Calibration: Real production data 2025-11-18, 7-12 Uhr (98.6% accuracy)
 
         Args:
             clear_sky_radiation_wm2: Theoretical maximum radiation (W/m²) from astronomy

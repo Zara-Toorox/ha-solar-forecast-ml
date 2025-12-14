@@ -1,4 +1,4 @@
-"""Coordinator Update Helpers - Extract methods from _async_update_data V10.0.0 @zara
+"""Coordinator Update Helpers - Extract methods from _async_update_data V12.0.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -161,8 +161,8 @@ class CoordinatorUpdateHelpers:
                     data["_source"] = "residual_model_state"
                     return data
 
-            # Fallback to learned_geometry.json (GeometryLearner)
-            geometry_file = data_manager.data_dir / "learned_geometry.json"
+            # Fallback to learned_geometry.json (GeometryLearner) - in physics/ subdirectory
+            geometry_file = data_manager.data_dir / "physics" / "learned_geometry.json"
             if geometry_file.exists():
                 with open(geometry_file, "r") as f:
                     data = json.load(f)
@@ -186,35 +186,6 @@ class CoordinatorUpdateHelpers:
             },
             hourly_forecast=hourly_forecast,
         )
-
-    async def update_electricity_prices(self) -> None:
-        """Update electricity prices if battery management enabled @zara"""
-        if not self.coordinator.electricity_service:
-            return
-
-        try:
-            should_update = False
-            last_update = self.coordinator.electricity_service.get_last_update()
-
-            if last_update is None:
-                should_update = True
-            else:
-
-                hours_since_update = (dt_util.now() - last_update).total_seconds() / 3600
-                should_update = hours_since_update > 12
-
-            if should_update:
-                _LOGGER.debug("Fetching electricity prices from ENTSO-E...")
-                prices = await self.coordinator.electricity_service.fetch_day_ahead_prices()
-                if prices:
-                    _LOGGER.info(
-                        f"Electricity prices updated successfully: {len(prices.get('prices', []))} price points"
-                    )
-                else:
-                    _LOGGER.warning("Failed to fetch electricity prices")
-
-        except Exception as e:
-            _LOGGER.error(f"Error updating electricity prices: {e}", exc_info=True)
 
     async def handle_startup_recovery(self) -> None:
         """Handle startup recovery for missing forecasts @zara"""
