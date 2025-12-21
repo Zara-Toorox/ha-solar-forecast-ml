@@ -1,4 +1,4 @@
-"""Weather Data Provider - Open-Meteo ONLY V12.0.0 @zara
+"""Weather Data Provider - Open-Meteo ONLY V12.2.0 @zara
 
 IMPORTANT: This module now uses Open-Meteo as the ONLY data source.
 - NO HA Weather Entity dependency for forecasts

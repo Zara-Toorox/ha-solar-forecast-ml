@@ -1,4 +1,4 @@
-"""sensors package V12.0.0 @zara
+"""sensors package V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

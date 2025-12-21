@@ -1,4 +1,4 @@
-"""Notification Service for Solar Forecast ML Integration V12.0.0 @zara
+"""Notification Service for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -29,6 +29,7 @@ from ..const import (
     CONF_NOTIFY_LEARNING,
     CONF_NOTIFY_STARTUP,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
+    CONF_NOTIFY_WEATHER_ALERT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ NOTIFICATION_ID_FORECAST = "solar_forecast_ml_forecast"
 NOTIFICATION_ID_LEARNING = "solar_forecast_ml_learning"
 NOTIFICATION_ID_RETRAINING = "solar_forecast_ml_retraining"
 NOTIFICATION_ID_FROST = "solar_forecast_ml_frost"
+NOTIFICATION_ID_WEATHER_ALERT = "solar_forecast_ml_weather_alert"
 
 class NotificationService:
     """Service for Persistent Notifications in Home Assistant"""
@@ -412,6 +414,83 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
     async def dismiss_frost_notification(self) -> bool:
         """Remove frost notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_FROST)
+
+    async def show_weather_alert(
+        self,
+        alert_type: str,
+        reason: str,
+        hour: int,
+        date_str: str,
+        weather_actual: dict = None,
+        weather_forecast: dict = None,
+    ) -> bool:
+        """Show weather alert notification when unexpected weather is detected @zara"""
+        if not self._should_notify(CONF_NOTIFY_WEATHER_ALERT):
+            return False
+
+        try:
+            # Map alert types to German descriptions
+            alert_descriptions = {
+                "unexpected_rain": "Unerwarteter Regen",
+                "unexpected_snow": "Unerwarteter Schnee",
+                "unexpected_clouds": "Unerwartete Bewölkung",
+                "sudden_storm": "Plötzliches Unwetter",
+                "unexpected_fog": "Unerwarteter Nebel",
+            }
+            alert_title = alert_descriptions.get(alert_type, alert_type)
+
+            # Build weather details
+            weather_details = ""
+            if weather_actual:
+                actual_rain = weather_actual.get("precipitation_mm", 0)
+                actual_clouds = weather_actual.get("clouds", 0)
+                actual_temp = weather_actual.get("temperature", "N/A")
+                weather_details += f"""
+**Aktuelle Wetterdaten:**
+• Niederschlag: {actual_rain:.1f} mm
+• Bewölkung: {actual_clouds}%
+• Temperatur: {actual_temp}°C"""
+
+            if weather_forecast:
+                forecast_rain = weather_forecast.get("precipitation_probability", 0)
+                forecast_clouds = weather_forecast.get("clouds", 0)
+                weather_details += f"""
+
+**Prognose war:**
+• Niederschlagswahrscheinlichkeit: {forecast_rain}%
+• Bewölkung: {forecast_clouds}%"""
+
+            message = f"""**Unerwartetes Wetterereignis erkannt!** ⚠️
+
+**Zeit:** {date_str} {hour:02d}:00 Uhr
+**Ereignis:** {alert_title}
+**Grund:** {reason}
+{weather_details}
+
+**Auswirkungen:**
+• Die Solarproduktion weicht von der Prognose ab
+• Diese Stunde wird vom ML-Training ausgeschlossen
+• Die Prognose-Genauigkeit wird nicht beeinträchtigt
+
+**Hinweis:** Das System lernt aus dieser Abweichung für zukünftige Wettervorhersagen.
+
+*"Der Weltraum mag kalt sein, aber unsere Algorithmen lernen warm."* — Inspired by Star Trek 🖖"""
+
+            await self._safe_create_notification(
+                message=message,
+                title=f"⚠️ Wetteralarm: {alert_title}",
+                notification_id=NOTIFICATION_ID_WEATHER_ALERT,
+            )
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"[X] Error showing weather alert notification: {e}", exc_info=True)
+            return False
+
+    async def dismiss_weather_alert_notification(self) -> bool:
+        """Remove weather alert notification @zara"""
+        return await self._safe_dismiss_notification(NOTIFICATION_ID_WEATHER_ALERT)
 
 async def create_notification_service(
     hass: HomeAssistant, entry: ConfigEntry

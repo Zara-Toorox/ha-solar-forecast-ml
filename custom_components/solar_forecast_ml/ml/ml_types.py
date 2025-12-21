@@ -1,4 +1,4 @@
-"""ML Type Definitions and Data Classes V12.0.0 @zara
+"""ML Type Definitions and Data Classes V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -167,28 +167,42 @@ class HourlyProfile:
             if hour_str not in self.hourly_averages:
                 _LOGGER.debug(f"HourlyProfile missing average for hour {hour_str}, setting to 0.0.")
                 self.hourly_averages[hour_str] = 0.0
-            elif self.hourly_averages[hour_str] < 0:
-                _LOGGER.warning(
-                    f"HourlyProfile average for hour {hour_str} is negative ({self.hourly_averages[hour_str]}). Clamping to 0.0."
-                )
-                self.hourly_averages[hour_str] = 0.0
+            else:
+                value = self.hourly_averages[hour_str]
+                # Handle old dict format: {"count": 0, "total": 0.0, "average": 0.5}
+                if isinstance(value, dict):
+                    self.hourly_averages[hour_str] = float(value.get("average", 0.0))
+                elif not isinstance(value, (int, float)):
+                    _LOGGER.warning(
+                        f"HourlyProfile average for hour {hour_str} has invalid type ({type(value)}). Setting to 0.0."
+                    )
+                    self.hourly_averages[hour_str] = 0.0
+                elif value < 0:
+                    _LOGGER.warning(
+                        f"HourlyProfile average for hour {hour_str} is negative ({value}). Clamping to 0.0."
+                    )
+                    self.hourly_averages[hour_str] = 0.0
 
 def create_default_learned_weights() -> LearnedWeights:
-    """Creates a LearnedWeights object with default values - V3 with 14 features @zara"""
+    """Creates a LearnedWeights object with default values - V3 with 14 features @zara
+
+    CRITICAL: These feature names MUST match the production files!
+    Production reference: /Volumes/config/solar_forecast_ml/ml/learned_weights.json
+    """
 
     default_feature_names = [
-        "hour",
+        "hour_of_day",
         "day_of_year",
-        "month",
-        "elevation",
-        "azimuth",
-        "cloud_cover",
-        "temperature",
-        "humidity",
-        "wind_speed",
-        "precipitation",
-        "clear_sky_radiation",
-        "theoretical_max",
+        "season_encoded",
+        "weather_temp",
+        "weather_solar_radiation_wm2",
+        "weather_wind",
+        "weather_humidity",
+        "weather_rain",
+        "weather_clouds",
+        "sun_elevation_deg",
+        "theoretical_max_kwh",
+        "clear_sky_radiation_wm2",
         "production_yesterday",
         "production_same_hour_yesterday",
     ]

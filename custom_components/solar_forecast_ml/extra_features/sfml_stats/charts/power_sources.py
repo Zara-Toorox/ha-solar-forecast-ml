@@ -78,6 +78,12 @@ class PowerSourcesChart:
         import numpy as np
         from .styles import apply_dark_theme
 
+        try:
+            _LOGGER.debug("Rendering power sources chart: period=%s, data_points=%d",
+                          self.period, len(self.data) if self.data else 0)
+        except Exception:
+            pass
+
         apply_dark_theme()
 
         # Create figure with 2 rows
@@ -121,6 +127,7 @@ class PowerSourcesChart:
 
     def _render_stacked_area(self, ax: Any) -> None:
         """Render the main stacked area chart. @zara"""
+        import matplotlib.pyplot as plt
         import numpy as np
 
         if not self.data:
@@ -131,7 +138,8 @@ class PowerSourcesChart:
 
         # Extract data
         timestamps = []
-        solar = []
+        solar_to_house = []
+        solar_to_battery = []
         battery = []
         grid = []
         consumption = []
@@ -147,13 +155,15 @@ class PowerSourcesChart:
 
                 # Get values, default to 0 if None
                 # Values are in W, convert to kW for display
-                solar_val = (point.get('solar_to_house') or 0) / 1000
+                solar_to_house_val = (point.get('solar_to_house') or 0) / 1000
+                solar_to_battery_val = (point.get('solar_to_battery') or 0) / 1000
                 battery_val = (point.get('battery_to_house') or 0) / 1000
                 grid_val = (point.get('grid_to_house') or 0) / 1000
                 consumption_val = (point.get('home_consumption') or 0) / 1000
 
                 # Ensure non-negative
-                solar.append(max(0, solar_val))
+                solar_to_house.append(max(0, solar_to_house_val))
+                solar_to_battery.append(max(0, solar_to_battery_val))
                 battery.append(max(0, battery_val))
                 grid.append(max(0, grid_val))
                 consumption.append(max(0, consumption_val))
@@ -165,26 +175,32 @@ class PowerSourcesChart:
             return
 
         # Convert to numpy arrays
-        solar = np.array(solar)
+        solar_to_house = np.array(solar_to_house)
+        solar_to_battery = np.array(solar_to_battery)
         battery = np.array(battery)
         grid = np.array(grid)
         consumption = np.array(consumption)
 
-        # Colors matching the reference image
-        solar_color = '#FFB74D'  # Orange/Yellow for Solar
-        battery_color = '#4DD0E1'  # Cyan/Turquoise for Battery
-        grid_color = '#90CAF9'  # Light Blue for Grid
+        # Colors matching the frontend
+        solar_to_house_color = '#FFB74D'  # Orange for Solar → Haus
+        solar_to_battery_color = '#9ACD32'  # Yellow-Green for Solar → Batterie
+        battery_color = '#4DD0E1'  # Cyan for Batterie → Haus
+        grid_color = '#90CAF9'  # Light Blue for Netz → Haus
 
-        # Create stacked area chart
-        ax.fill_between(timestamps, 0, solar,
-                        color=solar_color, alpha=0.8, label='Solar')
-        ax.fill_between(timestamps, solar, solar + battery,
-                        color=battery_color, alpha=0.8, label='Batterie')
-        ax.fill_between(timestamps, solar + battery, solar + battery + grid,
-                        color=grid_color, alpha=0.8, label='Netz')
+        # Create stacked area chart for house consumption sources
+        ax.fill_between(timestamps, 0, solar_to_house,
+                        color=solar_to_house_color, alpha=0.8, label='Solar → Haus')
+        ax.fill_between(timestamps, solar_to_house, solar_to_house + battery,
+                        color=battery_color, alpha=0.8, label='Batterie → Haus')
+        ax.fill_between(timestamps, solar_to_house + battery, solar_to_house + battery + grid,
+                        color=grid_color, alpha=0.8, label='Netz → Haus')
+
+        # Solar to Battery as separate line (not stacked, as it doesn't go to house)
+        ax.plot(timestamps, solar_to_battery, color=solar_to_battery_color, linewidth=2,
+                label='Solar → Batterie', linestyle='--', alpha=0.9)
 
         # Consumption line on top
-        ax.plot(timestamps, consumption, color='#1a1a1a', linewidth=2,
+        ax.plot(timestamps, consumption, color='#ffffff', linewidth=2,
                 label='Verbrauch', linestyle='-')
 
         # Styling
@@ -221,6 +237,8 @@ class PowerSourcesChart:
 
     def _render_battery_soc(self, ax: Any) -> None:
         """Render battery SOC timeline. @zara"""
+        import matplotlib.pyplot as plt
+
         if not self.data:
             ax.axis('off')
             return
@@ -247,9 +265,10 @@ class PowerSourcesChart:
             return
 
         # Color gradient based on SOC level
+        battery_green = '#4DD0E1'  # Cyan color for battery
         ax.fill_between(timestamps, 0, soc_values,
-                        color=self._styles.battery_green, alpha=0.6)
-        ax.plot(timestamps, soc_values, color=self._styles.battery_green,
+                        color=battery_green, alpha=0.6)
+        ax.plot(timestamps, soc_values, color=battery_green,
                 linewidth=1.5)
 
         ax.set_ylabel('SOC (%)', color=self._styles.text_primary, fontsize=10)
@@ -275,15 +294,19 @@ class PowerSourcesChart:
             return
 
         # Calculate stats from data if not provided
-        solar_total = self.stats.get('solar_total', 0)
-        battery_total = self.stats.get('battery_total', 0)
-        grid_total = self.stats.get('grid_total', 0)
-        consumption_total = self.stats.get('consumption_total', 0)
-        autarky = self.stats.get('autarky', 0)
+        # Support both old (snake_case) and new (camelCase) keys
+        solar_total = self.stats.get('solarTotal', self.stats.get('solar_total', 0)) or 0
+        solar_to_house = self.stats.get('solarToHouse', self.stats.get('solar_to_house', 0)) or 0
+        solar_to_battery = self.stats.get('solarToBattery', self.stats.get('solar_to_battery', 0)) or 0
+        battery_total = self.stats.get('batteryTotal', self.stats.get('battery_total', 0)) or 0
+        grid_total = self.stats.get('gridTotal', self.stats.get('grid_total', 0)) or 0
+        consumption_total = self.stats.get('consumptionTotal', self.stats.get('consumption_total', 0)) or 0
+        autarky = self.stats.get('autarky', 0) or 0
 
         # Calculate from data if stats empty
         if not solar_total and self.data:
-            solar_vals = [p.get('solar_to_house', 0) or 0 for p in self.data]
+            solar_to_house_vals = [p.get('solar_to_house', 0) or 0 for p in self.data]
+            solar_to_battery_vals = [p.get('solar_to_battery', 0) or 0 for p in self.data]
             battery_vals = [p.get('battery_to_house', 0) or 0 for p in self.data]
             grid_vals = [p.get('grid_to_house', 0) or 0 for p in self.data]
             consumption_vals = [p.get('home_consumption', 0) or 0 for p in self.data]
@@ -291,19 +314,23 @@ class PowerSourcesChart:
             # Convert W to kWh: W * intervalHours / 1000
             # 5-min intervals = 5/60 hours per interval
             interval_hours = 5 / 60
-            solar_total = (sum(solar_vals) * interval_hours) / 1000
+            solar_to_house = (sum(solar_to_house_vals) * interval_hours) / 1000
+            solar_to_battery = (sum(solar_to_battery_vals) * interval_hours) / 1000
+            solar_total = solar_to_house + solar_to_battery
             battery_total = (sum(battery_vals) * interval_hours) / 1000
             grid_total = (sum(grid_vals) * interval_hours) / 1000
             consumption_total = (sum(consumption_vals) * interval_hours) / 1000
 
             if consumption_total > 0:
-                autarky = ((solar_total + battery_total) / consumption_total) * 100
+                autarky = ((solar_to_house + battery_total) / consumption_total) * 100
                 autarky = min(100, autarky)
 
         stats_text = (
-            f"Solar: {solar_total:.2f} kWh\n"
-            f"Batterie: {battery_total:.2f} kWh\n"
-            f"Netz: {grid_total:.2f} kWh\n"
+            f"Solar gesamt: {solar_total:.2f} kWh\n"
+            f"  → Haus: {solar_to_house:.2f} kWh\n"
+            f"  → Batterie: {solar_to_battery:.2f} kWh\n"
+            f"Batterie → Haus: {battery_total:.2f} kWh\n"
+            f"Netz → Haus: {grid_total:.2f} kWh\n"
             f"Verbrauch: {consumption_total:.2f} kWh\n"
             f"Autarkie: {autarky:.1f}%"
         )

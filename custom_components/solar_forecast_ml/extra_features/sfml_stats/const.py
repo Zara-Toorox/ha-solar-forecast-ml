@@ -22,7 +22,7 @@ from typing import Final
 
 DOMAIN: Final = "sfml_stats"
 NAME: Final = "SFML Stats"
-VERSION: Final = "2.0.0"
+VERSION: Final = "2.2.0"
 
 SOLAR_FORECAST_ML_BASE: Final = Path("solar_forecast_ml")
 SOLAR_FORECAST_ML_STATS: Final = SOLAR_FORECAST_ML_BASE / "stats"
@@ -165,6 +165,7 @@ CONF_BILLING_START_DAY: Final = "billing_start_day"
 CONF_BILLING_START_MONTH: Final = "billing_start_month"
 CONF_BILLING_PRICE_MODE: Final = "billing_price_mode"
 CONF_BILLING_FIXED_PRICE: Final = "billing_fixed_price"
+CONF_FEED_IN_TARIFF: Final = "feed_in_tariff"
 
 PRICE_MODE_FIXED: Final = "fixed"
 PRICE_MODE_DYNAMIC: Final = "dynamic"
@@ -173,6 +174,7 @@ DEFAULT_BILLING_START_DAY: Final = 1
 DEFAULT_BILLING_START_MONTH: Final = 1
 DEFAULT_BILLING_PRICE_MODE: Final = PRICE_MODE_DYNAMIC
 DEFAULT_BILLING_FIXED_PRICE: Final = 35.0
+DEFAULT_FEED_IN_TARIFF: Final = 8.1
 
 ENERGY_FLOW_SENSORS: Final = [
     CONF_SENSOR_SOLAR_POWER,

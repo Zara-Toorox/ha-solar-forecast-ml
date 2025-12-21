@@ -1,4 +1,4 @@
-"""Best Hour Calculator - Weather-based calculation of peak production hour V12.0.0 @zara
+"""Best Hour Calculator - Weather-based calculation of peak production hour V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

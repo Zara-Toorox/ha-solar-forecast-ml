@@ -1,4 +1,4 @@
-"""ML Prediction Strategy Implementations V12.0.0 @zara
+"""ML Prediction Strategy Implementations V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

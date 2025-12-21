@@ -1,4 +1,4 @@
-"""Data State Handler for Solar Forecast ML Integration V12.0.0 @zara
+"""Data State Handler for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -76,9 +76,8 @@ class DataStateHandler(DataManagerIO):
         """Load expected daily production from persistent storage
 
         Priority:
-        1. prediction_kwh_display (intraday corrected value for display)
-        2. prediction_kwh (original locked forecast)
-        3. coordinator_state.json (legacy fallback)
+        1. prediction_kwh from daily_forecasts.json (locked forecast)
+        2. coordinator_state.json (legacy fallback)
         """
         try:
 
@@ -87,11 +86,9 @@ class DataStateHandler(DataManagerIO):
                     "forecast_day", {}
                 ).get("locked"):
                     forecast_day = daily_forecasts_data["today"]["forecast_day"]
-                    # Priority: display value (intraday corrected) > original locked value
-                    value = forecast_day.get("prediction_kwh_display") or forecast_day.get("prediction_kwh")
+                    value = forecast_day.get("prediction_kwh")
                     if value is not None:
-                        is_corrected = forecast_day.get("intraday_corrected", False)
-                        source_info = "intraday_corrected" if is_corrected else forecast_day.get('source')
+                        source_info = forecast_day.get('source')
                         _LOGGER.debug(
                             f"Loaded expected daily production from daily_forecasts.json: "
                             f"{value:.2f} kWh (source: {source_info})"
@@ -196,65 +193,3 @@ class DataStateHandler(DataManagerIO):
     async def is_weather_cache_valid(self, max_age_minutes: int = 180) -> bool:
         """Legacy method - Open-Meteo cache is the single data source. @zara"""
         return False
-
-    async def save_intraday_correction(
-        self,
-        original_forecast: float,
-        corrected_forecast: float,
-        correction_factor: float,
-        source: str,
-        applied_at: datetime,
-    ) -> bool:
-        """Save intraday correction metadata for tracking @zara
-
-        This tracks when and why the daily forecast was adjusted during the day.
-
-        Args:
-            original_forecast: Original morning forecast (kWh)
-            corrected_forecast: New corrected forecast (kWh)
-            correction_factor: Factor applied (e.g., 1.5)
-            source: Source of correction (morning_sensor_correction, midday_correction)
-            applied_at: When correction was applied
-
-        Returns:
-            True if saved successfully
-        """
-        try:
-            state = await self._read_json_file(
-                self.coordinator_state_file, self._coordinator_state_default
-            )
-
-            # Add intraday correction history
-            if "intraday_corrections" not in state:
-                state["intraday_corrections"] = []
-
-            correction_entry = {
-                "original_forecast_kwh": round(original_forecast, 3),
-                "corrected_forecast_kwh": round(corrected_forecast, 3),
-                "correction_factor": round(correction_factor, 3),
-                "source": source,
-                "applied_at": applied_at.isoformat(),
-            }
-
-            state["intraday_corrections"].append(correction_entry)
-
-            # Keep only today's corrections
-            today_str = applied_at.date().isoformat()
-            state["intraday_corrections"] = [
-                c for c in state["intraday_corrections"]
-                if c.get("applied_at", "").startswith(today_str)
-            ]
-
-            state["last_updated"] = dt_util.now().isoformat()
-
-            await self._atomic_write_json(self.coordinator_state_file, state)
-
-            _LOGGER.info(
-                f"Intraday correction saved: {original_forecast:.2f} → {corrected_forecast:.2f} kWh "
-                f"(factor={correction_factor:.2f}, source={source})"
-            )
-            return True
-
-        except Exception as e:
-            _LOGGER.error(f"Failed to save intraday correction: {e}")
-            return False

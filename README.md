@@ -1,6 +1,6 @@
-# Solar Forecast ML V12 "Sarpeidon" - 1st HA Full AI & ML Solar Forecast
+# Solar Forecast ML V12.2 "Sarpeidon" - 1st HA Full AI & ML Solar Forecast
 
-[![Version](https://img.shields.io/badge/version-12.0.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-12.2.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 
@@ -8,7 +8,11 @@
 
 **Intelligent Solar Forecasting for Home Assistant with Physics-First ML Architecture**
 
-Imagine your smart home not just reacting, but *predicting* - using machine learning that adapts daily to your unique solar installation. That's exactly what Solar Forecast ML does. With **Version 12.0.0 "Sarpeidon"** we introduce enhanced **Multi-Weather Blending**, **Per-Panel-Group Learning**, and **Hourly Correction Factors** for unprecedented accuracy.
+Imagine your smart home not just reacting, but *predicting* - using machine learning that adapts daily to your unique solar installation. That's exactly what Solar Forecast ML does. With **Version 12.2.0 "Sarpeidon"** we introduce enhanced **Multi-Weather Blending**, **Per-Panel-Group Learning**, **Learning Filters**, and the new **SFML Stats Lite** dashboard for all platforms.
+
+<p align="center">
+  <img src="docs/images/progose_graph.png" alt="Solar Forecast ML Prognose" width="600">
+</p>
 
 ---
 
@@ -25,19 +29,37 @@ The integration adapts to your specific roof orientation, local weather conditio
 
 ---
 
-## New in Version 12.0.0 "Sarpeidon"
+## New in Version 12.2.0 "Sarpeidon"
+
+### SFML Stats Lite (NEW)
+- **Universal Dashboard** - Works on ALL platforms including Raspberry Pi and ARM
+- **Real-time Energy Flow** - Visualize solar, battery, grid, and house consumption
+- **Cost Tracking** - Fixed or dynamic pricing support
+- **Multi-String Support** - Track up to 4 panel groups individually
+- **Automated Reports** - Weekly and monthly chart generation
+
+### Learning Filter System (NEW)
+- **Intelligent Data Filtering** - Excludes anomalous hours from ML training
+- **Weather Alert Detection** - Automatically flags unexpected weather events
+- **Inverter Clipping Detection** - Excludes hardware-limited data points
+- **Daily Learning Protection** - Skips training if >25% of data is flagged
+
+### Clothing Recommendation (NEW in SFML Stats)
+- **Weather-based Recommendations** - Suggests appropriate clothing based on forecast
+- **Multi-language Support** - German and English recommendations
+- **Icon-based Display** - Visual clothing suggestions
 
 ### Multi-Weather Source Blending
 - **Open-Meteo + wttr.in** - Combines multiple weather sources for better cloud predictions
 - **Adaptive Weight Learning** - System learns which weather source is more accurate for your location
 - **Trigger-based Fetching** - Only queries secondary source when cloud cover > 50%
 
-### Per-Panel-Group Learning (NEW)
+### Per-Panel-Group Learning
 - **Individual Energy Sensors** - Configure separate kWh sensors per panel group
 - **Group-specific Efficiency** - Each panel group learns its own hourly efficiency factors
 - **Shadow Detection per Group** - Identifies which panels are affected by shadows
 
-### Hourly Correction Factors (NEW)
+### Hourly Correction Factors
 - **Hour-specific Weather Corrections** - Instead of daily averages, corrections are applied per hour
 - **Morning/Afternoon Optimization** - Addresses systematic forecast biases at different times
 - **7-day Rolling Learning** - Continuously improves based on recent performance
@@ -104,65 +126,126 @@ The core architecture - a complete redesign from traditional solar forecasting:
 
 Solar Forecast ML works best with these companion integrations that extend its capabilities:
 
-### SFM-Stats (Statistics Dashboard)
+### SFML Stats (Advanced Statistics Dashboard)
 
-**What it does:** Provides comprehensive statistics, visualizations, and analytics for your solar production data. Creates beautiful Lovelace cards showing historical performance, accuracy metrics, and trend analysis.
+<p align="center">
+  <img src="docs/images/energy_flow.png" alt="SFML Stats Energy Flow" width="500">
+</p>
+
+**What it does:** Provides comprehensive statistics, visualizations, and analytics for your solar production data. A powerful dashboard that visualizes solar production, battery storage, grid consumption, and energy costs in real-time. Includes the new **Clothing Recommendation** feature.
 
 **Features:**
+- Real-time energy flow visualization (solar, battery, grid, house)
 - Historical production charts (daily, weekly, monthly)
 - Forecast vs. actual comparison graphs
-- ML model performance metrics
-- Panel group efficiency visualization
-- Weather correlation analysis
+- Cost tracking with fixed or dynamic pricing
+- Multi-string support (up to 4 panel groups)
+- Automated weekly and monthly report generation
+- Weather overlay on charts
+- Dark and light theme support
+- **NEW:** Clothing recommendations based on weather
 
-**Installation via Service:**
-```yaml
-service: solar_forecast_ml.install_sfm_stats
-data: {}
-```
+**Installation:**
+1. Go to Developer Tools > Services
+2. Run `solar_forecast_ml.install_extras`
+3. Restart Home Assistant
+4. Go to Settings > Devices & Services > Add Integration > SFML Stats
+5. Configure your sensors (all optional - integration works with partial config)
+6. Access the dashboard at `http://YOUR_HA:8123/api/sfml_stats/dashboard`
 
-After running this service:
-1. Restart Home Assistant
-2. Add the new cards to your dashboard
-3. SFM-Stats entities will appear under `sensor.sfm_stats_*`
-
-> **Platform Compatibility for SFM-Stats:**
+> **Platform Compatibility for SFML Stats:**
 >
 > | Platform | Status | Notes |
 > |----------|--------|-------|
 > | x86_64 (Intel/AMD) | **Fully Supported** | Recommended |
 > | Home Assistant OS (x86) | **Fully Supported** | Native installation |
 > | Docker on x86 | **Fully Supported** | Standard HA container |
-> | **Proxmox VE** | **Not Compatible** | NumPy/SciPy compilation issues in virtualized environment. CPU instructions not properly passed through. |
-> | **Raspberry Pi (ARM)** | **Not Compatible** | Insufficient RAM and slower NumPy operations cause timeouts. |
-> | **SBC / ARM Processors** | **Not Compatible** | Single-board computers (Odroid, Orange Pi, etc.) lack computational power for statistics processing. |
-> | **32-bit Systems** | **Not Compatible** | Requires 64-bit architecture. |
+> | **Proxmox VE** | **Try on your own if your aware what you are doing** | no support by the developer |
+> | **Raspberry Pi (ARM)** | **not supported** | Use SFML Stats Lite instead |
+> | **SBC / ARM Processors** | **not supported** | Use SFML Stats Lite instead |
+
+---
+
+### SFML Stats Lite (For Raspberry Pi & ARM)
+
+**What it does:** A lightweight version of SFML Stats designed specifically for Raspberry Pi and ARM devices. Provides the same energy monitoring dashboard without the heavy computational requirements.
+
+**Features:**
+- Real-time energy flow visualization (solar, battery, grid, house)
+- Cost tracking with fixed or dynamic pricing
+- Multi-string support (up to 4 panel groups)
+- Automated weekly and monthly report generation
+- Weather overlay on charts
+- Dark and light theme support
+
+**Installation:**
+1. Go to Developer Tools > Services
+2. Run `solar_forecast_ml.install_extras`
+3. Restart Home Assistant
+4. Go to Settings > Devices & Services > Add Integration > SFML Stats Lite
+5. Configure your sensors (all optional - integration works with partial config)
+6. Access the dashboard at `http://YOUR_HA:8123/api/sfml_stats_lite/dashboard`
+
+> **Platform Compatibility for SFML Stats Lite:**
 >
-> **Note:** These restrictions apply only to SFM-Stats, not to Solar Forecast ML itself. The main integration runs on all platforms including Raspberry Pi and ARM devices.
+> | Platform | Status |
+> |----------|--------|
+> | Raspberry Pi (ARM) | **Fully Supported** |
+> | All ARM devices | **Fully Supported** |
+> | Proxmox VE | **Fully Supported** |
+> | x86_64 (Intel/AMD) | **Fully Supported** |
+> | Home Assistant OS | **Fully Supported** |
+> | Docker | **Fully Supported** |
 
 ### Grid-Price Monitor
 
-**What it does:** Integrates with dynamic electricity pricing (aWATTar, Tibber, Nordpool) to optimize your energy usage based on solar forecast and grid prices.
+**What it does:** Monitors dynamic electricity spot prices from aWATTar (Germany & Austria) and provides smart automation triggers for optimal energy usage. Perfect for charging EVs, batteries, or running high-power appliances when electricity is cheapest.
 
 **Features:**
-- Real-time electricity price tracking
-- Optimal charging/discharging recommendations
-- Price forecast integration with solar forecast
-- Automation triggers for low-price periods
-- Cost savings calculations
+- **Real-time Spot Prices** - Current and next hour prices in ct/kWh
+- **Price Forecasts** - Today's and tomorrow's hourly prices (available from ~14:00)
+- **Cheapest/Most Expensive Hour** - Automatically identifies optimal times
+- **Binary Sensor for Automations** - `binary_sensor.cheap_energy` triggers when price is below threshold
+- **Configurable Price Components** - Grid fees, taxes, VAT, provider markup
+- **Calibration Mode** - Match your actual electricity bill
+- **Battery Tracking** - Track how much energy was charged from grid
 
-**Installation via Service:**
+**Sensors:**
+| Sensor | Description |
+|--------|-------------|
+| `sensor.grid_price_monitor_spot_price` | Current spot price (ct/kWh) |
+| `sensor.grid_price_monitor_total_price` | Total price incl. fees & taxes |
+| `sensor.grid_price_monitor_cheapest_hour_today` | Cheapest hour today |
+| `sensor.grid_price_monitor_average_price_today` | Average price today |
+| `binary_sensor.grid_price_monitor_cheap_energy` | ON when price < threshold |
+
+**Installation:**
+1. Go to Developer Tools > Services
+2. Run `solar_forecast_ml.install_extras`
+3. Restart Home Assistant
+4. Go to Settings > Devices & Services > Add Integration > Grid Price Monitor
+5. Configure:
+   - **Country:** Germany (DE) or Austria (AT)
+   - **VAT Rate:** 19% (DE) or 20% (AT)
+   - **Grid Fee:** Your grid operator fee (ct/kWh)
+   - **Taxes & Fees:** Additional taxes (ct/kWh)
+   - **Max Price Threshold:** Price below which `cheap_energy` is ON
+
+**Example Automation:**
 ```yaml
-service: solar_forecast_ml.install_grid_price_monitor
-data:
-  provider: "awattar"  # Options: awattar, tibber, nordpool
-  country: "DE"        # Your country code
+automation:
+  - alias: "Charge EV when electricity is cheap"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.grid_price_monitor_cheap_energy
+        to: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.ev_charger
 ```
 
-After running this service:
-1. Restart Home Assistant
-2. Configure your electricity provider credentials (if required)
-3. Grid-Price entities will appear under `sensor.grid_price_*`
+> **Availability:** Currently supports **aWATTar** API (Germany & Austria). No API key required - uses free public market data.
 
 **Note:** Both companion integrations require Solar Forecast ML to be installed and configured first. They share data seamlessly without additional configuration.
 
@@ -220,8 +303,12 @@ After running this service:
 ### Companion Integration Services
 | Service | Description |
 |---------|-------------|
-| `install_sfm_stats` | Install the SFM-Stats companion integration |
-| `install_grid_price_monitor` | Install the Grid-Price Monitor companion integration |
+| `install_extras` | **Main installer!** Installs/updates ALL companion modules (SFML Stats Lite, SFM-Stats, Grid Price Monitor). Run via Developer Tools > Services |
+
+### Reset & Recovery Services
+| Service | Description |
+|---------|-------------|
+| `borg_mode` | **Complete system reset** - Deletes ALL learned data and starts fresh. Use when: predictions are very inaccurate after 3-4 days, you changed sensors, or migrated from an older installation with corrupted data |
 
 ### Astronomy Services (Developers only or on advice)
 | Service | Description |
@@ -256,6 +343,22 @@ After running this service:
 2. Copy `custom_components/solar_forecast_ml` to your `config/custom_components/`
 3. Restart Home Assistant
 4. After Setup please wait 10-15 min and perform a 2nd Restart (needed to fill the caches)
+
+### After Updating from a Previous Version
+
+> **Important:** After updating Solar Forecast ML, run the `install_extras` service to update all companion modules:
+> ```yaml
+> service: solar_forecast_ml.install_extras
+> data: {}
+> ```
+> Then restart Home Assistant to apply the updates.
+
+> **Having problems after updating?** If predictions are inaccurate, you configured wrong sensors in the past, or you want a complete fresh start, run the **Borg Mode** service:
+> ```yaml
+> service: solar_forecast_ml.borg_mode
+> data: {}
+> ```
+> This deletes ALL learned data and lets the system relearn from scratch. Recommended after major version updates or sensor changes.
 
 ### Configuration
 1. Go to Settings -> Devices & Services
@@ -392,6 +495,18 @@ This will:
 - The SFM-Stats companion integration is not compatible with Proxmox or ARM-based systems
 - Solar Forecast ML itself works fine on these platforms
 - For SFM-Stats, please use x86_64 hardware
+
+**Predictions very inaccurate after 3-4 days?**
+- This often happens after migrating from an older version or when sensors were changed
+- Old/corrupted data from previous installations can cause persistent issues
+- **Solution:** Run the `borg_mode` service for a complete reset:
+```yaml
+service: solar_forecast_ml.borg_mode
+data: {}
+```
+- This deletes ALL learned data and starts fresh
+- After running, wait 3-7 days for the system to relearn your installation
+- Consider running `bootstrap_physics_from_history` afterwards to speed up learning
 
 ---
 

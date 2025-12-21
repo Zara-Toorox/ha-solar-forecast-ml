@@ -1,4 +1,4 @@
-"""Weather Data Pipeline Manager V12.0.0 @zara
+"""Weather Data Pipeline Manager V12.2.0 @zara
 
 Open-Meteo is the SINGLE DATA SOURCE for all weather data.
 No HA Weather Entity required.

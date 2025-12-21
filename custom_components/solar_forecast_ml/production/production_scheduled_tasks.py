@@ -46,7 +46,10 @@ from ..const import (
 )
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..data.data_manager import DataManager
-from ..data.data_sensor_cloud_correction import SensorCloudCorrection
+from ..data.data_learning_filter import (
+    should_exclude_hour_from_learning,
+    should_skip_daily_learning,
+)
 from ..ml.ml_types import LearnedWeights, create_default_learned_weights
 
 if TYPE_CHECKING:
@@ -77,16 +80,6 @@ class ScheduledTasksManager:
         self._dynamic_listeners = []  # For sunrise-based dynamic tasks
 
         self.morning_routine_handler = MorningRoutineHandler(data_manager, coordinator)
-
-        solar_rad_sensor = coordinator.entry.data.get(CONF_SOLAR_RADIATION_SENSOR)
-        lux_sensor = coordinator.entry.data.get(CONF_LUX_SENSOR)
-        self.sensor_cloud_correction = SensorCloudCorrection(
-            hass=hass,
-            data_manager=data_manager,
-            solar_radiation_sensor=solar_rad_sensor,
-            lux_sensor=lux_sensor,
-            solar_yield_entity=solar_yield_today_entity_id,
-        )
 
         self._end_of_day_running = False
 
@@ -381,10 +374,6 @@ class ScheduledTasksManager:
 
         return forecast_time
 
-    def _calculate_cloud_check_time(self, sunrise: datetime) -> datetime:
-        """Calculate cloud check time: sunrise + 4 hours @zara"""
-        return sunrise + timedelta(hours=4)
-
     async def _schedule_dynamic_tasks_for_today(self) -> None:
         """Schedule dynamic tasks based on today's sunrise @zara"""
         # Cancel any existing dynamic listeners
@@ -397,16 +386,15 @@ class ScheduledTasksManager:
 
         sunrise = await self._get_sunrise_for_today()
         if not sunrise:
-            _LOGGER.warning("Could not get sunrise - using fallback times (05:30 forecast, 12:00 cloud check)")
+            _LOGGER.warning("Could not get sunrise - using fallback time (05:30 forecast)")
             # Fallback to reasonable defaults
             now = dt_util.now()
             sunrise = datetime.combine(now.date(), time(8, 0))
             if now.tzinfo:
                 sunrise = sunrise.replace(tzinfo=now.tzinfo)
 
-        # Calculate dynamic times
+        # Calculate dynamic forecast time
         final_forecast_time = self._calculate_dynamic_forecast_time(sunrise)
-        cloud_check_time = self._calculate_cloud_check_time(sunrise)
 
         now = dt_util.now()
 
@@ -424,21 +412,6 @@ class ScheduledTasksManager:
             )
         else:
             _LOGGER.debug(f"Final forecast time {final_forecast_time.strftime('%H:%M')} already passed")
-
-        # Schedule cloud check if not yet passed
-        if cloud_check_time > now:
-            remove_cloud = async_track_point_in_time(
-                self.hass,
-                self._cloud_discrepancy_logging,
-                cloud_check_time
-            )
-            self._dynamic_listeners.append(remove_cloud)
-            _LOGGER.info(
-                f"☁️ Dynamic scheduling: Cloud check at {cloud_check_time.strftime('%H:%M')} "
-                f"(sunrise + 4h, logging only)"
-            )
-        else:
-            _LOGGER.debug(f"Cloud check time {cloud_check_time.strftime('%H:%M')} already passed")
 
     async def _final_morning_forecast(self, now: datetime) -> None:
         """Final morning forecast with fresh weather data @zara
@@ -473,83 +446,6 @@ class ScheduledTasksManager:
 
         except Exception as e:
             _LOGGER.error(f"Final morning forecast failed: {e}", exc_info=True)
-
-    async def _cloud_discrepancy_logging(self, now: datetime) -> None:
-        """Log cloud discrepancy for weight learning (no correction) @zara
-
-        This runs at sunrise + 4h and:
-        1. Compares sensor cloud cover with forecast
-        2. Logs discrepancy for end-of-day weight learning
-        3. Does NOT apply any correction
-        """
-        current_time = now if now is not None else dt_util.now()
-
-        _LOGGER.info(f"☁️ Cloud discrepancy check at {current_time.strftime('%H:%M')} (logging only)")
-
-        try:
-            if not self.sensor_cloud_correction.cloud_sensors_enabled:
-                _LOGGER.debug("Cloud sensors not configured - skipping check")
-                return
-
-            # Get sensor cloud cover
-            sensor_cloud = await self.sensor_cloud_correction._get_sensor_cloud_estimate(datetime.now())
-            if sensor_cloud is None:
-                _LOGGER.debug("Could not read sensor cloud cover")
-                return
-
-            # Get forecast cloud cover (average for daylight hours)
-            forecast_cloud = await self.sensor_cloud_correction._get_forecast_cloud_average(current_time)
-            if forecast_cloud is None:
-                _LOGGER.debug("Could not get forecast cloud cover")
-                return
-
-            discrepancy = sensor_cloud - forecast_cloud
-
-            # Log for weight learning
-            log_entry = {
-                "timestamp": current_time.isoformat(),
-                "sensor_cloud_percent": round(sensor_cloud, 1),
-                "forecast_cloud_percent": round(forecast_cloud, 1),
-                "discrepancy_percent": round(discrepancy, 1),
-                "action": "logged_for_learning"
-            }
-
-            # Save to drift log for end-of-day analysis
-            drift_log_file = self.data_manager.data_dir / "stats" / "forecast_drift_log.json"
-            try:
-                def _update_log():
-                    existing = []
-                    if drift_log_file.exists():
-                        with open(drift_log_file, "r") as f:
-                            data = json.load(f)
-                            existing = data.get("entries", [])
-
-                    existing.append(log_entry)
-                    # Keep last 30 days
-                    existing = existing[-720:]  # ~30 days * 24 hours
-
-                    with open(drift_log_file, "w") as f:
-                        json.dump({"entries": existing}, f, indent=2)
-
-                await self.hass.async_add_executor_job(_update_log)
-            except Exception as e:
-                _LOGGER.debug(f"Could not save drift log: {e}")
-
-            if abs(discrepancy) > 25:
-                _LOGGER.info(
-                    f"☁️ Cloud discrepancy detected:\n"
-                    f"  Sensor: {sensor_cloud:.0f}%, Forecast: {forecast_cloud:.0f}%, "
-                    f"Diff: {discrepancy:+.0f}%\n"
-                    f"  → Logged for weight learning (no correction applied)"
-                )
-            else:
-                _LOGGER.debug(
-                    f"Cloud check: Sensor={sensor_cloud:.0f}%, Forecast={forecast_cloud:.0f}%, "
-                    f"Diff={discrepancy:+.0f}% (within tolerance)"
-                )
-
-        except Exception as e:
-            _LOGGER.error(f"Cloud discrepancy logging failed: {e}", exc_info=True)
 
     def setup_listeners(self) -> None:
         """Register the time-based listeners with Home Assistant @zara
@@ -612,7 +508,6 @@ class ScheduledTasksManager:
         # Also schedule dynamic tasks now (for startup/reload scenarios)
         self.hass.async_create_task(self._schedule_dynamic_tasks_for_today())
 
-    @callback
     async def _schedule_dynamic_tasks_callback(self, now: datetime) -> None:
         """Callback to schedule dynamic tasks at 00:30 @zara"""
         await self._schedule_dynamic_tasks_for_today()
@@ -730,10 +625,6 @@ class ScheduledTasksManager:
         """Reset expected daily production at midnight @zara"""
         try:
             await self.coordinator.reset_expected_daily_production()
-
-            # Reset sensor correction daily state
-            self.sensor_cloud_correction.reset_daily_state()
-
         except Exception as e:
             _LOGGER.error(f"Failed to reset expected daily production: {e}")
 
@@ -919,7 +810,17 @@ class ScheduledTasksManager:
                                 "solar_radiation_wm2": weather_data.get("solar_radiation_wm2", 0)
                             }
 
-                    if hourly_actuals and astronomy_data:
+                    # Check if daily learning should be skipped due to too many excluded hours
+                    skip_daily_learning, exclusion_ratio, skip_reason = should_skip_daily_learning(
+                        hourly_predictions or []
+                    )
+
+                    if skip_daily_learning:
+                        _LOGGER.info(
+                            f"Skipping Pattern Learner for {today_str}: {skip_reason}"
+                        )
+
+                    if hourly_actuals and astronomy_data and not skip_daily_learning:
                         # Extract peak power for breakthrough detection
                         peak_power_w = finalized.get("peak_power_w")
 
@@ -1172,13 +1073,11 @@ class ScheduledTasksManager:
 
             data_dir = Path(self.data_manager.data_dir)
 
-            # Initialize the learner (skip_load=True to avoid blocking call)
-            efficiency_learner = PanelGroupEfficiencyLearner(
+            # Initialize the learner using async factory to avoid blocking file I/O
+            efficiency_learner = await PanelGroupEfficiencyLearner.async_create(
                 data_path=data_dir,
                 panel_groups=panel_groups,
-                skip_load=True,
             )
-            await efficiency_learner.async_load_state()
 
             # Get today's hourly predictions with panel_group_actuals
             today_str = now.strftime("%Y-%m-%d")
@@ -1191,6 +1090,7 @@ class ScheduledTasksManager:
             # Count entries with panel_group_actuals
             entries_with_actuals = 0
             entries_added = 0
+            entries_excluded = 0
 
             for pred in predictions:
                 panel_group_actuals = pred.get("panel_group_actuals")
@@ -1198,6 +1098,15 @@ class ScheduledTasksManager:
                     continue
 
                 entries_with_actuals += 1
+
+                # Check if hour should be excluded from learning (frost, clipping, weather alerts)
+                should_exclude, exclude_reason = should_exclude_hour_from_learning(pred)
+                if should_exclude:
+                    entries_excluded += 1
+                    _LOGGER.debug(
+                        f"Panel group efficiency: Skipping hour {pred.get('target_hour')} - {exclude_reason}"
+                    )
+                    continue
 
                 # Extract data needed for learning
                 target_date = pred.get("target_date", today_str)
@@ -1209,7 +1118,7 @@ class ScheduledTasksManager:
 
                 # Get weather data from weather_corrected sub-dict
                 weather_corrected = pred.get("weather_corrected", {}) or {}
-                ghi = weather_corrected.get("ghi", 0) or 0
+                ghi = weather_corrected.get("solar_radiation_wm2", 0) or 0  # Fixed: was "ghi"
                 dni = weather_corrected.get("direct_radiation", 0) or 0
                 dhi = weather_corrected.get("diffuse_radiation", 0) or 0
                 temperature = weather_corrected.get("temperature", 15) or 15
@@ -1217,8 +1126,8 @@ class ScheduledTasksManager:
 
                 # Get astronomy data from astronomy sub-dict
                 astronomy = pred.get("astronomy", {}) or {}
-                sun_elevation = astronomy.get("elevation_deg", 0) or 0
-                sun_azimuth = astronomy.get("azimuth_deg", 180) or 180
+                sun_elevation = astronomy.get("sun_elevation_deg", 0) or 0  # Fixed: was "elevation_deg"
+                sun_azimuth = astronomy.get("sun_azimuth_deg", 180) or 180  # Fixed: was "azimuth_deg"
 
                 # Build timestamp for the data point
                 timestamp = f"{target_date}T{hour:02d}:30:00"
@@ -1252,9 +1161,10 @@ class ScheduledTasksManager:
             success = await efficiency_learner.optimize_efficiency()
 
             if success:
+                excluded_info = f", {entries_excluded} excluded" if entries_excluded > 0 else ""
                 _LOGGER.info(
                     f"Panel group efficiency trained: {entries_added} samples, "
-                    f"{len(panel_groups)} groups"
+                    f"{len(panel_groups)} groups{excluded_info}"
                 )
             else:
                 _LOGGER.debug(
@@ -1345,10 +1255,47 @@ class ScheduledTasksManager:
             except Exception:
                 pass
 
+            # Calculate excluded hours info for accuracy tracking
+            excluded_hours_info = None
+            try:
+                from ..data.data_learning_filter import calculate_excluded_hours_ratio
+
+                today_str = now.strftime("%Y-%m-%d")
+                hourly_predictions = await self.coordinator.data_manager.hourly_predictions.get_predictions_for_date(today_str)
+
+                if hourly_predictions:
+                    ratio, excluded_count, total_count = calculate_excluded_hours_ratio(hourly_predictions)
+
+                    # Collect exclusion reasons
+                    exclusion_reasons = {}
+                    for pred in hourly_predictions:
+                        flags = pred.get("flags") or {}
+                        if flags.get("exclude_from_learning") or flags.get("has_weather_alert") or flags.get("inverter_clipped"):
+                            reason = flags.get("weather_alert_type") or "other"
+                            if flags.get("inverter_clipped"):
+                                reason = "inverter_clipped"
+                            exclusion_reasons[reason] = exclusion_reasons.get(reason, 0) + 1
+
+                    excluded_hours_info = {
+                        "count": excluded_count,
+                        "total": total_count,
+                        "ratio": round(ratio, 3),
+                        "reasons": exclusion_reasons if exclusion_reasons else None,
+                    }
+
+                    if excluded_count > 0:
+                        _LOGGER.info(
+                            f"Excluded hours info for {today_str}: {excluded_count}/{total_count} "
+                            f"({ratio:.1%}), reasons: {exclusion_reasons}"
+                        )
+            except Exception as e:
+                _LOGGER.debug(f"Could not calculate excluded hours info: {e}")
+
             success = await self.data_manager.finalize_today(
                 yield_kwh=actual_yield,
                 consumption_kwh=actual_consumption,
                 production_seconds=production_seconds,
+                excluded_hours_info=excluded_hours_info,
             )
 
             if success:
@@ -1817,7 +1764,7 @@ class ScheduledTasksManager:
                         "pressure_hpa": current_weather.get("pressure"),
                     }
 
-            astronomy_update = await self._calculate_astronomy_for_hour(current_time)
+            astronomy_update = await self._calculate_astronomy_for_hour(previous_hour_dt)
 
             # Get inverter max power for clipping detection
             inverter_max_power = getattr(self.coordinator, 'inverter_max_power', 0.0)

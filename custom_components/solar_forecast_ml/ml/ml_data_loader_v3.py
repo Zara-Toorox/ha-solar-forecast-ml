@@ -1,4 +1,4 @@
-"""ML Data Loader V3 - Load training data with corrected weather V12.0.0 @zara
+"""ML Data Loader V3 - Load training data with corrected weather V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -23,6 +23,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from ..data.data_learning_filter import (
+    filter_predictions_for_learning,
+    should_exclude_hour_from_learning,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -96,66 +100,19 @@ class MLDataLoaderV3:
 
             historical_cache = await self._load_historical_cache()
 
-            valid_predictions = [
+            # Filter to predictions with actual production data
+            predictions_with_actuals = [
                 p for p in predictions
                 if p.get("actual_kwh") is not None
             ]
 
-            _LOGGER.info(f"Found {len(valid_predictions)} predictions with actual production")
+            _LOGGER.info(f"Found {len(predictions_with_actuals)} predictions with actual production")
 
-            frost_excluded_count = 0
-            non_frost_predictions = []
-            for p in valid_predictions:
-
-                weather_actual = p.get("weather_actual") or {}
-                frost_detected = weather_actual.get("frost_detected")
-
-                if frost_detected == "heavy_frost":
-                    frost_excluded_count += 1
-                    frost_score = weather_actual.get("frost_score", 'N/A')
-                    frost_confidence = weather_actual.get("frost_confidence", 0)
-                    sample_id = f"{p.get('target_date')} {p.get('target_hour', '?'):02d}:00" if p.get('target_date') else p.get('id', 'unknown')
-                    _LOGGER.info(
-                        f"Excluding sample {sample_id} - heavy frost detected "
-                        f"(score: {frost_score}, confidence: {frost_confidence:.0%})"
-                    )
-                else:
-                    non_frost_predictions.append(p)
-
-            if frost_excluded_count > 0:
-                _LOGGER.info(
-                    f"Excluded {frost_excluded_count} frost-affected samples from training "
-                    f"({len(non_frost_predictions)} clean samples remaining)"
-                )
-
-            valid_predictions = non_frost_predictions
-
-            # Filter out inverter-clipped hours
-            # These hours are excluded because actual production was limited by hardware,
-            # not by weather/solar conditions, which would bias the ML model
-            clipped_excluded_count = 0
-            non_clipped_predictions = []
-            for p in valid_predictions:
-                flags = p.get("flags") or {}
-                is_clipped = flags.get("inverter_clipped", False)
-
-                if is_clipped:
-                    clipped_excluded_count += 1
-                    sample_id = f"{p.get('target_date')} {p.get('target_hour', '?'):02d}:00" if p.get('target_date') else p.get('id', 'unknown')
-                    _LOGGER.debug(
-                        f"Excluding sample {sample_id} - inverter clipping detected "
-                        f"(actual: {p.get('actual_kwh', 'N/A')} kWh)"
-                    )
-                else:
-                    non_clipped_predictions.append(p)
-
-            if clipped_excluded_count > 0:
-                _LOGGER.info(
-                    f"Excluded {clipped_excluded_count} inverter-clipped samples from training "
-                    f"({len(non_clipped_predictions)} clean samples remaining)"
-                )
-
-            valid_predictions = non_clipped_predictions
+            # Use centralized learning filter (handles frost, clipping, weather alerts, etc.)
+            valid_predictions, exclusion_stats = filter_predictions_for_learning(
+                predictions_with_actuals,
+                log_exclusions=True
+            )
 
             if len(valid_predictions) < min_samples:
                 _LOGGER.warning(

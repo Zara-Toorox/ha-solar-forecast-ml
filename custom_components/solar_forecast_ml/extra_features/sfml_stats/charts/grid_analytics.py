@@ -135,12 +135,12 @@ class GridAnalyticsChart:
         ax.axis('off')
 
         stats_text = [
-            f"Bezug (Woche): {self.stats.get('weekImport', 0):.2f} kWh",
-            f"Einspeisung (Woche): {self.stats.get('weekExport', 0):.2f} kWh",
+            f"Bezug (Mo-So): {self.stats.get('weekImport', 0):.2f} kWh",
+            f"Einspeisung (Mo-So): {self.stats.get('weekExport', 0):.2f} kWh",
             f"Netto Balance: {self.stats.get('netBalance', 0):.2f} kWh",
             f"Ø Strompreis: {self.stats.get('avgPrice', 0):.2f} ct/kWh",
-            f"Kosten (Monat): {self.stats.get('costs', 0):.2f} €",
-            f"Erlöse (Monat): {self.stats.get('revenue', 0):.2f} €",
+            f"Kosten (Mo-So): {self.stats.get('costs', 0):.2f} €",
+            f"Erlöse (Mo-So): {self.stats.get('revenue', 0):.2f} €",
         ]
 
         positions = [

@@ -1,4 +1,4 @@
-"""JSON Schema Validation and Migration for Solar Forecast ML Integration V12.0.0 @zara
+"""JSON Schema Validation and Migration for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -18,7 +18,7 @@ Copyright (C) 2025 Zara-Toorox
 
 import logging
 import math
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -78,9 +78,12 @@ class DataSchemaValidator:
 
             success &= await self._validate_learned_geometry()
             success &= await self._validate_learned_panel_group_efficiency()
+            success &= await self._validate_learning_config()
             success &= await self._validate_panel_group_sensor_state()
+            success &= await self._validate_panel_group_today_cache()
             success &= await self._validate_residual_model_state()
             success &= await self._validate_yield_cache()
+            success &= await self._validate_multi_day_hourly_forecast()
 
             if self.migration_log:
                 _LOGGER.info("=== Migration Summary ===")
@@ -279,20 +282,24 @@ class DataSchemaValidator:
         return True
 
     def _get_expected_feature_names(self) -> List[str]:
-        """Get the 14 expected feature names (V3 format - matches production) @zara"""
+        """Get the 14 expected feature names (V3 format - matches production) @zara
+
+        CRITICAL: These names MUST match the actual production files in
+        /Volumes/config/solar_forecast_ml/ml/learned_weights.json
+        """
         return [
-            "hour",
+            "hour_of_day",
             "day_of_year",
-            "month",
-            "elevation",
-            "azimuth",
-            "cloud_cover",
-            "temperature",
-            "humidity",
-            "wind_speed",
-            "precipitation",
-            "clear_sky_radiation",
-            "theoretical_max",
+            "season_encoded",
+            "weather_temp",
+            "weather_solar_radiation_wm2",
+            "weather_wind",
+            "weather_humidity",
+            "weather_rain",
+            "weather_clouds",
+            "sun_elevation_deg",
+            "theoretical_max_kwh",
+            "clear_sky_radiation_wm2",
             "production_yesterday",
             "production_same_hour_yesterday",
         ]
@@ -337,13 +344,27 @@ class DataSchemaValidator:
         for hour in range(24):
             hour_str = str(hour)
             if hour_str not in data["hourly_averages"]:
-
                 data["hourly_averages"][hour_str] = self._calculate_sine_hour(hour)
                 modified = True
-            elif data["hourly_averages"][hour_str] < 0:
-                self._log_migration(f"hourly_profile.json: Clamping negative value for hour {hour}")
-                data["hourly_averages"][hour_str] = 0.0
-                modified = True
+            else:
+                value = data["hourly_averages"][hour_str]
+                # Migrate old format: {"count": 0, "total": 0.0, "average": 0.5} -> 0.5
+                if isinstance(value, dict):
+                    if "average" in value:
+                        self._log_migration(f"hourly_profile.json: Migrating old dict format for hour {hour}")
+                        data["hourly_averages"][hour_str] = float(value["average"])
+                    else:
+                        self._log_migration(f"hourly_profile.json: Invalid dict format for hour {hour}, using default")
+                        data["hourly_averages"][hour_str] = self._calculate_sine_hour(hour)
+                    modified = True
+                elif not isinstance(value, (int, float)):
+                    self._log_migration(f"hourly_profile.json: Invalid type for hour {hour}, using default")
+                    data["hourly_averages"][hour_str] = self._calculate_sine_hour(hour)
+                    modified = True
+                elif value < 0:
+                    self._log_migration(f"hourly_profile.json: Clamping negative value for hour {hour}")
+                    data["hourly_averages"][hour_str] = 0.0
+                    modified = True
 
         if "samples_count" not in data or data["samples_count"] < 0:
             data["samples_count"] = 0
@@ -382,19 +403,26 @@ class DataSchemaValidator:
         return 0.0
 
     def _create_default_hourly_profile(self) -> Dict[str, Any]:
-        """Create default hourly profile structure - matches production format @zara"""
+        """Create default hourly profile structure - matches production format @zara
+
+        CRITICAL: Structure MUST match production file at
+        /Volumes/config/solar_forecast_ml/ml/hourly_profile.json
+        """
         hourly_averages = {}
+        hourly_factors = {}
         for hour in range(24):
-            hourly_averages[str(hour)] = self._calculate_sine_hour(hour)
+            value = self._calculate_sine_hour(hour)
+            hourly_averages[str(hour)] = value
+            hourly_factors[str(hour)] = round(value * 2.5, 3)  # Scale factor
 
         return {
             "hourly_averages": hourly_averages,
             "samples_count": 0,
             "last_updated": None,
             "confidence": 0.1,
-            "hourly_factors": {},
+            "hourly_factors": hourly_factors,
             "seasonal_adjustment": {},
-            "file_format_version": "3.0.0",
+            "file_format_version": "1.0",
             "last_saved": None,
         }
 
@@ -451,7 +479,11 @@ class DataSchemaValidator:
         return True
 
     def _create_default_model_state(self) -> Dict[str, Any]:
-        """Create default model state structure - matches production V1.0 format @zara"""
+        """Create default model state structure - matches production V1.0 format @zara
+
+        CRITICAL: Structure MUST match production file at
+        /Volumes/config/solar_forecast_ml/ml/model_state.json
+        """
         return {
             "version": "1.0",
             "model_loaded": False,
@@ -462,7 +494,7 @@ class DataSchemaValidator:
             "peak_power_kw": None,
             "model_info": {
                 "version": "1.0",
-                "type": None,
+                "type": "ridge_regression_normalized",
             },
             "performance_metrics": {
                 "avg_prediction_time_ms": 0.0,
@@ -605,18 +637,15 @@ class DataSchemaValidator:
         }
 
     def _create_default_forecast_day(self) -> Dict[str, Any]:
-        """Create default forecast_day block - matches production V12.0.0 format @zara"""
+        """Create default forecast_day block @zara"""
         return {
             "prediction_kwh": None,
             "prediction_kwh_raw": None,
-            "prediction_kwh_display": None,  # For intraday corrections (09:05/12:05)
             "safeguard_applied": False,
             "safeguard_reduction_kwh": 0.0,
             "locked": False,
             "locked_at": None,
             "source": None,
-            "intraday_corrected": False,
-            "intraday_corrected_at": None,
         }
 
     def _create_default_forecast_tomorrow(self) -> Dict[str, Any]:
@@ -1086,6 +1115,51 @@ class DataSchemaValidator:
                 if "updated_at" not in ra:
                     ra["updated_at"] = None
                     modified = True
+
+                # V12.2.0: Weather-specific correction factors (clear vs cloudy)
+                if "sample_days_clear" not in ra:
+                    ra["sample_days_clear"] = 0
+                    modified = True
+
+                if "sample_days_cloudy" not in ra:
+                    ra["sample_days_cloudy"] = 0
+                    modified = True
+
+                if "correction_factors_clear" not in ra:
+                    ra["correction_factors_clear"] = {
+                        "temperature": 0.0,
+                        "solar_radiation_wm2": 1.0,
+                        "clouds": 1.0,
+                        "humidity": 1.0,
+                        "wind": 1.0,
+                        "rain": 1.0,
+                        "pressure": 0.0,
+                    }
+                    modified = True
+
+                if "correction_factors_cloudy" not in ra:
+                    ra["correction_factors_cloudy"] = {
+                        "temperature": 0.0,
+                        "solar_radiation_wm2": 1.0,
+                        "clouds": 1.0,
+                        "humidity": 1.0,
+                        "wind": 1.0,
+                        "rain": 1.0,
+                        "pressure": 0.0,
+                    }
+                    modified = True
+
+                # V12.2.0: Hourly correction factors
+                if "hourly_factors" not in ra:
+                    ra["hourly_factors"] = {
+                        "solar_radiation_wm2": {},
+                        "clouds": {},
+                    }
+                    modified = True
+
+                if "hourly_min_samples" not in ra:
+                    ra["hourly_min_samples"] = 3
+                    modified = True
             else:
 
                 for period in ["7_day", "30_day"]:
@@ -1141,7 +1215,12 @@ class DataSchemaValidator:
         return True
 
     def _create_default_weather_precision_daily(self) -> Dict[str, Any]:
-        """Create default weather_precision_daily structure - matches production flat format @zara"""
+        """Create default weather_precision_daily structure - matches production flat format @zara
+
+        MASTER structure (from /Volumes/config/solar_forecast_ml/stats/weather_precision_daily.json):
+        - rolling_averages includes weather-specific correction factors for clear/cloudy days
+        - hourly_factors enable hour-specific corrections for solar_radiation and clouds
+        """
         return {
             "daily_tracking": {},
             "rolling_averages": {
@@ -1165,6 +1244,33 @@ class DataSchemaValidator:
                     "pressure": 0.0,
                 },
                 "updated_at": None,
+                # Weather-specific correction factors (clear vs cloudy days)
+                "sample_days_clear": 0,
+                "sample_days_cloudy": 0,
+                "correction_factors_clear": {
+                    "temperature": 0.0,
+                    "solar_radiation_wm2": 1.0,
+                    "clouds": 1.0,
+                    "humidity": 1.0,
+                    "wind": 1.0,
+                    "rain": 1.0,
+                    "pressure": 0.0,
+                },
+                "correction_factors_cloudy": {
+                    "temperature": 0.0,
+                    "solar_radiation_wm2": 1.0,
+                    "clouds": 1.0,
+                    "humidity": 1.0,
+                    "wind": 1.0,
+                    "rain": 1.0,
+                    "pressure": 0.0,
+                },
+                # Hourly correction factors for solar_radiation and clouds
+                "hourly_factors": {
+                    "solar_radiation_wm2": {},
+                    "clouds": {},
+                },
+                "hourly_min_samples": 3,
             },
             "metadata": {
                 "created": None,
@@ -1176,7 +1282,10 @@ class DataSchemaValidator:
         }
 
     def _create_default_rolling_averages(self) -> Dict[str, Any]:
-        """Create default rolling_averages structure - flat format @zara"""
+        """Create default rolling_averages structure - flat format @zara
+
+        MASTER structure includes weather-specific and hourly correction factors.
+        """
         return {
             "sample_days": 0,
             "correction_factors": {
@@ -1198,6 +1307,33 @@ class DataSchemaValidator:
                 "pressure": 0.0,
             },
             "updated_at": None,
+            # Weather-specific correction factors
+            "sample_days_clear": 0,
+            "sample_days_cloudy": 0,
+            "correction_factors_clear": {
+                "temperature": 0.0,
+                "solar_radiation_wm2": 1.0,
+                "clouds": 1.0,
+                "humidity": 1.0,
+                "wind": 1.0,
+                "rain": 1.0,
+                "pressure": 0.0,
+            },
+            "correction_factors_cloudy": {
+                "temperature": 0.0,
+                "solar_radiation_wm2": 1.0,
+                "clouds": 1.0,
+                "humidity": 1.0,
+                "wind": 1.0,
+                "rain": 1.0,
+                "pressure": 0.0,
+            },
+            # Hourly correction factors
+            "hourly_factors": {
+                "solar_radiation_wm2": {},
+                "clouds": {},
+            },
+            "hourly_min_samples": 3,
         }
 
     def _create_default_rolling_average_period(self) -> Dict[str, Any]:
@@ -2032,13 +2168,12 @@ class DataSchemaValidator:
 
         data = await self._read_json(file_path)
         if data is None:
-            # File doesn't exist - will be created by PanelGroupEfficiencyLearner
-            # when panel groups are configured and bootstrap runs
+            # Create default structure for immediate availability
             self._log_migration(
-                "learned_panel_group_efficiency.json: File missing - will be created by "
-                "PanelGroupEfficiencyLearner when panel groups are configured"
+                "learned_panel_group_efficiency.json: Creating new file"
             )
-            return True  # Not an error - file is optional
+            data = self._create_default_learned_panel_group_efficiency()
+            return await self._write_json(file_path, data)
 
         modified = False
 
@@ -2127,6 +2262,24 @@ class DataSchemaValidator:
             return await self._write_json(file_path, data)
 
         return True
+
+    def _create_default_learned_panel_group_efficiency(self) -> Dict[str, Any]:
+        """Create default learned_panel_group_efficiency.json structure @zara
+
+        MASTER structure from geometry_learner.py:save_state()
+        """
+        return {
+            "version": "2.1",
+            "mode": "panel_groups",
+            "panel_groups": [],
+            "data_points": [],
+            "total_samples": 0,
+            "last_updated": None,
+            "metadata": {
+                "total_capacity_kwp": 0.0,
+                "group_count": 0,
+            },
+        }
 
     async def _validate_residual_model_state(self) -> bool:
         """Validate residual_model_state.json - ML Residual Trainer state @zara"""
@@ -2462,18 +2615,30 @@ class DataSchemaValidator:
 
         IMPORTANT: These are the initial weights before any learning occurs.
         50/50 split gives equal weight to both sources until the system learns.
+
+        MASTER structure (from /Volumes/config/solar_forecast_ml/data/weather_source_weights.json):
+        - version: "1.1" (V12.1 with accelerated learning support)
+        - weights: {open_meteo, wwo}
+        - learning_metadata: {last_updated, last_learning_date, last_mae, comparison_hours,
+                             smoothing_factor_used, smoothing_factor_default, accelerated_learning}
         """
         return {
-            "version": "1.0",
+            "version": "1.1",
             "weights": {
                 "open_meteo": 0.5,
                 "wwo": 0.5,
             },
             "learning_metadata": {
                 "last_updated": None,
-                "learning_days": 0,
-                "created_at": dt_util.now().isoformat(),
-                "source": "schema_validator_default",
+                "last_learning_date": None,
+                "last_mae": {
+                    "open_meteo": None,
+                    "wwo": None,
+                },
+                "comparison_hours": 0,
+                "smoothing_factor_used": 0.3,
+                "smoothing_factor_default": 0.3,
+                "accelerated_learning": False,
             },
         }
 
@@ -2609,3 +2774,287 @@ class DataSchemaValidator:
             "last_updated": None,
             "last_values": {},
         }
+
+    async def _validate_multi_day_hourly_forecast(self) -> bool:
+        """Validate multi_day_hourly_forecast.json - Rolling hourly forecasts for 3 days @zara
+
+        This file persists hourly forecast data for today, tomorrow, and day after tomorrow.
+        Automatically created/updated by the coordinator when forecasts are generated.
+
+        Location: data_dir/stats/multi_day_hourly_forecast.json
+        """
+        file_path = self.data_dir / "stats" / "multi_day_hourly_forecast.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            self._log_migration(
+                "multi_day_hourly_forecast.json: Creating empty template - "
+                "will be populated on next forecast update"
+            )
+            data = self._create_default_multi_day_hourly_forecast()
+            return await self._write_json(file_path, data)
+
+        modified = False
+
+        if "version" not in data:
+            data["version"] = "1.0"
+            modified = True
+
+        if "updated_at" not in data:
+            data["updated_at"] = None
+            modified = True
+
+        if "days" not in data or not isinstance(data["days"], dict):
+            data["days"] = {}
+            modified = True
+
+        if "summary" not in data or not isinstance(data["summary"], dict):
+            data["summary"] = {
+                "today": 0,
+                "tomorrow": 0,
+                "day_after_tomorrow": 0,
+            }
+            modified = True
+
+        if modified:
+            self._log_migration("multi_day_hourly_forecast.json: Schema validated and updated")
+            return await self._write_json(file_path, data)
+
+        return True
+
+    def _create_default_multi_day_hourly_forecast(self) -> Dict[str, Any]:
+        """Create default multi_day_hourly_forecast structure @zara"""
+        now_local = dt_util.now()
+        today_str = now_local.date().isoformat()
+
+        return {
+            "version": "1.0",
+            "updated_at": None,
+            "days": {},
+            "summary": {
+                "today": 0,
+                "tomorrow": 0,
+                "day_after_tomorrow": 0,
+            },
+        }
+
+    async def _validate_learning_config(self) -> bool:
+        """Validate learning_config.json - ML learning parameters @zara
+
+        CRITICAL: This file contains learning parameters used by geometry_learner.py
+        and panel_group_calculator.py. Without it, ML learning cannot function properly.
+
+        Location: physics/learning_config.json
+        """
+        file_path = self.data_dir / "physics" / "learning_config.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            self._log_migration(
+                "learning_config.json: Creating new file (required for ML learning)"
+            )
+            data = self._create_default_learning_config()
+            return await self._write_json(file_path, data)
+
+        modified = False
+
+        # Validate version
+        if "version" not in data:
+            data["version"] = "1.0"
+            modified = True
+
+        # Validate learning_parameters
+        if "learning_parameters" not in data or not isinstance(data["learning_parameters"], dict):
+            data["learning_parameters"] = self._create_default_learning_config()["learning_parameters"]
+            modified = True
+            self._log_migration("learning_config.json: Restored learning_parameters")
+        else:
+            lp = data["learning_parameters"]
+            defaults = self._create_default_learning_config()["learning_parameters"]
+
+            # Ensure all required keys exist
+            for key in ["baseline_prediction_kwh", "shadow_detection_efficiency",
+                        "shadow_hour_threshold", "smoothing", "efficiency_clamps"]:
+                if key not in lp:
+                    lp[key] = defaults[key]
+                    modified = True
+
+        # Validate weather_adjustment
+        if "weather_adjustment" not in data:
+            data["weather_adjustment"] = {
+                "cloud_cover_factor": 0.5,
+                "description": "Faktor für Wolkenbedeckungs-Korrektur"
+            }
+            modified = True
+
+        # Validate elevation_adjustment
+        if "elevation_adjustment" not in data:
+            data["elevation_adjustment"] = {
+                "low_elevation_threshold_deg": 10.0,
+                "low_elevation_factor": 0.15,
+                "high_elevation_factor": 0.08,
+                "description": "Anpassung basierend auf Sonnenhöhe"
+            }
+            modified = True
+
+        # Validate physics_defaults
+        if "physics_defaults" not in data:
+            data["physics_defaults"] = {
+                "albedo": 0.2,
+                "system_efficiency": 0.90,
+                "description": "Standard-Physikparameter"
+            }
+            modified = True
+
+        # Validate metadata
+        if "metadata" not in data:
+            data["metadata"] = {
+                "created_at": datetime.now().isoformat(),
+                "last_updated": None,
+                "auto_tuned": False
+            }
+            modified = True
+
+        if modified:
+            self._log_migration("learning_config.json: Structure validated and repaired")
+            return await self._write_json(file_path, data)
+
+        return True
+
+    def _create_default_learning_config(self) -> Dict[str, Any]:
+        """Create default learning_config.json structure @zara
+
+        MASTER structure from production:
+        /Volumes/config/solar_forecast_ml/physics/learning_config.json
+        """
+        return {
+            "version": "1.0",
+            "description": "Konfiguration für das Lernverhalten des Solar Forecast ML Systems. "
+                           "Diese Werte werden durch das Lernsystem automatisch angepasst.",
+            "learning_parameters": {
+                "baseline_prediction_kwh": 0.05,
+                "shadow_detection_efficiency": 0.2,
+                "shadow_hour_threshold": 0.7,
+                "smoothing": {
+                    "aggressive": {
+                        "deviation_threshold": 1.0,
+                        "old_weight": 0.3,
+                        "new_weight": 0.7,
+                        "description": "Bei >100% Abweichung"
+                    },
+                    "fast": {
+                        "deviation_threshold": 0.5,
+                        "old_weight": 0.5,
+                        "new_weight": 0.5,
+                        "description": "Bei >50% Abweichung"
+                    },
+                    "normal": {
+                        "old_weight": 0.8,
+                        "new_weight": 0.2,
+                        "description": "Standard-Glättung"
+                    }
+                },
+                "efficiency_clamps": {
+                    "min_efficiency": 0.1,
+                    "max_efficiency": 5.0,
+                    "conservative_min": 0.3,
+                    "conservative_max": 3.0
+                }
+            },
+            "weather_adjustment": {
+                "cloud_cover_factor": 0.5,
+                "description": "Faktor für Wolkenbedeckungs-Korrektur"
+            },
+            "elevation_adjustment": {
+                "low_elevation_threshold_deg": 10.0,
+                "low_elevation_factor": 0.15,
+                "high_elevation_factor": 0.08,
+                "description": "Anpassung basierend auf Sonnenhöhe"
+            },
+            "physics_defaults": {
+                "albedo": 0.2,
+                "system_efficiency": 0.90,
+                "description": "Standard-Physikparameter"
+            },
+            "metadata": {
+                "created_at": datetime.now().isoformat(),
+                "last_updated": None,
+                "auto_tuned": False
+            }
+        }
+
+    async def _validate_panel_group_today_cache(self) -> bool:
+        """Validate panel_group_today_cache.json - Daily panel group statistics @zara
+
+        CRITICAL: This file is used by the Stats API (sfml_stats and sfml_stats_lite)
+        to provide real-time panel group performance data.
+
+        Location: stats/panel_group_today_cache.json
+        """
+        file_path = self.data_dir / "stats" / "panel_group_today_cache.json"
+
+        data = await self._read_json(file_path)
+        if data is None:
+            self._log_migration(
+                "panel_group_today_cache.json: Creating new file (required for Stats API)"
+            )
+            data = self._create_default_panel_group_today_cache()
+            return await self._write_json(file_path, data)
+
+        modified = False
+        today_str = date.today().isoformat()
+
+        # Reset if date changed
+        if data.get("date") != today_str:
+            data = self._create_default_panel_group_today_cache()
+            modified = True
+            self._log_migration(
+                f"panel_group_today_cache.json: Reset for new day ({today_str})"
+            )
+
+        # Validate required fields
+        if "last_updated" not in data:
+            data["last_updated"] = None
+            modified = True
+
+        if "available" not in data:
+            data["available"] = False
+            modified = True
+
+        if "groups" not in data or not isinstance(data["groups"], dict):
+            data["groups"] = self._create_default_panel_groups()
+            modified = True
+            self._log_migration("panel_group_today_cache.json: Restored groups structure")
+
+        if modified:
+            return await self._write_json(file_path, data)
+
+        return True
+
+    def _create_default_panel_group_today_cache(self) -> Dict[str, Any]:
+        """Create default panel_group_today_cache.json structure @zara
+
+        MASTER structure from production:
+        /Volumes/config/solar_forecast_ml/stats/panel_group_today_cache.json
+        """
+        return {
+            "date": date.today().isoformat(),
+            "last_updated": None,
+            "available": False,
+            "groups": self._create_default_panel_groups(),
+        }
+
+    def _create_default_panel_groups(self) -> Dict[str, Any]:
+        """Create default panel groups structure @zara"""
+        groups = {}
+        # Default: two panel groups (matches typical installation)
+        for i in range(1, 3):
+            group_name = f"Gruppe {i}"
+            groups[group_name] = {
+                "name": group_name,
+                "prediction_total_kwh": 0.0,
+                "actual_total_kwh": 0.0,
+                "hourly": [],
+                "accuracy_percent": None,
+            }
+        return groups

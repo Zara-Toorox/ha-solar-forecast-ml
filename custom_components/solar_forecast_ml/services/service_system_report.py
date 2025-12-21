@@ -1,4 +1,4 @@
-"""System Report Generator for Solar Forecast ML Integration V12.0.0 @zara
+"""System Report Generator for Solar Forecast ML Integration V12.2.0 @zara
 
 Generates a monthly Markdown report with system insights.
 

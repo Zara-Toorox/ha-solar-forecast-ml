@@ -1,4 +1,4 @@
-"""Handler for hourly prediction data - ML optimized structure V12.0.0 @zara
+"""Handler for hourly prediction data - ML optimized structure V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.util import dt as dt_util
 
+from ..const import DOMAIN
 from .data_shadow_detection import get_shadow_detector
 
 _LOGGER = logging.getLogger(__name__)
@@ -235,6 +236,8 @@ class HourlyPredictionsHandler:
                         "is_peak_hour": False,
                         "is_outlier": False,
                         "has_weather_alert": False,
+                        "weather_alert_type": None,  # "unexpected_rain", "unexpected_clouds", "sudden_storm", etc.
+                        "exclude_from_learning": False,  # Master flag: True if this hour should be excluded from ALL learning
                         "has_sensor_data": False,
                         "sensor_data_complete": False,
                         "weather_forecast_updated": False,
@@ -363,6 +366,31 @@ class HourlyPredictionsHandler:
 
             if weather_actual:
                 prediction["weather_actual"] = weather_actual
+
+            # Unexpected weather detection - compare actual vs forecast
+            weather_alert = self._detect_unexpected_weather(
+                weather_actual=weather_actual,
+                weather_forecast=prediction.get("weather_forecast"),
+                sensor_data=sensor_data,
+            )
+            if weather_alert:
+                prediction["flags"]["has_weather_alert"] = True
+                prediction["flags"]["weather_alert_type"] = weather_alert["type"]
+                prediction["flags"]["exclude_from_learning"] = True
+                _LOGGER.info(
+                    f"⚠️ Weather alert for {prediction_id}: {weather_alert['type']} - "
+                    f"{weather_alert['reason']}"
+                )
+
+                # Send Home Assistant notification
+                await self._send_weather_alert_notification(
+                    alert_type=weather_alert["type"],
+                    reason=weather_alert["reason"],
+                    hour=hour,
+                    date_str=date,
+                    weather_actual=weather_actual,
+                    weather_forecast=prediction.get("weather_forecast"),
+                )
 
             # Store per-panel-group actual production for group-specific learning
             if panel_group_actuals:
@@ -732,6 +760,95 @@ class HourlyPredictionsHandler:
         non_null_count = sum(1 for v in sensor_data.values() if v is not None)
         return non_null_count >= 3
 
+    def _detect_unexpected_weather(
+        self,
+        weather_actual: Optional[Dict[str, Any]],
+        weather_forecast: Optional[Dict[str, Any]],
+        sensor_data: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, str]]:
+        """Detect unexpected weather events by comparing actual vs forecast.
+
+        Returns alert dict if unexpected weather detected, None otherwise.
+
+        Alert types:
+        - unexpected_rain: Rain sensor shows precipitation, forecast had none
+        - unexpected_clouds: Solar radiation significantly lower than forecast
+        - sudden_storm: Large pressure drop indicating storm
+        - unexpected_snow: Temperature < 2°C with precipitation
+
+        @zara
+        """
+        if not weather_actual and not sensor_data:
+            return None
+
+        # Get actual values from sensors or weather_actual
+        actual_rain = None
+        actual_temp = None
+        actual_radiation = None
+        actual_pressure = None
+
+        if weather_actual:
+            actual_rain = weather_actual.get("precipitation_mm")
+            actual_temp = weather_actual.get("temperature_c")
+            actual_radiation = weather_actual.get("solar_radiation_wm2")
+            actual_pressure = weather_actual.get("pressure_hpa")
+
+        # Override with sensor data if available (more accurate)
+        if sensor_data:
+            if sensor_data.get("rain_mm") is not None:
+                actual_rain = sensor_data.get("rain_mm")
+            if sensor_data.get("temperature_c") is not None:
+                actual_temp = sensor_data.get("temperature_c")
+            if sensor_data.get("solar_radiation_wm2") is not None:
+                actual_radiation = sensor_data.get("solar_radiation_wm2")
+
+        # Get forecast values
+        forecast_rain = 0.0
+        forecast_radiation = None
+        forecast_clouds = None
+
+        if weather_forecast:
+            forecast_rain = weather_forecast.get("precipitation_mm") or 0.0
+            forecast_radiation = weather_forecast.get("solar_radiation_wm2")
+            forecast_clouds = weather_forecast.get("cloud_cover_percent")
+
+        # Detection 1: Unexpected rain
+        # Actual rain > 0.5mm but forecast had < 0.1mm
+        if actual_rain is not None and actual_rain > 0.5 and forecast_rain < 0.1:
+            return {
+                "type": "unexpected_rain",
+                "reason": f"Actual rain {actual_rain:.1f}mm, forecast {forecast_rain:.1f}mm",
+            }
+
+        # Detection 2: Unexpected snow
+        # Temperature < 2°C and precipitation > 0.5mm
+        if (
+            actual_temp is not None
+            and actual_rain is not None
+            and actual_temp < 2.0
+            and actual_rain > 0.5
+            and forecast_rain < 0.1
+        ):
+            return {
+                "type": "unexpected_snow",
+                "reason": f"Temp {actual_temp:.1f}°C with {actual_rain:.1f}mm precipitation (not forecast)",
+            }
+
+        # Detection 3: Unexpected clouds / sudden radiation drop
+        # Actual radiation < 40% of forecast (significant drop)
+        if (
+            actual_radiation is not None
+            and forecast_radiation is not None
+            and forecast_radiation > 100  # Only during daylight with meaningful forecast
+            and actual_radiation < forecast_radiation * 0.4
+        ):
+            return {
+                "type": "unexpected_clouds",
+                "reason": f"Radiation {actual_radiation:.0f} W/m² vs forecast {forecast_radiation:.0f} W/m² ({actual_radiation/forecast_radiation*100:.0f}%)",
+            }
+
+        return None
+
     def _get_historical_context(
         self, all_predictions: List[Dict], current_date: str, current_hour: int
     ) -> Dict[str, float]:
@@ -873,6 +990,43 @@ class HourlyPredictionsHandler:
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _do_write)
+
+    async def _send_weather_alert_notification(
+        self,
+        alert_type: str,
+        reason: str,
+        hour: int,
+        date_str: str,
+        weather_actual: Optional[Dict] = None,
+        weather_forecast: Optional[Dict] = None,
+    ) -> None:
+        """Send a weather alert notification via Home Assistant @zara"""
+        try:
+            # Access notification service via data_manager -> hass
+            if not self.data_manager or not hasattr(self.data_manager, 'hass'):
+                _LOGGER.debug("Cannot send weather alert notification: no hass access")
+                return
+
+            hass = self.data_manager.hass
+            notification_service = hass.data.get(DOMAIN, {}).get("notification_service")
+
+            if not notification_service:
+                _LOGGER.debug("Notification service not available for weather alert")
+                return
+
+            await notification_service.show_weather_alert(
+                alert_type=alert_type,
+                reason=reason,
+                hour=hour,
+                date_str=date_str,
+                weather_actual=weather_actual,
+                weather_forecast=weather_forecast,
+            )
+
+            _LOGGER.info(f"Weather alert notification sent for {date_str} {hour:02d}:00")
+
+        except Exception as e:
+            _LOGGER.error(f"Error sending weather alert notification: {e}")
 
     def _ensure_file_exists(self):
         """Ensure the hourly predictions file exists with initial structure @zara"""

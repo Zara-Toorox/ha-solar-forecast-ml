@@ -1,4 +1,4 @@
-"""Forecast Orchestrator for Solar Forecast ML Integration V12.0.0 @zara
+"""Forecast Orchestrator for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -523,8 +523,15 @@ class ForecastOrchestrator:
 
                     hourly_values.append(blended_entry)
                 else:
-
-                    hourly_values.append(ml_hour)
+                    # Rule-based has no value for this hour - check if it's a production hour
+                    # If rule-based skipped this hour, it's likely outside production window
+                    # Only include ML value if it's within reasonable production hours
+                    if self.is_production_hour(datetime.fromisoformat(ml_hour["datetime"])):
+                        hourly_values.append(ml_hour)
+                    else:
+                        _LOGGER.debug(
+                            f"Skipping ML-only hour {hour} on {date} - outside production window"
+                        )
 
             _LOGGER.debug(f"Blended {len(hourly_values)} hourly values")
         elif ml_result and ml_result.hourly_values:

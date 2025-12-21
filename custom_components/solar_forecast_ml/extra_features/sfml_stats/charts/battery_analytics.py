@@ -139,11 +139,11 @@ class BatteryAnalyticsChart:
         ax.axis('off')
 
         stats_text = [
-            f"Geladen (Woche): {self.stats.get('weekCharged', 0):.2f} kWh",
-            f"Entladen (Woche): {self.stats.get('weekDischarged', 0):.2f} kWh",
+            f"Geladen (Mo-So): {self.stats.get('weekCharged', 0):.2f} kWh",
+            f"Entladen (Mo-So): {self.stats.get('weekDischarged', 0):.2f} kWh",
             f"Ø SOC: {self.stats.get('avgSOC', 0):.0f}%",
             f"Wirkungsgrad: {self.stats.get('efficiency', 0):.1f}%",
-            f"Zyklen (Monat): {self.stats.get('cycles', 0):.1f}",
+            f"Zyklen (Mo-So): {self.stats.get('cycles', 0):.1f}",
             f"Peak Leistung: {self.stats.get('peakPower', 0):.0f} W",
         ]
 

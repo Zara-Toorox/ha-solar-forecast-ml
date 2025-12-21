@@ -1,4 +1,4 @@
-"""Solar Forecast ML Integration - Main Entry Point V12.0.0 @zara
+"""Solar Forecast ML Integration - Main Entry Point V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -39,16 +39,39 @@ from .core.core_helpers import SafeDateTimeUtil as dt_util
 _LOGGER = logging.getLogger(__name__)
 
 _log_queue_listener: QueueListener | None = None
+_log_queue_handler: QueueHandler | None = None
+_logging_initialized: bool = False
 
 async def setup_file_logging(hass: HomeAssistant) -> None:
-    """Setup non-blocking file logging using QueueHandler @zara"""
-    global _log_queue_listener
+    """Setup non-blocking file logging using QueueHandler @zara
+
+    CRITICAL FIX V12.2.0: Prevents duplicate handlers on reload.
+    This function now checks if logging is already initialized and skips
+    re-initialization to prevent log message duplication (2x, 3x, 6x entries).
+    """
+    global _log_queue_listener, _log_queue_handler, _logging_initialized
+
+    # CRITICAL: Skip if already initialized to prevent handler accumulation
+    if _logging_initialized and _log_queue_listener is not None:
+        _LOGGER.debug("File logging already initialized - skipping (prevents duplicate handlers)")
+        return
 
     def _setup_logging_sync():
         """Synchronous file operations - runs in executor to avoid blocking @zara"""
-        global _log_queue_listener
+        global _log_queue_listener, _log_queue_handler, _logging_initialized
 
         try:
+            integration_logger = logging.getLogger(__package__)
+
+            # CRITICAL FIX: Remove any existing QueueHandlers first to prevent accumulation
+            # This handles edge cases where _logging_initialized flag was reset but handlers remain
+            existing_queue_handlers = [
+                h for h in integration_logger.handlers
+                if isinstance(h, QueueHandler)
+            ]
+            for handler in existing_queue_handlers:
+                _LOGGER.debug(f"Removing existing QueueHandler to prevent duplication: {handler}")
+                integration_logger.removeHandler(handler)
 
             log_dir = Path(hass.config.path("solar_forecast_ml/logs"))
             log_dir.mkdir(parents=True, exist_ok=True)
@@ -70,8 +93,8 @@ async def setup_file_logging(hass: HomeAssistant) -> None:
 
             log_queue: queue.Queue = queue.Queue(-1)
 
-            queue_handler = QueueHandler(log_queue)
-            queue_handler.setLevel(logging.DEBUG)
+            _log_queue_handler = QueueHandler(log_queue)
+            _log_queue_handler.setLevel(logging.DEBUG)
 
             _log_queue_listener = QueueListener(
                 log_queue,
@@ -82,9 +105,10 @@ async def setup_file_logging(hass: HomeAssistant) -> None:
 
             atexit.register(_stop_queue_listener)
 
-            integration_logger = logging.getLogger(__package__)
-            integration_logger.addHandler(queue_handler)
+            integration_logger.addHandler(_log_queue_handler)
             integration_logger.setLevel(logging.DEBUG)
+
+            _logging_initialized = True
 
             return str(log_file)
 
@@ -102,13 +126,24 @@ async def setup_file_logging(hass: HomeAssistant) -> None:
 
 def _stop_queue_listener() -> None:
     """Stop the queue listener on shutdown. @zara"""
-    global _log_queue_listener
+    global _log_queue_listener, _log_queue_handler, _logging_initialized
+
+    if _log_queue_handler is not None:
+        try:
+            integration_logger = logging.getLogger(__package__)
+            integration_logger.removeHandler(_log_queue_handler)
+            _log_queue_handler = None
+        except Exception:
+            pass
+
     if _log_queue_listener is not None:
         try:
             _log_queue_listener.stop()
             _log_queue_listener = None
         except Exception:
             pass
+
+    _logging_initialized = False
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Solar Forecast ML integration legacy @zara"""
@@ -318,7 +353,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry @zara"""
+    """Unload a config entry @zara
+
+    CRITICAL FIX V12.2.0: Now properly cleans up logging handlers on unload
+    to prevent duplicate log entries after reload.
+    """
     _LOGGER.info("Unloading Solar Forecast ML integration...")
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -331,6 +370,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         if not hass.data[DOMAIN]:
             _async_unregister_services(hass)
+
+            # CRITICAL FIX V12.2.0: Stop logging when last entry is unloaded
+            # This prevents handler accumulation on reload
+            _stop_queue_listener()
+            _LOGGER.debug("File logging stopped (last config entry unloaded)")
 
     _LOGGER.info("Solar Forecast ML integration unloaded successfully")
     return unload_ok

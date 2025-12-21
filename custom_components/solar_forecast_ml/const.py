@@ -1,4 +1,4 @@
-"""Constants for Solar Forecast ML Integration V12.0.0 @zara
+"""Constants for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -22,12 +22,12 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "12.0.0"
-RELEASE_VERSION = "12.0.0"
+VERSION = "12.2.0"
+RELEASE_VERSION = "12.2.0"
 RELEASE_NAME = "Sarpeidon"
-SOFTWARE_VERSION = "12.0.0"
-INTEGRATION_MODEL = "V12.0.0"
-ML_VERSION = "12.0.0"
+SOFTWARE_VERSION = "12.2.0"
+INTEGRATION_MODEL = "V12.2.0"
+ML_VERSION = "12.2.0"
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -88,6 +88,7 @@ CONF_NOTIFY_FORECAST = "notify_forecast"
 CONF_NOTIFY_LEARNING = "notify_learning"
 CONF_NOTIFY_SUCCESSFUL_LEARNING = "notify_successful_learning"
 CONF_NOTIFY_FROST = "notify_frost"
+CONF_NOTIFY_WEATHER_ALERT = "notify_weather_alert"
 CONF_LEARNING_ENABLED = "learning_enabled"
 
 CONF_ML_ALGORITHM = "ml_algorithm"
@@ -193,6 +194,9 @@ SERVICE_SEND_DAILY_BRIEFING = "send_daily_briefing"
 
 # Installation Services
 SERVICE_INSTALL_EXTRA_FEATURES = "install_extra_features"
+
+# Data Management Services
+SERVICE_BORG_ASSIMILATION_REVERSE = "borg_assimilation_reverse"
 
 ICON_SOLAR = "mdi:solar-power"
 ICON_FORECAST = "mdi:weather-sunny"

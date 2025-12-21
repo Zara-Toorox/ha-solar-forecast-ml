@@ -133,7 +133,7 @@ class HouseAnalyticsChart:
         ax.axis('off')
 
         stats_text = [
-            f"Verbrauch (Woche): {self.stats.get('weekConsumption', 0):.2f} kWh",
+            f"Verbrauch (Mo-So): {self.stats.get('weekConsumption', 0):.2f} kWh",
             f"Ø pro Tag: {self.stats.get('avgDaily', 0):.2f} kWh",
             f"Autarkie: {self.stats.get('autarky', 0):.1f}%",
             f"Eigenverbrauch: {self.stats.get('selfConsumption', 0):.1f}%",

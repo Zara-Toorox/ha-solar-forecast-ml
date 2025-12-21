@@ -1,4 +1,4 @@
-"""Geometry Learner for Solar Forecast ML Integration V12.0.0 @zara
+"""Geometry Learner for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -35,6 +35,167 @@ from .physics_engine import (
 from .panel_group_calculator import PanelGroupCalculator, PanelGroup
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class LearningConfig:
+    """Configuration for learning parameters, loaded from learning_config.json. @zara"""
+    # Learning parameters
+    baseline_prediction_kwh: float = 0.05
+    shadow_detection_efficiency: float = 0.2
+    shadow_hour_threshold: float = 0.7
+
+    # Smoothing parameters for adaptive learning
+    smoothing_aggressive_threshold: float = 1.0  # >100% deviation
+    smoothing_aggressive_old: float = 0.3
+    smoothing_aggressive_new: float = 0.7
+    smoothing_fast_threshold: float = 0.5  # >50% deviation
+    smoothing_fast_old: float = 0.5
+    smoothing_fast_new: float = 0.5
+    smoothing_normal_old: float = 0.8
+    smoothing_normal_new: float = 0.2
+
+    # Efficiency clamps
+    efficiency_min: float = 0.1
+    efficiency_max: float = 5.0
+    efficiency_conservative_min: float = 0.3
+    efficiency_conservative_max: float = 3.0
+
+    # Weather adjustment
+    weather_cloud_factor: float = 0.5
+
+    # Elevation adjustment
+    elevation_low_threshold: float = 10.0
+    elevation_low_factor: float = 0.15
+    elevation_high_factor: float = 0.08
+
+    # Physics defaults
+    physics_albedo: float = 0.2
+    physics_system_efficiency: float = 0.90
+
+    @classmethod
+    def load_from_file(cls, data_path: Path) -> "LearningConfig":
+        """Load config from learning_config.json synchronously. Falls back to defaults if not found. @zara
+
+        Note: This method performs blocking file I/O. Use async_load_from_file()
+        when calling from an async context (e.g., Home Assistant event loop).
+        """
+        config_file = data_path / "physics" / "learning_config.json"
+
+        if not config_file.exists():
+            _LOGGER.debug("No learning_config.json found, using defaults")
+            return cls()
+
+        try:
+            with open(config_file, "r") as f:
+                data = json.load(f)
+
+            return cls._parse_config_data(data, config_file)
+
+        except Exception as e:
+            _LOGGER.warning("Failed to load learning_config.json: %s, using defaults", e)
+            return cls()
+
+    @classmethod
+    async def async_load_from_file(cls, data_path: Path) -> "LearningConfig":
+        """Load config from learning_config.json asynchronously. Falls back to defaults if not found. @zara
+
+        Use this method when calling from an async context (e.g., Home Assistant event loop)
+        to avoid blocking file I/O.
+        """
+        import asyncio
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, cls.load_from_file, data_path)
+
+    @classmethod
+    def _parse_config_data(cls, data: dict, config_file: Path) -> "LearningConfig":
+        """Parse config data dict into LearningConfig instance. @zara"""
+        lp = data.get("learning_parameters", {})
+        smoothing = lp.get("smoothing", {})
+        clamps = lp.get("efficiency_clamps", {})
+        weather = data.get("weather_adjustment", {})
+        elevation = data.get("elevation_adjustment", {})
+        physics = data.get("physics_defaults", {})
+
+        config = cls(
+            baseline_prediction_kwh=lp.get("baseline_prediction_kwh", 0.05),
+            shadow_detection_efficiency=lp.get("shadow_detection_efficiency", 0.2),
+            shadow_hour_threshold=lp.get("shadow_hour_threshold", 0.7),
+
+            smoothing_aggressive_threshold=smoothing.get("aggressive", {}).get("deviation_threshold", 1.0),
+            smoothing_aggressive_old=smoothing.get("aggressive", {}).get("old_weight", 0.3),
+            smoothing_aggressive_new=smoothing.get("aggressive", {}).get("new_weight", 0.7),
+            smoothing_fast_threshold=smoothing.get("fast", {}).get("deviation_threshold", 0.5),
+            smoothing_fast_old=smoothing.get("fast", {}).get("old_weight", 0.5),
+            smoothing_fast_new=smoothing.get("fast", {}).get("new_weight", 0.5),
+            smoothing_normal_old=smoothing.get("normal", {}).get("old_weight", 0.8),
+            smoothing_normal_new=smoothing.get("normal", {}).get("new_weight", 0.2),
+
+            efficiency_min=clamps.get("min_efficiency", 0.1),
+            efficiency_max=clamps.get("max_efficiency", 5.0),
+            efficiency_conservative_min=clamps.get("conservative_min", 0.3),
+            efficiency_conservative_max=clamps.get("conservative_max", 3.0),
+
+            weather_cloud_factor=weather.get("cloud_cover_factor", 0.5),
+
+            elevation_low_threshold=elevation.get("low_elevation_threshold_deg", 10.0),
+            elevation_low_factor=elevation.get("low_elevation_factor", 0.15),
+            elevation_high_factor=elevation.get("high_elevation_factor", 0.08),
+
+            physics_albedo=physics.get("albedo", 0.2),
+            physics_system_efficiency=physics.get("system_efficiency", 0.90),
+        )
+
+        _LOGGER.info("Loaded learning config from %s", config_file)
+        return config
+
+
+# Global config instance (loaded lazily)
+_learning_config: Optional[LearningConfig] = None
+
+
+def get_learning_config(data_path: Optional[Path] = None) -> LearningConfig:
+    """Get the learning config, loading from file if not yet loaded (sync version). @zara
+
+    Note: This function performs blocking file I/O on first call.
+    Use async_get_learning_config() when calling from an async context.
+    """
+    global _learning_config
+    if _learning_config is None:
+        if data_path is not None:
+            _learning_config = LearningConfig.load_from_file(data_path)
+        else:
+            _learning_config = LearningConfig()
+    return _learning_config
+
+
+async def async_get_learning_config(data_path: Optional[Path] = None) -> LearningConfig:
+    """Get the learning config asynchronously, loading from file if not yet loaded. @zara
+
+    Use this function when calling from an async context (e.g., Home Assistant event loop)
+    to avoid blocking file I/O.
+    """
+    global _learning_config
+    if _learning_config is None:
+        if data_path is not None:
+            _learning_config = await LearningConfig.async_load_from_file(data_path)
+        else:
+            _learning_config = LearningConfig()
+    return _learning_config
+
+
+def reload_learning_config(data_path: Path) -> LearningConfig:
+    """Force reload of learning config from file (sync version). @zara"""
+    global _learning_config
+    _learning_config = LearningConfig.load_from_file(data_path)
+    return _learning_config
+
+
+async def async_reload_learning_config(data_path: Path) -> LearningConfig:
+    """Force reload of learning config from file asynchronously. @zara"""
+    global _learning_config
+    _learning_config = await LearningConfig.async_load_from_file(data_path)
+    return _learning_config
 
 
 @dataclass
@@ -601,6 +762,10 @@ class GeometryLearner:
         }
 
 
+WEATHER_CLEAR_MAX_CLOUDS = 20
+WEATHER_CLOUDY_MIN_CLOUDS = 40
+
+
 @dataclass
 class PanelGroupEfficiency:
     """Learned efficiency factors for a single panel group. @zara"""
@@ -608,13 +773,20 @@ class PanelGroupEfficiency:
     configured_tilt_deg: float
     configured_azimuth_deg: float
     power_kwp: float
-    energy_sensor: Optional[str] = None  # Optional kWh sensor for per-group learning
+    energy_sensor: Optional[str] = None
     learned_efficiency_factor: float = 1.0
     learned_shadow_hours: List[int] = field(default_factory=list)
     sample_count: int = 0
     confidence: float = 0.0
     hourly_efficiency: Dict[int, float] = field(default_factory=dict)
     learning_history: List[Dict[str, Any]] = field(default_factory=list)
+    avg_cloud_cover_at_learning: Dict[int, float] = field(default_factory=dict)
+    sample_count_per_hour: Dict[int, int] = field(default_factory=dict)
+    avg_sun_elevation_at_learning: Dict[int, float] = field(default_factory=dict)
+    hourly_efficiency_clear: Dict[int, float] = field(default_factory=dict)
+    hourly_efficiency_cloudy: Dict[int, float] = field(default_factory=dict)
+    sample_count_clear: Dict[int, int] = field(default_factory=dict)
+    sample_count_cloudy: Dict[int, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         result = {
@@ -627,7 +799,14 @@ class PanelGroupEfficiency:
             "sample_count": self.sample_count,
             "confidence": round(self.confidence, 4),
             "hourly_efficiency": {str(k): round(v, 4) for k, v in self.hourly_efficiency.items()},
-            "learning_history": self.learning_history[-30:],  # Keep last 30 entries
+            "learning_history": self.learning_history[-30:],
+            "avg_cloud_cover_at_learning": {str(k): round(v, 1) for k, v in self.avg_cloud_cover_at_learning.items()},
+            "sample_count_per_hour": {str(k): v for k, v in self.sample_count_per_hour.items()},
+            "avg_sun_elevation_at_learning": {str(k): round(v, 1) for k, v in self.avg_sun_elevation_at_learning.items()},
+            "hourly_efficiency_clear": {str(k): round(v, 4) for k, v in self.hourly_efficiency_clear.items()},
+            "hourly_efficiency_cloudy": {str(k): round(v, 4) for k, v in self.hourly_efficiency_cloudy.items()},
+            "sample_count_clear": {str(k): v for k, v in self.sample_count_clear.items()},
+            "sample_count_cloudy": {str(k): v for k, v in self.sample_count_cloudy.items()},
         }
         if self.energy_sensor:
             result["energy_sensor"] = self.energy_sensor
@@ -637,6 +816,20 @@ class PanelGroupEfficiency:
     def from_dict(cls, data: dict) -> "PanelGroupEfficiency":
         hourly_eff = data.get("hourly_efficiency", {})
         hourly_eff_int = {int(k): v for k, v in hourly_eff.items()}
+        avg_cloud = data.get("avg_cloud_cover_at_learning", {})
+        avg_cloud_int = {int(k): v for k, v in avg_cloud.items()}
+        sample_per_hour = data.get("sample_count_per_hour", {})
+        sample_per_hour_int = {int(k): v for k, v in sample_per_hour.items()}
+        avg_elevation = data.get("avg_sun_elevation_at_learning", {})
+        avg_elevation_int = {int(k): v for k, v in avg_elevation.items()}
+        hourly_eff_clear = data.get("hourly_efficiency_clear", {})
+        hourly_eff_clear_int = {int(k): v for k, v in hourly_eff_clear.items()}
+        hourly_eff_cloudy = data.get("hourly_efficiency_cloudy", {})
+        hourly_eff_cloudy_int = {int(k): v for k, v in hourly_eff_cloudy.items()}
+        sample_count_clear = data.get("sample_count_clear", {})
+        sample_count_clear_int = {int(k): v for k, v in sample_count_clear.items()}
+        sample_count_cloudy = data.get("sample_count_cloudy", {})
+        sample_count_cloudy_int = {int(k): v for k, v in sample_count_cloudy.items()}
         return cls(
             name=data.get("name", "Unknown"),
             configured_tilt_deg=data.get("configured_tilt_deg", 30.0),
@@ -649,6 +842,13 @@ class PanelGroupEfficiency:
             confidence=data.get("confidence", 0.0),
             hourly_efficiency=hourly_eff_int,
             learning_history=data.get("learning_history", []),
+            avg_cloud_cover_at_learning=avg_cloud_int,
+            sample_count_per_hour=sample_per_hour_int,
+            avg_sun_elevation_at_learning=avg_elevation_int,
+            hourly_efficiency_clear=hourly_eff_clear_int,
+            hourly_efficiency_cloudy=hourly_eff_cloudy_int,
+            sample_count_clear=sample_count_clear_int,
+            sample_count_cloudy=sample_count_cloudy_int,
         )
 
 
@@ -670,21 +870,50 @@ class PanelGroupEfficiencyLearner:
     MIN_SAMPLES_FOR_CONFIDENCE = 30
     FULL_CONFIDENCE_SAMPLES = 100
     MAX_CLOUD_COVER = 50.0  # Relaxed for winter - allow more cloudy days @zara
-    MIN_SUN_ELEVATION = 5.0  # Lowered for winter when sun is low @zara
+    MIN_SUN_ELEVATION = 3.0  # Lowered for winter to capture morning/evening hours @zara
+    MIN_GHI = 20  # Lowered from 50 to allow more learning data in winter @zara
 
     def __init__(
         self,
         data_path: Path,
         panel_groups: List[Dict[str, Any]],
         skip_load: bool = False,
+        _config: Optional[LearningConfig] = None,
+        _panel_group_calculator: Optional[PanelGroupCalculator] = None,
     ):
-        """Initialize the panel group efficiency learner. @zara"""
+        """Initialize the panel group efficiency learner. @zara
+
+        Note: When calling from an async context, use async_create() factory method
+        to avoid blocking file I/O.
+
+        Args:
+            data_path: Path to data directory
+            panel_groups: List of panel group configurations
+            skip_load: If True, skip loading state from file
+            _config: Pre-loaded LearningConfig (internal, used by async_create)
+            _panel_group_calculator: Pre-created calculator (internal, used by async_create)
+        """
         self.data_path = data_path
         # State file (in physics/ subdirectory for better organization)
         self.state_file = data_path / "physics" / "learned_panel_group_efficiency.json"
 
+        # Load learning config from JSON (externalized parameters)
+        # Use pre-loaded config if provided (from async_create), otherwise load sync
+        if _config is not None:
+            self._config = _config
+        else:
+            self._config = get_learning_config(data_path)
+
         self._panel_groups_config = panel_groups
-        self._panel_group_calculator = PanelGroupCalculator(panel_groups=panel_groups)
+        # Pass data_path so PanelGroupCalculator can load physics defaults from config
+        # Use pre-created calculator if provided (from async_create)
+        if _panel_group_calculator is not None:
+            self._panel_group_calculator = _panel_group_calculator
+        else:
+            self._panel_group_calculator = PanelGroupCalculator(
+                panel_groups=panel_groups,
+                data_path=data_path
+            )
 
         self.group_efficiencies: List[PanelGroupEfficiency] = []
         for idx, group in enumerate(panel_groups):
@@ -710,6 +939,50 @@ class PanelGroupEfficiencyLearner:
             len(self.group_efficiencies),
             self._panel_group_calculator.total_capacity_kwp,
         )
+
+    @classmethod
+    async def async_create(
+        cls,
+        data_path: Path,
+        panel_groups: List[Dict[str, Any]],
+        skip_load: bool = False,
+    ) -> "PanelGroupEfficiencyLearner":
+        """Async factory method to create PanelGroupEfficiencyLearner without blocking. @zara
+
+        Use this method when creating PanelGroupEfficiencyLearner from an async context
+        (e.g., Home Assistant event loop) to avoid blocking file I/O.
+
+        Args:
+            data_path: Path to data directory
+            panel_groups: List of panel group configurations
+            skip_load: If True, skip loading state from file
+
+        Returns:
+            Initialized PanelGroupEfficiencyLearner instance
+        """
+        # Load config asynchronously
+        config = await async_get_learning_config(data_path)
+
+        # Create PanelGroupCalculator asynchronously
+        calculator = await PanelGroupCalculator.async_create(
+            panel_groups=panel_groups,
+            data_path=data_path
+        )
+
+        # Create instance with pre-loaded components (skip_load=True to avoid sync I/O)
+        instance = cls(
+            data_path=data_path,
+            panel_groups=panel_groups,
+            skip_load=True,  # We'll load state async below
+            _config=config,
+            _panel_group_calculator=calculator,
+        )
+
+        # Load state asynchronously if needed
+        if not skip_load:
+            await instance.async_load_state()
+
+        return instance
 
     async def async_load_state(self) -> None:
         """Load state asynchronously. @zara"""
@@ -741,7 +1014,7 @@ class PanelGroupEfficiencyLearner:
             data = json.load(f)
 
         version = data.get("version", "1.0")
-        if version != "2.0":
+        if version not in ("2.0", "2.1"):
             _LOGGER.info("Old geometry state version, starting fresh for panel groups")
             return
 
@@ -755,6 +1028,27 @@ class PanelGroupEfficiencyLearner:
                     eff.confidence = saved.get("confidence", 0.0)
                     eff.hourly_efficiency = {
                         int(k): v for k, v in saved.get("hourly_efficiency", {}).items()
+                    }
+                    eff.avg_cloud_cover_at_learning = {
+                        int(k): v for k, v in saved.get("avg_cloud_cover_at_learning", {}).items()
+                    }
+                    eff.sample_count_per_hour = {
+                        int(k): v for k, v in saved.get("sample_count_per_hour", {}).items()
+                    }
+                    eff.avg_sun_elevation_at_learning = {
+                        int(k): v for k, v in saved.get("avg_sun_elevation_at_learning", {}).items()
+                    }
+                    eff.hourly_efficiency_clear = {
+                        int(k): v for k, v in saved.get("hourly_efficiency_clear", {}).items()
+                    }
+                    eff.hourly_efficiency_cloudy = {
+                        int(k): v for k, v in saved.get("hourly_efficiency_cloudy", {}).items()
+                    }
+                    eff.sample_count_clear = {
+                        int(k): v for k, v in saved.get("sample_count_clear", {}).items()
+                    }
+                    eff.sample_count_cloudy = {
+                        int(k): v for k, v in saved.get("sample_count_cloudy", {}).items()
                     }
                     break
 
@@ -775,7 +1069,7 @@ class PanelGroupEfficiencyLearner:
         """Save current state to file. @zara"""
         try:
             data = {
-                "version": "2.0",
+                "version": "2.1",
                 "mode": "panel_groups",
                 "panel_groups": [g.to_dict() for g in self.group_efficiencies],
                 "data_points": [p.to_dict() for p in self.data_points[-500:]],
@@ -833,7 +1127,7 @@ class PanelGroupEfficiencyLearner:
         if cloud_cover_percent > self.MAX_CLOUD_COVER:
             return False
 
-        if ghi_wm2 < 50:
+        if ghi_wm2 < self.MIN_GHI:
             return False
 
         irradiance = IrradianceData(ghi=ghi_wm2, dni=dni_wm2, dhi=dhi_wm2)
@@ -845,11 +1139,12 @@ class PanelGroupEfficiencyLearner:
 
         if physics_result.total_power_kwh > 0.001:
             if per_group_actuals:
-                # Per-group learning using actual sensor data
                 self._learn_from_per_group_actuals(
                     hour=hour,
                     physics_result=physics_result,
                     per_group_actuals=per_group_actuals,
+                    cloud_cover=cloud_cover_percent,
+                    sun_elevation_deg=sun_elevation_deg,
                 )
             else:
                 # Fallback: Distribute total actual by contribution percentage
@@ -886,6 +1181,8 @@ class PanelGroupEfficiencyLearner:
         hour: int,
         physics_result,
         per_group_actuals: Dict[str, float],
+        cloud_cover: float = 50.0,
+        sun_elevation_deg: float = 20.0,
     ) -> None:
         """Learn efficiency from per-group actual production data.
 
@@ -901,42 +1198,144 @@ class PanelGroupEfficiencyLearner:
             eff = self.group_efficiencies[idx]
             group_name = eff.name
 
-            # Get actual production for this group
             group_actual_kwh = per_group_actuals.get(group_name)
 
             if group_actual_kwh is None or group_actual_kwh <= 0:
                 continue
 
-            # Get physics prediction for this group
             group_predicted_kwh = group_result.power_kwh
 
+            # If physics prediction is too low, use existing hourly_efficiency as baseline
+            # This handles cases where DNI/DHI=0 causes unrealistic physics predictions
             if group_predicted_kwh <= 0.001:
-                continue
+                # Fallback: Compare actual to what we would have predicted with current efficiency
+                existing_eff = eff.hourly_efficiency.get(hour, eff.learned_efficiency_factor)
+                # Use configurable baseline (from learning_config.json)
+                baseline_prediction = self._config.baseline_prediction_kwh
+                if group_actual_kwh > 0.01:
+                    # Learn from actual vs baseline
+                    efficiency_ratio = group_actual_kwh / baseline_prediction
+                    efficiency_ratio = min(self._config.efficiency_conservative_max, efficiency_ratio)
+                    _LOGGER.debug(
+                        "Low physics prediction for %s @ %02d:00, using baseline. actual=%.4f, baseline=%.4f, eff=%.3f",
+                        group_name, hour, group_actual_kwh, baseline_prediction, efficiency_ratio
+                    )
+                else:
+                    # Very low actual production - this is shadow/no-sun situation
+                    # Reduce efficiency significantly (configurable shadow detection)
+                    efficiency_ratio = self._config.shadow_detection_efficiency
+                    _LOGGER.debug(
+                        "Very low production for %s @ %02d:00: actual=%.4f -> setting eff=%.2f (shadow detected)",
+                        group_name, hour, group_actual_kwh, efficiency_ratio
+                    )
+            else:
+                efficiency_ratio = group_actual_kwh / group_predicted_kwh
 
-            # Calculate efficiency ratio for this specific group
-            efficiency_ratio = group_actual_kwh / group_predicted_kwh
-
-            # Sanity check: efficiency should be reasonable (0.1 to 2.0)
-            if not (0.1 < efficiency_ratio < 2.0):
-                _LOGGER.debug(
-                    "Unusual efficiency ratio for %s: %.3f (actual=%.4f, predicted=%.4f)",
-                    group_name, efficiency_ratio, group_actual_kwh, group_predicted_kwh
+            # Clamp extreme ratios but don't reject them - they contain valuable information!
+            # Very high ratios (>max) indicate physics underestimation
+            # Very low ratios (<min) indicate shadowing
+            if efficiency_ratio > self._config.efficiency_max:
+                _LOGGER.info(
+                    "High efficiency ratio for %s @ %02d:00: %.3f (actual=%.4f, predicted=%.4f) - clamping to %.1f",
+                    group_name, hour, efficiency_ratio, group_actual_kwh, group_predicted_kwh,
+                    self._config.efficiency_conservative_max
                 )
-                continue
+                efficiency_ratio = self._config.efficiency_conservative_max
+            elif efficiency_ratio < self._config.efficiency_min:
+                _LOGGER.info(
+                    "Low efficiency ratio for %s @ %02d:00: %.3f (actual=%.4f, predicted=%.4f) - clamping to %.1f",
+                    group_name, hour, efficiency_ratio, group_actual_kwh, group_predicted_kwh,
+                    self._config.efficiency_min
+                )
+                efficiency_ratio = self._config.efficiency_min
 
-            # Update hourly efficiency with exponential moving average
             if hour not in eff.hourly_efficiency:
                 eff.hourly_efficiency[hour] = efficiency_ratio
+                eff.avg_cloud_cover_at_learning[hour] = cloud_cover
+                eff.avg_sun_elevation_at_learning[hour] = sun_elevation_deg
+                eff.sample_count_per_hour[hour] = 1
             else:
                 old_eff = eff.hourly_efficiency[hour]
-                # Use stronger weight (0.2) for actual sensor data vs. distributed data (0.1)
-                eff.hourly_efficiency[hour] = old_eff * 0.8 + efficiency_ratio * 0.2
+
+                # Adaptive learning rate: faster when deviation is large (configurable via learning_config.json)
+                deviation_ratio = abs(efficiency_ratio - old_eff) / max(old_eff, 0.1)
+
+                if deviation_ratio > self._config.smoothing_aggressive_threshold:
+                    # Very large deviation - learn aggressively
+                    smoothing_old = self._config.smoothing_aggressive_old
+                    smoothing_new = self._config.smoothing_aggressive_new
+                    _LOGGER.info(
+                        "Aggressive learning for %s @ %02d:00: deviation=%.0f%%, "
+                        "old_eff=%.3f -> new_eff=%.3f (%.0f/%.0f smoothing)",
+                        group_name, hour, deviation_ratio * 100, old_eff, efficiency_ratio,
+                        smoothing_old * 100, smoothing_new * 100
+                    )
+                elif deviation_ratio > self._config.smoothing_fast_threshold:
+                    # Moderate deviation - learn faster
+                    smoothing_old = self._config.smoothing_fast_old
+                    smoothing_new = self._config.smoothing_fast_new
+                    _LOGGER.info(
+                        "Fast learning for %s @ %02d:00: deviation=%.0f%%, "
+                        "old_eff=%.3f -> new_eff=%.3f (%.0f/%.0f smoothing)",
+                        group_name, hour, deviation_ratio * 100, old_eff, efficiency_ratio,
+                        smoothing_old * 100, smoothing_new * 100
+                    )
+                else:
+                    # Small deviation - normal smoothing
+                    smoothing_old = self._config.smoothing_normal_old
+                    smoothing_new = self._config.smoothing_normal_new
+
+                eff.hourly_efficiency[hour] = old_eff * smoothing_old + efficiency_ratio * smoothing_new
+                old_cloud = eff.avg_cloud_cover_at_learning.get(hour, cloud_cover)
+                eff.avg_cloud_cover_at_learning[hour] = old_cloud * smoothing_old + cloud_cover * smoothing_new
+                old_elevation = eff.avg_sun_elevation_at_learning.get(hour, sun_elevation_deg)
+                eff.avg_sun_elevation_at_learning[hour] = old_elevation * smoothing_old + sun_elevation_deg * smoothing_new
+                eff.sample_count_per_hour[hour] = eff.sample_count_per_hour.get(hour, 0) + 1
 
             eff.sample_count += 1
 
+            self._learn_weather_specific_efficiency(
+                eff, hour, efficiency_ratio, cloud_cover, smoothing_old, smoothing_new
+            )
+
             _LOGGER.debug(
-                "Per-group learning for %s @ %02d:00: actual=%.4f, predicted=%.4f, eff=%.3f",
-                group_name, hour, group_actual_kwh, group_predicted_kwh, efficiency_ratio
+                "Per-group learning for %s @ %02d:00: actual=%.4f, predicted=%.4f, eff=%.3f, clouds=%.0f%%, elev=%.1f°",
+                group_name, hour, group_actual_kwh, group_predicted_kwh, efficiency_ratio, cloud_cover, sun_elevation_deg
+            )
+
+    def _learn_weather_specific_efficiency(
+        self,
+        eff: PanelGroupEfficiency,
+        hour: int,
+        efficiency_ratio: float,
+        cloud_cover: float,
+        smoothing_old: float,
+        smoothing_new: float,
+    ) -> None:
+        """Learn weather-specific efficiency (clear vs cloudy). @zara"""
+        if cloud_cover <= WEATHER_CLEAR_MAX_CLOUDS:
+            if hour not in eff.hourly_efficiency_clear:
+                eff.hourly_efficiency_clear[hour] = efficiency_ratio
+                eff.sample_count_clear[hour] = 1
+            else:
+                old_eff = eff.hourly_efficiency_clear[hour]
+                eff.hourly_efficiency_clear[hour] = old_eff * smoothing_old + efficiency_ratio * smoothing_new
+                eff.sample_count_clear[hour] = eff.sample_count_clear.get(hour, 0) + 1
+            _LOGGER.debug(
+                "Clear-sky learning for %s @ %02d:00: eff=%.3f, clouds=%.0f%%",
+                eff.name, hour, eff.hourly_efficiency_clear[hour], cloud_cover
+            )
+        elif cloud_cover >= WEATHER_CLOUDY_MIN_CLOUDS:
+            if hour not in eff.hourly_efficiency_cloudy:
+                eff.hourly_efficiency_cloudy[hour] = efficiency_ratio
+                eff.sample_count_cloudy[hour] = 1
+            else:
+                old_eff = eff.hourly_efficiency_cloudy[hour]
+                eff.hourly_efficiency_cloudy[hour] = old_eff * smoothing_old + efficiency_ratio * smoothing_new
+                eff.sample_count_cloudy[hour] = eff.sample_count_cloudy.get(hour, 0) + 1
+            _LOGGER.debug(
+                "Cloudy-sky learning for %s @ %02d:00: eff=%.3f, clouds=%.0f%%",
+                eff.name, hour, eff.hourly_efficiency_cloudy[hour], cloud_cover
             )
 
     async def optimize_efficiency(self) -> bool:
@@ -951,16 +1350,20 @@ class PanelGroupEfficiencyLearner:
 
         for eff in self.group_efficiencies:
             if eff.hourly_efficiency:
+                # Use configurable range to capture real efficiency variations
+                # Values >1.0 mean panels produce MORE than physics model predicts
+                # Values <1.0 mean panels produce LESS than physics model predicts
+                # Both are valid learning signals, not errors!
                 valid_efficiencies = [
                     e for e in eff.hourly_efficiency.values()
-                    if 0.3 < e < 1.5
+                    if self._config.efficiency_min < e < self._config.efficiency_max
                 ]
                 if valid_efficiencies:
                     eff.learned_efficiency_factor = sum(valid_efficiencies) / len(valid_efficiencies)
 
                 shadow_hours = []
                 for hour, hour_eff in eff.hourly_efficiency.items():
-                    if hour_eff < 0.7:
+                    if hour_eff < self._config.shadow_hour_threshold:
                         shadow_hours.append(hour)
                 eff.learned_shadow_hours = sorted(shadow_hours)
 
@@ -979,17 +1382,288 @@ class PanelGroupEfficiencyLearner:
 
         return True
 
-    def get_efficiency_for_hour(self, group_index: int, hour: int) -> float:
-        """Get learned efficiency factor for a group at a specific hour. @zara"""
+    def get_efficiency_for_hour(
+        self,
+        group_index: int,
+        hour: int,
+        current_cloud_cover: Optional[float] = None,
+        current_sun_elevation: Optional[float] = None,
+        current_dni: Optional[float] = None,
+        current_dhi: Optional[float] = None,
+        current_ghi: Optional[float] = None,
+    ) -> float:
+        """Get learned efficiency factor for a group at a specific hour.
+
+        The learned efficiency reflects how well the panel performs relative to
+        physics prediction. This is primarily valid for DIRECT radiation (DNI).
+        For DIFFUSE radiation (DHI), panel orientation matters much less, so
+        efficiency should be closer to 1.0.
+
+        When DNI/GHI data is available, we weight the learned efficiency by the
+        direct radiation fraction. This ensures:
+        - Clear sky (high DNI): Use mostly learned efficiency (preserves accuracy)
+        - Cloudy sky (high DHI): Use efficiency closer to 1.0 (physics is accurate)
+
+        Args:
+            group_index: Index of the panel group
+            hour: Hour of day (0-23)
+            current_cloud_cover: Current cloud cover percentage (0-100).
+            current_sun_elevation: Current sun elevation in degrees.
+            current_dni: Direct Normal Irradiance in W/m2 (NEW)
+            current_dhi: Diffuse Horizontal Irradiance in W/m2 (NEW)
+            current_ghi: Global Horizontal Irradiance in W/m2 (NEW)
+
+        @zara
+        """
         if group_index >= len(self.group_efficiencies):
             return 1.0
 
         eff = self.group_efficiencies[group_index]
 
+        learned_eff = self._get_weather_specific_efficiency(eff, hour, current_cloud_cover)
+
+        if current_ghi is not None and current_ghi > 20:
+            direct_fraction = self._calculate_direct_fraction(
+                current_dni, current_dhi, current_ghi, current_cloud_cover
+            )
+
+            if learned_eff <= 1.0:
+                DIFFUSE_LOSS_RETENTION = 0.3
+                diffuse_efficiency = 1.0 - (1.0 - learned_eff) * DIFFUSE_LOSS_RETENTION
+            else:
+                DIFFUSE_GAIN_RETENTION = 0.15
+                diffuse_efficiency = 1.0 + (learned_eff - 1.0) * DIFFUSE_GAIN_RETENTION
+
+            weighted_efficiency = (
+                direct_fraction * learned_eff +
+                (1 - direct_fraction) * diffuse_efficiency
+            )
+
+            _LOGGER.debug(
+                "DNI-weighted efficiency for %s @ %02d:00: "
+                "learned=%.3f, direct_fraction=%.2f, diffuse_eff=%.3f, weighted=%.3f",
+                eff.name, hour, learned_eff, direct_fraction, diffuse_efficiency, weighted_efficiency
+            )
+
+            if hour in eff.hourly_efficiency:
+                learned_elevation = eff.avg_sun_elevation_at_learning.get(hour)
+                if current_sun_elevation is not None and learned_elevation is not None:
+                    weighted_efficiency = self._adjust_efficiency_for_sun_elevation(
+                        learned_eff=weighted_efficiency,
+                        current_elevation=current_sun_elevation,
+                        learned_elevation=learned_elevation,
+                        group_name=eff.name,
+                        hour=hour,
+                    )
+
+            return max(
+                self._config.efficiency_conservative_min,
+                min(self._config.efficiency_conservative_max, weighted_efficiency)
+            )
+
         if hour in eff.hourly_efficiency:
-            return eff.hourly_efficiency[hour]
+            learned_cloud = eff.avg_cloud_cover_at_learning.get(hour)
+            learned_elevation = eff.avg_sun_elevation_at_learning.get(hour)
+
+            if current_cloud_cover is not None and learned_cloud is not None:
+                learned_eff = self._adjust_efficiency_for_weather(
+                    learned_eff=learned_eff,
+                    current_cloud_cover=current_cloud_cover,
+                    learned_cloud_cover=learned_cloud,
+                )
+
+            if current_sun_elevation is not None and learned_elevation is not None:
+                learned_eff = self._adjust_efficiency_for_sun_elevation(
+                    learned_eff=learned_eff,
+                    current_elevation=current_sun_elevation,
+                    learned_elevation=learned_elevation,
+                    group_name=eff.name,
+                    hour=hour,
+                )
+
+            return learned_eff
 
         return eff.learned_efficiency_factor
+
+    def _get_weather_specific_efficiency(
+        self,
+        eff: PanelGroupEfficiency,
+        hour: int,
+        current_cloud_cover: Optional[float],
+    ) -> float:
+        """Get weather-specific efficiency if available. @zara"""
+        if current_cloud_cover is not None:
+            if current_cloud_cover <= WEATHER_CLEAR_MAX_CLOUDS:
+                if hour in eff.hourly_efficiency_clear:
+                    _LOGGER.debug(
+                        "Using CLEAR efficiency for %s @ %02d:00: %.3f (clouds=%.0f%%)",
+                        eff.name, hour, eff.hourly_efficiency_clear[hour], current_cloud_cover
+                    )
+                    return eff.hourly_efficiency_clear[hour]
+            elif current_cloud_cover >= WEATHER_CLOUDY_MIN_CLOUDS:
+                if hour in eff.hourly_efficiency_cloudy:
+                    _LOGGER.debug(
+                        "Using CLOUDY efficiency for %s @ %02d:00: %.3f (clouds=%.0f%%)",
+                        eff.name, hour, eff.hourly_efficiency_cloudy[hour], current_cloud_cover
+                    )
+                    return eff.hourly_efficiency_cloudy[hour]
+            else:
+                clear_eff = eff.hourly_efficiency_clear.get(hour)
+                cloudy_eff = eff.hourly_efficiency_cloudy.get(hour)
+                if clear_eff is not None and cloudy_eff is not None:
+                    blend = (current_cloud_cover - WEATHER_CLEAR_MAX_CLOUDS) / (WEATHER_CLOUDY_MIN_CLOUDS - WEATHER_CLEAR_MAX_CLOUDS)
+                    blended_eff = clear_eff * (1 - blend) + cloudy_eff * blend
+                    _LOGGER.debug(
+                        "Using BLENDED efficiency for %s @ %02d:00: %.3f (clear=%.3f, cloudy=%.3f, blend=%.2f)",
+                        eff.name, hour, blended_eff, clear_eff, cloudy_eff, blend
+                    )
+                    return blended_eff
+
+        if hour in eff.hourly_efficiency:
+            return eff.hourly_efficiency[hour]
+        return eff.learned_efficiency_factor
+
+    def _calculate_direct_fraction(
+        self,
+        dni: Optional[float],
+        dhi: Optional[float],
+        ghi: float,
+        cloud_cover: Optional[float] = None,
+    ) -> float:
+        """Calculate the fraction of direct radiation in total irradiance.
+
+        Args:
+            dni: Direct Normal Irradiance in W/m2
+            dhi: Diffuse Horizontal Irradiance in W/m2
+            ghi: Global Horizontal Irradiance in W/m2
+            cloud_cover: Cloud cover percentage as fallback
+
+        Returns:
+            Fraction of direct radiation (0.0 = all diffuse, 1.0 = all direct)
+
+        @zara
+        """
+        if dni is not None and ghi > 0:
+            # Direct calculation from DNI/GHI ratio
+            # Note: DNI can be > GHI at low sun angles, so we clamp
+            direct_fraction = max(0.0, min(1.0, dni / ghi))
+        elif dhi is not None and ghi > 0:
+            # Calculate from DHI: direct = GHI - DHI (approximately)
+            direct_fraction = max(0.0, min(1.0, (ghi - dhi) / ghi))
+        elif cloud_cover is not None:
+            # Fallback: Estimate direct fraction from cloud cover
+            # Clear sky (~0% clouds): ~85% direct
+            # Overcast (~100% clouds): ~15% direct
+            direct_fraction = max(0.0, min(1.0, 0.15 + (100 - cloud_cover) / 100 * 0.70))
+        else:
+            # Conservative default
+            direct_fraction = 0.5
+
+        return direct_fraction
+
+    def _adjust_efficiency_for_weather(
+        self,
+        learned_eff: float,
+        current_cloud_cover: float,
+        learned_cloud_cover: float,
+    ) -> float:
+        """Adjust learned efficiency based on weather difference.
+
+        If efficiency was learned at high cloud cover but current weather is clear,
+        we should expect HIGHER actual production relative to physics model.
+        Conversely, if learned at clear sky but current is cloudy, expect LOWER.
+
+        The adjustment is based on the principle that cloud cover affects the
+        ratio between diffuse and direct radiation. At high cloud cover, panels
+        receive more diffuse light (which affects tilt efficiency differently).
+
+        @zara
+        """
+        cloud_diff = learned_cloud_cover - current_cloud_cover
+
+        if abs(cloud_diff) < 10:
+            return learned_eff
+
+        # Weather cloud factor from config (default 0.5)
+        adjustment_factor = 1.0 + (cloud_diff / 100.0) * self._config.weather_cloud_factor
+
+        adjusted_eff = learned_eff * adjustment_factor
+
+        adjusted_eff = max(
+            self._config.efficiency_conservative_min,
+            min(self._config.efficiency_conservative_max, adjusted_eff)
+        )
+
+        _LOGGER.debug(
+            "Weather adjustment: learned_eff=%.3f, clouds %.0f%% -> %.0f%%, "
+            "adjustment=%.3f, result=%.3f",
+            learned_eff, learned_cloud_cover, current_cloud_cover,
+            adjustment_factor, adjusted_eff
+        )
+
+        return adjusted_eff
+
+    def _adjust_efficiency_for_sun_elevation(
+        self,
+        learned_eff: float,
+        current_elevation: float,
+        learned_elevation: float,
+        group_name: str = "",
+        hour: int = 0,
+    ) -> float:
+        """Adjust learned efficiency based on sun elevation difference.
+
+        This accounts for seasonal shadow variations:
+        - Same hour in summer (high sun) vs winter (low sun) can have vastly
+          different shadow patterns
+        - If efficiency was learned at high elevation but current is low,
+          there may be more shadowing -> reduce efficiency
+        - If learned at low elevation but current is high, less shadowing
+          -> but be careful not to over-boost
+
+        The correction is asymmetric:
+        - Lower sun than learned: Stronger correction (shadows are worse)
+        - Higher sun than learned: Weaker correction (can't exceed physics)
+
+        @zara
+        """
+        elevation_diff = current_elevation - learned_elevation
+
+        # Small differences don't need correction
+        if abs(elevation_diff) < 5:
+            return learned_eff
+
+        # Calculate correction factor (configurable via learning_config.json)
+        # Negative diff = current sun is LOWER than when learned
+        # This typically means MORE shadowing in winter
+        if elevation_diff < 0:
+            # Sun is lower than learned -> expect MORE shadows
+            # Stronger correction (default: -15% per 10° lower)
+            correction_factor = 1.0 + (elevation_diff / 10.0) * self._config.elevation_low_factor
+        else:
+            # Sun is higher than learned -> expect LESS shadows
+            # Weaker correction (default: +8% per 10° higher, can't exceed physics)
+            correction_factor = 1.0 + (elevation_diff / 10.0) * self._config.elevation_high_factor
+
+        # Clamp to reasonable range
+        correction_factor = max(self._config.efficiency_conservative_min, min(1.5, correction_factor))
+
+        adjusted_eff = learned_eff * correction_factor
+
+        # Final clamp
+        adjusted_eff = max(
+            self._config.efficiency_min,
+            min(self._config.efficiency_conservative_max, adjusted_eff)
+        )
+
+        _LOGGER.debug(
+            "Elevation adjustment for %s @ %02d:00: learned_elev=%.1f°, current=%.1f°, "
+            "diff=%.1f°, correction=%.3f, eff %.3f -> %.3f",
+            group_name, hour, learned_elevation, current_elevation,
+            elevation_diff, correction_factor, learned_eff, adjusted_eff
+        )
+
+        return adjusted_eff
 
     def get_panel_group_calculator(self) -> PanelGroupCalculator:
         """Get the panel group calculator. @zara"""

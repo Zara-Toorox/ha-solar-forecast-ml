@@ -1,4 +1,4 @@
-"""Panel Group Calculator for Solar Forecast ML Integration V12.0.0 @zara
+"""Panel Group Calculator for Solar Forecast ML Integration V12.2.0 @zara
 
 This module handles calculations for multiple panel groups with different
 orientations (azimuth/tilt) and capacities.
@@ -21,8 +21,10 @@ Copyright (C) 2025 Zara-Toorox
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 from .physics_engine import (
@@ -35,6 +37,45 @@ from .physics_engine import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _load_physics_defaults_from_config_sync(data_path: Optional[Path]) -> dict:
+    """Load physics defaults from learning_config.json synchronously (for executor). @zara"""
+    defaults = {
+        "albedo": 0.2,
+        "system_efficiency": 0.90
+    }
+
+    if data_path is None:
+        return defaults
+
+    config_file = data_path / "physics" / "learning_config.json"
+    if not config_file.exists():
+        return defaults
+
+    try:
+        with open(config_file, "r") as f:
+            data = json.load(f)
+
+        physics = data.get("physics_defaults", {})
+        defaults["albedo"] = physics.get("albedo", 0.2)
+        defaults["system_efficiency"] = physics.get("system_efficiency", 0.90)
+
+        _LOGGER.debug(
+            "Loaded physics defaults from config: albedo=%.2f, system_eff=%.2f",
+            defaults["albedo"], defaults["system_efficiency"]
+        )
+    except Exception as e:
+        _LOGGER.warning("Failed to load physics defaults from config: %s", e)
+
+    return defaults
+
+
+async def _load_physics_defaults_from_config(data_path: Optional[Path]) -> dict:
+    """Load physics defaults from learning_config.json asynchronously. @zara"""
+    import asyncio
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _load_physics_defaults_from_config_sync, data_path)
 
 
 @dataclass
@@ -151,33 +192,89 @@ class PanelGroupCalculator:
     # Physical constants (inherited from PhysicsEngine)
     TEMP_COEFFICIENT = -0.004  # Temperature coefficient for crystalline Si (%/K)
     STC_TEMPERATURE = 25.0  # Standard Test Conditions temperature (C)
+    # Default values (can be overridden via learning_config.json)
     DEFAULT_ALBEDO = 0.2  # Ground reflectivity
     DEFAULT_SYSTEM_EFF = 0.90  # System efficiency (inverter, cables, etc.)
 
     def __init__(
         self,
         panel_groups: list[PanelGroup] | list[dict] | None = None,
-        albedo: float = DEFAULT_ALBEDO,
-        system_efficiency: float = DEFAULT_SYSTEM_EFF,
+        albedo: Optional[float] = None,
+        system_efficiency: Optional[float] = None,
+        data_path: Optional[Path] = None,
+        _skip_config_load: bool = False,
     ):
         """Initialize the panel group calculator. @zara
 
         Args:
             panel_groups: List of PanelGroup objects or dicts with group config
-            albedo: Ground reflectivity (default 0.2)
-            system_efficiency: Overall system efficiency (default 0.90)
+            albedo: Ground reflectivity (default from config or 0.2)
+            system_efficiency: Overall system efficiency (default from config or 0.90)
+            data_path: Optional path to data directory for loading config
+            _skip_config_load: Internal flag - if True, skip sync config loading
+                               (used by async_create factory method)
         """
-        self.albedo = albedo
-        self.system_efficiency = system_efficiency
+        # Load defaults from config if available (sync path for backwards compatibility)
+        if not _skip_config_load and (albedo is None or system_efficiency is None):
+            config_defaults = _load_physics_defaults_from_config_sync(data_path)
+        else:
+            config_defaults = {"albedo": 0.2, "system_efficiency": 0.90}
+
+        self.albedo = albedo if albedo is not None else config_defaults["albedo"]
+        self.system_efficiency = (
+            system_efficiency if system_efficiency is not None
+            else config_defaults["system_efficiency"]
+        )
         self._groups: list[PanelGroup] = []
 
         if panel_groups:
             self.set_panel_groups(panel_groups)
 
         _LOGGER.debug(
-            "PanelGroupCalculator initialized with %d groups, total %.2f kWp",
+            "PanelGroupCalculator initialized with %d groups, total %.2f kWp, albedo=%.2f, sys_eff=%.2f",
             len(self._groups),
             self.total_capacity_kwp,
+            self.albedo,
+            self.system_efficiency,
+        )
+
+    @classmethod
+    async def async_create(
+        cls,
+        panel_groups: list["PanelGroup"] | list[dict] | None = None,
+        albedo: Optional[float] = None,
+        system_efficiency: Optional[float] = None,
+        data_path: Optional[Path] = None,
+    ) -> "PanelGroupCalculator":
+        """Async factory method to create PanelGroupCalculator without blocking. @zara
+
+        Use this method when creating PanelGroupCalculator from an async context
+        (e.g., Home Assistant event loop) to avoid blocking file I/O.
+
+        Args:
+            panel_groups: List of PanelGroup objects or dicts with group config
+            albedo: Ground reflectivity (default from config or 0.2)
+            system_efficiency: Overall system efficiency (default from config or 0.90)
+            data_path: Optional path to data directory for loading config
+
+        Returns:
+            Initialized PanelGroupCalculator instance
+        """
+        # Load config asynchronously first
+        if albedo is None or system_efficiency is None:
+            config_defaults = await _load_physics_defaults_from_config(data_path)
+            if albedo is None:
+                albedo = config_defaults["albedo"]
+            if system_efficiency is None:
+                system_efficiency = config_defaults["system_efficiency"]
+
+        # Now create instance with pre-loaded values (skip sync config load)
+        return cls(
+            panel_groups=panel_groups,
+            albedo=albedo,
+            system_efficiency=system_efficiency,
+            data_path=data_path,
+            _skip_config_load=True,
         )
 
     def set_panel_groups(self, panel_groups: list[PanelGroup] | list[dict]) -> None:

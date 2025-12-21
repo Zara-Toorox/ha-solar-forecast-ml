@@ -1,4 +1,4 @@
-"""Weather Precision Tracker - Learns weather forecast accuracy for local location V12.0.0 @zara
+"""Weather Precision Tracker - Learns weather forecast accuracy for local location V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -839,16 +839,11 @@ class WeatherPrecisionTracker(DataManagerIO):
         return daily_factors
 
     def _update_rolling_averages(self, precision_data: Dict[str, Any]) -> None:
-        """Update 7-day rolling averages including hourly factors for solar_radiation_wm2 @zara
-
-        V10.3.0: Added hourly_factors for solar_radiation_wm2 to correct hour-specific
-        forecast errors. Open-Meteo tends to underpredict in mornings and overpredict
-        in afternoons, so a daily average factor doesn't fit any hour well.
-
-        The hourly factors are calculated from the raw hourly_comparisons data,
-        requiring at least MIN_HOURLY_SAMPLES (3) samples per hour before being used.
-        """
+        """Update 7-day rolling averages including hourly factors for solar_radiation_wm2 @zara"""
         try:
+            WEATHER_CLEAR_MAX_CLOUDS = 30
+            WEATHER_CLOUDY_MIN_CLOUDS = 50
+
             daily_tracking = precision_data.get("daily_tracking", {})
 
             dates = sorted(daily_tracking.keys(), reverse=True)
@@ -867,16 +862,37 @@ class WeatherPrecisionTracker(DataManagerIO):
                 "pressure": []
             }
 
-            # NEW: Collect hourly factors for solar_radiation_wm2 (and optionally clouds)
-            # Structure: {hour: [factor1, factor2, ...]} for last 7 days
+            field_values_clear = {k: [] for k in field_values.keys()}
+            field_values_cloudy = {k: [] for k in field_values.keys()}
+
             hourly_solar_factors: Dict[int, List[float]] = {}
             hourly_cloud_factors: Dict[int, List[float]] = {}
 
             valid_days = 0
+            valid_days_clear = 0
+            valid_days_cloudy = 0
 
             for date in dates[:7]:
                 day_data = daily_tracking[date]
                 daily_factors = day_data.get("daily_factors", {})
+
+                hourly_comparisons = day_data.get("hourly_comparisons", [])
+                productive_cloud_values = []
+                for comp in hourly_comparisons:
+                    hour = comp.get("hour")
+                    if hour is None or not (7 <= hour <= 17):
+                        continue
+                    fields = comp.get("fields", {})
+                    cloud_data = fields.get("clouds", {})
+                    if cloud_data and "forecast" in cloud_data:
+                        productive_cloud_values.append(cloud_data["forecast"])
+
+                avg_clouds = None
+                if productive_cloud_values:
+                    avg_clouds = sum(productive_cloud_values) / len(productive_cloud_values)
+
+                is_clear_day = avg_clouds is not None and avg_clouds <= WEATHER_CLEAR_MAX_CLOUDS
+                is_cloudy_day = avg_clouds is not None and avg_clouds >= WEATHER_CLOUDY_MIN_CLOUDS
 
                 for field_name in field_values.keys():
                     if field_name in daily_factors:
@@ -884,14 +900,24 @@ class WeatherPrecisionTracker(DataManagerIO):
 
                         if field_name in offset_fields or field_name in difference_fields:
                             field_values[field_name].append(value)
+                            if is_clear_day:
+                                field_values_clear[field_name].append(value)
+                            elif is_cloudy_day:
+                                field_values_cloudy[field_name].append(value)
                         elif value != 1.0:
                             field_values[field_name].append(value)
+                            if is_clear_day:
+                                field_values_clear[field_name].append(value)
+                            elif is_cloudy_day:
+                                field_values_cloudy[field_name].append(value)
 
                 if daily_factors:
                     valid_days += 1
+                    if is_clear_day:
+                        valid_days_clear += 1
+                    elif is_cloudy_day:
+                        valid_days_cloudy += 1
 
-                # NEW: Extract hourly factors from hourly_comparisons
-                hourly_comparisons = day_data.get("hourly_comparisons", [])
                 for comp in hourly_comparisons:
                     hour = comp.get("hour")
                     if hour is None:
@@ -899,17 +925,14 @@ class WeatherPrecisionTracker(DataManagerIO):
 
                     fields = comp.get("fields", {})
 
-                    # Solar radiation - only productive hours (7-17)
                     solar_data = fields.get("solar_radiation_wm2", {})
                     if solar_data and "factor" in solar_data:
                         factor = solar_data["factor"]
-                        # Filter extreme outliers but keep realistic range
                         if 7 <= hour <= 17 and 0.05 <= factor <= 5.0:
                             if hour not in hourly_solar_factors:
                                 hourly_solar_factors[hour] = []
                             hourly_solar_factors[hour].append(factor)
 
-                    # Clouds - all hours
                     cloud_data = fields.get("clouds", {})
                     if cloud_data and "factor" in cloud_data:
                         factor = cloud_data["factor"]
@@ -918,8 +941,9 @@ class WeatherPrecisionTracker(DataManagerIO):
                                 hourly_cloud_factors[hour] = []
                             hourly_cloud_factors[hour].append(factor)
 
-            # Calculate daily rolling averages (existing logic)
             rolling_averages = {}
+            rolling_averages_clear = {}
+            rolling_averages_cloudy = {}
             confidence_scores = {}
 
             for field_name, values in field_values.items():
@@ -944,7 +968,28 @@ class WeatherPrecisionTracker(DataManagerIO):
                         rolling_averages[field_name] = 1.0
                     confidence_scores[field_name] = 0.0
 
-            # NEW: Calculate hourly rolling averages
+            MIN_WEATHER_SAMPLES = 2
+
+            for field_name, values in field_values_clear.items():
+                if values and len(values) >= MIN_WEATHER_SAMPLES:
+                    avg_value = sum(values) / len(values)
+                    rolling_averages_clear[field_name] = round(avg_value, 3)
+                else:
+                    if field_name in offset_fields or field_name in difference_fields:
+                        rolling_averages_clear[field_name] = 0.0
+                    else:
+                        rolling_averages_clear[field_name] = 1.0
+
+            for field_name, values in field_values_cloudy.items():
+                if values and len(values) >= MIN_WEATHER_SAMPLES:
+                    avg_value = sum(values) / len(values)
+                    rolling_averages_cloudy[field_name] = round(avg_value, 3)
+                else:
+                    if field_name in offset_fields or field_name in difference_fields:
+                        rolling_averages_cloudy[field_name] = 0.0
+                    else:
+                        rolling_averages_cloudy[field_name] = 1.0
+
             MIN_HOURLY_SAMPLES = 3
 
             hourly_factors_result = {
@@ -952,15 +997,12 @@ class WeatherPrecisionTracker(DataManagerIO):
                 "clouds": {},
             }
 
-            # Process solar radiation hourly factors
             for hour, factors in hourly_solar_factors.items():
                 if len(factors) >= MIN_HOURLY_SAMPLES:
                     avg_factor = sum(factors) / len(factors)
-                    # Calculate confidence based on sample count and consistency
                     sample_confidence = min(1.0, len(factors) / 7)
                     variance = sum((x - avg_factor) ** 2 for x in factors) / len(factors)
                     std_dev = math.sqrt(variance)
-                    # Higher std_dev = less consistent = lower confidence
                     consistency = max(0.0, 1.0 - (std_dev * 0.5))
                     confidence = round((sample_confidence + consistency) / 2, 2)
 
@@ -971,7 +1013,6 @@ class WeatherPrecisionTracker(DataManagerIO):
                         "std_dev": round(std_dev, 3),
                     }
 
-            # Process cloud hourly factors
             for hour, factors in hourly_cloud_factors.items():
                 if len(factors) >= MIN_HOURLY_SAMPLES:
                     avg_factor = sum(factors) / len(factors)
@@ -990,29 +1031,38 @@ class WeatherPrecisionTracker(DataManagerIO):
 
             precision_data["rolling_averages"] = {
                 "sample_days": valid_days,
+                "sample_days_clear": valid_days_clear,
+                "sample_days_cloudy": valid_days_cloudy,
                 "correction_factors": rolling_averages,
+                "correction_factors_clear": rolling_averages_clear,
+                "correction_factors_cloudy": rolling_averages_cloudy,
                 "confidence": confidence_scores,
                 "hourly_factors": hourly_factors_result,
                 "hourly_min_samples": MIN_HOURLY_SAMPLES,
                 "updated_at": dt_util.now().isoformat()
             }
 
-            # Log hourly factors if available
             solar_hourly = hourly_factors_result.get("solar_radiation_wm2", {})
+            clear_solar = rolling_averages_clear.get("solar_radiation_wm2", 1.0)
+            cloudy_solar = rolling_averages_cloudy.get("solar_radiation_wm2", 1.0)
             if solar_hourly:
                 hour_summary = ", ".join(
                     f"{h}h:{d['factor']:.2f}"
                     for h, d in sorted(solar_hourly.items(), key=lambda x: int(x[0]))
                 )
                 _LOGGER.info(
-                    f"Updated rolling averages: {valid_days} days, "
-                    f"daily solar_rad={rolling_averages.get('solar_radiation_wm2', 1.0):.3f}, "
-                    f"hourly solar_rad=[{hour_summary}]"
+                    f"Updated rolling averages: {valid_days} days "
+                    f"(clear={valid_days_clear}, cloudy={valid_days_cloudy}), "
+                    f"solar_rad: daily={rolling_averages.get('solar_radiation_wm2', 1.0):.3f}, "
+                    f"clear={clear_solar:.3f}, cloudy={cloudy_solar:.3f}, "
+                    f"hourly=[{hour_summary}]"
                 )
             else:
-                _LOGGER.debug(
-                    f"Updated 7-day rolling averages: "
-                    f"{valid_days} days, corrections: {rolling_averages}"
+                _LOGGER.info(
+                    f"Updated rolling averages: {valid_days} days "
+                    f"(clear={valid_days_clear}, cloudy={valid_days_cloudy}), "
+                    f"solar_rad: daily={rolling_averages.get('solar_radiation_wm2', 1.0):.3f}, "
+                    f"clear={clear_solar:.3f}, cloudy={cloudy_solar:.3f}"
                 )
 
         except Exception as e:

@@ -244,10 +244,7 @@ class WeatherForecastCorrector(DataManagerIO):
         return default
 
     async def _load_correction_factors(self) -> Dict[str, Any]:
-        """Load precision correction factors from weather_precision_daily.json
-
-        V10.3.0: Now also loads hourly_factors for solar_radiation_wm2 and clouds.
-        """
+        """Load precision correction factors from weather_precision_daily.json"""
         default_factors = {
             "temperature": 0.0,
             "solar_radiation_wm2": 1.0,
@@ -265,8 +262,12 @@ class WeatherForecastCorrector(DataManagerIO):
                 _LOGGER.debug("No precision file found - using default factors (no correction)")
                 return {
                     "factors": default_factors,
+                    "factors_clear": default_factors.copy(),
+                    "factors_cloudy": default_factors.copy(),
                     "confidence": default_confidence,
                     "sample_days": 0,
+                    "sample_days_clear": 0,
+                    "sample_days_cloudy": 0,
                     "hourly_factors": default_hourly,
                 }
 
@@ -274,27 +275,43 @@ class WeatherForecastCorrector(DataManagerIO):
             if not precision_data:
                 return {
                     "factors": default_factors,
+                    "factors_clear": default_factors.copy(),
+                    "factors_cloudy": default_factors.copy(),
                     "confidence": default_confidence,
                     "sample_days": 0,
+                    "sample_days_clear": 0,
+                    "sample_days_cloudy": 0,
                     "hourly_factors": default_hourly,
                 }
 
             rolling = precision_data.get("rolling_averages", {})
             factors = rolling.get("correction_factors", default_factors)
+            factors_clear = rolling.get("correction_factors_clear", factors.copy())
+            factors_cloudy = rolling.get("correction_factors_cloudy", factors.copy())
             confidence = rolling.get("confidence", default_confidence)
             sample_days = rolling.get("sample_days", 0)
+            sample_days_clear = rolling.get("sample_days_clear", 0)
+            sample_days_cloudy = rolling.get("sample_days_cloudy", 0)
             hourly_factors = rolling.get("hourly_factors", default_hourly)
 
             for key in default_factors:
                 if key not in factors:
                     factors[key] = default_factors[key]
+                if key not in factors_clear:
+                    factors_clear[key] = factors[key]
+                if key not in factors_cloudy:
+                    factors_cloudy[key] = factors[key]
                 if key not in confidence:
                     confidence[key] = 0.0
 
             return {
                 "factors": factors,
+                "factors_clear": factors_clear,
+                "factors_cloudy": factors_cloudy,
                 "confidence": confidence,
                 "sample_days": sample_days,
+                "sample_days_clear": sample_days_clear,
+                "sample_days_cloudy": sample_days_cloudy,
                 "hourly_factors": hourly_factors,
             }
 
@@ -302,8 +319,12 @@ class WeatherForecastCorrector(DataManagerIO):
             _LOGGER.warning(f"Error loading correction factors: {e}")
             return {
                 "factors": default_factors,
+                "factors_clear": default_factors.copy(),
+                "factors_cloudy": default_factors.copy(),
                 "confidence": default_confidence,
                 "sample_days": 0,
+                "sample_days_clear": 0,
+                "sample_days_cloudy": 0,
                 "hourly_factors": default_hourly,
             }
 
@@ -329,21 +350,7 @@ class WeatherForecastCorrector(DataManagerIO):
         hour: int,
         daily_fallback: float
     ) -> float:
-        """Get correction factor for a specific field and hour.
-
-        V10.3.0: Helper method to get the best available factor:
-        1. If hourly factor exists for this hour with sufficient samples -> use it
-        2. Otherwise -> use daily fallback
-
-        Args:
-            hourly_factors: Dict with structure {field: {hour_str: {factor, samples, ...}}}
-            field: Field name (e.g., "solar_radiation_wm2")
-            hour: Hour (0-23)
-            daily_fallback: Daily average factor to use if no hourly factor
-
-        Returns:
-            Correction factor (float)
-        """
+        """Get correction factor for a specific field and hour."""
         field_hourly = hourly_factors.get(field, {})
         hour_data = field_hourly.get(str(hour))
 
@@ -352,26 +359,57 @@ class WeatherForecastCorrector(DataManagerIO):
 
         return daily_fallback
 
+    def _get_weather_specific_ghi_factor(
+        self,
+        cloud_cover: float,
+        factors: Dict[str, float],
+        factors_clear: Dict[str, float],
+        factors_cloudy: Dict[str, float],
+        sample_days_clear: int,
+        sample_days_cloudy: int,
+        min_samples: int = 2
+    ) -> float:
+        """Get GHI correction factor based on cloud cover."""
+        WEATHER_CLEAR_MAX_CLOUDS = 30
+        WEATHER_CLOUDY_MIN_CLOUDS = 50
+
+        daily_factor = factors.get("solar_radiation_wm2", 1.0)
+        clear_factor = factors_clear.get("solar_radiation_wm2", daily_factor)
+        cloudy_factor = factors_cloudy.get("solar_radiation_wm2", daily_factor)
+
+        has_clear = sample_days_clear >= min_samples
+        has_cloudy = sample_days_cloudy >= min_samples
+
+        if cloud_cover is None:
+            return daily_factor
+
+        if cloud_cover <= WEATHER_CLEAR_MAX_CLOUDS:
+            if has_clear:
+                return clear_factor
+            return daily_factor
+
+        if cloud_cover >= WEATHER_CLOUDY_MIN_CLOUDS:
+            if has_cloudy:
+                return cloudy_factor
+            return daily_factor
+
+        if has_clear and has_cloudy:
+            t = (cloud_cover - WEATHER_CLEAR_MAX_CLOUDS) / (WEATHER_CLOUDY_MIN_CLOUDS - WEATHER_CLEAR_MAX_CLOUDS)
+            return clear_factor + t * (cloudy_factor - clear_factor)
+
+        return daily_factor
+
     async def create_corrected_forecast(self, min_confidence: float = 0.0) -> bool:
-        """Create corrected weather forecast with precision factors applied.
-
-        V10.3.0: Now uses hourly correction factors for solar_radiation_wm2 and clouds
-        when available. This fixes the systematic morning/afternoon bias where
-        Open-Meteo underpredicts in mornings and overpredicts in afternoons.
-
-        Args:
-            min_confidence: Minimum average confidence required to apply corrections.
-                           If confidence is below this threshold, raw values are used.
-                           Default 0.0 means always apply corrections if available.
-
-        Returns:
-            True if forecast was created successfully, False otherwise.
-        """
+        """Create corrected weather forecast with precision factors applied."""
         try:
             correction_data = await self._load_correction_factors()
             factors = correction_data["factors"]
+            factors_clear = correction_data.get("factors_clear", factors)
+            factors_cloudy = correction_data.get("factors_cloudy", factors)
             confidence = correction_data["confidence"]
             sample_days = correction_data["sample_days"]
+            sample_days_clear = correction_data.get("sample_days_clear", 0)
+            sample_days_cloudy = correction_data.get("sample_days_cloudy", 0)
             hourly_factors = correction_data.get("hourly_factors", {})
 
             # Calculate average confidence across all fields
@@ -385,8 +423,19 @@ class WeatherForecastCorrector(DataManagerIO):
             has_hourly_solar = bool(hourly_factors.get("solar_radiation_wm2", {}))
             has_hourly_clouds = bool(hourly_factors.get("clouds", {}))
 
+            has_weather_specific = sample_days_clear >= 2 or sample_days_cloudy >= 2
+
             if apply_corrections:
-                if has_hourly_solar:
+                clear_solar = factors_clear.get("solar_radiation_wm2", 1.0)
+                cloudy_solar = factors_cloudy.get("solar_radiation_wm2", 1.0)
+                if has_weather_specific:
+                    _LOGGER.info(
+                        f"Creating corrected forecast - {sample_days} days "
+                        f"(clear={sample_days_clear}, cloudy={sample_days_cloudy}), "
+                        f"solar_rad: daily={factors.get('solar_radiation_wm2', 1.0):.3f}, "
+                        f"clear={clear_solar:.3f}, cloudy={cloudy_solar:.3f}"
+                    )
+                elif has_hourly_solar:
                     solar_hourly = hourly_factors["solar_radiation_wm2"]
                     hour_summary = ", ".join(
                         f"{h}h:{d['factor']:.2f}"
@@ -408,9 +457,12 @@ class WeatherForecastCorrector(DataManagerIO):
                     f"Creating forecast - confidence too low ({avg_confidence:.2f} < {min_confidence:.2f}), "
                     "using raw Open-Meteo values"
                 )
-                # Reset factors to neutral values
                 factors = {k: (0.0 if k in ("temperature", "pressure") else 1.0) for k in factors}
-                hourly_factors = {}  # Don't use hourly factors either
+                factors_clear = factors.copy()
+                factors_cloudy = factors.copy()
+                hourly_factors = {}
+                sample_days_clear = 0
+                sample_days_cloudy = 0
             else:
                 _LOGGER.info("Creating forecast - no precision data yet (using raw Open-Meteo values)")
 
@@ -460,13 +512,23 @@ class WeatherForecastCorrector(DataManagerIO):
                     raw_rain = weather.get("rain") or 0
                     raw_pressure = weather.get("pressure")
 
-                    # V10.3.0: Get hourly factors if available, otherwise use daily
-                    solar_factor = self._get_hourly_factor(
-                        hourly_factors,
-                        "solar_radiation_wm2",
-                        hour,
-                        factors.get("solar_radiation_wm2", 1.0)
-                    )
+                    if has_weather_specific:
+                        solar_factor = self._get_weather_specific_ghi_factor(
+                            raw_clouds,
+                            factors,
+                            factors_clear,
+                            factors_cloudy,
+                            sample_days_clear,
+                            sample_days_cloudy
+                        )
+                    else:
+                        solar_factor = self._get_hourly_factor(
+                            hourly_factors,
+                            "solar_radiation_wm2",
+                            hour,
+                            factors.get("solar_radiation_wm2", 1.0)
+                        )
+
                     cloud_factor = self._get_hourly_factor(
                         hourly_factors,
                         "clouds",
@@ -474,19 +536,19 @@ class WeatherForecastCorrector(DataManagerIO):
                         factors.get("clouds", 1.0)
                     )
 
-                    # Track usage
                     if str(hour) in hourly_factors.get("solar_radiation_wm2", {}):
                         hourly_factors_used["solar_radiation_wm2"] += 1
                     if str(hour) in hourly_factors.get("clouds", {}):
                         hourly_factors_used["clouds"] += 1
 
+                    corrected_clouds = raw_clouds if has_weather_specific else self._apply_correction(raw_clouds, cloud_factor, "clouds")
                     forecast_by_date[date_str][str(hour)] = {
                         "temperature": self._apply_correction(raw_temp, factors.get("temperature", 0.0), "temperature"),
                         "solar_radiation_wm2": self._apply_correction(raw_solar, solar_factor, "solar_radiation_wm2"),
                         "wind": self._apply_correction(raw_wind, factors.get("wind", 1.0), "wind"),
                         "humidity": self._apply_correction(raw_humidity, factors.get("humidity", 1.0), "humidity"),
                         "rain": self._apply_correction(raw_rain, factors.get("rain", 1.0), "rain"),
-                        "clouds": self._apply_correction(raw_clouds, cloud_factor, "clouds"),
+                        "clouds": corrected_clouds,
                         "pressure": self._apply_correction(raw_pressure, factors.get("pressure", 0.0), "pressure"),
                         "direct_radiation": weather.get("direct_radiation"),
                         "diffuse_radiation": weather.get("diffuse_radiation"),
@@ -494,22 +556,34 @@ class WeatherForecastCorrector(DataManagerIO):
 
             rb_correction = await self._get_preserved_rb_correction()
 
+            mode = "precision_corrected"
+            if has_weather_specific:
+                mode = "precision_corrected_weather_specific"
+            elif has_hourly_solar:
+                mode = "precision_corrected_hourly"
+
             corrected_data = {
-                "version": "4.2",  # Bumped version for hourly factors
+                "version": "4.3",
                 "forecast": forecast_by_date,
                 "metadata": {
                     "created": dt_util.now().isoformat(),
                     "source": "open-meteo-corrected",
-                    "mode": "precision_corrected_hourly" if has_hourly_solar else "precision_corrected",
+                    "mode": mode,
                     "hours_forecast": sum(len(h) for h in forecast_by_date.values()),
                     "days_forecast": len(forecast_by_date),
                     "corrections_applied": {
                         "solar_radiation_wm2": factors.get("solar_radiation_wm2", 1.0),
+                        "solar_radiation_wm2_clear": factors_clear.get("solar_radiation_wm2", 1.0),
+                        "solar_radiation_wm2_cloudy": factors_cloudy.get("solar_radiation_wm2", 1.0),
                         "clouds": factors.get("clouds", 1.0),
                         "temperature": factors.get("temperature", 0.0),
                         "wind": factors.get("wind", 1.0),
                         "humidity": factors.get("humidity", 1.0),
                         "rain": factors.get("rain", 1.0),
+                    },
+                    "weather_specific_samples": {
+                        "clear_days": sample_days_clear,
+                        "cloudy_days": sample_days_cloudy,
                     },
                     "hourly_corrections": {
                         "solar_radiation_wm2": hourly_factors.get("solar_radiation_wm2", {}),
@@ -735,15 +809,20 @@ class WeatherForecastCorrector(DataManagerIO):
             # CLAMPING: Prevent unrealistic correction factors
             avg_factor = max(0.35, min(1.25, avg_factor))
 
-            if avg_factor > 1.0:
-                _LOGGER.warning(
-                    f"RB Correction factor is {avg_factor:.3f} (>1.0) - RBS was UNDERPREDICTING. "
-                    f"Actual={total_actual_all:.2f} kWh, Predicted={total_predicted_all:.2f} kWh"
+            if avg_factor > 1.05:
+                _LOGGER.info(
+                    f"RB Correction: factor={avg_factor:.3f} - RBS underpredicted by {(avg_factor-1)*100:.1f}%. "
+                    f"Cumulative over {sample_days} days: actual={total_actual_all:.2f} kWh, predicted={total_predicted_all:.2f} kWh"
+                )
+            elif avg_factor < 0.95:
+                _LOGGER.info(
+                    f"RB Correction: factor={avg_factor:.3f} - RBS overpredicted by {(1-avg_factor)*100:.1f}%. "
+                    f"Cumulative over {sample_days} days: actual={total_actual_all:.2f} kWh, predicted={total_predicted_all:.2f} kWh"
                 )
             else:
-                _LOGGER.info(
-                    f"RB Correction factor is {avg_factor:.3f} (<1.0) - RBS was OVERPREDICTING. "
-                    f"Actual={total_actual_all:.2f} kWh, Predicted={total_predicted_all:.2f} kWh"
+                _LOGGER.debug(
+                    f"RB Correction: factor={avg_factor:.3f} (within ±5%). "
+                    f"Cumulative over {sample_days} days: actual={total_actual_all:.2f} kWh, predicted={total_predicted_all:.2f} kWh"
                 )
 
             if sample_days == 1:

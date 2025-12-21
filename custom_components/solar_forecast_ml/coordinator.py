@@ -1,4 +1,4 @@
-"""Data Update Coordinator for Solar Forecast ML Integration V12.0.0 @zara
+"""Data Update Coordinator for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -174,6 +174,10 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
         # Panel group sensor reader for per-group learning
         self.panel_group_sensor_reader = None
+
+        # CRITICAL FIX V12.2.0: Store unsubscribe callbacks to prevent listener accumulation
+        self._unsub_power_peak_listener: Optional[callable] = None
+        self._unsub_weekly_retraining_listener: Optional[callable] = None
 
         _LOGGER.debug("SolarForecastMLCoordinator initialized")
 
@@ -354,7 +358,8 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     if now.weekday() == 6:
                         asyncio.create_task(self.ml_predictor.train_model())
 
-                async_track_time_change(
+                # CRITICAL FIX V12.2.0: Store unsubscribe callback
+                self._unsub_weekly_retraining_listener = async_track_time_change(
                     self.hass, _scheduled_weekly_retraining, hour=3, minute=0, second=0
                 )
 
@@ -370,7 +375,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             return False
 
     async def async_shutdown(self) -> None:
-        """Cleanup coordinator resources @zara"""
+        """Cleanup coordinator resources @zara
+
+        CRITICAL FIX V12.2.0: Now properly removes all event listeners
+        to prevent listener accumulation on reload.
+        """
 
         try:
             if self.weather_pipeline_manager:
@@ -378,6 +387,25 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
             await self.production_time_calculator.stop_tracking()
             self.scheduled_tasks.cancel_listeners()
+
+            # CRITICAL FIX V12.2.0: Remove power peak tracking listener
+            if self._unsub_power_peak_listener is not None:
+                try:
+                    self._unsub_power_peak_listener()
+                    self._unsub_power_peak_listener = None
+                    _LOGGER.debug("Power peak tracking listener removed")
+                except Exception as e:
+                    _LOGGER.warning(f"Error removing power peak listener: {e}")
+
+            # CRITICAL FIX V12.2.0: Remove weekly retraining listener
+            if self._unsub_weekly_retraining_listener is not None:
+                try:
+                    self._unsub_weekly_retraining_listener()
+                    self._unsub_weekly_retraining_listener = None
+                    _LOGGER.debug("Weekly retraining listener removed")
+                except Exception as e:
+                    _LOGGER.warning(f"Error removing weekly retraining listener: {e}")
+
         except Exception as e:
             _LOGGER.error(f"Error during coordinator shutdown: {e}")
 
@@ -470,7 +498,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 )
 
     async def _setup_power_peak_tracking(self) -> None:
-        """Setup event listener for power peak tracking @zara"""
+        """Setup event listener for power peak tracking @zara
+
+        CRITICAL FIX V12.2.0: Now stores unsubscribe callback to prevent
+        listener accumulation on reload.
+        """
         if not self.power_entity:
             return
 
@@ -507,7 +539,10 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
         from homeassistant.helpers.event import async_track_state_change_event
 
-        async_track_state_change_event(self.hass, [self.power_entity], power_state_changed)
+        # CRITICAL FIX V12.2.0: Store unsubscribe callback
+        self._unsub_power_peak_listener = async_track_state_change_event(
+            self.hass, [self.power_entity], power_state_changed
+        )
 
     async def _async_update_data(self):
         """Fetch data from API endpoint - refactored for clarity @zara"""
@@ -538,7 +573,9 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
             await self._update_sensor_properties(result)
 
-            await helpers.save_forecasts(forecast, result.get("hourly_forecast", []))
+            # Use forecast.get("hourly") directly - result.get("hourly_forecast") may be empty
+            # if enable_hourly is disabled, but we still want to persist the data
+            await helpers.save_forecasts(forecast, forecast.get("hourly", []))
 
             self._last_update_success_time = dt_util.now()
 
@@ -704,6 +741,10 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                         source=source,
                         lock=True,
                     )
+
+            # Save multi-day hourly forecast to JSON
+            if hourly_forecast:
+                await self.data_manager.save_multi_day_hourly_forecast(hourly_forecast)
 
         except Exception as e:
             _LOGGER.error(f"Failed to save forecasts to storage: {e}")

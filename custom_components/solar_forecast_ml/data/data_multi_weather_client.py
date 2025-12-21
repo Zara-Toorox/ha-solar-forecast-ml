@@ -1,4 +1,4 @@
-"""Multi-Weather Client - Combines Open-Meteo with wttr.in (WWO) for improved cloud forecasts V12.0.0 @zara
+"""Multi-Weather Client - Combines Open-Meteo with wttr.in (WWO) for improved cloud AND GHI forecasts V12.2.0 @zara @claude
 
 Trigger: Only fetches additional sources when Open-Meteo cloud_cover > 50%
 Learning: Tracks which source was more accurate and adjusts weights based on IST values
@@ -68,17 +68,35 @@ DEFAULT_WEIGHTS = {
     "wwo": 0.65,
 }
 
-# Extreme cloud threshold: When Open-Meteo reports >= this, boost wttr.in weight
+# Differential-based blending thresholds (V12.1 - improved blending @zara)
+# The key insight: Large DIFFERENCES between sources matter more than absolute values
+CLOUD_DIFF_MODERATE = 30.0      # >= 30 points difference: moderate boost to wttr.in
+CLOUD_DIFF_LARGE = 50.0         # >= 50 points difference: large boost to wttr.in
+CLOUD_DIFF_EXTREME = 70.0       # >= 70 points difference: extreme boost to wttr.in
+
+# Progressive weight boosts based on differential magnitude
+MODERATE_BOOST_WWO_WEIGHT = 0.75   # 75% wttr.in at moderate differential
+LARGE_BOOST_WWO_WEIGHT = 0.85      # 85% wttr.in at large differential
+EXTREME_BOOST_WWO_WEIGHT = 0.95    # 95% wttr.in at extreme differential
+
+# High-cloud skeptic: Extra skepticism when Open-Meteo shows very high clouds
+# Open-Meteo often overestimates cloud cover, especially > 80%
+HIGH_CLOUD_SKEPTIC_THRESHOLD = 80.0  # Open-Meteo cloud cover threshold
+HIGH_CLOUD_SKEPTIC_WWO_MAX = 30.0    # Only apply if wttr.in is below this
+
+# Legacy constants (kept for backwards compatibility, but no longer primary triggers)
 EXTREME_CLOUD_THRESHOLD = 95.0
-# Minimum difference for boost: Only boost if wttr.in is at least this much lower
 EXTREME_CLOUD_DIFF_MIN = 30.0
-# Boosted weight for wttr.in when extreme cloud discrepancy detected
 EXTREME_CLOUD_WWO_WEIGHT = 0.80
 
 # Learning parameters
 MIN_HOURS_FOR_LEARNING = 4  # Minimum hours with actual data needed
 SMOOTHING_FACTOR = 0.3  # How fast to adapt (0.3 = 30% new, 70% old)
 MIN_ERROR = 5.0  # Minimum error to prevent division issues
+
+# Accelerated learning for large errors (V12.1 @zara)
+LARGE_ERROR_SMOOTHING_FACTOR = 0.5  # 50% new data when error is large
+LARGE_ERROR_THRESHOLD = 40.0        # MAE > 40% triggers faster learning
 
 
 class WttrInClient:
@@ -688,7 +706,11 @@ class MultiWeatherBlender(DataManagerIO):
         open_meteo: List[Dict[str, Any]],
         wttr: Dict[str, Dict[int, Dict[str, Any]]],
     ) -> List[Dict[str, Any]]:
-        """Blend cloud_cover from multiple sources.
+        """Blend cloud_cover from multiple sources using differential-based weighting.
+
+        V12.1: Uses the DIFFERENCE between sources as the primary trigger,
+        not just the absolute value of Open-Meteo. Large differences trigger
+        progressive boosts to wttr.in (which is often more accurate locally).
 
         Only blends cloud_cover - all other fields come from Open-Meteo.
         Uses interpolation for wttr.in's 3-hour data.
@@ -705,6 +727,7 @@ class MultiWeatherBlender(DataManagerIO):
 
         blended = []
         blended_count = 0
+        boost_stats = {"none": 0, "moderate": 0, "large": 0, "extreme": 0, "high_cloud_skeptic": 0}
 
         for om_entry in open_meteo:
             result = om_entry.copy()
@@ -717,37 +740,66 @@ class MultiWeatherBlender(DataManagerIO):
                 wwo_cloud = self._get_interpolated_cloud(wttr[date_str], hour)
 
                 if wwo_cloud is not None:
-                    # Check for extreme discrepancy: Open-Meteo says near 100% but wttr.in much lower
-                    # This typically indicates Open-Meteo is wrong (common issue)
+                    # V12.1: Differential-based blending @zara
+                    # The key insight: Large DIFFERENCES between sources matter more
+                    # than absolute values. When sources disagree significantly,
+                    # trust wttr.in more (it's often better for local conditions).
+                    cloud_diff = abs(om_cloud - wwo_cloud)
+
                     effective_w_meteo = w_meteo
                     effective_w_wwo = w_wwo
-                    boost_applied = False
+                    boost_level = "none"
 
-                    if (om_cloud >= EXTREME_CLOUD_THRESHOLD and
-                        (om_cloud - wwo_cloud) >= EXTREME_CLOUD_DIFF_MIN):
-                        # Boost wttr.in weight when Open-Meteo shows extreme clouds
-                        # but wttr.in disagrees significantly
-                        effective_w_wwo = EXTREME_CLOUD_WWO_WEIGHT
-                        effective_w_meteo = 1.0 - EXTREME_CLOUD_WWO_WEIGHT
-                        boost_applied = True
+                    # Progressive boost based on differential magnitude
+                    if cloud_diff >= CLOUD_DIFF_EXTREME:
+                        # Extreme discrepancy (>= 70 points): trust wttr.in almost completely
+                        # Example: Open-Meteo 88%, wttr.in 0% -> diff = 88 -> extreme boost
+                        effective_w_wwo = EXTREME_BOOST_WWO_WEIGHT
+                        effective_w_meteo = 1.0 - effective_w_wwo
+                        boost_level = "extreme"
 
-                    # Weighted blend
+                    elif cloud_diff >= CLOUD_DIFF_LARGE:
+                        # Large discrepancy (>= 50 points): heavily favor wttr.in
+                        effective_w_wwo = LARGE_BOOST_WWO_WEIGHT
+                        effective_w_meteo = 1.0 - effective_w_wwo
+                        boost_level = "large"
+
+                    elif cloud_diff >= CLOUD_DIFF_MODERATE:
+                        # Moderate discrepancy (>= 30 points): moderately favor wttr.in
+                        effective_w_wwo = MODERATE_BOOST_WWO_WEIGHT
+                        effective_w_meteo = 1.0 - effective_w_wwo
+                        boost_level = "moderate"
+
+                    # High-cloud skeptic: Extra skepticism when Open-Meteo shows very high clouds
+                    # Open-Meteo often overestimates cloud cover > 80%
+                    if (om_cloud >= HIGH_CLOUD_SKEPTIC_THRESHOLD and
+                        wwo_cloud < HIGH_CLOUD_SKEPTIC_WWO_MAX and
+                        cloud_diff >= CLOUD_DIFF_MODERATE):
+                        # Apply at least large boost when Open-Meteo is very pessimistic
+                        if effective_w_wwo < LARGE_BOOST_WWO_WEIGHT:
+                            effective_w_wwo = LARGE_BOOST_WWO_WEIGHT
+                            effective_w_meteo = 1.0 - effective_w_wwo
+                            boost_level = "high_cloud_skeptic"
+
+                    boost_stats[boost_level] += 1
+
+                    # Weighted blend for clouds
                     blended_cloud = (effective_w_meteo * om_cloud) + (effective_w_wwo * wwo_cloud)
                     blended_cloud = max(0.0, min(100.0, blended_cloud))
 
                     result["cloud_cover"] = round(blended_cloud, 1)
                     result["source"] = "blended"
+
                     result["blend_info"] = {
                         "sources": ["open-meteo", "wwo"],
                         "open_meteo_cloud": om_cloud,
                         "wwo_cloud": wwo_cloud,
+                        "cloud_differential": cloud_diff,
                         "weights": {"open_meteo": effective_w_meteo, "wwo": effective_w_wwo},
                         "blended_cloud": blended_cloud,
-                        "extreme_boost": boost_applied,
+                        "boost_level": boost_level,
                     }
                     blended_count += 1
-
-                    # Blending details logging removed to reduce log spam
                 else:
                     result["source"] = "open-meteo-only"
                     result["blend_info"] = {"sources": ["open-meteo"], "trigger": "no_wwo_data"}
@@ -757,9 +809,11 @@ class MultiWeatherBlender(DataManagerIO):
 
             blended.append(result)
 
+        # Log blending summary with boost statistics
+        boost_summary = ", ".join(f"{k}={v}" for k, v in boost_stats.items() if v > 0)
         _LOGGER.info(
-            f"Blended {blended_count}/{len(blended)} hours using weights: "
-            f"open_meteo={w_meteo:.1%}, wwo={w_wwo:.1%}"
+            f"Blended {blended_count}/{len(blended)} hours using differential-based weights. "
+            f"Base: open_meteo={w_meteo:.1%}, wwo={w_wwo:.1%}. Boosts: {boost_summary}"
         )
 
         return blended
@@ -1029,17 +1083,32 @@ class WeatherSourceLearner(DataManagerIO):
             new_weight_om = inv_om / total_inv
             new_weight_wwo = inv_wwo / total_inv
 
+            # Step 5b: V12.1 - Apply accelerated learning when one source was significantly better @zara
+            # When there's a large error or large accuracy difference, learn faster
+            max_mae = max(mae_open_meteo, mae_wwo)
+            error_ratio = max_mae / max(min(mae_open_meteo, mae_wwo), MIN_ERROR)
+
+            if max_mae > LARGE_ERROR_THRESHOLD or error_ratio >= 2.0:
+                # One source was significantly better - learn faster
+                actual_smoothing = LARGE_ERROR_SMOOTHING_FACTOR
+                _LOGGER.info(
+                    f"Accelerated learning triggered: MAE={max_mae:.1f}%, ratio={error_ratio:.1f}x. "
+                    f"Using smoothing={actual_smoothing:.0%} instead of {SMOOTHING_FACTOR:.0%}"
+                )
+            else:
+                actual_smoothing = SMOOTHING_FACTOR
+
             # Step 6: Load old weights and apply smoothing
             old_weights = await self._load_weights()
             result["old_weights"] = old_weights.copy()
 
             smoothed_om = (
-                (1 - SMOOTHING_FACTOR) * old_weights.get("open_meteo", 0.5) +
-                SMOOTHING_FACTOR * new_weight_om
+                (1 - actual_smoothing) * old_weights.get("open_meteo", 0.5) +
+                actual_smoothing * new_weight_om
             )
             smoothed_wwo = (
-                (1 - SMOOTHING_FACTOR) * old_weights.get("wwo", 0.5) +
-                SMOOTHING_FACTOR * new_weight_wwo
+                (1 - actual_smoothing) * old_weights.get("wwo", 0.5) +
+                actual_smoothing * new_weight_wwo
             )
 
             # Normalize to ensure they sum to 1
@@ -1055,7 +1124,7 @@ class WeatherSourceLearner(DataManagerIO):
             result["new_weights"] = new_weights
 
             weights_data = {
-                "version": "1.0",
+                "version": "1.1",  # V12.1: Added accelerated learning support
                 "weights": new_weights,
                 "learning_metadata": {
                     "last_updated": datetime.now().isoformat(),
@@ -1065,7 +1134,9 @@ class WeatherSourceLearner(DataManagerIO):
                         "wwo": round(mae_wwo, 2),
                     },
                     "comparison_hours": result["comparison_hours"],
-                    "smoothing_factor": SMOOTHING_FACTOR,
+                    "smoothing_factor_used": actual_smoothing,  # Actual smoothing used (may be accelerated)
+                    "smoothing_factor_default": SMOOTHING_FACTOR,
+                    "accelerated_learning": actual_smoothing > SMOOTHING_FACTOR,
                 },
             }
 

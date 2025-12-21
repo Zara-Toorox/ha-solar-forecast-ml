@@ -1,4 +1,4 @@
-"""User-Friendly Log Messages V12.0.0 @zara
+"""User-Friendly Log Messages V12.2.0 @zara
 
 This module provides user-friendly log messages in German for Home Assistant users.
 Technical messages are translated into understandable language with context

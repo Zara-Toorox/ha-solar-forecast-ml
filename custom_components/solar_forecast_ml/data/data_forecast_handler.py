@@ -1,4 +1,4 @@
-"""Data Forecast Handler for Solar Forecast ML Integration V12.0.0 @zara
+"""Data Forecast Handler for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -251,14 +251,11 @@ class DataForecastHandler(DataManagerIO):
             data["today"]["forecast_day"] = {
                 "prediction_kwh": round(float(prediction_kwh), 2),
                 "prediction_kwh_raw": round(float(prediction_kwh_raw), 2) if prediction_kwh_raw is not None else None,
-                "prediction_kwh_display": round(float(prediction_kwh), 2),  # Initial = prediction_kwh
                 "safeguard_applied": safeguard_applied,
                 "safeguard_reduction_kwh": round(float(prediction_kwh_raw - prediction_kwh), 2) if prediction_kwh_raw is not None else 0.0,
                 "locked": lock,
                 "locked_at": now_local.isoformat() if lock else None,
                 "source": source,
-                "intraday_corrected": False,
-                "intraday_corrected_at": None,
             }
 
             await self._atomic_write_json(self.daily_forecasts_file, data)
@@ -273,53 +270,6 @@ class DataForecastHandler(DataManagerIO):
 
         except Exception as e:
             _LOGGER.error(f"Failed to save today's forecast: {e}", exc_info=True)
-            return False
-
-    async def update_intraday_display_forecast(
-        self,
-        display_value: float,
-        source: str,
-    ) -> bool:
-        """Update the display forecast value for intraday corrections (09:05/12:05) @zara
-
-        This ONLY updates prediction_kwh_display, leaving prediction_kwh and
-        prediction_kwh_raw unchanged for ML learning purposes.
-
-        Args:
-            display_value: The corrected forecast value to display
-            source: Source of the correction (e.g., "morning_sensor_correction", "midday_correction")
-
-        Returns:
-            True if update succeeded
-        """
-        try:
-            data = await self.load_daily_forecasts()
-            now_local = dt_util.now()
-            today_str = now_local.date().isoformat()
-
-            if "today" not in data or data["today"].get("date") != today_str:
-                _LOGGER.warning("Cannot update intraday display - no forecast for today")
-                return False
-
-            forecast_day = data["today"].get("forecast_day", {})
-            original_display = forecast_day.get("prediction_kwh_display") or forecast_day.get("prediction_kwh")
-
-            # Update only the display value
-            data["today"]["forecast_day"]["prediction_kwh_display"] = round(float(display_value), 2)
-            data["today"]["forecast_day"]["intraday_corrected"] = True
-            data["today"]["forecast_day"]["intraday_corrected_at"] = now_local.isoformat()
-
-            await self._atomic_write_json(self.daily_forecasts_file, data)
-
-            _LOGGER.info(
-                f"✓ Intraday display forecast updated: {original_display:.2f} → {display_value:.2f} kWh "
-                f"(source: {source})"
-            )
-
-            return True
-
-        except Exception as e:
-            _LOGGER.error(f"Failed to update intraday display forecast: {e}", exc_info=True)
             return False
 
     async def save_forecast_tomorrow(
@@ -697,7 +647,11 @@ class DataForecastHandler(DataManagerIO):
             return None
 
     async def finalize_today(
-        self, yield_kwh: float, consumption_kwh: Optional[float] = None, production_seconds: int = 0
+        self,
+        yield_kwh: float,
+        consumption_kwh: Optional[float] = None,
+        production_seconds: int = 0,
+        excluded_hours_info: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Finalize today with actual values at 2330"""
         try:
@@ -720,7 +674,7 @@ class DataForecastHandler(DataManagerIO):
                 accuracy = max(0.0, 100.0 - (error / forecast_kwh * 100))
                 accuracy_percent = round(accuracy, 1)
 
-            data["today"]["finalized"] = {
+            finalized_data = {
                 "yield_kwh": round(float(yield_kwh), 2),
                 "consumption_kwh": (
                     round(float(consumption_kwh), 2) if consumption_kwh is not None else None
@@ -730,13 +684,24 @@ class DataForecastHandler(DataManagerIO):
                 "at": now_local.isoformat(),
             }
 
+            # Add excluded hours info if available
+            if excluded_hours_info:
+                finalized_data["excluded_hours"] = excluded_hours_info
+
+            data["today"]["finalized"] = finalized_data
+
             await self._atomic_write_json(self.daily_forecasts_file, data)
+
+            excluded_info_str = ""
+            if excluded_hours_info:
+                excluded_info_str = f", Excluded={excluded_hours_info.get('count', 0)}/{excluded_hours_info.get('total', 0)} hours"
 
             _LOGGER.info(
                 f"[OK] Today finalized: Yield={yield_kwh:.2f} kWh, "
                 f"Consumption={f'{consumption_kwh:.2f}' if consumption_kwh is not None else 'N/A'} kWh, "
                 f"Production={production_hours}, "
                 f"Accuracy={f'{accuracy_percent:.1f}' if accuracy_percent else 'N/A'}%"
+                f"{excluded_info_str}"
             )
 
             await self._update_aggregated_data(yield_kwh, consumption_kwh)
@@ -1094,6 +1059,11 @@ class DataForecastHandler(DataManagerIO):
                 "finalized_at": finalized_data.get("at"),
             }
 
+            # Add excluded hours info if available
+            excluded_hours_info = finalized_data.get("excluded_hours")
+            if excluded_hours_info:
+                history_entry["excluded_hours"] = excluded_hours_info
+
             if "history" not in data:
                 data["history"] = []
 
@@ -1281,3 +1251,141 @@ class DataForecastHandler(DataManagerIO):
         except Exception as e:
             _LOGGER.error(f"Failed to calculate statistics: {e}", exc_info=True)
             return False
+
+    async def save_multi_day_hourly_forecast(
+        self,
+        hourly_forecast: List[Dict[str, Any]],
+    ) -> bool:
+        """Save hourly forecasts for today, tomorrow, and day after tomorrow.
+
+        Creates a rolling JSON file with hourly breakdown per day.
+        File: stats/multi_day_hourly_forecast.json
+
+        @zara
+        """
+        try:
+            if not hourly_forecast:
+                return False
+
+            now_local = dt_util.now()
+            today_str = now_local.date().isoformat()
+            tomorrow_str = (now_local + timedelta(days=1)).date().isoformat()
+            day_after_str = (now_local + timedelta(days=2)).date().isoformat()
+
+            forecast_file = self.data_dir / "stats" / "multi_day_hourly_forecast.json"
+
+            by_date: Dict[str, List[Dict[str, Any]]] = {
+                today_str: [],
+                tomorrow_str: [],
+                day_after_str: [],
+            }
+
+            for entry in hourly_forecast:
+                # Support multiple date field names from different sources
+                date_str = entry.get("date")
+                if not date_str:
+                    # Fallback to datetime or local_datetime field
+                    dt_field = entry.get("datetime") or entry.get("local_datetime")
+                    if dt_field:
+                        if isinstance(dt_field, str):
+                            date_str = dt_field[:10]
+                        elif hasattr(dt_field, "date"):
+                            date_str = dt_field.date().isoformat()
+
+                if not date_str or date_str not in by_date:
+                    continue
+
+                hour = entry.get("hour")
+                if hour is None:
+                    dt_field = entry.get("datetime") or entry.get("local_datetime")
+                    if isinstance(dt_field, str) and len(dt_field) >= 13:
+                        hour = int(dt_field[11:13])
+
+                # Support multiple field names for production value
+                production = entry.get("production_kwh") or entry.get("solar_kwh", 0)
+
+                hourly_entry = {
+                    "hour": hour,
+                    "prediction_kwh": round(production, 4),
+                    "cloud_cover": entry.get("cloud_cover"),
+                    "temperature": entry.get("temperature"),
+                    "solar_radiation_wm2": entry.get("solar_radiation_wm2"),
+                    "weather_source": entry.get("weather_source"),
+                }
+
+                if "panel_groups" in entry:
+                    hourly_entry["panel_groups"] = entry["panel_groups"]
+                if "panel_group_predictions" in entry:
+                    hourly_entry["panel_group_predictions"] = entry["panel_group_predictions"]
+
+                by_date[date_str].append(hourly_entry)
+
+            for date_str in by_date:
+                by_date[date_str].sort(key=lambda x: x.get("hour", 0))
+
+            totals = {}
+            for date_str, hours in by_date.items():
+                totals[date_str] = round(
+                    sum(h.get("prediction_kwh", 0) for h in hours), 3
+                )
+
+            data = {
+                "version": "1.0",
+                "updated_at": now_local.isoformat(),
+                "days": {
+                    today_str: {
+                        "date": today_str,
+                        "day_type": "today",
+                        "total_kwh": totals.get(today_str, 0),
+                        "hourly": by_date.get(today_str, []),
+                    },
+                    tomorrow_str: {
+                        "date": tomorrow_str,
+                        "day_type": "tomorrow",
+                        "total_kwh": totals.get(tomorrow_str, 0),
+                        "hourly": by_date.get(tomorrow_str, []),
+                    },
+                    day_after_str: {
+                        "date": day_after_str,
+                        "day_type": "day_after_tomorrow",
+                        "total_kwh": totals.get(day_after_str, 0),
+                        "hourly": by_date.get(day_after_str, []),
+                    },
+                },
+                "summary": {
+                    "today": totals.get(today_str, 0),
+                    "tomorrow": totals.get(tomorrow_str, 0),
+                    "day_after_tomorrow": totals.get(day_after_str, 0),
+                },
+            }
+
+            await self._atomic_write_json(forecast_file, data)
+
+            _LOGGER.debug(
+                f"Multi-day hourly forecast saved: today={totals.get(today_str, 0):.2f}, "
+                f"tomorrow={totals.get(tomorrow_str, 0):.2f}, "
+                f"day_after={totals.get(day_after_str, 0):.2f} kWh"
+            )
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to save multi-day hourly forecast: {e}", exc_info=True)
+            return False
+
+    async def load_multi_day_hourly_forecast(self) -> Optional[Dict[str, Any]]:
+        """Load the multi-day hourly forecast from file.
+
+        @zara
+        """
+        try:
+            forecast_file = self.data_dir / "stats" / "multi_day_hourly_forecast.json"
+
+            if not forecast_file.exists():
+                return None
+
+            return await self._read_json_file(forecast_file, default={})
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to load multi-day hourly forecast: {e}", exc_info=True)
+            return None

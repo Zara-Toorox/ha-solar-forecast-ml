@@ -707,6 +707,129 @@ send_daily_briefing:
               value: "en"
 
 # ============================================================================
+# DATA MANAGEMENT SERVICES - Reset and Cleanup
+# ⚠️ USER CONTROLLED - Setzt gelernte Daten zurück (mit Backup)
+# ============================================================================
+
+borg_assimilation_reverse:
+  name: "🖖 Borg Assimilation Reverse"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🖖 BENUTZER-SERVICE / USER SERVICE                                       ║
+    ║ Setzt gelernte Daten zurück - IMMER mit automatischem Backup!            ║
+    ║ "We are the Borg. Your data distinctiveness will be... restored."        ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🖖 BORG ASSIMILATION REVERSE - Entfernt "assimilierte" (gelernte) Daten!
+
+    Dieser Service setzt ausgewählte gelernte Daten auf neutrale Standardwerte
+    zurück. Ein automatisches Backup wird VOR dem Reset erstellt.
+
+    Wann verwenden?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ Falsche Sensoren waren konfiguriert und wurden korrigiert
+    ✅ Panel-Gruppen wurden nachträglich hinzugefügt/geändert
+    ✅ ML-Modell produziert konsistent schlechte Vorhersagen
+    ✅ "Garbage Data" aus der Anfangszeit entfernen
+    ✅ Nach größeren Konfigurationsänderungen (solar_capacity, Standort)
+
+    Verfügbare Targets:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📊 panel_groups
+       Setzt learned_panel_group_efficiency.json zurück:
+       - hourly_efficiency → {} (leer, neutral)
+       - learned_efficiency_factor → 1.0
+       - sample_count → 0
+       - confidence → 0
+       ➜ System lernt Panel-Effizienz komplett neu
+
+    🧠 ml_weights
+       Setzt learned_weights.json zurück:
+       - Alle ML-Gewichte → 0.0
+       - Training samples → 0
+       - Accuracy → 0%
+       ➜ ML-Modell startet Training von Grund auf neu
+
+    📜 hourly_history
+       Entfernt alte Einträge aus hourly_predictions.json:
+       - Standardmäßig: Älter als 30 Tage
+       - Optional: before_date Parameter für gezieltes Löschen
+       ➜ Entfernt "Garbage Data" aus der Vergangenheit
+
+    🔄 all
+       Führt ALLE obigen Resets durch
+       ➜ Kompletter Neustart des Lernsystems
+
+    Sicherheit:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✓ Automatisches Backup in: /solar_forecast_ml/backups/borg_reverse_YYYYMMDD_HHMMSS/
+    ✓ Backup enthält alle betroffenen Dateien vor dem Reset
+    ✓ Backup-Retention: 30 Tage (ältere werden automatisch gelöscht)
+
+    Nach dem Reset:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    - System startet sofort mit neutralen Werten
+    - Lernen beginnt automatisch beim nächsten Daten-Eingang
+    - Panel-Gruppen: Lernt um 23:30 täglich
+    - ML-Modell: Training läuft um 06:00 täglich
+
+    Beispiele:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Nur Panel-Gruppen zurücksetzen (häufigster Anwendungsfall)
+    service: solar_forecast_ml.borg_assimilation_reverse
+    data:
+      target: panel_groups
+
+    # Alles zurücksetzen + Garbage vor dem 15.12. entfernen
+    service: solar_forecast_ml.borg_assimilation_reverse
+    data:
+      target: all
+      before_date: "2025-12-15"
+
+  fields:
+    target:
+      name: "Reset-Ziel"
+      description: >
+        Was soll zurückgesetzt werden?
+        - panel_groups: Panel-Gruppen Effizienz-Daten
+        - ml_weights: ML-Modell Gewichte
+        - hourly_history: Stündliche Vorhersage-Historie
+        - all: Alles oben genannte
+      required: true
+      example: "panel_groups"
+      selector:
+        select:
+          options:
+            - label: "📊 Panel-Gruppen Effizienz"
+              value: "panel_groups"
+            - label: "🧠 ML-Modell Gewichte"
+              value: "ml_weights"
+            - label: "📜 Stündliche Historie"
+              value: "hourly_history"
+            - label: "🔄 Alles"
+              value: "all"
+    before_date:
+      name: "Daten VOR diesem Datum löschen (optional)"
+      description: >
+        Optional: Nur für target=hourly_history oder target=all.
+        Löscht nur Einträge VOR diesem Datum.
+        Format: YYYY-MM-DD (z.B. 2025-12-15)
+        Wenn nicht angegeben: Löscht Einträge älter als 30 Tage.
+      required: false
+      example: "2025-12-15"
+      selector:
+        date:
+    keep_backup:
+      name: "Backup erstellen"
+      description: >
+        Erstellt automatisch ein Backup vor dem Reset.
+        DRINGEND EMPFOHLEN! Standard: true
+      required: false
+      default: true
+      selector:
+        boolean:
+
+# ============================================================================
 # INSTALLATION SERVICES - Extra Features Management
 # ============================================================================
 

@@ -1,4 +1,4 @@
-"""ML Residual Trainer - Train ML on residuals (actual - physics) V12.0.0 @zara
+"""ML Residual Trainer - Train ML on residuals (actual - physics) V12.2.0 @zara
 
 This is part of the Physics-First, ML-Enhanced architecture.
 
@@ -31,10 +31,20 @@ from ..core.core_user_messages import user_msg
 _LOGGER = logging.getLogger(__name__)
 
 
-def _get_panel_group_calculator(panel_groups: List[Dict[str, Any]]):
-    """Helper to lazily import and create PanelGroupCalculator. @zara"""
+def _get_panel_group_calculator_sync(panel_groups: List[Dict[str, Any]], data_path: Optional[Path] = None):
+    """Helper to lazily import and create PanelGroupCalculator (sync version). @zara
+
+    Note: This performs blocking file I/O. Use _get_panel_group_calculator_async()
+    when calling from an async context.
+    """
     from ..physics import PanelGroupCalculator
-    return PanelGroupCalculator(panel_groups=panel_groups)
+    return PanelGroupCalculator(panel_groups=panel_groups, data_path=data_path)
+
+
+async def _get_panel_group_calculator_async(panel_groups: List[Dict[str, Any]], data_path: Optional[Path] = None):
+    """Helper to lazily import and create PanelGroupCalculator (async version). @zara"""
+    from ..physics import PanelGroupCalculator
+    return await PanelGroupCalculator.async_create(panel_groups=panel_groups, data_path=data_path)
 
 
 class ResidualTrainer:
@@ -172,13 +182,31 @@ class ResidualTrainer:
             _LOGGER.error("Failed to save residual model state: %s", e)
 
     def _get_panel_group_calculator(self):
-        """Get or create panel group calculator. @zara"""
+        """Get or create panel group calculator (sync version). @zara
+
+        Note: This performs blocking file I/O on first call.
+        Use async_ensure_physics_engine() to initialize asynchronously first.
+        """
         if self._panel_group_calculator is None and self._use_panel_groups:
-            self._panel_group_calculator = _get_panel_group_calculator(
-                self._panel_groups_config
+            self._panel_group_calculator = _get_panel_group_calculator_sync(
+                self._panel_groups_config,
+                data_path=self.data_dir,
             )
             _LOGGER.info(
                 "ResidualTrainer: PanelGroupCalculator initialized with %d groups",
+                self._panel_group_calculator.group_count,
+            )
+        return self._panel_group_calculator
+
+    async def _async_get_panel_group_calculator(self):
+        """Get or create panel group calculator (async version). @zara"""
+        if self._panel_group_calculator is None and self._use_panel_groups:
+            self._panel_group_calculator = await _get_panel_group_calculator_async(
+                self._panel_groups_config,
+                data_path=self.data_dir,
+            )
+            _LOGGER.info(
+                "ResidualTrainer: PanelGroupCalculator initialized async with %d groups",
                 self._panel_group_calculator.group_count,
             )
         return self._panel_group_calculator
@@ -216,7 +244,7 @@ class ResidualTrainer:
     async def async_ensure_physics_engine(self) -> None:
         """Ensure physics engine is loaded with state - use in async context @zara"""
         if self._use_panel_groups:
-            self._get_panel_group_calculator()
+            await self._async_get_panel_group_calculator()
             return
 
         if self._physics_engine is None:

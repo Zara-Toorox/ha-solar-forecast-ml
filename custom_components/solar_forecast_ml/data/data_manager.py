@@ -1,4 +1,4 @@
-"""Data Manager for Solar Forecast ML Integration - FACADE V12.0.0 @zara
+"""Data Manager for Solar Forecast ML Integration - FACADE V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -144,16 +144,6 @@ class DataManager(DataManagerIO):
             prediction_kwh, source, lock, force_overwrite, prediction_kwh_raw, safeguard_applied
         )
 
-    async def update_intraday_display_forecast(
-        self,
-        display_value: float,
-        source: str,
-    ) -> bool:
-        """Update intraday display forecast (09:05/12:05 corrections) @zara"""
-        return await self.forecast_handler.update_intraday_display_forecast(
-            display_value, source
-        )
-
     async def save_forecast_tomorrow(
         self, date: datetime, prediction_kwh: float, source: str = "ML", lock: bool = False
     ) -> bool:
@@ -175,6 +165,12 @@ class DataManager(DataManagerIO):
     ) -> bool:
         """Save best hour forecast"""
         return await self.forecast_handler.save_forecast_best_hour(hour, prediction_kwh, source)
+
+    async def save_multi_day_hourly_forecast(
+        self, hourly_forecast: list
+    ) -> bool:
+        """Save multi-day hourly forecast to JSON @zara"""
+        return await self.forecast_handler.save_multi_day_hourly_forecast(hourly_forecast)
 
     async def save_actual_best_hour(self, hour: int, actual_kwh: float) -> bool:
         """Save actual best production hour @zara"""
@@ -223,12 +219,16 @@ class DataManager(DataManagerIO):
         return await self.forecast_handler.get_all_time_peak()
 
     async def finalize_today(
-        self, yield_kwh: float, consumption_kwh: Optional[float] = None, production_seconds: int = 0
+        self,
+        yield_kwh: float,
+        consumption_kwh: Optional[float] = None,
+        production_seconds: int = 0,
+        excluded_hours_info: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Finalize today with actual values"""
 
         return await self.forecast_handler.finalize_today(
-            yield_kwh, consumption_kwh, production_seconds
+            yield_kwh, consumption_kwh, production_seconds, excluded_hours_info
         )
 
     async def get_history(
@@ -317,23 +317,6 @@ class DataManager(DataManagerIO):
     async def clear_expected_daily_production(self) -> bool:
         """Clear expected daily production @zara"""
         return await self.state_handler.clear_expected_daily_production()
-
-    async def save_intraday_correction(
-        self,
-        original_forecast: float,
-        corrected_forecast: float,
-        correction_factor: float,
-        source: str,
-        applied_at: datetime,
-    ) -> bool:
-        """Save intraday correction metadata @zara"""
-        return await self.state_handler.save_intraday_correction(
-            original_forecast=original_forecast,
-            corrected_forecast=corrected_forecast,
-            correction_factor=correction_factor,
-            source=source,
-            applied_at=applied_at,
-        )
 
     async def save_weather_cache(self, weather_data: Dict[str, Any]) -> bool:
         """Legacy method - Open-Meteo cache is the primary data source. @zara"""
@@ -446,23 +429,3 @@ class DataManager(DataManagerIO):
     ) -> bool:
         """OLD METHOD - redirects to update_peak_today"""
         return await self.update_peak_today(power_w, timestamp)
-
-    async def finalize_current_day(
-        self,
-        actual_yield_kwh: float,
-        actual_consumption_kwh: Optional[float] = None,
-        production_time_today: Optional[str] = None,
-    ) -> bool:
-        """OLD METHOD - redirects to finalize_today"""
-        production_seconds = 0
-        if production_time_today:
-            try:
-                parts = production_time_today.replace("h", "").replace("m", "").split()
-                if len(parts) >= 2:
-                    production_seconds = int(parts[0]) * 3600 + int(parts[1]) * 60
-            except Exception as e:
-                _LOGGER.debug(f"Could not parse production time '{production_time_today}': {e}")
-
-        return await self.finalize_today(
-            actual_yield_kwh, actual_consumption_kwh, production_seconds
-        )

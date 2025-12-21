@@ -1,0 +1,281 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SFML Stats Lite - Basic Settings",
+        "description": "Configure statistics generation for Solar Forecast ML.",
+        "data": {
+          "auto_generate": "Automatic generation",
+          "generate_weekly": "Weekly reports",
+          "generate_monthly": "Monthly reports",
+          "theme": "Color scheme"
+        },
+        "data_description": {
+          "auto_generate": "Automatically generate reports on schedule",
+          "generate_weekly": "Create a weekly report every Sunday",
+          "generate_monthly": "Create a monthly report on the 1st of each month",
+          "theme": "Dark or Light theme for the charts"
+        }
+      },
+      "energy_flow": {
+        "title": "Energy Flow Sensors",
+        "description": "Select sensors for the energy flow diagram.\n\nAll fields are optional! Only select the sensors you have available.\n\nIMPORTANT: All sensors must provide current power in WATTS (W), NOT kWh!",
+        "data": {
+          "sensor_solar_power": "Solar Power (W)",
+          "sensor_solar_to_house": "Solar to House (W)",
+          "sensor_solar_to_battery": "Solar to Battery (W)",
+          "sensor_grid_to_house": "Grid to House (W)",
+          "sensor_grid_to_battery": "Grid to Battery (W)",
+          "sensor_house_to_grid": "Export to Grid (W)",
+          "sensor_smartmeter_import": "Smartmeter Import (W)",
+          "sensor_smartmeter_export": "Smartmeter Export (W)"
+        },
+        "data_description": {
+          "sensor_solar_power": "Current PV power in Watts (e.g. 3500 W). From your inverter. Typical range: 0-15000 W.",
+          "sensor_solar_to_house": "Power flowing directly from PV to house in Watts. Without battery/grid portion. Typical range: 0-10000 W.",
+          "sensor_solar_to_battery": "Power flowing from PV to battery in Watts. Typical range: 0-5000 W.",
+          "sensor_grid_to_house": "Grid import for direct house consumption in Watts. Typical range: 0-20000 W.",
+          "sensor_grid_to_battery": "Grid import for battery charging in Watts. Typical range: 0-5000 W.",
+          "sensor_house_to_grid": "Export to grid in Watts. Typical range: 0-15000 W.",
+          "sensor_smartmeter_import": "Current import power from smartmeter in Watts. Used for hourly billing.",
+          "sensor_smartmeter_export": "Current export power from smartmeter in Watts. Used for hourly billing."
+        }
+      },
+      "battery": {
+        "title": "Battery & Consumption",
+        "description": "Sensors for battery status and home consumption.\n\nAll fields are optional!\n\nSOC = Percent (0-100%), Power = Watts (W)",
+        "data": {
+          "sensor_battery_soc": "Battery SOC (%)",
+          "sensor_battery_power": "Battery Charge/Discharge Power (W)",
+          "sensor_battery_to_house": "Battery to House (W)",
+          "sensor_battery_to_grid": "Battery to Grid (W)",
+          "sensor_home_consumption": "Home Consumption Total (W)"
+        },
+        "data_description": {
+          "sensor_battery_soc": "State of Charge in percent. Expected range: 0-100 (NOT 0-1!). Shows battery charge level.",
+          "sensor_battery_power": "Current charge or discharge power in Watts. Positive = Charging, Negative = Discharging (or vice versa depending on system). Range: -10000 to +10000 W.",
+          "sensor_battery_to_house": "Discharge power flowing to house in Watts. ONLY positive values! Typical range: 0-10000 W.",
+          "sensor_battery_to_grid": "Battery discharge to grid in Watts. ONLY positive values! Typical range: 0-10000 W.",
+          "sensor_home_consumption": "Total current home consumption in Watts. Typical range: 200-20000 W. Example: 1500 W."
+        }
+      },
+      "statistics": {
+        "title": "Statistics Sensors & Weather (optional)",
+        "description": "Sensors for daily and yearly statistics.\n\nAll fields are optional!\n\nIMPORTANT: Energy values expected in kWh here, NOT Watts!",
+        "data": {
+          "sensor_solar_yield_daily": "Solar Yield Today (kWh)",
+          "sensor_grid_import_daily": "Grid Import Today (kWh)",
+          "sensor_grid_import_yearly": "Grid Import Yearly (kWh)",
+          "sensor_battery_charge_solar_daily": "Battery Charge Solar Today (kWh)",
+          "sensor_battery_charge_grid_daily": "Battery Charge Grid Today (kWh)",
+          "sensor_price_total": "Current Price Total (ct/kWh)",
+          "weather_entity": "Weather Entity (HA)"
+        },
+        "data_description": {
+          "sensor_solar_yield_daily": "Total PV production today in kWh. Expected range: 0-100 kWh. Resets at midnight. Example: 15.3 kWh.",
+          "sensor_grid_import_daily": "Total grid import today in kWh. Expected range: 0-100 kWh. Resets at midnight.",
+          "sensor_grid_import_yearly": "Total grid import this year in kWh (meter reading). Expected range: 0-50000 kWh.",
+          "sensor_battery_charge_solar_daily": "Energy charged from PV to battery today in kWh. Expected range: 0-50 kWh.",
+          "sensor_battery_charge_grid_daily": "Energy charged from grid to battery today in kWh. Expected range: 0-50 kWh.",
+          "sensor_price_total": "Current total electricity price incl. all fees in cents per kWh. Expected range: 15-80 ct/kWh. Example: 35.5 ct/kWh.",
+          "weather_entity": "Home Assistant Weather integration (e.g. weather.home). Shows temperature, humidity, wind alongside solar forecast. Weather data is loaded from Solar Forecast ML."
+        }
+      },
+      "panels": {
+        "title": "PV Panel Sensors (optional)",
+        "description": "Configure up to 4 individual PV panels.\n\nAll fields are optional!\n\nFor each panel you can specify a name and a live watt sensor.",
+        "data": {
+          "panel1_name": "Panel 1 Name",
+          "sensor_panel1_power": "Panel 1 Live Power",
+          "panel2_name": "Panel 2 Name",
+          "sensor_panel2_power": "Panel 2 Live Power",
+          "panel3_name": "Panel 3 Name",
+          "sensor_panel3_power": "Panel 3 Live Power",
+          "panel4_name": "Panel 4 Name",
+          "sensor_panel4_power": "Panel 4 Live Power"
+        },
+        "data_description": {
+          "panel1_name": "Name of the panel (e.g. 'South-East' or 'Garage')",
+          "sensor_panel1_power": "Current power in Watts",
+          "panel2_name": "Name of the panel",
+          "sensor_panel2_power": "Current power in Watts",
+          "panel3_name": "Name of the panel",
+          "sensor_panel3_power": "Current power in Watts",
+          "panel4_name": "Name of the panel",
+          "sensor_panel4_power": "Current power in Watts"
+        }
+      },
+      "billing": {
+        "title": "Electricity Bill & Billing Period",
+        "description": "Configure your billing period for the annual balance.\n\nStart date = When does your billing year begin with your electricity provider?\n\nkWh sensors must be 'total_increasing' (meter readings)!",
+        "data": {
+          "billing_start_day": "Billing Start Day (1-28)",
+          "billing_start_month": "Billing Start Month",
+          "billing_price_mode": "Price Mode",
+          "billing_fixed_price": "Fixed Price (ct/kWh)",
+          "sensor_smartmeter_import_kwh": "Grid Import Meter (kWh total)",
+          "sensor_smartmeter_export_kwh": "Grid Export Meter (kWh total)",
+          "sensor_solar_yield_total_kwh": "Solar Yield Meter (kWh total)"
+        },
+        "data_description": {
+          "billing_start_day": "Day of month when your billing year starts. Example: 15 = the 15th of the month.",
+          "billing_start_month": "Month when your billing year starts. Example: January = billing year starts on selected day in January.",
+          "billing_price_mode": "Dynamic = hourly spot prices from Grid Price Monitor integration. Fixed = your fixed tariff price.",
+          "billing_fixed_price": "Your electricity tariff price in cents per kWh. Only relevant in fixed price mode. Example: 35.0 for 35 ct/kWh.",
+          "sensor_smartmeter_import_kwh": "Absolute meter reading for grid import in kWh. MUST be 'total_increasing' (always increasing). Example: sensor.power_meter_total_consumption with value like 12345.67 kWh.",
+          "sensor_smartmeter_export_kwh": "Absolute meter reading for grid export in kWh. MUST be 'total_increasing'. Example: sensor.power_meter_total_export with value like 5432.10 kWh.",
+          "sensor_solar_yield_total_kwh": "Absolute total yield of PV system in kWh. MUST be 'total_increasing'. Example: sensor.inverter_total_yield with value like 15000.00 kWh."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "SFML Stats Lite is already configured."
+    },
+    "error": {
+      "cannot_connect": "Connection failed",
+      "unknown": "Unknown error"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SFML Stats Lite Options",
+        "description": "Select which settings you want to change.",
+        "menu_options": {
+          "general": "Basic Settings",
+          "energy_flow": "Energy Flow Sensors",
+          "battery": "Battery & Consumption",
+          "statistics": "Statistics Sensors",
+          "panels": "PV Panel Sensors",
+          "billing": "Electricity Bill & Billing"
+        }
+      },
+      "general": {
+        "title": "Basic Settings",
+        "description": "Adjust report generation and theme.",
+        "data": {
+          "auto_generate": "Automatic generation",
+          "generate_weekly": "Weekly reports",
+          "generate_monthly": "Monthly reports",
+          "theme": "Color scheme"
+        },
+        "data_description": {
+          "auto_generate": "Automatically generate reports on schedule",
+          "generate_weekly": "Create a weekly report every Sunday",
+          "generate_monthly": "Create a monthly report on the 1st of each month",
+          "theme": "Dark or Light theme for the charts"
+        }
+      },
+      "energy_flow": {
+        "title": "Energy Flow Sensors",
+        "description": "All sensors must provide WATTS (W), NOT kWh!",
+        "data": {
+          "sensor_solar_power": "Solar Power (W)",
+          "sensor_solar_to_house": "Solar to House (W)",
+          "sensor_solar_to_battery": "Solar to Battery (W)",
+          "sensor_grid_to_house": "Grid to House (W)",
+          "sensor_grid_to_battery": "Grid to Battery (W)",
+          "sensor_house_to_grid": "Export to Grid (W)",
+          "sensor_smartmeter_import": "Smartmeter Import (W)",
+          "sensor_smartmeter_export": "Smartmeter Export (W)"
+        },
+        "data_description": {
+          "sensor_solar_power": "Current PV power in Watts (e.g. 3500 W). Typical range: 0-15000 W.",
+          "sensor_solar_to_house": "Power flowing directly from PV to house in Watts. Typical range: 0-10000 W.",
+          "sensor_solar_to_battery": "Power flowing from PV to battery in Watts. Typical range: 0-5000 W.",
+          "sensor_grid_to_house": "Grid import for direct house consumption in Watts. Typical range: 0-20000 W.",
+          "sensor_grid_to_battery": "Grid import for battery charging in Watts. Typical range: 0-5000 W.",
+          "sensor_house_to_grid": "Export to grid in Watts. Typical range: 0-15000 W.",
+          "sensor_smartmeter_import": "Current import power from smartmeter in Watts.",
+          "sensor_smartmeter_export": "Current export power from smartmeter in Watts."
+        }
+      },
+      "battery": {
+        "title": "Battery & Consumption",
+        "description": "SOC = Percent (0-100%), Power = Watts (W)",
+        "data": {
+          "sensor_battery_soc": "Battery SOC (%)",
+          "sensor_battery_power": "Battery Charge/Discharge Power (W)",
+          "sensor_battery_to_house": "Battery to House (W)",
+          "sensor_battery_to_grid": "Battery to Grid (W)",
+          "sensor_home_consumption": "Home Consumption Total (W)"
+        },
+        "data_description": {
+          "sensor_battery_soc": "Battery charge level in percent. Range: 0-100 (NOT 0-1!).",
+          "sensor_battery_power": "Current charge/discharge power in Watts. Range: -10000 to +10000 W.",
+          "sensor_battery_to_house": "Discharge power to house in Watts. ONLY positive values!",
+          "sensor_battery_to_grid": "Battery discharge to grid in Watts. ONLY positive values!",
+          "sensor_home_consumption": "Total home consumption in Watts. Typical range: 200-20000 W."
+        }
+      },
+      "statistics": {
+        "title": "Statistics Sensors & Weather",
+        "description": "IMPORTANT: Energy values expected in kWh here!",
+        "data": {
+          "sensor_solar_yield_daily": "Solar Yield Today (kWh)",
+          "sensor_grid_import_daily": "Grid Import Today (kWh)",
+          "sensor_grid_import_yearly": "Grid Import Yearly (kWh)",
+          "sensor_battery_charge_solar_daily": "Battery Charge Solar Today (kWh)",
+          "sensor_battery_charge_grid_daily": "Battery Charge Grid Today (kWh)",
+          "sensor_price_total": "Current Price Total (ct/kWh)",
+          "weather_entity": "Weather Entity (HA)"
+        },
+        "data_description": {
+          "sensor_solar_yield_daily": "Total PV production today in kWh. Range: 0-100 kWh.",
+          "sensor_grid_import_daily": "Total grid import today in kWh. Range: 0-100 kWh.",
+          "sensor_grid_import_yearly": "Total grid import this year in kWh. Range: 0-50000 kWh.",
+          "sensor_battery_charge_solar_daily": "Energy charged from PV to battery today in kWh.",
+          "sensor_battery_charge_grid_daily": "Energy charged from grid to battery today in kWh.",
+          "sensor_price_total": "Current electricity price in ct/kWh. Range: 15-80 ct/kWh.",
+          "weather_entity": "Home Assistant Weather integration. Weather data is loaded from Solar Forecast ML."
+        }
+      },
+      "panels": {
+        "title": "PV Panel Sensors",
+        "description": "Configure up to 4 individual PV panels with live power.",
+        "data": {
+          "panel1_name": "Panel 1 Name",
+          "sensor_panel1_power": "Panel 1 Live Power",
+          "panel2_name": "Panel 2 Name",
+          "sensor_panel2_power": "Panel 2 Live Power",
+          "panel3_name": "Panel 3 Name",
+          "sensor_panel3_power": "Panel 3 Live Power",
+          "panel4_name": "Panel 4 Name",
+          "sensor_panel4_power": "Panel 4 Live Power"
+        },
+        "data_description": {
+          "panel1_name": "Name of the panel (e.g. 'South-East' or 'Garage')",
+          "sensor_panel1_power": "Current power in Watts",
+          "panel2_name": "Name of the panel",
+          "sensor_panel2_power": "Current power in Watts",
+          "panel3_name": "Name of the panel",
+          "sensor_panel3_power": "Current power in Watts",
+          "panel4_name": "Name of the panel",
+          "sensor_panel4_power": "Current power in Watts"
+        }
+      },
+      "billing": {
+        "title": "Electricity Bill & Billing Period",
+        "description": "kWh sensors must be 'total_increasing' (meter readings)!",
+        "data": {
+          "billing_start_day": "Billing Start Day (1-28)",
+          "billing_start_month": "Billing Start Month",
+          "billing_price_mode": "Price Mode",
+          "billing_fixed_price": "Fixed Price (ct/kWh)",
+          "sensor_smartmeter_import_kwh": "Grid Import Meter (kWh total)",
+          "sensor_smartmeter_export_kwh": "Grid Export Meter (kWh total)",
+          "sensor_solar_yield_total_kwh": "Solar Yield Meter (kWh total)"
+        },
+        "data_description": {
+          "billing_start_day": "Day of month when your billing period starts (1-28).",
+          "billing_start_month": "Month when your billing period starts.",
+          "billing_price_mode": "Dynamic = hourly spot prices. Fixed = your tariff price.",
+          "billing_fixed_price": "Your electricity tariff price in cents per kWh.",
+          "sensor_smartmeter_import_kwh": "Meter reading grid import in kWh (total_increasing).",
+          "sensor_smartmeter_export_kwh": "Meter reading grid export in kWh (total_increasing).",
+          "sensor_solar_yield_total_kwh": "Total solar yield in kWh (total_increasing)."
+        }
+      }
+    }
+  }
+}

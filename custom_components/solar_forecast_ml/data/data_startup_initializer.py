@@ -1,8 +1,17 @@
-"""Startup Initializer - Guarantees all critical JSON files exist BEFORE async operations V12.0.0 @zara
+"""Startup Initializer - Guarantees all critical JSON files exist BEFORE async operations V12.2.0 @zara
 
 IMPORTANT: All JSON structures created here MUST match the MASTER files in production!
 Master location: /Volumes/config/solar_forecast_ml/
 Do NOT add fields that don't exist in the master!
+
+REFACTORED V12.2.0: This module now ONLY creates the 5 critical pre-async files:
+1. Directory structure
+2. open_meteo_cache.json
+3. astronomy_cache.json
+4. weather_forecast_corrected.json
+5. daily_forecasts.json
+
+All other files are created by DataSchemaValidator (async).
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -29,8 +38,13 @@ from zoneinfo import ZoneInfo
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class StartupInitializer:
-    """Synchronous initializer - guarantees critical files exist before async startup"""
+    """Synchronous initializer - guarantees critical files exist before async startup
+
+    REFACTORED V12.2.0: Only handles 5 critical pre-async files.
+    All other files are handled by DataSchemaValidator after async startup.
+    """
 
     def __init__(self, data_dir: Path, config: Dict[str, Any]):
         """Initialize startup initializer @zara"""
@@ -68,39 +82,101 @@ class StartupInitializer:
         return dt.isoformat()
 
     def initialize_all(self) -> bool:
-        """Initialize ALL critical JSON files synchronously @zara"""
+        """Initialize ONLY critical JSON files synchronously @zara
+
+        CRITICAL: This method MUST run BEFORE any async operations to prevent
+        FileNotFoundError race conditions during first startup.
+
+        REFACTORED V12.2.0: Only creates files that are needed BEFORE async startup.
+        All other files are created/validated by DataSchemaValidator (async).
+
+        Order matters:
+        1. Create ALL directories first (required for any file operation)
+        2. Create open_meteo_cache (first API fetch depends on it)
+        3. Create astronomy_cache (first calculation depends on it)
+        4. Create weather_forecast_corrected (derived from open_meteo)
+        5. Create daily_forecasts (sensors access this immediately)
+
+        All other files are handled by DataSchemaValidator after async startup.
+        """
         _LOGGER.info("=" * 80)
-        _LOGGER.info("🚀 STARTUP INITIALIZER - Guaranteeing critical files exist")
+        _LOGGER.info("STARTUP INITIALIZER - Creating critical pre-async files")
         _LOGGER.info("=" * 80)
 
         success = True
 
-        # CRITICAL: open_meteo_cache FIRST - other files may depend on it!
+        # STEP 1: Create ALL required directories FIRST
+        if not self._ensure_directory_structure():
+            _LOGGER.error("Failed to create directory structure")
+            success = False
+        else:
+            _LOGGER.info("Directory structure - Ready")
+
+        # STEP 2: open_meteo_cache FIRST - API fetch depends on it!
         if not self._ensure_open_meteo_cache():
-            _LOGGER.warning("⚠️  open_meteo_cache.json - Created empty (will be filled by API)")
+            _LOGGER.warning("open_meteo_cache.json - Created empty (will be filled by API)")
         else:
-            _LOGGER.info("✅ open_meteo_cache.json - Ready")
+            _LOGGER.info("open_meteo_cache.json - Ready")
 
+        # STEP 3: astronomy_cache (first calculation depends on it)
         if not self._ensure_astronomy_cache():
-            _LOGGER.error("❌ Failed to create astronomy_cache.json")
+            _LOGGER.error("Failed to create astronomy_cache.json")
             success = False
         else:
-            _LOGGER.info("✅ astronomy_cache.json - Ready")
+            _LOGGER.info("astronomy_cache.json - Ready")
 
+        # STEP 4: weather_forecast_corrected (derived from open_meteo)
         if not self._ensure_weather_forecast_corrected():
-            _LOGGER.error("❌ Failed to create weather_forecast_corrected.json")
+            _LOGGER.error("Failed to create weather_forecast_corrected.json")
             success = False
         else:
-            _LOGGER.info("✅ weather_forecast_corrected.json - Ready")
+            _LOGGER.info("weather_forecast_corrected.json - Ready")
+
+        # STEP 5: daily_forecasts.json - CRITICAL for sensors
+        if not self._ensure_daily_forecasts():
+            _LOGGER.error("Failed to create daily_forecasts.json")
+            success = False
+        else:
+            _LOGGER.info("daily_forecasts.json - Ready")
 
         _LOGGER.info("=" * 80)
         if success:
-            _LOGGER.info("✅ STARTUP INITIALIZER - All critical files guaranteed")
+            _LOGGER.info("STARTUP INITIALIZER - Critical files ready (5 files)")
+            _LOGGER.info("Remaining files will be created by DataSchemaValidator")
         else:
-            _LOGGER.error("❌ STARTUP INITIALIZER - Some files failed (check logs above)")
+            _LOGGER.error("STARTUP INITIALIZER - Some critical files failed")
         _LOGGER.info("=" * 80)
 
         return success
+
+    def _ensure_directory_structure(self) -> bool:
+        """Create ALL required directories synchronously @zara
+
+        CRITICAL: Must run FIRST before any file operations to prevent
+        FileNotFoundError when atomic writes try to create temp files.
+        """
+        required_dirs = [
+            self.data_dir,
+            self.data_dir / "data",
+            self.data_dir / "stats",
+            self.data_dir / "ml",
+            self.data_dir / "physics",
+            self.data_dir / "logs",
+            self.data_dir / "backups",
+            self.data_dir / "backups" / "auto",
+        ]
+
+        try:
+            for directory in required_dirs:
+                directory.mkdir(parents=True, exist_ok=True)
+                _LOGGER.debug(f"Ensured directory exists: {directory}")
+
+            _LOGGER.info(f"Created/verified {len(required_dirs)} directories")
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to create directory structure: {e}", exc_info=True)
+            return False
 
     def _ensure_open_meteo_cache(self) -> bool:
         """Create/validate open_meteo_cache.json matching MASTER structure @zara
@@ -493,3 +569,162 @@ class StartupInitializer:
                 "last_error": None,
             },
         }
+
+    def _ensure_daily_forecasts(self) -> bool:
+        """Create daily_forecasts.json matching MASTER structure @zara
+
+        CRITICAL: This file is accessed by many sensors and handlers.
+        Must exist before async operations start.
+
+        Location: stats/daily_forecasts.json
+        """
+        forecasts_file = self.data_dir / "stats" / "daily_forecasts.json"
+
+        if forecasts_file.exists():
+            _LOGGER.debug("daily_forecasts.json already exists, skipping")
+            return True
+
+        try:
+            forecasts_file.parent.mkdir(parents=True, exist_ok=True)
+
+            from datetime import date
+            today = date.today()
+            today_str = today.isoformat()
+
+            # MASTER structure for daily_forecasts.json
+            forecasts_data = {
+                "version": "3.0.0",
+                "today": {
+                    "date": today_str,
+                    "forecast_day": {
+                        "prediction_kwh": None,
+                        "prediction_kwh_raw": None,
+                        "safeguard_applied": False,
+                        "safeguard_reduction_kwh": 0.0,
+                        "locked": False,
+                        "locked_at": None,
+                        "source": None,
+                    },
+                    "forecast_tomorrow": {
+                        "date": None,
+                        "prediction_kwh": None,
+                        "locked": False,
+                        "locked_at": None,
+                        "source": None,
+                        "updates": [],
+                    },
+                    "forecast_day_after_tomorrow": {
+                        "date": None,
+                        "prediction_kwh": None,
+                        "locked": False,
+                        "next_update": None,
+                        "source": None,
+                        "updates": [],
+                    },
+                    "forecast_best_hour": {
+                        "hour": None,
+                        "prediction_kwh": None,
+                        "locked": False,
+                        "locked_at": None,
+                        "source": None,
+                    },
+                    "actual_best_hour": {
+                        "hour": None,
+                        "actual_kwh": None,
+                        "saved_at": None,
+                    },
+                    "forecast_next_hour": {
+                        "period": None,
+                        "prediction_kwh": None,
+                        "updated_at": None,
+                        "source": None,
+                    },
+                    "production_time": {
+                        "active": False,
+                        "duration_seconds": 0,
+                        "start_time": None,
+                        "end_time": None,
+                        "last_power_above_10w": None,
+                        "zero_power_since": None,
+                    },
+                    "peak_today": {
+                        "power_w": 0.0,
+                        "at": None,
+                    },
+                    "yield_today": {
+                        "kwh": None,
+                        "sensor": None,
+                    },
+                    "consumption_today": {
+                        "kwh": None,
+                        "sensor": None,
+                    },
+                    "autarky": {
+                        "percent": None,
+                        "calculated_at": None,
+                    },
+                    "finalized": {
+                        "yield_kwh": None,
+                        "consumption_kwh": None,
+                        "production_hours": None,
+                        "accuracy_percent": None,
+                        "at": None,
+                    },
+                },
+                "statistics": {
+                    "all_time_peak": {
+                        "power_w": 0.0,
+                        "date": None,
+                        "at": None,
+                    },
+                    "current_week": {
+                        "period": None,
+                        "date_range": None,
+                        "yield_kwh": 0.0,
+                        "consumption_kwh": 0.0,
+                        "days": 0,
+                        "updated_at": None,
+                    },
+                    "current_month": {
+                        "period": None,
+                        "yield_kwh": 0.0,
+                        "consumption_kwh": 0.0,
+                        "avg_autarky": 0.0,
+                        "days": 0,
+                        "updated_at": None,
+                    },
+                    "last_7_days": {
+                        "avg_yield_kwh": 0.0,
+                        "avg_accuracy": 0.0,
+                        "total_yield_kwh": 0.0,
+                        "calculated_at": None,
+                    },
+                    "last_30_days": {
+                        "avg_yield_kwh": 0.0,
+                        "avg_accuracy": 0.0,
+                        "total_yield_kwh": 0.0,
+                        "calculated_at": None,
+                    },
+                    "last_365_days": {
+                        "avg_yield_kwh": 0.0,
+                        "total_yield_kwh": 0.0,
+                        "calculated_at": None,
+                    },
+                },
+                "history": [],
+                "metadata": {
+                    "retention_days": 730,
+                    "history_entries": 0,
+                    "last_update": None,
+                },
+            }
+
+            with open(forecasts_file, "w", encoding="utf-8") as f:
+                json.dump(forecasts_data, f, indent=2, ensure_ascii=False)
+
+            _LOGGER.info(f"Created daily_forecasts.json (MASTER structure) for {today_str}")
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to create daily_forecasts.json: {e}", exc_info=True)
+            return False

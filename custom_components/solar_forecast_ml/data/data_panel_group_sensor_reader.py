@@ -1,4 +1,4 @@
-"""Panel Group Sensor Reader V12.0.0 @zara
+"""Panel Group Sensor Reader V12.2.0 @zara
 
 Reads energy sensors for panel groups to enable per-group learning.
 

@@ -10,7 +10,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
@@ -206,3 +206,13 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .DS_Store
+
+# Claude Code
+.claude/
+
+# IDE settings
+.idea/
+.vscode/
+
+# AI Arbeitsverzeichnis (sensible Daten - NIEMALS pushen!)
+/AI/

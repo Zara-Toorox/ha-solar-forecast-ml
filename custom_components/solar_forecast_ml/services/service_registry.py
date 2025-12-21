@@ -27,6 +27,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 
 from ..const import (
     DOMAIN,
+    SERVICE_BORG_ASSIMILATION_REVERSE,
     SERVICE_BOOTSTRAP_FROM_HISTORY,
     SERVICE_BOOTSTRAP_PHYSICS_FROM_HISTORY,
     SERVICE_BUILD_ASTRONOMY_CACHE,
@@ -180,6 +181,13 @@ class ServiceRegistry:
                 name=SERVICE_INSTALL_EXTRA_FEATURES,
                 handler=self._handle_install_extra_features,
                 description="Install extra feature components (grid_price_monitor, sfml_stats)",
+            ),
+
+            # Data Management Services
+            ServiceDefinition(
+                name=SERVICE_BORG_ASSIMILATION_REVERSE,
+                handler=self._handle_borg_assimilation_reverse,
+                description="Reset learned data with automatic backup (panel_groups, ml_weights, hourly_history, all)",
             ),
         ]
 
@@ -1330,12 +1338,11 @@ class ServiceRegistry:
                 _LOGGER.info(f"STEP 7/8: Training PanelGroupEfficiencyLearner ({len(panel_groups)} groups)...")
                 from ..physics import PanelGroupEfficiencyLearner
 
-                efficiency_learner = PanelGroupEfficiencyLearner(
+                # Use async factory to avoid blocking file I/O in event loop
+                efficiency_learner = await PanelGroupEfficiencyLearner.async_create(
                     data_path=self.coordinator.data_manager.data_dir,
                     panel_groups=panel_groups,
-                    skip_load=True,
                 )
-                await efficiency_learner.async_load_state()
 
                 geometry_result = await efficiency_learner.bulk_add_historical_data(geometry_samples)
 
@@ -1510,16 +1517,21 @@ class ServiceRegistry:
 
                 # Send notification
                 try:
+                    installed_list = "\n".join(f"- {feat}" for feat in installed)
                     await self.hass.services.async_call(
                         "persistent_notification",
                         "create",
                         {
-                            "title": "Extra Features Installed",
+                            "title": "✅ Extra Features erfolgreich installiert",
                             "message": (
-                                f"Die folgenden Integrationen wurden installiert:\n"
-                                f"- {chr(10).join(installed)}\n\n"
-                                f"**Bitte Home Assistant neu starten!**\n\n"
-                                f"Nach dem Neustart unter Einstellungen → Geräte & Dienste → Integration hinzufügen konfigurieren."
+                                f"Die folgenden Integrationen wurden erfolgreich kopiert:\n"
+                                f"{installed_list}\n\n"
+                                f"**⚠️ Bitte Home Assistant neu starten!**\n\n"
+                                f"Nach dem Neustart unter Einstellungen → Geräte & Dienste → Integration hinzufügen konfigurieren.\n\n"
+                                f"---\n"
+                                f"**🔴 WICHTIG für ARM64-Systeme (Raspberry Pi, etc.):**\n"
+                                f"Auf ARM64-Architektur darf **NUR sfml_stats_lite** verwendet werden!\n"
+                                f"Die vollständige sfml_stats-Integration ist nicht mit ARM64 kompatibel."
                             ),
                             "notification_id": "solar_forecast_ml_extra_features",
                         },
@@ -1529,4 +1541,348 @@ class ServiceRegistry:
 
         except Exception as err:
             _LOGGER.error(f"Error in install_extra_features service: {err}", exc_info=True)
+
+    # =========================================================================
+    # Data Management Services
+    # =========================================================================
+
+    async def _handle_borg_assimilation_reverse(self, call: ServiceCall) -> None:
+        """Handle borg_assimilation_reverse service - Reset learned data with backup @zara
+
+        "We are the Borg. Your data distinctiveness will be... restored."
+
+        This service allows users to selectively reset learned data:
+        - panel_groups: Reset learned_panel_group_efficiency.json
+        - ml_weights: Reset learned_weights.json
+        - hourly_history: Clean hourly_predictions.json
+        - all: Reset everything above
+
+        ALWAYS creates a backup before any reset operation.
+
+        Parameters:
+            target: str - What to reset (panel_groups, ml_weights, hourly_history, all)
+            before_date: str (optional) - Only reset data before this date (YYYY-MM-DD)
+            keep_backup: bool - Keep backup after reset (default: True)
+        """
+        from datetime import datetime
+        from pathlib import Path
+        import shutil
+
+        target = call.data.get("target", "all")
+        before_date_str = call.data.get("before_date")
+        keep_backup = call.data.get("keep_backup", True)
+
+        _LOGGER.info("=" * 80)
+        _LOGGER.info("🖖 SERVICE: borg_assimilation_reverse")
+        _LOGGER.info("   'We are the Borg. Your data distinctiveness will be... restored.'")
+        _LOGGER.info("=" * 80)
+        _LOGGER.info(f"Target: {target}")
+        _LOGGER.info(f"Before date: {before_date_str or 'ALL DATA'}")
+        _LOGGER.info(f"Keep backup: {keep_backup}")
+
+        try:
+            data_dir = self.coordinator.data_manager.data_dir
+            ml_dir = data_dir / "ml"
+            stats_dir = data_dir / "stats"
+            backups_dir = data_dir / "backups" / "borg_assimilation"
+
+            # Ensure backup directory exists
+            def _ensure_backup_dir():
+                backups_dir.mkdir(parents=True, exist_ok=True)
+            await self.hass.async_add_executor_job(_ensure_backup_dir)
+
+            # Create timestamp for backup
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_subdir = backups_dir / f"backup_{timestamp}"
+
+            # Define target files
+            target_files = {
+                "panel_groups": [
+                    ml_dir / "learned_panel_group_efficiency.json",
+                ],
+                "ml_weights": [
+                    ml_dir / "learned_weights.json",
+                    ml_dir / "hourly_profile.json",
+                    ml_dir / "model_state.json",
+                ],
+                "hourly_history": [
+                    stats_dir / "hourly_predictions.json",
+                    stats_dir / "hourly_weather_actual.json",
+                ],
+            }
+
+            # Determine which files to process
+            files_to_reset = []
+            if target == "all":
+                for file_list in target_files.values():
+                    files_to_reset.extend(file_list)
+            elif target in target_files:
+                files_to_reset = target_files[target]
+            else:
+                _LOGGER.error(f"Unknown target: {target}")
+                _LOGGER.error("Valid targets: panel_groups, ml_weights, hourly_history, all")
+                return
+
+            # Filter to only existing files
+            def _filter_existing():
+                return [f for f in files_to_reset if f.exists()]
+            existing_files = await self.hass.async_add_executor_job(_filter_existing)
+
+            if not existing_files:
+                _LOGGER.warning("No files found to reset!")
+                return
+
+            _LOGGER.info(f"Files to reset: {len(existing_files)}")
+
+            # ================================================================
+            # STEP 1: Create backup (ALWAYS!)
+            # ================================================================
+            _LOGGER.info("STEP 1: Creating backup...")
+
+            def _create_backup():
+                backup_subdir.mkdir(parents=True, exist_ok=True)
+                backed_up = []
+                for file_path in existing_files:
+                    if file_path.exists():
+                        # Preserve directory structure in backup
+                        relative_path = file_path.relative_to(data_dir)
+                        backup_path = backup_subdir / relative_path
+                        backup_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(file_path, backup_path)
+                        backed_up.append(str(relative_path))
+                return backed_up
+
+            backed_up_files = await self.hass.async_add_executor_job(_create_backup)
+            _LOGGER.info(f"  ✓ Backed up {len(backed_up_files)} files to {backup_subdir}")
+            for f in backed_up_files:
+                _LOGGER.info(f"    - {f}")
+
+            # ================================================================
+            # STEP 2: Reset files
+            # ================================================================
+            _LOGGER.info("STEP 2: Resetting data...")
+
+            reset_count = 0
+            partial_reset_count = 0
+
+            for file_path in existing_files:
+                try:
+                    if before_date_str:
+                        # Partial reset: Filter data by date
+                        reset_result = await self._reset_file_before_date(
+                            file_path, before_date_str
+                        )
+                        if reset_result:
+                            partial_reset_count += 1
+                            _LOGGER.info(f"  ✓ Partial reset: {file_path.name}")
+                    else:
+                        # Full reset: Create empty/default structure
+                        await self._reset_file_complete(file_path)
+                        reset_count += 1
+                        _LOGGER.info(f"  ✓ Full reset: {file_path.name}")
+                except Exception as e:
+                    _LOGGER.error(f"  ✗ Failed to reset {file_path.name}: {e}")
+
+            # ================================================================
+            # STEP 3: Summary & Notification
+            # ================================================================
+            _LOGGER.info("=" * 80)
+            _LOGGER.info("🖖 BORG ASSIMILATION REVERSE COMPLETE!")
+            _LOGGER.info(f"  - Target: {target}")
+            _LOGGER.info(f"  - Full resets: {reset_count}")
+            _LOGGER.info(f"  - Partial resets: {partial_reset_count}")
+            _LOGGER.info(f"  - Backup location: {backup_subdir}")
+            _LOGGER.info("=" * 80)
+
+            # Send notification
+            try:
+                await self.hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": "🖖 Borg Assimilation Reverse - Complete",
+                        "message": (
+                            f"**Target:** {target}\n"
+                            f"**Resets:** {reset_count + partial_reset_count} files\n"
+                            f"**Backup:** `{backup_subdir}`\n\n"
+                            f"'Resistance is futile... but your backup is secure.'"
+                        ),
+                        "notification_id": "solar_forecast_ml_borg_reverse",
+                    },
+                )
+            except Exception:
+                pass
+
+        except Exception as err:
+            _LOGGER.error(f"Error in borg_assimilation_reverse: {err}", exc_info=True)
+
+    async def _reset_file_complete(self, file_path: "Path") -> None:
+        """Reset a file to its default empty state @zara"""
+        import json
+
+        # Default structures for each file type
+        default_structures = {
+            "learned_panel_group_efficiency.json": {
+                "version": "1.0",
+                "last_updated": None,
+                "groups": {},
+                "metadata": {
+                    "reset_by": "borg_assimilation_reverse",
+                    "reset_at": self._get_timestamp(),
+                },
+            },
+            "learned_weights.json": {
+                "version": "1.0",
+                "weights": {},
+                "metadata": {
+                    "reset_by": "borg_assimilation_reverse",
+                    "reset_at": self._get_timestamp(),
+                },
+            },
+            "hourly_profile.json": {
+                "version": "1.0",
+                "profiles": {},
+                "metadata": {
+                    "reset_by": "borg_assimilation_reverse",
+                    "reset_at": self._get_timestamp(),
+                },
+            },
+            "model_state.json": {
+                "version": "1.0",
+                "state": {},
+                "metadata": {
+                    "reset_by": "borg_assimilation_reverse",
+                    "reset_at": self._get_timestamp(),
+                },
+            },
+            "hourly_predictions.json": {
+                "version": "1.0",
+                "predictions": {},
+                "metadata": {
+                    "reset_by": "borg_assimilation_reverse",
+                    "reset_at": self._get_timestamp(),
+                },
+            },
+            "hourly_weather_actual.json": {
+                "version": "1.0",
+                "hourly_data": {},
+                "metadata": {
+                    "reset_by": "borg_assimilation_reverse",
+                    "reset_at": self._get_timestamp(),
+                },
+            },
+        }
+
+        filename = file_path.name
+        default_content = default_structures.get(filename, {
+            "version": "1.0",
+            "data": {},
+            "metadata": {
+                "reset_by": "borg_assimilation_reverse",
+                "reset_at": self._get_timestamp(),
+            },
+        })
+
+        def _write_default():
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(default_content, f, indent=2, ensure_ascii=False)
+
+        await self.hass.async_add_executor_job(_write_default)
+
+    async def _reset_file_before_date(self, file_path: "Path", before_date_str: str) -> bool:
+        """Reset data in a file before a specific date @zara
+
+        Returns True if any data was removed.
+        """
+        import json
+        from datetime import datetime
+
+        try:
+            before_date = datetime.strptime(before_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            _LOGGER.error(f"Invalid date format: {before_date_str}. Use YYYY-MM-DD")
+            return False
+
+        def _load_file():
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+
+        def _save_file(data):
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+        try:
+            data = await self.hass.async_add_executor_job(_load_file)
+        except Exception:
+            return False
+
+        modified = False
+        filename = file_path.name
+
+        # Handle different file structures
+        if filename == "learned_panel_group_efficiency.json":
+            # Filter groups by date
+            if "groups" in data:
+                for group_name, group_data in data.get("groups", {}).items():
+                    if "history" in group_data:
+                        original_len = len(group_data["history"])
+                        group_data["history"] = [
+                            h for h in group_data["history"]
+                            if self._date_str_after(h.get("date"), before_date)
+                        ]
+                        if len(group_data["history"]) < original_len:
+                            modified = True
+
+        elif filename in ("hourly_predictions.json", "hourly_weather_actual.json"):
+            # Filter hourly_data by date keys
+            if "hourly_data" in data:
+                original_keys = set(data["hourly_data"].keys())
+                data["hourly_data"] = {
+                    k: v for k, v in data["hourly_data"].items()
+                    if self._date_str_after(k, before_date)
+                }
+                if set(data["hourly_data"].keys()) != original_keys:
+                    modified = True
+
+        elif filename == "learned_weights.json":
+            # Filter weights by date
+            if "weights" in data:
+                for weight_type, weight_data in data.get("weights", {}).items():
+                    if isinstance(weight_data, dict) and "history" in weight_data:
+                        original_len = len(weight_data["history"])
+                        weight_data["history"] = [
+                            h for h in weight_data["history"]
+                            if self._date_str_after(h.get("date"), before_date)
+                        ]
+                        if len(weight_data["history"]) < original_len:
+                            modified = True
+
+        if modified:
+            # Update metadata
+            if "metadata" not in data:
+                data["metadata"] = {}
+            data["metadata"]["partial_reset_by"] = "borg_assimilation_reverse"
+            data["metadata"]["partial_reset_at"] = self._get_timestamp()
+            data["metadata"]["reset_before_date"] = before_date_str
+
+            await self.hass.async_add_executor_job(_save_file, data)
+
+        return modified
+
+    def _date_str_after(self, date_str: str, before_date) -> bool:
+        """Check if a date string is on or after the before_date @zara"""
+        from datetime import datetime
+
+        if not date_str:
+            return True  # Keep entries without dates
+
+        try:
+            entry_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+            return entry_date >= before_date
+        except (ValueError, TypeError):
+            return True  # Keep entries with invalid dates
+
+    def _get_timestamp(self) -> str:
+        """Get current timestamp as ISO string @zara"""
+        return dt_util.now().isoformat()
 

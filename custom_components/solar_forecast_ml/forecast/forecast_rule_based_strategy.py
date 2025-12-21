@@ -1,4 +1,4 @@
-"""Rule-Based Forecast Strategy V12.0.0 @zara
+"""Rule-Based Forecast Strategy V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -165,8 +165,15 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 self._panel_groups_init_attempted = True
                 if self._panel_groups_config:
                     try:
-                        self.panel_group_calculator = PanelGroupCalculator(
-                            panel_groups=self._panel_groups_config
+                        # Get data_path for config loading
+                        data_path = None
+                        if self.orchestrator and hasattr(self.orchestrator, 'data_manager'):
+                            data_path = Path(self.orchestrator.data_manager.data_dir)
+
+                        # Use async factory to avoid blocking file I/O in event loop
+                        self.panel_group_calculator = await PanelGroupCalculator.async_create(
+                            panel_groups=self._panel_groups_config,
+                            data_path=data_path,
                         )
                         self.use_panel_groups = True
                         _LOGGER.info(
@@ -186,12 +193,11 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                 try:
                     if self.orchestrator and hasattr(self.orchestrator, 'data_manager'):
                         data_dir = Path(self.orchestrator.data_manager.data_dir)
-                        self.panel_group_efficiency_learner = PanelGroupEfficiencyLearner(
+                        # Use async factory to avoid blocking file I/O in event loop
+                        self.panel_group_efficiency_learner = await PanelGroupEfficiencyLearner.async_create(
                             data_path=data_dir,
                             panel_groups=self._panel_groups_config,
-                            skip_load=True,
                         )
-                        await self.panel_group_efficiency_learner.async_load_state()
                         _LOGGER.info(
                             "PanelGroupEfficiencyLearner loaded: %d groups, %d total samples",
                             len(self._panel_groups_config),
@@ -319,7 +325,9 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                     ghi = corrected_weather.get("ghi", solar_radiation_wm2) or solar_radiation_wm2
                     dni = corrected_weather.get("direct_radiation", 0) or 0
                     dhi = corrected_weather.get("diffuse_radiation", 0) or 0
-                    cloud_cover = corrected_weather.get("clouds", 100) or 100
+                    # NOTE: Don't use "or 100" here! 0% clouds is valid and means clear sky @zara
+                    cloud_cover_raw = corrected_weather.get("clouds")
+                    cloud_cover = cloud_cover_raw if cloud_cover_raw is not None else 50
                     temperature = corrected_weather.get("temperature", 15) or 15
 
                     if ghi <= 0 and solar_radiation_wm2 <= 0:
@@ -380,11 +388,17 @@ class RuleBasedForecastStrategy(ForecastStrategy):
 
                             if self.panel_group_efficiency_learner:
                                 # Calculate with per-group efficiency factors
+                                # NEW: Pass DNI/DHI/GHI for physics-based efficiency weighting
                                 for idx, grp in enumerate(group_result.get("groups", [])):
                                     group_kwh = grp.get("power_kwh", 0)
                                     efficiency = self.panel_group_efficiency_learner.get_efficiency_for_hour(
                                         group_index=idx,
                                         hour=hour_local,
+                                        current_cloud_cover=cloud_cover,
+                                        current_sun_elevation=sun_elevation,
+                                        current_dni=dni,
+                                        current_dhi=dhi,
+                                        current_ghi=ghi or solar_radiation_wm2,
                                     )
                                     if efficiency != 1.0:
                                         efficiency_applied = True
@@ -439,8 +453,16 @@ class RuleBasedForecastStrategy(ForecastStrategy):
                                 group_name = grp.get("group_name", f"Group {idx+1}")
                                 raw_kwh = grp.get("power_kwh", 0)
                                 # Apply learned efficiency if available
+                                # NEW: Pass DNI/DHI/GHI for physics-based efficiency weighting
                                 if self.panel_group_efficiency_learner:
-                                    eff = self.panel_group_efficiency_learner.get_efficiency_for_hour(idx, hour_local)
+                                    eff = self.panel_group_efficiency_learner.get_efficiency_for_hour(
+                                        idx, hour_local,
+                                        current_cloud_cover=cloud_cover,
+                                        current_sun_elevation=sun_elevation,
+                                        current_dni=dni,
+                                        current_dhi=dhi,
+                                        current_ghi=ghi or solar_radiation_wm2,
+                                    )
                                 else:
                                     eff = 1.0
                                 # Final prediction for this group

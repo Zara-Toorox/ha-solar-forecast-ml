@@ -1,4 +1,4 @@
-"""Data Adapter for Type Conversions V12.0.0 @zara
+"""Data Adapter for Type Conversions V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -203,11 +203,17 @@ class TypedDataAdapter:
 
             hourly_averages_raw = data.get("hourly_averages", {})
 
-            hourly_averages = (
-                {str(k): float(v) for k, v in hourly_averages_raw.items()}
-                if isinstance(hourly_averages_raw, dict)
-                else {}
-            )
+            # Convert hourly_averages, handling old dict format migration
+            hourly_averages: Dict[str, float] = {}
+            if isinstance(hourly_averages_raw, dict):
+                for k, v in hourly_averages_raw.items():
+                    if isinstance(v, dict):
+                        # Old format: {"count": 0, "total": 0.0, "average": 0.5}
+                        hourly_averages[str(k)] = float(v.get("average", 0.0))
+                    elif isinstance(v, (int, float)):
+                        hourly_averages[str(k)] = float(v)
+                    else:
+                        hourly_averages[str(k)] = 0.0
 
             samples_count = int(data.get("samples_count", 0))
             last_updated = data.get(

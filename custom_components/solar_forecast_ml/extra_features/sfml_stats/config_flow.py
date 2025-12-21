@@ -81,12 +81,14 @@ from .const import (
     CONF_BILLING_START_MONTH,
     CONF_BILLING_PRICE_MODE,
     CONF_BILLING_FIXED_PRICE,
+    CONF_FEED_IN_TARIFF,
     PRICE_MODE_FIXED,
     PRICE_MODE_DYNAMIC,
     DEFAULT_BILLING_START_DAY,
     DEFAULT_BILLING_START_MONTH,
     DEFAULT_BILLING_PRICE_MODE,
     DEFAULT_BILLING_FIXED_PRICE,
+    DEFAULT_FEED_IN_TARIFF,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -400,6 +402,18 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
+                vol.Optional(
+                    CONF_FEED_IN_TARIFF,
+                    default=DEFAULT_FEED_IN_TARIFF,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=50,
+                        step=0.1,
+                        unit_of_measurement="ct/kWh",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
             }),
             errors=errors,
         )
@@ -482,12 +496,17 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         ]
 
         if user_input is not None:
-            # Filter out empty strings to allow deletion of entities
-            cleaned = {k: v for k, v in user_input.items() if v and v.strip()}
+            # Start with current data
             new_data = {**self._config_entry.data}
+            # Process each key - remove if empty, update if has value
             for key in energy_flow_keys:
-                new_data.pop(key, None)
-            new_data.update(cleaned)
+                value = user_input.get(key)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    # Remove the key if value is empty or None
+                    new_data.pop(key, None)
+                else:
+                    # Update with new value
+                    new_data[key] = value
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
@@ -516,12 +535,17 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         ]
 
         if user_input is not None:
-            # Filter out empty strings to allow deletion of entities
-            cleaned = {k: v for k, v in user_input.items() if v and v.strip()}
+            # Start with current data
             new_data = {**self._config_entry.data}
+            # Process each key - remove if empty, update if has value
             for key in battery_keys:
-                new_data.pop(key, None)
-            new_data.update(cleaned)
+                value = user_input.get(key)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    # Remove the key if value is empty or None
+                    new_data.pop(key, None)
+                else:
+                    # Update with new value
+                    new_data[key] = value
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
@@ -551,12 +575,17 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         ]
 
         if user_input is not None:
-            # Filter out empty strings to allow deletion of entities
-            cleaned = {k: v for k, v in user_input.items() if v and v.strip()}
+            # Start with current data
             new_data = {**self._config_entry.data}
+            # Process each key - remove if empty, update if has value
             for key in statistics_keys:
-                new_data.pop(key, None)
-            new_data.update(cleaned)
+                value = user_input.get(key)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    # Remove the key if value is empty or None
+                    new_data.pop(key, None)
+                else:
+                    # Update with new value
+                    new_data[key] = value
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
@@ -586,12 +615,17 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         ]
 
         if user_input is not None:
-            # Filter out empty strings to allow deletion of entities
-            cleaned = {k: v for k, v in user_input.items() if v and (isinstance(v, bool) or v.strip())}
+            # Start with current data
             new_data = {**self._config_entry.data}
+            # Process each key - remove if empty, update if has value
             for key in panel_keys:
-                new_data.pop(key, None)
-            new_data.update(cleaned)
+                value = user_input.get(key)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    # Remove the key if value is empty or None
+                    new_data.pop(key, None)
+                else:
+                    # Update with new value
+                    new_data[key] = value
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
@@ -672,6 +706,18 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                     min=0,
                     max=100,
                     step=0.01,
+                    unit_of_measurement="ct/kWh",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                CONF_FEED_IN_TARIFF,
+                default=current.get(CONF_FEED_IN_TARIFF, DEFAULT_FEED_IN_TARIFF),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=50,
+                    step=0.1,
                     unit_of_measurement="ct/kWh",
                     mode=selector.NumberSelectorMode.BOX,
                 )

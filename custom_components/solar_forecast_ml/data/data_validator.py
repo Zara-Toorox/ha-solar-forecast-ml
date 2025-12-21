@@ -1,4 +1,4 @@
-"""Data Validation Module for Solar Forecast ML Integration V12.0.0 @zara
+"""Data Validation Module for Solar Forecast ML Integration V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -341,3 +341,189 @@ class DataValidator:
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         temp_file.replace(cache_file)
+
+    @staticmethod
+    def validate_learning_config(data: Dict[str, Any]) -> bool:
+        """Validate learning_config.json structure @zara
+
+        Args:
+            data: Config data dict
+
+        Returns:
+            True if valid, False otherwise
+        """
+        if not isinstance(data, dict):
+            _LOGGER.error("learning_config: data is not a dict")
+            return False
+
+        # Check required top-level fields
+        required_sections = ["learning_parameters", "weather_adjustment",
+                            "elevation_adjustment", "physics_defaults"]
+
+        for section in required_sections:
+            if section not in data:
+                _LOGGER.warning(f"learning_config: missing section '{section}'")
+
+        # Validate learning_parameters
+        lp = data.get("learning_parameters", {})
+        if not isinstance(lp, dict):
+            _LOGGER.error("learning_config: learning_parameters is not a dict")
+            return False
+
+        # Check key learning parameters
+        if "smoothing" in lp:
+            smoothing = lp["smoothing"]
+            if not isinstance(smoothing, dict):
+                _LOGGER.error("learning_config: smoothing is not a dict")
+                return False
+
+        if "efficiency_clamps" in lp:
+            clamps = lp["efficiency_clamps"]
+            if not isinstance(clamps, dict):
+                _LOGGER.error("learning_config: efficiency_clamps is not a dict")
+                return False
+
+        # Validate physics_defaults
+        physics = data.get("physics_defaults", {})
+        if physics:
+            albedo = physics.get("albedo")
+            if albedo is not None and not (0.0 <= albedo <= 1.0):
+                _LOGGER.warning(f"learning_config: albedo out of range [0,1]: {albedo}")
+
+            sys_eff = physics.get("system_efficiency")
+            if sys_eff is not None and not (0.0 <= sys_eff <= 1.0):
+                _LOGGER.warning(f"learning_config: system_efficiency out of range [0,1]: {sys_eff}")
+
+        return True
+
+    @staticmethod
+    def validate_and_create_learning_config(
+        config_file: Path,
+    ) -> Dict[str, Any]:
+        """Validate learning_config.json, create if missing or invalid @zara
+
+        Args:
+            config_file: Path to the config file
+
+        Returns:
+            Dict with validation result:
+            {
+                "valid": bool,
+                "created": bool,
+                "repaired": bool,
+                "message": str
+            }
+        """
+        result = {
+            "valid": False,
+            "created": False,
+            "repaired": False,
+            "message": "",
+        }
+
+        try:
+            # Ensure directory exists
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Check if file exists
+            if not config_file.exists():
+                # Create default config file
+                default_config = DataValidator._create_default_learning_config()
+                DataValidator._write_cache_file(config_file, default_config)
+                result["created"] = True
+                result["valid"] = True
+                result["message"] = "Created new learning_config.json file"
+                _LOGGER.info(f"Created new learning_config.json: {config_file}")
+                return result
+
+            # File exists - validate it
+            try:
+                with open(config_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except json.JSONDecodeError as e:
+                _LOGGER.warning(f"learning_config.json corrupted, recreating: {e}")
+                default_config = DataValidator._create_default_learning_config()
+                DataValidator._write_cache_file(config_file, default_config)
+                result["repaired"] = True
+                result["valid"] = True
+                result["message"] = "Repaired corrupted learning_config.json file"
+                return result
+
+            # Validate structure
+            if DataValidator.validate_learning_config(data):
+                result["valid"] = True
+                result["message"] = "learning_config.json is valid"
+                return result
+
+            # Invalid structure - repair it
+            _LOGGER.warning("learning_config.json has invalid structure, recreating")
+            default_config = DataValidator._create_default_learning_config()
+            DataValidator._write_cache_file(config_file, default_config)
+            result["repaired"] = True
+            result["valid"] = True
+            result["message"] = "Repaired invalid learning_config.json structure"
+            return result
+
+        except Exception as e:
+            result["message"] = f"Error validating learning_config.json: {e}"
+            _LOGGER.error(result["message"])
+            return result
+
+    @staticmethod
+    def _create_default_learning_config() -> Dict[str, Any]:
+        """Create default learning_config.json structure with neutral values @zara"""
+        return {
+            "version": "1.0",
+            "description": "Konfiguration für das Lernverhalten des Solar Forecast ML Systems. "
+                           "Diese Werte werden durch das Lernsystem automatisch angepasst.",
+            "learning_parameters": {
+                "baseline_prediction_kwh": 0.05,
+                "shadow_detection_efficiency": 0.2,
+                "shadow_hour_threshold": 0.7,
+                "smoothing": {
+                    "aggressive": {
+                        "deviation_threshold": 1.0,
+                        "old_weight": 0.3,
+                        "new_weight": 0.7,
+                        "description": "Bei >100% Abweichung"
+                    },
+                    "fast": {
+                        "deviation_threshold": 0.5,
+                        "old_weight": 0.5,
+                        "new_weight": 0.5,
+                        "description": "Bei >50% Abweichung"
+                    },
+                    "normal": {
+                        "old_weight": 0.8,
+                        "new_weight": 0.2,
+                        "description": "Standard-Glättung"
+                    }
+                },
+                "efficiency_clamps": {
+                    "min_efficiency": 0.1,
+                    "max_efficiency": 5.0,
+                    "conservative_min": 0.3,
+                    "conservative_max": 3.0
+                }
+            },
+            "weather_adjustment": {
+                "cloud_cover_factor": 0.5,
+                "description": "Faktor für Wolkenbedeckungs-Korrektur"
+            },
+            "elevation_adjustment": {
+                "low_elevation_threshold_deg": 10.0,
+                "low_elevation_factor": 0.15,
+                "high_elevation_factor": 0.08,
+                "description": "Anpassung basierend auf Sonnenhöhe"
+            },
+            "physics_defaults": {
+                "albedo": 0.2,
+                "system_efficiency": 0.90,
+                "description": "Standard-Physikparameter"
+            },
+            "metadata": {
+                "created_at": datetime.now().isoformat(),
+                "last_updated": None,
+                "auto_tuned": False
+            }
+        }

@@ -1,4 +1,4 @@
-"""Extra Features Installation Service for Solar Forecast ML V12.0.0 @zara
+"""Extra Features Installation Service for Solar Forecast ML V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -33,6 +33,7 @@ class ExtraFeaturesInstaller:
     EXTRA_FEATURES = [
         "grid_price_monitor",
         "sfml_stats",
+        "sfml_stats_lite",
     ]
 
     def __init__(self, hass: HomeAssistant) -> None:

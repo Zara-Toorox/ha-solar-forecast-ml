@@ -36,7 +36,9 @@ from ..const import (
     PRICE_MODE_FIXED,
     DEFAULT_BILLING_FIXED_PRICE,
     CONF_SENSOR_SOLAR_POWER,
+    CONF_SENSOR_SOLAR_TO_HOUSE,
     CONF_SENSOR_SOLAR_TO_BATTERY,
+    CONF_SENSOR_BATTERY_TO_HOUSE,
     CONF_SENSOR_GRID_TO_BATTERY,
     CONF_SENSOR_HOME_CONSUMPTION,
     CONF_SENSOR_SMARTMETER_IMPORT,
@@ -268,9 +270,11 @@ class BillingCalculator:
             "smartmeter_import": config.get(CONF_SENSOR_SMARTMETER_IMPORT),
             "smartmeter_export": config.get(CONF_SENSOR_SMARTMETER_EXPORT),
             "solar_power": config.get(CONF_SENSOR_SOLAR_POWER),
+            "solar_to_house": config.get(CONF_SENSOR_SOLAR_TO_HOUSE),
             "solar_to_battery": config.get(CONF_SENSOR_SOLAR_TO_BATTERY),
+            "battery_to_house": config.get(CONF_SENSOR_BATTERY_TO_HOUSE),
             "grid_to_battery": config.get(CONF_SENSOR_GRID_TO_BATTERY),
-            "wr_to_house": config.get(CONF_SENSOR_HOME_CONSUMPTION),
+            "home_consumption": config.get(CONF_SENSOR_HOME_CONSUMPTION),
         }
 
         _log("Configured sensors:")
@@ -294,27 +298,68 @@ class BillingCalculator:
         solar_power = flows.get("solar_power", 0.0)
         solar_to_battery = flows.get("solar_to_battery", 0.0)
         grid_to_battery = flows.get("grid_to_battery", 0.0)
-        wr_to_house = flows.get("wr_to_house", 0.0)
 
         _log("=" * 60)
         _log("CALCULATIONS:")
 
+        # Prüfe ob Batterie-Sensoren konfiguriert sind
+        has_battery = bool(
+            config.get(CONF_SENSOR_BATTERY_TO_HOUSE) or
+            config.get(CONF_SENSOR_SOLAR_TO_BATTERY) or
+            config.get(CONF_SENSOR_GRID_TO_BATTERY)
+        )
+        _log("  Battery configured: %s", has_battery)
+
+        # Solar direkt zum Haus: Sensor bevorzugen, sonst berechnen
+        if config.get(CONF_SENSOR_SOLAR_TO_HOUSE):
+            solar_direct = flows.get("solar_to_house", 0.0)
+            _log("  Solar->House = %.2f kWh (from sensor)", solar_direct)
+        else:
+            solar_direct = max(0, solar_power - solar_to_battery)
+            _log("  Solar->House = Solar(%.2f) - Solar->Battery(%.2f) = %.2f kWh (calculated)",
+                 solar_power, solar_to_battery, solar_direct)
+
+        # Batterie zum Haus: Sensor bevorzugen, sonst 0 wenn keine Batterie
+        if config.get(CONF_SENSOR_BATTERY_TO_HOUSE):
+            battery_to_house = flows.get("battery_to_house", 0.0)
+            _log("  Battery->House = %.2f kWh (from sensor)", battery_to_house)
+        elif has_battery:
+            # Batterie existiert aber kein direkter Sensor - kann nicht sicher berechnet werden
+            battery_to_house = 0.0
+            _log("  Battery->House = 0 kWh (no direct sensor, cannot calculate safely)")
+        else:
+            # Keine Batterie konfiguriert
+            battery_to_house = 0.0
+            _log("  Battery->House = 0 kWh (no battery configured)")
+
+        # Eigenverbrauch (WR → Haus) = Solar direkt + Batterie-Entladung
+        wr_to_house = solar_direct + battery_to_house
+        _log("  WR->House = Solar->House(%.2f) + Battery->House(%.2f) = %.2f kWh",
+             solar_direct, battery_to_house, wr_to_house)
+
+        # Netz zum Haus
         grid_to_house = max(0, smartmeter_import - grid_to_battery)
         _log("  Grid->House = Smartmeter(%.2f) - Grid->Battery(%.2f) = %.2f kWh",
              smartmeter_import, grid_to_battery, grid_to_house)
 
-        home_consumption = wr_to_house + grid_to_house
-        _log("  Home consumption = WR->House(%.2f) + Grid->House(%.2f) = %.2f kWh",
-             wr_to_house, grid_to_house, home_consumption)
+        # Hausverbrauch: Sensor bevorzugen, sonst berechnen
+        if config.get(CONF_SENSOR_HOME_CONSUMPTION):
+            home_consumption_sensor = flows.get("home_consumption", 0.0)
+            # Plausibilitätsprüfung: Sensor-Wert sollte >= berechneter Eigenverbrauch sein
+            home_consumption_calculated = wr_to_house + grid_to_house
+            if home_consumption_sensor >= wr_to_house * 0.9:  # 10% Toleranz
+                home_consumption = home_consumption_sensor
+                _log("  Home consumption = %.2f kWh (from sensor)", home_consumption)
+            else:
+                home_consumption = home_consumption_calculated
+                _log("  Home consumption = %.2f kWh (calculated, sensor value %.2f implausible)",
+                     home_consumption, home_consumption_sensor)
+        else:
+            home_consumption = wr_to_house + grid_to_house
+            _log("  Home consumption = WR->House(%.2f) + Grid->House(%.2f) = %.2f kWh (calculated)",
+                 wr_to_house, grid_to_house, home_consumption)
 
-        solar_direct = max(0, solar_power - solar_to_battery)
-        _log("  Solar direct = Solar(%.2f) - Solar->Battery(%.2f) = %.2f kWh",
-             solar_power, solar_to_battery, solar_direct)
-
-        battery_to_house = max(0, wr_to_house - solar_direct)
-        _log("  Battery->House = WR->House(%.2f) - Solar direct(%.2f) = %.2f kWh",
-             wr_to_house, solar_direct, battery_to_house)
-
+        # Batterie-Ladung
         battery_total_charge = solar_to_battery + grid_to_battery
         _log("  Battery charge = Solar->Battery(%.2f) + Grid->Battery(%.2f) = %.2f kWh",
              solar_to_battery, grid_to_battery, battery_total_charge)
@@ -330,6 +375,7 @@ class BillingCalculator:
         _log("  Grid cost = %.2f kWh * %.2f ct = %.2f EUR",
              smartmeter_import, avg_price, grid_cost_eur)
 
+        # Ersparnis basiert auf Eigenverbrauch (was nicht vom Netz bezogen wurde)
         savings_eur = (wr_to_house * avg_price) / 100
         _log("  Savings = %.2f kWh * %.2f ct = %.2f EUR",
              wr_to_house, avg_price, savings_eur)

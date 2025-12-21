@@ -1,4 +1,4 @@
-"""Low-Level Data IO Operations V12.0.0 @zara
+"""Low-Level Data IO Operations V12.2.0 @zara
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -120,44 +120,51 @@ class DataManagerIO:
             return False
 
     async def _atomic_write_json_unlocked(self, file_path: Path, data: Dict[str, Any]) -> None:
-        """Internal function for atomic JSON writing Assumes the caller holds _file_lock @zara"""
+        """Internal function for atomic JSON writing Assumes the caller holds _file_lock @zara
 
-        parent_dir = file_path.parent
-        await self._ensure_directory_exists(parent_dir)
+        CRITICAL FIX (V12.0.1): Directory creation is now done INSIDE the synchronous
+        executor function to prevent race conditions. Previously, the async check and
+        sync mkdir could race with other tasks, causing FileNotFoundError on first startup.
+        """
 
+        # Pre-generate temp file path components
         task_name = asyncio.current_task().get_name()
         task_hash = hashlib.md5(task_name.encode()).hexdigest()[:8]
         timestamp = str(int(time.time() * 1000))[-6:]
 
-        counter = 0
-        while counter < 100:
-            suffix = (
-                f".tmp_{task_hash}_{timestamp}"
-                if counter == 0
-                else f".tmp_{task_hash}_{timestamp}_{counter}"
-            )
-            temp_file = file_path.parent / f"{file_path.stem}{suffix}"
-            if not temp_file.exists():
-                break
-            counter += 1
-        else:
+        # All file operations are now done synchronously in the executor
+        # to prevent race conditions between directory check and file creation
+        def _ensure_dir_and_write():
+            """Synchronous directory creation + write + move - all in one atomic block.
 
-            import random
-
-            suffix = f".tmp_{random.randint(100000, 999999)}"
-            temp_file = file_path.parent / f"{file_path.stem}{suffix}"
-        try:
-            # Ensure directory exists right before writing (race condition protection)
+            CRITICAL: By doing mkdir inside the same executor call as the file write,
+            we eliminate the race condition where another task could try to write
+            between our async exists() check and the actual mkdir().
+            """
             parent_dir = file_path.parent
-            if not await self.hass.async_add_executor_job(parent_dir.exists):
-                await self.hass.async_add_executor_job(
-                    lambda: parent_dir.mkdir(parents=True, exist_ok=True)
-                )
 
-            # Write atomically using synchronous I/O in executor to prevent race conditions
-            # with Python 3.13's aggressive temp file cleanup
-            def _write_and_move():
-                """Synchronous write + move to prevent file handle race conditions."""
+            # ALWAYS ensure directory exists - mkdir with exist_ok=True is idempotent
+            # This is safe to call even if directory exists
+            parent_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate unique temp file name
+            counter = 0
+            while counter < 100:
+                suffix = (
+                    f".tmp_{task_hash}_{timestamp}"
+                    if counter == 0
+                    else f".tmp_{task_hash}_{timestamp}_{counter}"
+                )
+                temp_file = parent_dir / f"{file_path.stem}{suffix}"
+                if not temp_file.exists():
+                    break
+                counter += 1
+            else:
+                import random
+                suffix = f".tmp_{random.randint(100000, 999999)}"
+                temp_file = parent_dir / f"{file_path.stem}{suffix}"
+
+            try:
                 # Write to temp file
                 with open(temp_file, "w", encoding="utf-8") as f:
                     json.dump(
@@ -165,33 +172,36 @@ class DataManagerIO:
                     )
                     f.flush()
                     os.fsync(f.fileno())
-                # File is still in scope here - safe to move immediately
+
+                # Move temp file to final destination (atomic on POSIX)
                 shutil.move(str(temp_file), str(file_path))
 
-            await self.hass.async_add_executor_job(_write_and_move)
+            except Exception as write_error:
+                # Clean up temp file on error
+                if temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass
+                raise write_error
+
+            finally:
+                # Final cleanup - remove temp file if it still exists
+                if temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass
+
+        try:
+            await self.hass.async_add_executor_job(_ensure_dir_and_write)
 
         except Exception as e:
             _LOGGER.error("Atomic write failed for %s: %s", file_path.name, e)
-
-            if await self._file_exists(temp_file):
-
-                try:
-                    await self.hass.async_add_executor_job(temp_file.unlink)
-                except Exception as unlink_e:
-                    _LOGGER.warning("Failed to remove temporary file %s: %s", temp_file, unlink_e)
-
             raise DataIntegrityException(
                 f"Failed atomic write to {file_path.name}: {str(e)}",
-                context=create_context(file=str(file_path), error=str(e), temp_file=str(temp_file)),
+                context=create_context(file=str(file_path), error=str(e)),
             )
-        finally:
-
-            if await self._file_exists(temp_file):
-                try:
-                    await self.hass.async_add_executor_job(temp_file.unlink)
-                except Exception as e:
-
-                    pass
 
     async def _atomic_write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Public thread-safe method for atomically writing JSON data to a file @zara"""
