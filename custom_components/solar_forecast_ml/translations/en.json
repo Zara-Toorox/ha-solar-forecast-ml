@@ -206,17 +206,28 @@
       "data_age": {
         "name": "Data Age"
       },
-      "last_ml_training": {
-        "name": "Last ML Training"
+      "last_ai_training": {
+        "name": "Last AI Training"
       },
       "next_scheduled_task": {
         "name": "Next Scheduled Task"
       },
-      "ml_service_status": {
-        "name": "ML Service Status"
+      "ai_service_status": {
+        "name": "AI Service Status"
       },
-      "ml_metrics": {
-        "name": "ML Model Metrics"
+      "ai_metrics": {
+        "name": "AI Model Metrics"
+      },
+      "ai_rmse": {
+        "name": "AI RMSE",
+        "state": {
+          "excellent": "Excellent",
+          "very_good": "Very Good",
+          "good": "Good",
+          "fair": "Fair",
+          "moderate": "Moderate",
+          "learning": "Learning"
+        }
       },
       "active_prediction_model": {
         "name": "Active Prediction Model"

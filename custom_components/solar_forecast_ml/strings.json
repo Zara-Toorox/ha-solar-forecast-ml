@@ -119,7 +119,8 @@
           "notify_learning": "Training Notifications",
           "notify_successful_learning": "Success Notifications",
           "ml_algorithm": "Mode",
-          "enable_tiny_lstm": "Enable / Disable AI"
+          "enable_tiny_lstm": "Enable / Disable AI",
+          "pirate_weather_api_key": "Pirate Weather API Key"
         },
         "data_description": {
           "update_interval": "Forecast update interval (300-86400s, default: 3600)",
@@ -130,7 +131,8 @@
           "notify_learning": "Notify on training start",
           "notify_successful_learning": "Notify on training success",
           "ml_algorithm": "Choose algorithm: 'Automatic' lets system decide based on available data (recommended). 'Ridge' is fast and stable. 'Neural Network' provides 5-10% better accuracy with 100+ samples.",
-          "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled."
+          "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled.",
+          "pirate_weather_api_key": "Optional: Free API key from https://pirate-weather.apiable.io/ - Enables NOAA GFS/HRRR weather model for improved cloud cover blending."
         }
       }
     },
@@ -197,6 +199,17 @@
       },
       "model_accuracy": {
         "name": "Model Accuracy"
+      },
+      "ai_rmse": {
+        "name": "AI RMSE",
+        "state": {
+          "excellent": "Excellent",
+          "very_good": "Very Good",
+          "good": "Good",
+          "fair": "Fair",
+          "moderate": "Moderate",
+          "learning": "Learning"
+        }
       },
       "last_training": {
         "name": "Last Training"

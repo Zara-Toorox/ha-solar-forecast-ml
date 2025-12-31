@@ -1,79 +1,57 @@
-"""User-Friendly Log Messages V12.2.0 @zara
-
-This module provides user-friendly log messages in German for Home Assistant users.
-Technical messages are translated into understandable language with context
-about what the system is doing and whether user action is required.
-
-Message Categories:
-- INFO_NORMAL: System is working as expected, no action needed
-- INFO_LEARNING: System is in learning phase, patience required
-- WARNING_DEGRADED: System works but with limitations
-- WARNING_CONFIG: Configuration issue that should be addressed
-- ERROR_ACTION: Error that requires user action
-- ERROR_INTERNAL: Internal error (still shown user-friendly)
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 from typing import Any, Dict, Optional
 
 
 class UserMessages:
-    """
-    Centralized user-friendly messages for Home Assistant logs.
-
-    All messages are in German and designed to be understood by
-    non-technical users. Each message explains:
-    1. What happened
-    2. Why it happened (if relevant)
-    3. What the system will do next
-    4. Whether user action is required
-    """
+    """Centralized user-friendly messages for Home Assistant logs @zara"""
 
     # ==========================================================================
-    # ML TRAINING MESSAGES
+    # AI TRAINING MESSAGES
     # ==========================================================================
 
-    ML_LEARNING_PHASE = (
-        "Lernphase: Das ML-Modell sammelt noch Daten. "
-        "Bisher {samples} Datenpunkte erfasst (Bereich: {min_val:.2f}-{max_val:.2f} kWh). "
-        "Die Vorhersage wird mit jedem sonnigen Tag praeziser. "
-        "System nutzt regelbasierte Vorhersage."
+    AI_LEARNING_PHASE = (
+        "Learning phase: AI model is still collecting data. "
+        "So far {samples} data points captured (range: {min_val:.2f}-{max_val:.2f} kWh). "
+        "Predictions improve with each sunny day. "
+        "System uses rule-based forecasting."
     )
 
-    ML_LEARNING_PHASE_SIMPLE = (
-        "Lernphase: ML-Modell sammelt Daten ({samples} Punkte). "
-        "Regelbasierte Vorhersage aktiv - wird automatisch praeziser."
+    AI_LEARNING_PHASE_SIMPLE = (
+        "Learning phase: AI model collecting data ({samples} points). "
+        "Rule-based forecasting active - will improve automatically."
     )
 
-    ML_NOT_ENOUGH_RESIDUALS = (
-        "Lernphase: Noch nicht genuegend Vergleichsdaten fuer ML-Training "
-        "({count} von 10 benoetigt). System nutzt Physik-Modell."
+    AI_NOT_ENOUGH_RESIDUALS = (
+        "Learning phase: Not enough comparison data for AI training yet "
+        "({count} of 10 required). System uses physics model."
     )
 
-    ML_TRAINING_SUCCESS = (
-        "ML-Training erfolgreich abgeschlossen. "
-        "Genauigkeit: {accuracy:.1%}, Datenpunkte: {samples}, Dauer: {duration:.1f}s"
+    AI_TRAINING_SUCCESS = (
+        "AI training completed successfully. "
+        "Accuracy: {accuracy:.1%}, data points: {samples}, duration: {duration:.1f}s"
     )
 
-    ML_TRAINING_LAMBDA = (
-        "ML-Modell optimiert (Lambda={lambda_val:.4f}, {samples} Datenpunkte)"
+    AI_TRAINING_LAMBDA = (
+        "AI model optimized (Lambda={lambda_val:.4f}, {samples} data points)"
     )
 
-    ML_TSS_ZERO = (
-        "Lernphase: Zu wenig Variation in den Produktionsdaten. "
-        "Dies ist normal bei neuen Installationen oder bewoelkten Perioden. "
-        "System wartet auf mehr sonnige Tage."
+    AI_TSS_ZERO = (
+        "Learning phase: Too little variation in production data. "
+        "This is normal for new installations or cloudy periods. "
+        "System waiting for more sunny days."
     )
 
-    ML_LINALG_ERROR = (
-        "ML-Berechnung: Numerisches Problem bei der Optimierung. "
-        "System verwendet alternative Berechnung."
+    AI_LINALG_ERROR = (
+        "AI calculation: Numerical problem during optimization. "
+        "System uses alternative calculation."
     )
 
     # ==========================================================================
@@ -81,31 +59,31 @@ class UserMessages:
     # ==========================================================================
 
     WEATHER_CACHE_UPDATING = (
-        "Wetterdaten werden aktualisiert. Keine Aktion erforderlich."
+        "Weather data is being updated. No action required."
     )
 
     WEATHER_CACHE_NOT_FOUND = (
-        "Wetter-Cache nicht gefunden. Wetterdaten werden neu abgerufen."
+        "Weather cache not found. Weather data will be fetched."
     )
 
     WEATHER_NO_FORECAST_DATA = (
-        "Keine Wettervorhersage fuer {date} im Cache. "
-        "Wird beim naechsten Update automatisch abgerufen."
+        "No weather forecast for {date} in cache. "
+        "Will be fetched automatically on next update."
     )
 
     WEATHER_API_ERROR = (
-        "Wetterdienst temporaer nicht erreichbar. "
-        "Naechster Versuch in {retry_minutes} Minuten. "
-        "Vorhersage basiert auf letzten verfuegbaren Daten."
+        "Weather service temporarily unreachable. "
+        "Next attempt in {retry_minutes} minutes. "
+        "Forecast based on last available data."
     )
 
     WEATHER_PRECISION_SKIP = (
-        "Wettergenauigkeits-Berechnung uebersprungen - Daten werden gesammelt."
+        "Weather precision calculation skipped - data being collected."
     )
 
     WEATHER_FALLBACK_ACTIVE = (
-        "Wetterdaten temporaer nicht verfuegbar. "
-        "Vorhersage basiert auf Standardwerten."
+        "Weather data temporarily unavailable. "
+        "Forecast based on default values."
     )
 
     # ==========================================================================
@@ -113,21 +91,21 @@ class UserMessages:
     # ==========================================================================
 
     ASTRONOMY_CACHE_BUILDING = (
-        "Sonnenstandsdaten werden erstmalig berechnet... "
-        "Dies kann einige Sekunden dauern."
+        "Solar position data being calculated for the first time... "
+        "This may take a few seconds."
     )
 
     ASTRONOMY_CACHE_NOT_FOUND = (
-        "Sonnenstandsdaten werden neu berechnet."
+        "Solar position data being recalculated."
     )
 
     ASTRONOMY_CACHE_READY = (
-        "Sonnenstandsdaten fuer {days} Tage berechnet."
+        "Solar position data calculated for {days} days."
     )
 
     ASTRONOMY_CACHE_ERROR = (
-        "Sonnenstandsberechnung fehlgeschlagen fuer {date}. "
-        "System verwendet Standardwerte."
+        "Solar position calculation failed for {date}. "
+        "System uses default values."
     )
 
     # ==========================================================================
@@ -135,29 +113,29 @@ class UserMessages:
     # ==========================================================================
 
     FILE_NOT_FOUND_CREATING = (
-        "Datei '{filename}' nicht gefunden. Wird neu erstellt."
+        "File '{filename}' not found. Creating new file."
     )
 
     FILE_HOURLY_PREDICTIONS_NEW = (
-        "Neue Installation erkannt - Vorhersage-Datenbank wird erstellt."
+        "New installation detected - prediction database being created."
     )
 
     FILE_SAVE_ERROR = (
-        "Fehler beim Speichern von '{filename}'. "
-        "Bitte Schreibrechte im Konfigurationsverzeichnis pruefen."
+        "Error saving '{filename}'. "
+        "Please check write permissions in configuration directory."
     )
 
     FILE_LOAD_ERROR = (
-        "Fehler beim Laden von '{filename}'. "
-        "Datei wird beim naechsten Update neu erstellt."
+        "Error loading '{filename}'. "
+        "File will be recreated on next update."
     )
 
     FILE_BACKUP_CREATED = (
-        "Backup erstellt: {filename}"
+        "Backup created: {filename}"
     )
 
     FILE_BACKUP_RESTORED = (
-        "Backup wiederhergestellt: {filename}"
+        "Backup restored: {filename}"
     )
 
     # ==========================================================================
@@ -165,30 +143,30 @@ class UserMessages:
     # ==========================================================================
 
     FORECAST_TODAY_SAVED = (
-        "Tagesprognose gespeichert: {kwh:.2f} kWh (Quelle: {source})"
+        "Daily forecast saved: {kwh:.2f} kWh (source: {source})"
     )
 
     FORECAST_TOMORROW_SAVED = (
-        "Prognose fuer morgen gespeichert: {kwh:.2f} kWh"
+        "Tomorrow's forecast saved: {kwh:.2f} kWh"
     )
 
     FORECAST_LOCKED = (
-        "Prognose fuer {date} bereits festgelegt. Keine Aktualisierung noetig."
+        "Forecast for {date} already set. No update needed."
     )
 
     FORECAST_ADJUSTED = (
-        "Prognose angepasst: Aktuelle Produktion ({current:.2f} kWh) "
-        "uebertrifft urspruengliche Prognose ({original:.2f} kWh). "
-        "Neue Prognose: {adjusted:.2f} kWh"
+        "Forecast adjusted: Current production ({current:.2f} kWh) "
+        "exceeds original forecast ({original:.2f} kWh). "
+        "New forecast: {adjusted:.2f} kWh"
     )
 
     FORECAST_FALLBACK = (
-        "ML-Vorhersage nicht verfuegbar. Regelbasierte Vorhersage wird verwendet."
+        "AI forecast unavailable. Rule-based forecast being used."
     )
 
     FORECAST_ALL_FAILED = (
-        "Vorhersage konnte nicht erstellt werden. "
-        "Bitte Internetverbindung und Wetterdienst pruefen."
+        "Forecast could not be created. "
+        "Please check internet connection and weather service."
     )
 
     # ==========================================================================
@@ -196,20 +174,20 @@ class UserMessages:
     # ==========================================================================
 
     PRODUCTION_TRACKING_STARTED = (
-        "Produktionsueberwachung gestartet fuer {entity}"
+        "Production monitoring started for {entity}"
     )
 
     PRODUCTION_TRACKING_DISABLED = (
-        "Keine Leistungs-Entity konfiguriert. "
-        "Produktionszeiterfassung ist deaktiviert."
+        "No power entity configured. "
+        "Production time tracking is disabled."
     )
 
     PRODUCTION_NEW_PEAK = (
-        "Neuer Tagesrekord: {power_w:.0f}W um {time}"
+        "New daily record: {power_w:.0f}W at {time}"
     )
 
     PRODUCTION_ALL_TIME_PEAK = (
-        "NEUER ALLZEIT-REKORD: {power_w:.0f}W am {date}"
+        "NEW ALL-TIME RECORD: {power_w:.0f}W on {date}"
     )
 
     # ==========================================================================
@@ -217,19 +195,19 @@ class UserMessages:
     # ==========================================================================
 
     CONFIG_SOLAR_CAPACITY_ZERO = (
-        "Konfigurationsproblem: PV-Anlagenleistung ist 0 oder negativ. "
-        "Bitte in den Einstellungen korrigieren. "
-        "System verwendet Fallback-Wert von 1.0 kWp."
+        "Configuration problem: PV system capacity is 0 or negative. "
+        "Please correct in settings. "
+        "System uses fallback value of 1.0 kWp."
     )
 
     CONFIG_POWER_ENTITY_MISSING = (
-        "Setup unvollstaendig: Kein Leistungs-Sensor konfiguriert. "
-        "Bitte in den Integrationseinstellungen auswaehlen."
+        "Setup incomplete: No power sensor configured. "
+        "Please select in integration settings."
     )
 
     CONFIG_DIRECTORY_ERROR = (
-        "Keine Schreibrechte im Konfigurationsverzeichnis. "
-        "Bitte Berechtigungen fuer '{path}' pruefen."
+        "No write permissions in configuration directory. "
+        "Please check permissions for '{path}'."
     )
 
     # ==========================================================================
@@ -237,28 +215,28 @@ class UserMessages:
     # ==========================================================================
 
     INIT_COORDINATOR_READY = (
-        "Solar Forecast bereit ({mode}, {capacity} kWp)"
+        "Solar Forecast ready ({mode}, {capacity} kWp)"
     )
 
-    INIT_ML_READY = (
-        "ML-Modell initialisiert und bereit."
+    INIT_AI_READY = (
+        "AI model initialized and ready."
     )
 
-    INIT_ML_DISABLED = (
-        "ML-Funktionen deaktiviert. Regelbasierte Vorhersage aktiv."
+    INIT_AI_DISABLED = (
+        "AI functions disabled. Rule-based forecasting active."
     )
 
     INIT_CLEAN_SLATE = (
-        "Neuinstallation erkannt - Datenstruktur wird erstellt..."
+        "New installation detected - data structure being created..."
     )
 
     INIT_CLEAN_SLATE_COMPLETE = (
-        "Neuinstallation abgeschlossen. System ist betriebsbereit."
+        "New installation complete. System is operational."
     )
 
     INIT_DEPENDENCIES_MISSING = (
-        "Einige optionale Abhaengigkeiten fehlen. "
-        "ML-Funktionen sind eingeschraenkt."
+        "Some optional dependencies are missing. "
+        "AI functions are limited."
     )
 
     # ==========================================================================
@@ -266,27 +244,27 @@ class UserMessages:
     # ==========================================================================
 
     TASK_MORNING_ROUTINE_START = (
-        "Morgenroutine gestartet fuer {date}"
+        "Morning routine started for {date}"
     )
 
     TASK_MORNING_ROUTINE_SUCCESS = (
-        "Morgenroutine erfolgreich abgeschlossen."
+        "Morning routine completed successfully."
     )
 
     TASK_MORNING_ROUTINE_RETRY = (
-        "Morgenroutine fehlgeschlagen. Wiederholung in {wait}s..."
+        "Morning routine failed. Retry in {wait}s..."
     )
 
     TASK_END_OF_DAY_START = (
-        "Tagesabschluss-Routine gestartet"
+        "End-of-day routine started"
     )
 
     TASK_END_OF_DAY_SUCCESS = (
-        "Tagesabschluss erfolgreich. Genauigkeit: {accuracy:.1%}"
+        "End-of-day routine successful. Accuracy: {accuracy:.1%}"
     )
 
     TASK_MIDNIGHT_ROTATION = (
-        "Mitternachts-Rotation: Prognosen fuer neuen Tag vorbereitet."
+        "Midnight rotation: Forecasts prepared for new day."
     )
 
     # ==========================================================================
@@ -294,13 +272,13 @@ class UserMessages:
     # ==========================================================================
 
     SENSOR_UNAVAILABLE = (
-        "Sensor '{entity}' nicht verfuegbar. "
-        "Bitte pruefen ob der Sensor korrekt konfiguriert ist."
+        "Sensor '{entity}' not available. "
+        "Please check if the sensor is configured correctly."
     )
 
     SENSOR_INVALID_VALUE = (
-        "Ungueltiger Wert von Sensor '{entity}': {value}. "
-        "Wird fuer Berechnung uebersprungen."
+        "Invalid value from sensor '{entity}': {value}. "
+        "Skipped for calculation."
     )
 
     # ==========================================================================
@@ -308,11 +286,11 @@ class UserMessages:
     # ==========================================================================
 
     SHADOW_DETECTION_INIT = (
-        "Schattenanalyse initialisiert."
+        "Shadow analysis initialized."
     )
 
     SHADOW_DETECTION_FALLBACK = (
-        "Schattenanalyse: Alternative Methode wird verwendet."
+        "Shadow analysis: Alternative method being used."
     )
 
     # ==========================================================================
@@ -320,27 +298,18 @@ class UserMessages:
     # ==========================================================================
 
     ERROR_UNEXPECTED = (
-        "Unerwarteter Fehler aufgetreten. "
-        "System versucht fortzufahren. Details im Debug-Log."
+        "Unexpected error occurred. "
+        "System attempting to continue. Details in debug log."
     )
 
     ERROR_SERVICE_UNAVAILABLE = (
-        "Dienst temporaer nicht verfuegbar. "
-        "Automatischer Wiederholungsversuch."
+        "Service temporarily unavailable. "
+        "Automatic retry in progress."
     )
 
     @classmethod
     def format(cls, message_key: str, **kwargs: Any) -> str:
-        """
-        Format a message with the given parameters.
-
-        Args:
-            message_key: The message constant name (e.g., 'ML_LEARNING_PHASE')
-            **kwargs: Parameters to format into the message
-
-        Returns:
-            Formatted message string, or the key if not found
-        """
+        """Format a message with the given parameters @zara"""
         message_template = getattr(cls, message_key, None)
         if message_template is None:
             return message_key
@@ -348,37 +317,14 @@ class UserMessages:
         try:
             return message_template.format(**kwargs)
         except KeyError:
-            # Return template if formatting fails
             return message_template
 
     @classmethod
     def get(cls, message_key: str) -> str:
-        """
-        Get a message template without formatting.
-
-        Args:
-            message_key: The message constant name
-
-        Returns:
-            Message template string, or the key if not found
-        """
+        """Get a message template without formatting @zara"""
         return getattr(cls, message_key, message_key)
 
 
-# Convenience function for quick access
 def user_msg(key: str, **kwargs: Any) -> str:
-    """
-    Shorthand function to get and format a user message.
-
-    Usage:
-        from .core.core_user_messages import user_msg
-        _LOGGER.warning(user_msg('ML_LEARNING_PHASE', samples=10, min_val=0.1, max_val=5.2))
-
-    Args:
-        key: Message key from UserMessages class
-        **kwargs: Format parameters
-
-    Returns:
-        Formatted user-friendly message
-    """
+    """Shorthand function to get and format a user message @zara"""
     return UserMessages.format(key, **kwargs)

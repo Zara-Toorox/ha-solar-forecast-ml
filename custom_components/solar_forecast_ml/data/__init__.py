@@ -1,24 +1,21 @@
-"""data package V12.2.0 @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
-
-from .data_multi_weather_client import (
-    MultiWeatherBlender,
-    WeatherSourceLearner,
-    WttrInClient,
+# V12.4: Dual-path blending - combines cloud% (proven) with transmission (physics-based)
+from .data_weather_expert_blender import (
+    WeatherExpertBlender,
+    WeatherExpertLearner,
+    CloudType,
+    classify_cloud_type,
+    cloud_to_transmission,  # V12.4: Physics-based cloud→transmission conversion
+    BrightSkyExpert,
+    PirateWeatherExpert,
+    TRANSMISSION_TAU_BY_CLOUD_TYPE,  # V12.4: Transmission coefficients
 )
 from .data_panel_group_sensor_reader import PanelGroupSensorReader

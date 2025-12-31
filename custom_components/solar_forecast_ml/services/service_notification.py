@@ -1,20 +1,11 @@
-"""Notification Service for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import asyncio
 import logging
@@ -30,6 +21,7 @@ from ..const import (
     CONF_NOTIFY_STARTUP,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
     CONF_NOTIFY_WEATHER_ALERT,
+    CONF_NOTIFY_SNOW_COVERED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,6 +37,7 @@ NOTIFICATION_ID_LEARNING = "solar_forecast_ml_learning"
 NOTIFICATION_ID_RETRAINING = "solar_forecast_ml_retraining"
 NOTIFICATION_ID_FROST = "solar_forecast_ml_frost"
 NOTIFICATION_ID_WEATHER_ALERT = "solar_forecast_ml_weather_alert"
+NOTIFICATION_ID_SNOW_COVERED = "solar_forecast_ml_snow_covered"
 
 class NotificationService:
     """Service for Persistent Notifications in Home Assistant"""
@@ -250,12 +243,12 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def show_training_start(self, sample_count: int) -> bool:
-        """Show notification when ML training starts @zara"""
+        """Show notification when AI training starts @zara"""
         if not self._should_notify(CONF_NOTIFY_LEARNING):
             return False
 
         try:
-            message = f"""ML Training Started"""
+            message = f"""AI Training Started"""
 
             await self._safe_create_notification(
                 message=message, title="Training Started", notification_id=NOTIFICATION_ID_LEARNING
@@ -270,7 +263,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
     async def show_training_complete(
         self, success: bool, accuracy: Optional[float] = None, sample_count: Optional[int] = None
     ) -> bool:
-        """Show notification when ML training completes"""
+        """Show notification when AI training completes"""
         if not self._should_notify(CONF_NOTIFY_SUCCESSFUL_LEARNING):
             return False
 
@@ -284,9 +277,9 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
                 if sample_count is not None:
                     sample_text = f"\n**Samples Used:** {sample_count}"
 
-                message = f"""OK ML Training Complete"""
+                message = f"""OK AI Training Complete"""
             else:
-                message = """ ML Training Failed"""
+                message = """ AI Training Failed"""
 
             await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
@@ -318,7 +311,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
         old_features: Optional[int] = None,
         new_features: Optional[int] = None,
     ) -> bool:
-        """Show notification when ML model needs retraining"""
+        """Show notification when AI model needs retraining"""
         try:
 
             if reason == "feature_mismatch":
@@ -328,9 +321,9 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
 • Alte Features: {old_features}
 • Neue Features: {new_features}
 
-Das ML-Modell wird automatisch neu trainiert, um die geänderte Sensorkonfiguration zu berücksichtigen."""
+Das AI-Modell wird automatisch neu trainiert, um die geänderte Sensorkonfiguration zu berücksichtigen."""
             else:
-                reason_text = "Das ML-Modell muss neu trainiert werden."
+                reason_text = "Das AI-Modell muss neu trainiert werden."
 
             message = f"""**Solar Forecast ML - Modell-Neutraining erforderlich** ⚠️
 
@@ -349,7 +342,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
 
             await self._safe_create_notification(
                 message=message,
-                title="🔄 ML-Modell Neutraining",
+                title="🔄 AI-Modell Neutraining",
                 notification_id=NOTIFICATION_ID_RETRAINING,
             )
 
@@ -436,6 +429,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
                 "unexpected_clouds": "Unerwartete Bewölkung",
                 "sudden_storm": "Plötzliches Unwetter",
                 "unexpected_fog": "Unerwarteter Nebel",
+                "snow_covered_panels": "Schneebedeckte Panels",
             }
             alert_title = alert_descriptions.get(alert_type, alert_type)
 
@@ -491,6 +485,87 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
     async def dismiss_weather_alert_notification(self) -> bool:
         """Remove weather alert notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_WEATHER_ALERT)
+
+    async def show_snow_covered_warning(
+        self,
+        temperature_c: float,
+        precipitation_mm: float,
+        hour: int,
+    ) -> bool:
+        """Show warning when snow coverage on panels is detected @zara"""
+        if not self._should_notify(CONF_NOTIFY_SNOW_COVERED):
+            return False
+
+        try:
+            estimated_depth = precipitation_mm * 10  # Rough estimate: 1mm rain = 10mm snow
+
+            message = f"""**Schneebedeckung auf Solarpanelen erkannt!** ❄️
+
+**Zeit:** {hour:02d}:00 Uhr
+**Temperatur:** {temperature_c:.1f}°C
+**Niederschlag:** {precipitation_mm:.1f} mm
+**Geschätzte Schneehöhe:** ~{estimated_depth:.0f} mm
+
+**Auswirkungen:**
+• Die Solarproduktion ist stark reduziert oder auf 0
+• Diese Stunde wird vom ML-Training ausgeschlossen
+• Die Prognose-Genauigkeit kann beeinträchtigt sein
+
+**Hinweis:** Der Schnee schmilzt, sobald die Temperatur über 2°C steigt und die Sonne die Panele erwärmt. Sie werden benachrichtigt, wenn der Schnee schmilzt.
+
+*"Even in the coldest winter, the sun still rises."* — Inspired by Star Trek 🖖"""
+
+            await self._safe_create_notification(
+                message=message,
+                title="❄️ Schnee auf Solarpanelen",
+                notification_id=NOTIFICATION_ID_SNOW_COVERED,
+            )
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"[X] Error showing snow covered notification: {e}", exc_info=True)
+            return False
+
+    async def show_snow_melting_info(
+        self,
+        temperature_c: float,
+        hour: int,
+    ) -> bool:
+        """Show info when snow starts melting from panels @zara"""
+        if not self._should_notify(CONF_NOTIFY_SNOW_COVERED):
+            return False
+
+        try:
+            message = f"""**Schnee schmilzt von den Solarpanelen** ☀️
+
+**Zeit:** {hour:02d}:00 Uhr
+**Temperatur:** {temperature_c:.1f}°C
+
+**Status:**
+• Die Temperatur ist über 2°C gestiegen
+• Der Schnee beginnt zu schmelzen
+• Die Solarproduktion normalisiert sich
+
+**Hinweis:** Es kann einige Stunden dauern, bis die Panele vollständig schneefrei sind und die volle Leistung erreichen.
+
+*"After every storm, comes the calm."* — Inspired by Star Trek 🖖"""
+
+            await self._safe_create_notification(
+                message=message,
+                title="☀️ Schnee schmilzt",
+                notification_id=NOTIFICATION_ID_SNOW_COVERED,
+            )
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"[X] Error showing snow melting notification: {e}", exc_info=True)
+            return False
+
+    async def dismiss_snow_covered_notification(self) -> bool:
+        """Remove snow covered notification @zara"""
+        return await self._safe_dismiss_notification(NOTIFICATION_ID_SNOW_COVERED)
 
 async def create_notification_service(
     hass: HomeAssistant, entry: ConfigEntry

@@ -1,27 +1,11 @@
-"""Open-Meteo API Client - SINGLE DATA SOURCE (Direct Values, No Calculations) @zara
-
-IMPORTANT: Open-Meteo is now the ONLY weather data source.
-- GHI (global_horizontal_irradiance) is used DIRECTLY as solar_radiation_wm2
-- cloud_cover is used DIRECTLY (no physics-based calculations)
-- All weather parameters come from Open-Meteo API
-- NO blending with other weather sources
-- NO cloud layer transmission calculations
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import json
 import logging
@@ -44,7 +28,7 @@ OPEN_METEO_STALE_CACHE_MAX_AGE = 86400
 
 OPEN_METEO_MAX_API_CALLS_PER_HOUR = 5
 OPEN_METEO_RATE_LIMIT_WINDOW = 3600
-OPEN_METEO_HISTORY_RETENTION_DAYS = 7
+OPEN_METEO_HISTORY_RETENTION_DAYS = 730  # 2 years
 
 DEFAULT_WEATHER = {
     "temperature": 15.0,
@@ -62,11 +46,10 @@ DEFAULT_WEATHER = {
 
 
 class OpenMeteoClient:
-    """Client for fetching weather data from Open-Meteo API - SINGLE DATA SOURCE. @zara
+    """Client for fetching weather data from Open-Meteo API. @zara
 
-    IMPORTANT: Cache updates should go through MultiWeatherBlender when available.
-    The auto_save_cache flag controls whether _fetch_from_api automatically saves
-    to the file cache. Set to False when using MultiWeatherBlender.
+    V12.3: This client fetches raw Open-Meteo data. All blending happens
+    through WeatherExpertBlender in the pipeline.
     """
 
     def __init__(self, latitude: float, longitude: float, cache_file: Optional[Path] = None):
@@ -80,15 +63,13 @@ class OpenMeteoClient:
         self._last_api_error: Optional[str] = None
         self._consecutive_failures: int = 0
 
-        # When True, _fetch_from_api automatically saves to file cache.
-        # Set to False when MultiWeatherBlender is managing the cache.
+        # Auto-save to file cache after API fetch
         self.auto_save_cache = True
 
         _LOGGER.info(
-            f"OpenMeteoClient initialized - SINGLE DATA SOURCE MODE "
+            f"OpenMeteoClient initialized "
             f"(lat={latitude:.4f}, lon={longitude:.4f})"
             f"{' with persistent cache' if cache_file else ''}"
-            f" - Using direct GHI and cloud_cover values, NO calculations"
         )
 
     async def async_init(self) -> bool:
@@ -190,32 +171,21 @@ class OpenMeteoClient:
                 hour_entry = {
                     "temperature": entry.get("temperature"),
                     "humidity": entry.get("humidity"),
-                    "cloud_cover": entry.get("cloud_cover"),  # DIRECT VALUE - no calculations!
+                    "cloud_cover": entry.get("cloud_cover"),
+                    "cloud_cover_low": entry.get("cloud_cover_low"),
+                    "cloud_cover_mid": entry.get("cloud_cover_mid"),
+                    "cloud_cover_high": entry.get("cloud_cover_high"),
                     "precipitation": entry.get("precipitation"),
                     "wind_speed": entry.get("wind_speed"),
                     "pressure": entry.get("pressure"),
                     "direct_radiation": direct_rad,
                     "diffuse_radiation": diffuse_rad,
-                    "ghi": ghi,  # DIRECT VALUE used as solar_radiation_wm2
+                    "ghi": ghi,
                     "global_tilted_irradiance": entry.get("global_tilted_irradiance"),
                 }
 
-                # CRITICAL: Always include blend_info and source for WeatherSourceLearner
-                # Preserve from MultiWeatherBlender if present, otherwise add default
-                if "blend_info" in entry:
-                    hour_entry["blend_info"] = entry["blend_info"]
-                else:
-                    # Add default blend_info for entries without it (ensures weight learning works)
-                    hour_entry["blend_info"] = {
-                        "sources": ["open-meteo"],
-                        "trigger": "cache_save_default",
-                        "open_meteo_cloud": entry.get("cloud_cover"),
-                    }
-
-                if "source" in entry:
-                    hour_entry["source"] = entry["source"]
-                else:
-                    hour_entry["source"] = "open-meteo"
+                # Include source tracking for diagnostics
+                hour_entry["source"] = entry.get("source", "open-meteo")
 
                 forecast_by_date[date_str][str(hour)] = hour_entry
 
@@ -297,17 +267,11 @@ class OpenMeteoClient:
     async def get_raw_forecast_for_blending(self, hours: int = 72) -> Optional[List[Dict[str, Any]]]:
         """Get RAW Open-Meteo data for blending - bypasses in-memory cache.
 
-        IMPORTANT: This method is used by MultiWeatherBlender to get fresh,
-        unblended Open-Meteo data. It ignores the in-memory cache (which may
-        contain already-blended data) and either:
-        1. Fetches from API if rate limit allows
-        2. Falls back to FILE cache (which is only updated by Blender with blend_info)
-
-        This prevents double-blending where already-blended cloud_cover values
-        would be blended again.
+        V12.3: Used by WeatherExpertBlender to get fresh Open-Meteo data.
+        Either fetches from API or falls back to file cache.
 
         Returns:
-            Raw Open-Meteo forecast data (never already-blended data)
+            Raw Open-Meteo forecast data
         """
         # First try: Fresh API data (always raw)
         if self._check_rate_limit_budget():
@@ -357,6 +321,9 @@ class OpenMeteoClient:
                     "temperature_2m",
                     "relative_humidity_2m",
                     "cloud_cover",
+                    "cloud_cover_low",
+                    "cloud_cover_mid",
+                    "cloud_cover_high",
                     "precipitation",
                     "wind_speed_10m",
                     "pressure_msl",
@@ -372,6 +339,7 @@ class OpenMeteoClient:
                 ]),
                 "timezone": "auto",
                 "forecast_days": 3,
+                "models": "ecmwf_ifs025",
             }
 
             self._record_api_call()
@@ -396,14 +364,8 @@ class OpenMeteoClient:
                 self._cache["daily"] = data.get("daily", {})
                 self._cache_time = datetime.now()
 
-                # Only auto-save to file cache if MultiWeatherBlender is NOT managing it
-                # When Blender is active, it calls _save_file_cache with blend_info
                 if self.auto_save_cache:
                     await self._save_file_cache(hourly_data)
-                else:
-                    _LOGGER.debug(
-                        "Skipping auto-save (MultiWeatherBlender manages cache)"
-                    )
 
                 ghi_values = [h.get("ghi", 0) or 0 for h in hourly_data]
                 _LOGGER.info(
@@ -444,6 +406,10 @@ class OpenMeteoClient:
                 shortwave = self._safe_get(hourly, "shortwave_radiation", i)
                 ghi = shortwave if shortwave is not None else (direct_rad + diffuse_rad)
 
+                cloud_low = self._safe_get(hourly, "cloud_cover_low", i)
+                cloud_mid = self._safe_get(hourly, "cloud_cover_mid", i)
+                cloud_high = self._safe_get(hourly, "cloud_cover_high", i)
+
                 hour_data = {
                     "datetime": dt,
                     "date": dt.date().isoformat(),
@@ -451,6 +417,9 @@ class OpenMeteoClient:
                     "temperature": self._safe_get(hourly, "temperature_2m", i),
                     "humidity": self._safe_get(hourly, "relative_humidity_2m", i),
                     "cloud_cover": self._safe_get(hourly, "cloud_cover", i),
+                    "cloud_cover_low": cloud_low,
+                    "cloud_cover_mid": cloud_mid,
+                    "cloud_cover_high": cloud_high,
                     "precipitation": self._safe_get(hourly, "precipitation", i),
                     "wind_speed": self._safe_get(hourly, "wind_speed_10m", i),
                     "pressure": self._safe_get(hourly, "pressure_msl", i),
@@ -459,12 +428,15 @@ class OpenMeteoClient:
                     "ghi": ghi,
                     "global_tilted_irradiance": self._safe_get(hourly, "global_tilted_irradiance", i),
                     "source": "open-meteo",
-                    # CRITICAL: Always include blend_info for WeatherSourceLearner compatibility
-                    # This is the base case - MultiWeatherBlender may override with blended data
                     "blend_info": {
                         "sources": ["open-meteo"],
                         "trigger": "api_fetch",
                         "open_meteo_cloud": self._safe_get(hourly, "cloud_cover", i),
+                        "cloud_layers": {
+                            "low": cloud_low,
+                            "mid": cloud_mid,
+                            "high": cloud_high,
+                        },
                     },
                 }
                 result.append(hour_data)

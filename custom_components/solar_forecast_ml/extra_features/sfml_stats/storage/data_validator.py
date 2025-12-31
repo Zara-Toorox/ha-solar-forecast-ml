@@ -1,20 +1,12 @@
-"""Data validator for SFML Stats. @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
 from __future__ import annotations
 
 import logging
@@ -28,7 +20,7 @@ from ..const import (
     SFML_STATS_BASE,
     SOLAR_FORECAST_ML_BASE,
     SOLAR_FORECAST_ML_STATS,
-    SOLAR_FORECAST_ML_ML,
+    SOLAR_FORECAST_ML_AI,
     GRID_PRICE_MONITOR_BASE,
     GRID_PRICE_MONITOR_DATA,
 )
@@ -94,7 +86,7 @@ class DataValidator:
         sources = {
             "solar_forecast_ml": {
                 "base": SOLAR_FORECAST_ML_BASE,
-                "required_dirs": [SOLAR_FORECAST_ML_STATS, SOLAR_FORECAST_ML_ML],
+                "required_dirs": [SOLAR_FORECAST_ML_STATS, SOLAR_FORECAST_ML_AI],
             },
             "grid_price_monitor": {
                 "base": GRID_PRICE_MONITOR_BASE,

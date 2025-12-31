@@ -1,20 +1,11 @@
-"""Physics Engine for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 from __future__ import annotations
 
@@ -234,8 +225,8 @@ class PhysicsEngine:
         if geometry is None:
             geometry = self._geometry
 
-        # Handle sun below horizon or invalid data
-        if sun.elevation_deg <= 0 or not irradiance.is_valid():
+        # Handle completely invalid data
+        if not irradiance.is_valid():
             return POAResult(
                 poa_total=0.0,
                 poa_beam=0.0,
@@ -244,23 +235,38 @@ class PhysicsEngine:
                 aoi_deg=90.0,
             )
 
-        # Calculate AOI
-        aoi_deg = self.calculate_angle_of_incidence(sun, geometry)
-        aoi_rad = math.radians(aoi_deg)
+        # For low sun elevations (0-5°), there can still be diffuse radiation
+        # especially for flat panels that can capture twilight/dawn light
+        is_twilight = -2.0 <= sun.elevation_deg <= 5.0
+        sun_below_horizon = sun.elevation_deg <= 0
 
-        # POA beam component
-        # Only positive when sun is in front of panel (AOI < 90)
-        if aoi_deg < 90:
-            poa_beam = irradiance.dni * math.cos(aoi_rad)
+        # No direct beam when sun is below horizon
+        poa_beam = 0.0
+
+        if not sun_below_horizon:
+            # Calculate AOI for direct beam
+            aoi_deg = self.calculate_angle_of_incidence(sun, geometry)
+            aoi_rad = math.radians(aoi_deg)
+
+            # POA beam component
+            # Only positive when sun is in front of panel (AOI < 90)
+            if aoi_deg < 90:
+                poa_beam = irradiance.dni * math.cos(aoi_rad)
         else:
-            poa_beam = 0.0
+            aoi_deg = 90.0
 
         # POA diffuse component (isotropic sky model)
-        # This is a simplification; the full Perez model is more complex
-        poa_diffuse = irradiance.dhi * (1 + math.cos(geometry.tilt_rad)) / 2
+        # This works even at very low sun angles - flat panels can capture diffuse light
+        # For twilight conditions, scale down diffuse based on sun angle
+        diffuse_factor = 1.0
+        if is_twilight and sun.elevation_deg < 3.0:
+            # Gradual reduction for very low sun angles (from 3° down to -2°)
+            diffuse_factor = max(0.0, (sun.elevation_deg + 2.0) / 5.0)
+
+        poa_diffuse = irradiance.dhi * (1 + math.cos(geometry.tilt_rad)) / 2 * diffuse_factor
 
         # POA ground reflection component
-        poa_ground = irradiance.ghi * self.albedo * (1 - math.cos(geometry.tilt_rad)) / 2
+        poa_ground = irradiance.ghi * self.albedo * (1 - math.cos(geometry.tilt_rad)) / 2 * diffuse_factor
 
         # Total POA
         poa_total = max(0.0, poa_beam + poa_diffuse + poa_ground)

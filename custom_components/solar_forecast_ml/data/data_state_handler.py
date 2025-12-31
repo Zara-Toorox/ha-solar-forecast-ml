@@ -1,20 +1,11 @@
-"""Data State Handler for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from datetime import datetime, timedelta
@@ -32,13 +23,12 @@ from .data_manager import DataManagerIO
 _LOGGER = logging.getLogger(__name__)
 
 class DataStateHandler(DataManagerIO):
-    """Handles coordinator state and weather cache"""
+    """Handles coordinator state and production time state"""
 
     def __init__(self, hass: HomeAssistant, data_dir: Path):
         super().__init__(hass, data_dir)
 
         self.coordinator_state_file = self.data_dir / "data" / "coordinator_state.json"
-        self.weather_cache_file = self.data_dir / "data" / "weather_cache.json"
         self.production_time_state_file = self.data_dir / "data" / "production_time_state.json"
 
         self._coordinator_state_default = {
@@ -73,14 +63,8 @@ class DataStateHandler(DataManagerIO):
         check_daily_forecasts: bool = True,
         daily_forecasts_data: Optional[dict[str, Any]] = None,
     ) -> Optional[float]:
-        """Load expected daily production from persistent storage
-
-        Priority:
-        1. prediction_kwh from daily_forecasts.json (locked forecast)
-        2. coordinator_state.json (legacy fallback)
-        """
+        """Load expected daily production from daily_forecasts.json @zara"""
         try:
-
             if check_daily_forecasts and daily_forecasts_data:
                 if "today" in daily_forecasts_data and daily_forecasts_data["today"].get(
                     "forecast_day", {}
@@ -94,32 +78,6 @@ class DataStateHandler(DataManagerIO):
                             f"{value:.2f} kWh (source: {source_info})"
                         )
                         return float(value)
-
-            state = await self._read_json_file(
-                self.coordinator_state_file, self._coordinator_state_default
-            )
-
-            if not state:
-                return None
-
-            now_local = dt_util.now()
-            today_str = now_local.date().isoformat()
-            last_set_date = state.get("last_set_date")
-
-            if last_set_date != today_str:
-                _LOGGER.debug(
-                    f"Expected daily production expired "
-                    f"(from {last_set_date}, today is {today_str})"
-                )
-                return None
-
-            value = state.get("expected_daily_production")
-            if value is not None:
-                _LOGGER.debug(
-                    f"Loaded expected daily production from coordinator_state.json (OLD): "
-                    f"{value:.2f} kWh"
-                )
-                return float(value)
 
             return None
 
@@ -174,22 +132,3 @@ class DataStateHandler(DataManagerIO):
             _LOGGER.error(f"Failed to set last collected hour: {e}")
             return False
 
-    async def save_weather_cache(self, weather_data: dict[str, Any]) -> bool:
-        """Legacy method - Open-Meteo cache is the single data source. @zara"""
-        return True
-
-    async def load_weather_cache(self) -> Optional[dict[str, Any]]:
-        """Legacy method - Open-Meteo cache is the single data source. @zara"""
-        return None
-
-    async def clear_weather_cache(self) -> bool:
-        """Legacy method - Open-Meteo cache is the single data source. @zara"""
-        return True
-
-    async def get_weather_cache_age(self) -> Optional[int]:
-        """Legacy method - Open-Meteo cache is the single data source. @zara"""
-        return None
-
-    async def is_weather_cache_valid(self, max_age_minutes: int = 180) -> bool:
-        """Legacy method - Open-Meteo cache is the single data source. @zara"""
-        return False

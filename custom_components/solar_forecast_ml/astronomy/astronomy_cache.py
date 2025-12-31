@@ -1,20 +1,11 @@
-"""Astronomy Cache - Independent solar position and radiation calculations V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import asyncio
 import json
@@ -563,22 +554,40 @@ class AstronomyCache:
         success_count = 0
         error_count = 0
 
+        # Build list of dates to process
+        dates_to_process = []
         current_date = start_calc
         while current_date <= end_calc:
-            date_str = current_date.isoformat()
+            dates_to_process.append(current_date)
+            current_date += timedelta(days=1)
 
-            day_data = await self.build_cache_for_date(current_date, system_capacity_kwp)
+        # Process all dates in PARALLEL using asyncio.gather for faster startup
+        # Each build_cache_for_date already uses run_in_executor internally
+        _LOGGER.info(f"Astronomy cache: Processing {total_days} days in parallel...")
 
-            if day_data:
+        async def build_with_date(d: date):
+            """Helper to return (date_str, day_data) tuple"""
+            day_data = await self.build_cache_for_date(d, system_capacity_kwp)
+            return (d.isoformat(), day_data)
+
+        results = await asyncio.gather(
+            *[build_with_date(d) for d in dates_to_process],
+            return_exceptions=True
+        )
+
+        # Collect results
+        for result in results:
+            if isinstance(result, Exception):
+                _LOGGER.error(f"Astronomy cache build error: {result}")
+                error_count += 1
+            elif result[1] is not None:
+                date_str, day_data = result
                 cache_data["days"][date_str] = day_data
                 success_count += 1
             else:
                 error_count += 1
 
-            current_date += timedelta(days=1)
-
-            if success_count % 10 == 0:
-                _LOGGER.info(f"Astronomy cache: {success_count}/{total_days} days processed")
+        _LOGGER.info(f"Astronomy cache: {success_count}/{total_days} days processed")
 
         cache_data["cache_info"]["total_days"] = success_count
         cache_data["cache_info"]["success_count"] = success_count

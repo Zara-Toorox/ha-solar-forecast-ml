@@ -1,20 +1,11 @@
-"""Data Manager for Solar Forecast ML Integration - FACADE V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from datetime import datetime, timedelta
@@ -23,14 +14,13 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from ..ml.ml_types import HourlyProfile, LearnedWeights
+from ..ai import HourlyProfile, LearnedWeights
 from .data_backup_handler import DataBackupHandler
 from .data_daily_summaries import DailySummariesHandler
 from .data_forecast_handler import DataForecastHandler
 from .data_hourly_predictions import HourlyPredictionsHandler
 from .data_io import DataManagerIO
 from .data_ml_handler import DataMLHandler
-from .data_prediction_handler import DataPredictionHandler
 from .data_schema_validator import DataSchemaValidator
 from .data_state_handler import DataStateHandler
 
@@ -48,9 +38,6 @@ class DataManager(DataManagerIO):
 
         self.forecast_handler = DataForecastHandler(hass, data_dir)
         self.ml_handler = DataMLHandler(hass, data_dir, data_manager=self)
-        self.prediction_handler = DataPredictionHandler(
-            hass, data_dir
-        )
         self.state_handler = DataStateHandler(hass, data_dir)
         self.backup_handler = DataBackupHandler(hass, data_dir)
 
@@ -63,7 +50,6 @@ class DataManager(DataManagerIO):
         self.model_state_file = self.ml_handler.model_state_file
 
         self.coordinator_state_file = self.state_handler.coordinator_state_file
-        self.weather_cache_file = self.state_handler.weather_cache_file
         self.production_time_state_file = self.state_handler.production_time_state_file
 
         self.hourly_predictions_file = self.data_dir / "stats" / "hourly_predictions.json"
@@ -214,6 +200,15 @@ class DataManager(DataManagerIO):
         """Update all-time peak power @zara"""
         return await self.forecast_handler.update_all_time_peak(power_w, timestamp)
 
+    async def save_power_peak(
+        self, power_w: float, timestamp: datetime, is_all_time: bool = False
+    ) -> bool:
+        """Save power peak - updates today and optionally all-time @zara"""
+        success = await self.update_peak_today(power_w, timestamp)
+        if is_all_time:
+            success = await self.update_all_time_peak(power_w, timestamp) and success
+        return success
+
     async def get_all_time_peak(self) -> Optional[float]:
         """Get all-time peak value @zara"""
         return await self.forecast_handler.get_all_time_peak()
@@ -318,26 +313,6 @@ class DataManager(DataManagerIO):
         """Clear expected daily production @zara"""
         return await self.state_handler.clear_expected_daily_production()
 
-    async def save_weather_cache(self, weather_data: Dict[str, Any]) -> bool:
-        """Legacy method - Open-Meteo cache is the primary data source. @zara"""
-        return True
-
-    async def load_weather_cache(self) -> Optional[Dict[str, Any]]:
-        """Legacy method - Open-Meteo cache is the primary data source. @zara"""
-        return None
-
-    async def clear_weather_cache(self) -> bool:
-        """Legacy method - Open-Meteo cache is the primary data source. @zara"""
-        return True
-
-    async def get_weather_cache_age(self) -> Optional[int]:
-        """Legacy method - Open-Meteo cache is the primary data source. @zara"""
-        return None
-
-    async def is_weather_cache_valid(self, max_age_minutes: int = 180) -> bool:
-        """Legacy method - Open-Meteo cache is the primary data source. @zara"""
-        return False
-
     async def create_backup(
         self, backup_name: Optional[str] = None, backup_type: str = "manual"
     ) -> bool:
@@ -374,47 +349,19 @@ class DataManager(DataManagerIO):
         """Get backup info"""
         return await self.backup_handler.get_backup_info(backup_name, backup_type)
 
-    async def save_daily_forecast(
-        self, prediction_kwh: float, source: str = "auto_6am", force_overwrite: bool = False
-    ) -> bool:
-        """OLD METHOD - redirects to save_forecast_day"""
-        return await self.save_forecast_day(prediction_kwh, source, force_overwrite=force_overwrite)
-
     async def get_current_day_forecast(self) -> Optional[Dict[str, Any]]:
-        """OLD METHOD - returns today block @zara"""
+        """Get today's forecast block from daily_forecasts.json @zara"""
         try:
             data = await self.load_daily_forecasts()
             return data.get("today")
         except Exception:
             return None
 
-    async def save_forecast_today(self, prediction_kwh: float, source: str = "ML") -> bool:
-        """OLD METHOD - redirects to save_forecast_day @zara"""
-        return await self.save_forecast_day(prediction_kwh, source)
-
-    async def save_production_tracking(
-        self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        duration_seconds: int = 0,
-        duration_formatted: str = "00:00:00",
-        currently_producing: bool = False,
-        last_power_above_10w: Optional[datetime] = None,
-        zero_power_streak_minutes: int = 0,
+    async def save_daily_forecast(
+        self, prediction_kwh: float, source: str = "auto_6am", force_overwrite: bool = False
     ) -> bool:
-        """OLD METHOD - redirects to update_production_time"""
-        zero_power_since = None
-        if zero_power_streak_minutes > 0 and last_power_above_10w:
-            zero_power_since = last_power_above_10w + timedelta(minutes=zero_power_streak_minutes)
-
-        return await self.update_production_time(
-            active=currently_producing,
-            duration_seconds=duration_seconds,
-            start_time=start_time,
-            end_time=end_time,
-            last_power_above_10w=last_power_above_10w,
-            zero_power_since=zero_power_since,
-        )
+        """Save daily forecast - redirects to save_forecast_day @zara"""
+        return await self.save_forecast_day(prediction_kwh, source, force_overwrite=force_overwrite)
 
     async def move_to_history(self) -> bool:
         """Move finalized today data to history @zara"""
@@ -423,9 +370,3 @@ class DataManager(DataManagerIO):
     async def calculate_statistics(self) -> bool:
         """Calculate aggregated statistics @zara"""
         return await self.forecast_handler.calculate_statistics()
-
-    async def save_power_peak(
-        self, power_w: float, timestamp: datetime, is_all_time: bool = False
-    ) -> bool:
-        """OLD METHOD - redirects to update_peak_today"""
-        return await self.update_peak_today(power_w, timestamp)

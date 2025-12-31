@@ -1,24 +1,11 @@
-"""Weather Forecast Corrector - Applies Precision Corrections to Open-Meteo Data @zara
-
-Open-Meteo is the PRIMARY weather data source.
-Precision correction factors from local sensors are APPLIED to create
-the corrected forecast (Regional API + Local Sensor Learning).
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import json
 import logging
@@ -28,9 +15,11 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
+from ..astronomy.astronomy_cache_manager import get_cache_manager
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from .data_io import DataManagerIO
 from .data_open_meteo_client import OpenMeteoClient, get_default_weather
+from .data_weather_expert_blender import CloudType, classify_cloud_type, cloud_to_transmission
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,10 +43,11 @@ class WeatherForecastCorrector(DataManagerIO):
     - Open-Meteo provides raw regional forecast data
     - Local sensors provide actual measurements (hourly_weather_actual.json)
     - Precision tracking calculates correction factors (weather_precision_daily.json)
+    - WeatherExpertBlender provides multi-source blended cloud cover
     - This class APPLIES those factors to create weather_forecast_corrected.json
     """
 
-    def __init__(self, hass: HomeAssistant, data_manager):
+    def __init__(self, hass: HomeAssistant, data_manager, expert_blender=None):
         super().__init__(hass, data_manager.data_dir)
 
         self.data_manager = data_manager
@@ -65,8 +55,12 @@ class WeatherForecastCorrector(DataManagerIO):
         self.corrected_file = data_manager.weather_corrected_file
         self.precision_file = self.stats_dir / "weather_precision_daily.json"
 
+        # Expert blender for multi-source cloud cover
+        self._expert_blender = expert_blender
+
         self._open_meteo_client: Optional[OpenMeteoClient] = None
         self._open_meteo_cache: Dict[str, Dict[int, Dict[str, Any]]] = {}
+        self._wttr_cache: Dict[str, Dict[int, Dict[str, Any]]] = {}
         self._consecutive_failures: int = 0
         self._last_error: Optional[str] = None
 
@@ -79,19 +73,84 @@ class WeatherForecastCorrector(DataManagerIO):
                     latitude, longitude,
                     cache_file=cache_file
                 )
-                # IMPORTANT: Disable auto_save_cache to preserve Multi-Weather blending!
-                # The MultiWeatherBlender manages the cache with blended cloud_cover values.
-                # If we save here, we overwrite the blended data with pure Open-Meteo data.
+                # V12.3: Corrector reads from Open-Meteo cache, blending via ExpertBlender
                 self._open_meteo_client.auto_save_cache = False
                 _LOGGER.info(
                     f"WeatherForecastCorrector initialized "
-                    f"(lat={latitude:.4f}, lon={longitude:.4f}) - Applies precision corrections "
-                    f"(auto_save_cache=False to preserve blending)"
+                    f"(lat={latitude:.4f}, lon={longitude:.4f})"
+                    f"{' with ExpertBlender' if expert_blender else ''}"
                 )
             else:
                 _LOGGER.warning("No coordinates in HA config - Open-Meteo disabled")
         except Exception as e:
             _LOGGER.warning(f"Could not initialize Open-Meteo client: {e}")
+
+    def set_expert_blender(self, expert_blender) -> None:
+        """Set the expert blender for multi-source cloud cover."""
+        self._expert_blender = expert_blender
+        _LOGGER.info("WeatherForecastCorrector: Expert blender attached")
+
+    def _get_weighted_poa_radiation(self, date_str: str, hour: int) -> float:
+        """Get capacity-weighted POA (tilted) radiation from astronomy cache.
+
+        V12.4.2: Uses poa_wm2 per panel group weighted by kWp capacity.
+        This is MUCH more accurate than horizontal clear_sky_solar_radiation_wm2
+        because it accounts for panel tilt and azimuth.
+
+        Returns:
+            Weighted average POA radiation in W/m², or 0.0 if not available.
+        """
+        try:
+            cache_manager = get_cache_manager()
+            if not cache_manager.is_loaded():
+                return 0.0
+
+            hourly_astro = cache_manager.get_hourly_data(date_str, hour)
+            if not hourly_astro:
+                return 0.0
+
+            # Get per-group POA data
+            groups = hourly_astro.get("theoretical_max_per_group", [])
+            if not groups:
+                # Fallback to horizontal if no group data (shouldn't happen)
+                return hourly_astro.get("clear_sky_solar_radiation_wm2", 0.0) or 0.0
+
+            # Calculate capacity-weighted POA radiation
+            total_poa_weighted = 0.0
+            total_capacity = 0.0
+
+            for group in groups:
+                poa_wm2 = group.get("poa_wm2", 0.0) or 0.0
+                capacity_kwp = group.get("power_kwp", 0.0) or 0.0
+
+                if capacity_kwp > 0:
+                    total_poa_weighted += poa_wm2 * capacity_kwp
+                    total_capacity += capacity_kwp
+
+            if total_capacity <= 0:
+                return hourly_astro.get("clear_sky_solar_radiation_wm2", 0.0) or 0.0
+
+            weighted_poa = total_poa_weighted / total_capacity
+
+            # Log for debugging (only for production hours)
+            horizontal = hourly_astro.get("clear_sky_solar_radiation_wm2", 0.0) or 0.0
+            if horizontal > 0 and weighted_poa > 0:
+                ratio = weighted_poa / horizontal
+                _LOGGER.debug(
+                    f"POA radiation {date_str} {hour:02d}:00: "
+                    f"horizontal={horizontal:.1f} W/m², weighted_poa={weighted_poa:.1f} W/m² "
+                    f"(ratio={ratio:.2f}x)"
+                )
+
+            return weighted_poa
+
+        except Exception as e:
+            _LOGGER.debug(f"Could not get weighted POA radiation for {date_str} {hour:02d}:00: {e}")
+            return 0.0
+
+    def set_wttr_cache(self, wttr_cache: Dict[str, Dict[int, Dict[str, Any]]]) -> None:
+        """Set wttr.in cache for fallback."""
+        self._wttr_cache = wttr_cache
 
     async def async_init(self) -> bool:
         if self._open_meteo_client:
@@ -125,6 +184,9 @@ class WeatherForecastCorrector(DataManagerIO):
                         "temperature": entry.get("temperature"),
                         "humidity": entry.get("humidity"),
                         "cloud_cover": entry.get("cloud_cover"),
+                        "cloud_cover_low": entry.get("cloud_cover_low"),
+                        "cloud_cover_mid": entry.get("cloud_cover_mid"),
+                        "cloud_cover_high": entry.get("cloud_cover_high"),
                         "precipitation": entry.get("precipitation"),
                         "wind_speed": entry.get("wind_speed"),
                         "pressure": entry.get("pressure"),
@@ -147,28 +209,21 @@ class WeatherForecastCorrector(DataManagerIO):
             return False
 
     async def _fetch_open_meteo_forecast(self) -> bool:
-        """Load weather data from the BLENDED cache file (not from API). @zara
+        """Load weather data from Open-Meteo cache file. @zara
 
-        IMPORTANT: We read directly from the cache FILE to preserve Multi-Weather
-        blending. The cache file is managed by MultiWeatherBlender and contains
-        blended cloud_cover values from Open-Meteo + wttr.in.
-
-        DO NOT call _open_meteo_client.get_hourly_forecast() here as it may
-        fetch fresh data from the API, overwriting the blended values!
+        V12.3: Reads from Open-Meteo cache. ExpertBlender handles all blending
+        separately and writes to weather_forecast_corrected.json.
         """
         if not self._open_meteo_client:
             _LOGGER.debug("Open-Meteo client not available")
             return False
 
         try:
-            # CRITICAL: Reload the file cache to get the latest blended data
-            # The cache file may have been updated by MultiWeatherBlender
-            # since we last loaded it at async_init()
+            # Reload the file cache to get latest data
             if self._open_meteo_client._cache_file:
                 await self._open_meteo_client._load_file_cache()
-                _LOGGER.debug("Reloaded Open-Meteo cache file for blended data")
+                _LOGGER.debug("Reloaded Open-Meteo cache file")
 
-            # Now load from the client's internal cache (which now has the file data)
             cached_forecast = self._open_meteo_client._cache.get("hourly_forecast", [])
             if not cached_forecast:
                 _LOGGER.warning("No Open-Meteo data in cache file")
@@ -190,6 +245,9 @@ class WeatherForecastCorrector(DataManagerIO):
                         "temperature": entry.get("temperature"),
                         "humidity": entry.get("humidity"),
                         "cloud_cover": entry.get("cloud_cover"),
+                        "cloud_cover_low": entry.get("cloud_cover_low"),
+                        "cloud_cover_mid": entry.get("cloud_cover_mid"),
+                        "cloud_cover_high": entry.get("cloud_cover_high"),
                         "precipitation": entry.get("precipitation"),
                         "wind_speed": entry.get("wind_speed"),
                         "pressure": entry.get("pressure"),
@@ -199,8 +257,8 @@ class WeatherForecastCorrector(DataManagerIO):
                     }
 
             _LOGGER.info(
-                f"Loaded blended weather cache: {len(cached_forecast)} hours, "
-                f"{len(self._open_meteo_cache)} days (from MultiWeatherBlender cache)"
+                f"Loaded weather cache: {len(cached_forecast)} hours, "
+                f"{len(self._open_meteo_cache)} days"
             )
             return True
 
@@ -209,26 +267,149 @@ class WeatherForecastCorrector(DataManagerIO):
             return False
 
     def _get_weather_for_hour(self, date_str: str, hour: int) -> Dict[str, Any]:
-        """Get RAW weather for hour from Open-Meteo cache (before correction) @zara"""
-        if date_str in self._open_meteo_cache:
-            hour_data = self._open_meteo_cache[date_str].get(hour)
-            if hour_data:
-                return {
-                    "temperature": hour_data.get("temperature"),
-                    "solar_radiation_wm2": hour_data.get("ghi") or 0,
-                    "wind": hour_data.get("wind_speed"),
-                    "humidity": hour_data.get("humidity"),
-                    "rain": hour_data.get("precipitation") or 0,
-                    "clouds": hour_data.get("cloud_cover"),
-                    "pressure": hour_data.get("pressure"),
-                    "direct_radiation": hour_data.get("direct_radiation"),
-                    "diffuse_radiation": hour_data.get("diffuse_radiation"),
-                    "source": "open-meteo-raw",
-                    "confidence": 0.95,
-                }
+        """Get weather for hour with calculated radiation from POA + clouds.
 
-        _LOGGER.debug(f"No Open-Meteo data for {date_str} {hour:02d}:00, using defaults")
-        return self._get_default_weather_for_hour(hour, date_str)
+        V12.4.2: Radiation is calculated from TILTED (POA) radiation + cloud cover.
+        Uses capacity-weighted poa_wm2 per panel group, NOT horizontal radiation!
+        """
+        if date_str not in self._open_meteo_cache:
+            _LOGGER.debug(f"No Open-Meteo data for {date_str} {hour:02d}:00, using defaults")
+            return self._get_default_weather_for_hour(hour, date_str)
+
+        hour_data = self._open_meteo_cache[date_str].get(hour)
+        if not hour_data:
+            _LOGGER.debug(f"No Open-Meteo data for {date_str} {hour:02d}:00, using defaults")
+            return self._get_default_weather_for_hour(hour, date_str)
+
+        # Use Open-Meteo cloud cover as base (sync version - no blending)
+        cloud_cover = hour_data.get("cloud_cover")
+        cloud_source = "open-meteo-raw"
+        blend_info = None
+
+        # V12.4.2: Use TILTED (POA) radiation, not horizontal!
+        poa_radiation = self._get_weighted_poa_radiation(date_str, hour)
+
+        # Calculate actual radiation based on cloud cover
+        cloud_factor = (100.0 - (cloud_cover or 0.0)) / 100.0
+        calculated_radiation = poa_radiation * cloud_factor
+
+        return {
+            "temperature": hour_data.get("temperature"),
+            "solar_radiation_wm2": round(calculated_radiation, 1),
+            "wind": hour_data.get("wind_speed"),
+            "humidity": hour_data.get("humidity"),
+            "rain": hour_data.get("precipitation") or 0,
+            "clouds": cloud_cover,
+            "cloud_cover_low": hour_data.get("cloud_cover_low"),
+            "cloud_cover_mid": hour_data.get("cloud_cover_mid"),
+            "cloud_cover_high": hour_data.get("cloud_cover_high"),
+            "pressure": hour_data.get("pressure"),
+            # V12.4.2: Calculated radiation split from POA
+            "direct_radiation": round(calculated_radiation * 0.7, 1),
+            "diffuse_radiation": round(calculated_radiation * 0.3, 1),
+            "clear_sky_poa_radiation": round(poa_radiation, 1),
+            "source": cloud_source,
+            "blend_info": blend_info,
+            "confidence": 0.95,
+        }
+
+    async def _get_weather_for_hour_async(self, date_str: str, hour: int) -> Dict[str, Any]:
+        """Get weather for hour with dual-path blended cloud cover (async version).
+
+        V12.4.2: Radiation is now CALCULATED from TILTED (POA) radiation + blended clouds.
+        Uses capacity-weighted poa_wm2 per panel group, NOT horizontal radiation!
+
+        Formula: solar_radiation = poa_radiation * (100 - clouds) / 100
+        The physics engine's bucket learning (per cloud% range, per panel group)
+        handles the fine-tuning automatically.
+        """
+        if date_str not in self._open_meteo_cache:
+            _LOGGER.debug(f"No Open-Meteo data for {date_str} {hour:02d}:00, using defaults")
+            return self._get_default_weather_for_hour(hour, date_str)
+
+        hour_data = self._open_meteo_cache[date_str].get(hour)
+        if not hour_data:
+            _LOGGER.debug(f"No Open-Meteo data for {date_str} {hour:02d}:00, using defaults")
+            return self._get_default_weather_for_hour(hour, date_str)
+
+        cloud_low = hour_data.get("cloud_cover_low")
+        cloud_mid = hour_data.get("cloud_cover_mid")
+        cloud_high = hour_data.get("cloud_cover_high")
+
+        # Get wttr.in fallback cloud cover
+        wttr_cloud = None
+        if date_str in self._wttr_cache and hour in self._wttr_cache[date_str]:
+            wttr_cloud = self._wttr_cache[date_str][hour].get("cloud_cover")
+
+        # Use expert blender if available
+        if self._expert_blender:
+            try:
+                # V12.4: Dual-path blending - combines cloud% and transmission approaches
+                transmission, dual_info = await self._expert_blender.get_dual_path_blend(
+                    date=date_str,
+                    hour=hour,
+                    cloud_low=cloud_low,
+                    cloud_mid=cloud_mid,
+                    cloud_high=cloud_high,
+                    fallback_cloud=wttr_cloud,
+                    path_a_weight=0.5,  # Equal weighting for both paths
+                )
+                # Use the final cloud value from dual-path blend
+                cloud_cover = dual_info.get("final_cloud", 100.0 - transmission)
+                cloud_source = "dual_path_blend"
+                blend_info = dual_info
+            except Exception as e:
+                _LOGGER.debug(f"Dual-path blending failed for {date_str} {hour:02d}:00: {e}")
+                # Fallback to simple cloud% blending
+                try:
+                    cloud_cover, blend_info = await self._expert_blender.get_blended_cloud_cover(
+                        date=date_str,
+                        hour=hour,
+                        cloud_low=cloud_low,
+                        cloud_mid=cloud_mid,
+                        cloud_high=cloud_high,
+                        fallback_cloud=wttr_cloud,
+                    )
+                    cloud_source = "expert_blend_fallback"
+                except Exception as e2:
+                    _LOGGER.debug(f"Expert blending also failed: {e2}")
+                    cloud_cover = wttr_cloud if wttr_cloud is not None else hour_data.get("cloud_cover")
+                    cloud_source = "wttr_fallback" if wttr_cloud is not None else "open-meteo-raw"
+                    blend_info = {"error": str(e), "fallback_error": str(e2)}
+        else:
+            # No expert blender - use Open-Meteo cloud cover
+            cloud_cover = hour_data.get("cloud_cover")
+            cloud_source = "open-meteo-raw"
+            blend_info = None
+
+        # V12.4.2: Use TILTED (POA) radiation, not horizontal!
+        # This is the key fix - uses poa_wm2 per panel group weighted by kWp
+        poa_radiation = self._get_weighted_poa_radiation(date_str, hour)
+
+        # Calculate actual radiation based on cloud cover
+        # Formula: radiation = poa * (100 - clouds) / 100
+        cloud_factor = (100.0 - (cloud_cover or 0.0)) / 100.0
+        calculated_radiation = poa_radiation * cloud_factor
+
+        return {
+            "temperature": hour_data.get("temperature"),
+            "solar_radiation_wm2": round(calculated_radiation, 1),
+            "wind": hour_data.get("wind_speed"),
+            "humidity": hour_data.get("humidity"),
+            "rain": hour_data.get("precipitation") or 0,
+            "clouds": cloud_cover,
+            "cloud_cover_low": cloud_low,
+            "cloud_cover_mid": cloud_mid,
+            "cloud_cover_high": cloud_high,
+            "pressure": hour_data.get("pressure"),
+            # V12.4.2: Calculated radiation split from POA
+            "direct_radiation": round(calculated_radiation * 0.7, 1),  # ~70% direct
+            "diffuse_radiation": round(calculated_radiation * 0.3, 1),  # ~30% diffuse
+            "clear_sky_poa_radiation": round(poa_radiation, 1),
+            "source": cloud_source,
+            "blend_info": blend_info,
+            "confidence": 0.98 if cloud_source == "dual_path_blend" else 0.95 if "expert" in cloud_source else 0.85,
+        }
 
     def _get_default_weather_for_hour(self, hour: int, date_str: str) -> Dict[str, Any]:
         import math
@@ -489,7 +670,8 @@ class WeatherForecastCorrector(DataManagerIO):
                 day_data = self._open_meteo_cache[date_str]
 
                 for hour in range(24):
-                    weather = self._get_weather_for_hour(date_str, hour)
+                    # Use async version for expert blending
+                    weather = await self._get_weather_for_hour_async(date_str, hour)
 
                     astronomy = {}
                     if date_str in astronomy_data:
@@ -549,6 +731,9 @@ class WeatherForecastCorrector(DataManagerIO):
                         "humidity": self._apply_correction(raw_humidity, factors.get("humidity", 1.0), "humidity"),
                         "rain": self._apply_correction(raw_rain, factors.get("rain", 1.0), "rain"),
                         "clouds": corrected_clouds,
+                        "cloud_cover_low": weather.get("cloud_cover_low"),
+                        "cloud_cover_mid": weather.get("cloud_cover_mid"),
+                        "cloud_cover_high": weather.get("cloud_cover_high"),
                         "pressure": self._apply_correction(raw_pressure, factors.get("pressure", 0.0), "pressure"),
                         "direct_radiation": weather.get("direct_radiation"),
                         "diffuse_radiation": weather.get("diffuse_radiation"),
@@ -669,7 +854,7 @@ class WeatherForecastCorrector(DataManagerIO):
                         result["_confidence"] = 0.95
                         return result
 
-            weather = self._get_weather_for_hour(date_str, hour)
+            weather = await self._get_weather_for_hour_async(date_str, hour)
             weather["_source"] = "open_meteo_direct"
             return weather
 

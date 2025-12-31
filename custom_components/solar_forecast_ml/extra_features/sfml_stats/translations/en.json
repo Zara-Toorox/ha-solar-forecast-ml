@@ -128,6 +128,16 @@
           "sensor_smartmeter_export_kwh": "Absolute meter reading for grid export in kWh. MUST be 'total_increasing'. Example: sensor.power_meter_total_export with value like 5432.10 kWh.",
           "sensor_solar_yield_total_kwh": "Absolute total yield of PV system in kWh. MUST be 'total_increasing'. Example: sensor.inverter_total_yield with value like 15000.00 kWh."
         }
+      },
+      "panel_group_names": {
+        "title": "Panel Group Names",
+        "description": "Override the auto-generated panel group names from Solar Forecast ML.\n\nFormat: OriginalName=NewName (comma separated)\n\nExample: {example}",
+        "data": {
+          "panel_group_names_input": "Name Mapping"
+        },
+        "data_description": {
+          "panel_group_names_input": "Mapping of panel group names. Format: Gruppe 1=String South, Gruppe 2=String West. Leave empty for default names."
+        }
       }
     },
     "abort": {
@@ -151,7 +161,8 @@
           "battery": "Battery & Consumption",
           "statistics": "Statistics Sensors",
           "panels": "PV Panel Sensors",
-          "billing": "Electricity Bill & Billing"
+          "billing": "Electricity Bill & Billing",
+          "panel_group_names": "Panel Group Names"
         }
       },
       "general": {
@@ -280,6 +291,16 @@
           "sensor_smartmeter_import_kwh": "Meter reading grid import in kWh (total_increasing).",
           "sensor_smartmeter_export_kwh": "Meter reading grid export in kWh (total_increasing).",
           "sensor_solar_yield_total_kwh": "Total solar yield in kWh (total_increasing)."
+        }
+      },
+      "panel_group_names": {
+        "title": "Panel Group Names",
+        "description": "Override the auto-generated panel group names from Solar Forecast ML.\n\nFormat: OriginalName=NewName (comma separated)\n\nExample: {example}",
+        "data": {
+          "panel_group_names_input": "Name Mapping"
+        },
+        "data_description": {
+          "panel_group_names_input": "Mapping of panel group names. Format: Gruppe 1=String South, Gruppe 2=String West. Leave empty for default names."
         }
       }
     }

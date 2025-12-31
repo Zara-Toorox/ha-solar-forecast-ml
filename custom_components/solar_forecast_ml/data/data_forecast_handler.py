@@ -1,20 +1,11 @@
-"""Data Forecast Handler for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from datetime import datetime, timedelta
@@ -549,7 +540,14 @@ class DataForecastHandler(DataManagerIO):
             return False
 
     async def update_all_time_peak(self, power_w: float, timestamp: datetime) -> bool:
-        """Update all-time peak power @zara"""
+        """Update all-time peak power @zara
+
+        Note: all_time_peak is stored ONLY in daily_forecasts.json (Single Source of Truth).
+        The previous synchronization to astronomy_cache.json was removed because:
+        1. It was never read - only written (dead code)
+        2. It caused race conditions on Raspberry Pi (file locking issues)
+        3. astronomy_cache.json uses hourly_max_peaks (kWh) for Clear-Sky, not all_time_peak (kW)
+        """
         try:
             data = await self.load_daily_forecasts()
 
@@ -566,77 +564,11 @@ class DataForecastHandler(DataManagerIO):
 
             _LOGGER.info(f"NEW ALL-TIME PEAK: {power_w:.2f}W on {timestamp.date()}")
 
-            await self._update_astronomy_cache_all_time_peak(power_w, timestamp)
-
             return True
 
         except Exception as e:
             _LOGGER.error(f"Failed to update all-time peak: {e}", exc_info=True)
             return False
-
-    async def _update_astronomy_cache_all_time_peak(
-        self, power_w: float, timestamp: datetime
-    ) -> None:
-        """Update all_time_peak in astronomy cache"""
-        try:
-            astronomy_cache_file = self.data_dir / "stats" / "astronomy_cache.json"
-
-            if not astronomy_cache_file.exists():
-                return
-
-            def _update_sync():
-                try:
-                    import json
-
-                    with open(astronomy_cache_file, "r") as f:
-                        cache = json.load(f)
-
-                    power_kw = power_w / 1000.0
-
-                    if "pv_system" not in cache:
-                        cache["pv_system"] = {}
-
-                    cache["pv_system"]["all_time_peak_power_kw"] = round(power_kw, 4)
-                    cache["pv_system"]["all_time_peak_date"] = timestamp.date().isoformat()
-                    cache["pv_system"]["all_time_peak_at"] = timestamp.isoformat()
-
-                    from datetime import datetime as dt
-
-                    cache["last_updated"] = dt.now().isoformat()
-
-                    if "metadata" not in cache:
-                        cache["metadata"] = {}
-                    if "pv_system" not in cache["metadata"]:
-                        cache["metadata"]["pv_system"] = {}
-
-                    cache["metadata"]["pv_system"]["all_time_peak_power_kw"] = round(power_kw, 4)
-                    cache["metadata"]["pv_system"][
-                        "all_time_peak_date"
-                    ] = timestamp.date().isoformat()
-                    cache["metadata"]["pv_system"]["all_time_peak_at"] = timestamp.isoformat()
-
-                    cache["metadata"]["last_updated"] = dt.now().isoformat()
-
-                    temp_file = astronomy_cache_file.with_suffix(".tmp")
-                    with open(temp_file, "w") as f:
-                        json.dump(cache, f, indent=2, sort_keys=False)
-
-                    temp_file.replace(astronomy_cache_file)
-
-                    _LOGGER.debug(
-                        f"Updated astronomy cache with new all_time_peak: {power_kw:.3f} kW"
-                    )
-                    return True
-
-                except Exception as e:
-                    _LOGGER.debug(f"Could not update astronomy cache all_time_peak: {e}")
-                    return False
-
-            loop = self.hass.loop
-            await loop.run_in_executor(None, _update_sync)
-
-        except Exception as e:
-            _LOGGER.debug(f"Failed to update astronomy cache all_time_peak: {e}")
 
     async def get_all_time_peak(self) -> Optional[float]:
         """Get all-time peak value @zara"""
@@ -1313,6 +1245,15 @@ class DataForecastHandler(DataManagerIO):
                     "weather_source": entry.get("weather_source"),
                 }
 
+                # Support both old "groups" format and new "panel_group_predictions" format
+                if "groups" in entry:
+                    hourly_entry["panel_groups"] = entry["groups"]
+                    # Convert to AI-compatible format for TinyLSTM learning
+                    if "panel_group_predictions" not in entry:
+                        hourly_entry["panel_group_predictions"] = {
+                            g["name"]: round(g.get("power_kwh", 0), 4)
+                            for g in entry["groups"]
+                        }
                 if "panel_groups" in entry:
                     hourly_entry["panel_groups"] = entry["panel_groups"]
                 if "panel_group_predictions" in entry:

@@ -1,20 +1,11 @@
-"""Service Registry for Solar Forecast ML Integration V10.3.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import json
 import logging
@@ -28,19 +19,19 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from ..const import (
     DOMAIN,
     SERVICE_BORG_ASSIMILATION_REVERSE,
-    SERVICE_BOOTSTRAP_FROM_HISTORY,
-    SERVICE_BOOTSTRAP_PHYSICS_FROM_HISTORY,
     SERVICE_BUILD_ASTRONOMY_CACHE,
     SERVICE_INSTALL_EXTRA_FEATURES,
     SERVICE_RUN_WEATHER_CORRECTION,
     SERVICE_REFRESH_OPEN_METEO_CACHE,
     SERVICE_REFRESH_MULTI_WEATHER,
     SERVICE_REFRESH_CACHE_TODAY,
-    SERVICE_RESET_LEARNING_DATA,
-    SERVICE_RETRAIN_MODEL,
+    SERVICE_RESET_AI_MODEL,
+    SERVICE_RETRAIN_AI_MODEL,
     SERVICE_RUN_ALL_DAY_END_TASKS,
+    SERVICE_RUN_GRID_SEARCH,
     SERVICE_SEND_DAILY_BRIEFING,
     SERVICE_TEST_MORNING_ROUTINE,
+    SERVICE_TEST_RETROSPECTIVE_FORECAST,
 )
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
@@ -102,16 +93,21 @@ class ServiceRegistry:
     def _build_service_definitions(self) -> List[ServiceDefinition]:
         """Build all service definitions @zara"""
         return [
-            # ML Services
+            # AI Services
             ServiceDefinition(
-                name=SERVICE_RETRAIN_MODEL,
-                handler=self._handle_retrain_model,
-                description="Force ML model retraining",
+                name=SERVICE_RETRAIN_AI_MODEL,
+                handler=self._handle_retrain_ai_model,
+                description="Retrain TinyLSTM AI model with current data",
             ),
             ServiceDefinition(
-                name=SERVICE_RESET_LEARNING_DATA,
-                handler=self._handle_reset_model,
-                description="Reset ML model and learning data",
+                name=SERVICE_RESET_AI_MODEL,
+                handler=self._handle_reset_ai_model,
+                description="Reset TinyLSTM AI model to untrained state",
+            ),
+            ServiceDefinition(
+                name=SERVICE_RUN_GRID_SEARCH,
+                handler=self._handle_run_grid_search,
+                description="Run Grid-Search hyperparameter optimization (only on capable hardware)",
             ),
 
             # Emergency Services
@@ -126,6 +122,11 @@ class ServiceRegistry:
                 name=SERVICE_TEST_MORNING_ROUTINE,
                 handler=self._handle_test_morning_routine,
                 description="Test: Complete 6 AM morning routine",
+            ),
+            ServiceDefinition(
+                name=SERVICE_TEST_RETROSPECTIVE_FORECAST,
+                handler=self._handle_test_retrospective_forecast,
+                description="Test: Create retrospective forecast for today with current code",
             ),
 
             # Weather Services
@@ -143,18 +144,6 @@ class ServiceRegistry:
                 name=SERVICE_REFRESH_MULTI_WEATHER,
                 handler=self._handle_refresh_multi_weather,
                 description="Refresh Multi-Weather cache (Open-Meteo + wttr.in)",
-            ),
-            ServiceDefinition(
-                name=SERVICE_BOOTSTRAP_FROM_HISTORY,
-                handler=self._handle_bootstrap_from_history,
-                description="Bootstrap pattern learning from Home Assistant history",
-            ),
-
-            # Physics Services
-            ServiceDefinition(
-                name=SERVICE_BOOTSTRAP_PHYSICS_FROM_HISTORY,
-                handler=self._handle_bootstrap_physics_from_history,
-                description="Bootstrap Physics-First models (GeometryLearner, ResidualTrainer) from history",
             ),
 
             # Astronomy Services
@@ -187,33 +176,221 @@ class ServiceRegistry:
             ServiceDefinition(
                 name=SERVICE_BORG_ASSIMILATION_REVERSE,
                 handler=self._handle_borg_assimilation_reverse,
-                description="Reset learned data with automatic backup (panel_groups, ml_weights, hourly_history, all)",
+                description="Reset learned data with automatic backup (ai_weights, hourly_history, all)",
             ),
         ]
 
     # =========================================================================
-    # ML Services
+    # AI Services
     # =========================================================================
 
-    async def _handle_retrain_model(self, call: ServiceCall) -> None:
-        """Handle force_retrain service @zara"""
+    async def _handle_retrain_ai_model(self, call: ServiceCall) -> None:
+        """Handle retrain_ai_model service @zara"""
         try:
-            if self.coordinator.ml_predictor:
-                success = await self.coordinator.ml_predictor.force_training()
-                if not success:
-                    _LOGGER.error("ML model retraining failed")
+            if self.coordinator.ai_predictor:
+                _LOGGER.info("Service: retrain_ai_model - Starting AI training")
+                result = await self.coordinator.ai_predictor.train_model()
+                if result.success:
+                    _LOGGER.info(
+                        f"AI model training complete: R²={result.accuracy:.3f}, "
+                        f"samples={result.samples_used}"
+                    )
+                else:
+                    _LOGGER.error(f"AI model training failed: {result.error_message}")
+            else:
+                _LOGGER.warning("AI predictor not available")
         except Exception as e:
-            _LOGGER.error(f"Error in force_retrain: {e}")
+            _LOGGER.error(f"Error in retrain_ai_model: {e}")
 
-    async def _handle_reset_model(self, call: ServiceCall) -> None:
-        """Handle reset_model service @zara"""
+    async def _handle_reset_ai_model(self, call: ServiceCall) -> None:
+        """Handle reset_ai_model service @zara"""
         try:
-            if self.coordinator.ml_predictor:
-                success = await self.coordinator.ml_predictor.reset_model()
-                if not success:
-                    _LOGGER.error("ML model reset failed")
+            if self.coordinator.ai_predictor:
+                _LOGGER.info("Service: reset_ai_model - Resetting AI model")
+                # Reset by reinitializing (clears weights if file deleted)
+                success = await self.coordinator.ai_predictor.initialize()
+                if success:
+                    _LOGGER.info("AI model reset to untrained state")
+                else:
+                    _LOGGER.error("AI model reset failed")
+            else:
+                _LOGGER.warning("AI predictor not available")
         except Exception as e:
-            _LOGGER.error(f"Error in reset_model: {e}")
+            _LOGGER.error(f"Error in reset_ai_model: {e}")
+
+    async def _handle_run_grid_search(self, call: ServiceCall) -> None:
+        """Handle run_grid_search service - Run hyperparameter optimization @zara
+
+        Grid-Search tests different model settings systematically to find the best
+        combination. This service is only available on capable hardware (NUC, Mini-PC,
+        Server). Raspberry Pi and Virtual Machines are excluded due to performance
+        limitations.
+
+        The service will:
+        1. Check hardware capability
+        2. Load training data
+        3. Test multiple parameter combinations
+        4. Save the best parameters for future training
+        5. Optionally retrain the model with optimal parameters
+
+        Parameters:
+            retrain_after: bool - Retrain model with best params after search (default: True)
+        """
+        from ..ai import GridSearchOptimizer, TinyLSTM, detect_hardware
+
+        _LOGGER.info("=" * 70)
+        _LOGGER.info("SERVICE: run_grid_search")
+        _LOGGER.info("Hyperparameter optimization for TinyLSTM")
+        _LOGGER.info("=" * 70)
+
+        try:
+            # Step 1: Check hardware
+            hw_info = detect_hardware()
+            _LOGGER.info(f"Hardware: {hw_info.architecture}, {hw_info.cpu_count} CPUs")
+            _LOGGER.info(f"Raspberry Pi: {hw_info.is_raspberry_pi}")
+            _LOGGER.info(f"Virtual Machine: {hw_info.is_virtual_machine}")
+
+            if not hw_info.grid_search_allowed:
+                _LOGGER.warning(f"Grid-Search not available: {hw_info.reason}")
+
+                # Send notification about hardware limitation
+                try:
+                    await self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": "⚠️ Grid-Search nicht verfügbar",
+                            "message": (
+                                f"**Grund:** {hw_info.reason}\n\n"
+                                f"Grid-Search ist nur auf leistungsstarker Hardware verfügbar:\n"
+                                f"- ✅ NUC / Mini-PC\n"
+                                f"- ✅ Desktop / Server\n"
+                                f"- ❌ Raspberry Pi\n"
+                                f"- ❌ Virtuelle Maschinen\n\n"
+                                f"Die normale AI-Vorhersage funktioniert weiterhin."
+                            ),
+                            "notification_id": "solar_forecast_ml_grid_search",
+                        },
+                    )
+                except Exception:
+                    pass
+                return
+
+            # Step 2: Check AI predictor
+            if not self.coordinator.ai_predictor:
+                _LOGGER.error("AI predictor not available")
+                return
+
+            predictor = self.coordinator.ai_predictor
+
+            # Step 3: Load training data
+            _LOGGER.info("Loading training data...")
+            X_sequences, y_targets, _ = await predictor._prepare_training_data()
+
+            if len(X_sequences) < 50:
+                _LOGGER.error(f"Not enough training data: {len(X_sequences)} samples (need 50+)")
+                return
+
+            _LOGGER.info(f"Loaded {len(X_sequences)} training samples")
+
+            # Step 4: Initialize Grid-Search optimizer
+            data_dir = predictor._ai_dir
+            optimizer = GridSearchOptimizer(data_dir=data_dir)
+
+            # Progress callback for logging
+            async def progress_callback(current, total, params, accuracy):
+                _LOGGER.info(
+                    f"Grid-Search progress: {current}/{total} - "
+                    f"hidden={params.get('hidden_size')}, "
+                    f"batch={params.get('batch_size')}, "
+                    f"R²={accuracy:.4f}"
+                )
+
+            # Step 5: Run Grid-Search
+            from ..ai.ai_predictor import calculate_feature_count
+
+            feature_count = calculate_feature_count(predictor.num_groups)
+            num_outputs = predictor.num_groups if predictor.num_groups > 0 else 1
+
+            result = await optimizer.run_grid_search(
+                lstm_class=TinyLSTM,
+                X_sequences=X_sequences,
+                y_targets=y_targets,
+                input_size=feature_count,
+                sequence_length=24,
+                num_outputs=num_outputs,
+                progress_callback=progress_callback,
+            )
+
+            if not result.success:
+                _LOGGER.error(f"Grid-Search failed: {result.error_message}")
+                return
+
+            _LOGGER.info("=" * 70)
+            _LOGGER.info("GRID-SEARCH COMPLETE")
+            _LOGGER.info(f"  Best R²: {result.best_accuracy:.4f}")
+            _LOGGER.info(f"  Best params: {result.best_params}")
+            _LOGGER.info(f"  Duration: {result.duration_seconds:.1f}s")
+            _LOGGER.info("=" * 70)
+
+            # Step 6: Retrain with best params if requested
+            retrain_after = call.data.get("retrain_after", True)
+
+            if retrain_after and result.best_params:
+                _LOGGER.info("Retraining model with optimal parameters...")
+
+                # Reinitialize LSTM with best params
+                predictor.lstm = TinyLSTM(
+                    input_size=feature_count,
+                    hidden_size=result.best_params.get("hidden_size", 32),
+                    sequence_length=24,
+                    num_outputs=num_outputs,
+                    learning_rate=result.best_params.get("learning_rate", 0.005),
+                )
+
+                # Full training with best params
+                train_result = await predictor.train_model()
+
+                if train_result.success:
+                    _LOGGER.info(
+                        f"Retrained model: R²={train_result.accuracy:.4f} "
+                        f"(samples={train_result.samples_used})"
+                    )
+                else:
+                    _LOGGER.error(f"Retraining failed: {train_result.error_message}")
+
+            # Step 7: Send notification
+            try:
+                results_table = "\n".join(
+                    f"- hidden={r['params'].get('hidden_size')}, "
+                    f"batch={r['params'].get('batch_size')}: "
+                    f"R²={r.get('accuracy', 0):.4f}"
+                    for r in result.all_results
+                    if 'accuracy' in r
+                )
+
+                await self.hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": "✅ Grid-Search abgeschlossen",
+                        "message": (
+                            f"**Beste Parameter gefunden:**\n"
+                            f"- Hidden Size: {result.best_params.get('hidden_size')}\n"
+                            f"- Batch Size: {result.best_params.get('batch_size')}\n"
+                            f"- Learning Rate: {result.best_params.get('learning_rate')}\n\n"
+                            f"**Beste Genauigkeit:** R²={result.best_accuracy:.4f}\n"
+                            f"**Dauer:** {result.duration_seconds:.1f}s\n\n"
+                            f"**Alle Ergebnisse:**\n{results_table}"
+                        ),
+                        "notification_id": "solar_forecast_ml_grid_search",
+                    },
+                )
+            except Exception:
+                pass
+
+        except Exception as e:
+            _LOGGER.error(f"Error in run_grid_search: {e}", exc_info=True)
 
     # =========================================================================
     # Emergency Services
@@ -239,6 +416,322 @@ class ServiceRegistry:
         except Exception as e:
             _LOGGER.error(f"Error in test_morning_routine: {e}")
 
+    async def _handle_test_retrospective_forecast(self, call: ServiceCall) -> None:
+        """Handle test_retrospective_forecast service - Create retrospective forecast for today @zara
+
+        This service simulates running the morning forecast at "sunrise - 1 hour"
+        but uses the CURRENT code (with any recent changes like new correction factors).
+
+        Purpose:
+        - Test code changes that were made AFTER the actual morning forecast
+        - See what the morning forecast WOULD have been with the new code
+        - Results are written to stats/retrospective_forecast.json (not affecting actual predictions)
+
+        Example use case:
+        - User changes a correction factor at 14:00
+        - Runs this service to see how the 07:00 forecast would look with new code
+        - Compares retrospective_forecast.json with actual hourly_predictions.json
+        """
+        from datetime import datetime, time
+        from pathlib import Path
+
+        _LOGGER.info("=" * 70)
+        _LOGGER.info("SERVICE: test_retrospective_forecast")
+        _LOGGER.info("Creating retrospective forecast for today with CURRENT code")
+        _LOGGER.info("=" * 70)
+
+        try:
+            # Step 1: Get sunrise time for today from astronomy cache
+            sunrise = await self._get_sunrise_for_today()
+            if not sunrise:
+                _LOGGER.error("Could not determine sunrise time - using fallback 08:00")
+                now = dt_util.now()
+                sunrise = datetime.combine(now.date(), time(8, 0))
+                if now.tzinfo:
+                    sunrise = sunrise.replace(tzinfo=now.tzinfo)
+
+            # Simulation time: 1 hour before sunrise (typical morning forecast time)
+            simulation_time = sunrise - timedelta(hours=1)
+            today_str = dt_util.now().date().isoformat()
+
+            _LOGGER.info(f"Sunrise today: {sunrise.strftime('%H:%M')}")
+            _LOGGER.info(f"Simulation time (sunrise - 1h): {simulation_time.strftime('%H:%M')}")
+            _LOGGER.info(f"Target date: {today_str}")
+
+            # Step 2: Get weather forecast (current corrected forecast)
+            weather_service = self.coordinator.weather_service
+            if not weather_service:
+                _LOGGER.error("Weather service not available")
+                return
+
+            hourly_weather_forecast = await weather_service.get_corrected_hourly_forecast()
+            if not hourly_weather_forecast:
+                _LOGGER.error("No corrected weather forecast available")
+                return
+
+            current_weather = await weather_service.get_current_weather()
+
+            _LOGGER.info(f"Loaded {len(hourly_weather_forecast)} hours of weather data")
+
+            # Step 3: Get astronomy data for today
+            astronomy_data = await self._get_astronomy_data_for_date(today_str)
+            if not astronomy_data:
+                _LOGGER.error("No astronomy data available for today")
+                return
+
+            _LOGGER.info(f"Loaded astronomy data (daylight: {astronomy_data.get('daylight_hours', 'N/A')}h)")
+
+            # Step 4: Collect sensor configuration
+            from ..const import (
+                CONF_HUMIDITY_SENSOR,
+                CONF_LUX_SENSOR,
+                CONF_PRESSURE_SENSOR,
+                CONF_RAIN_SENSOR,
+                CONF_SOLAR_RADIATION_SENSOR,
+                CONF_TEMP_SENSOR,
+                CONF_WIND_SENSOR,
+            )
+
+            sensor_config = {
+                "temperature": self.coordinator.entry.data.get(CONF_TEMP_SENSOR) is not None,
+                "humidity": self.coordinator.entry.data.get(CONF_HUMIDITY_SENSOR) is not None,
+                "lux": self.coordinator.entry.data.get(CONF_LUX_SENSOR) is not None,
+                "rain": self.coordinator.entry.data.get(CONF_RAIN_SENSOR) is not None,
+                "wind_speed": self.coordinator.entry.data.get(CONF_WIND_SENSOR) is not None,
+                "pressure": self.coordinator.entry.data.get(CONF_PRESSURE_SENSOR) is not None,
+                "solar_radiation": self.coordinator.entry.data.get(CONF_SOLAR_RADIATION_SENSOR) is not None,
+            }
+
+            # Step 5: Get current external sensor data (for reference)
+            external_sensors = self.coordinator.sensor_collector.collect_all_sensor_data_dict()
+
+            # Step 6: Run forecast orchestrator with CURRENT code
+            _LOGGER.info("Running forecast orchestrator with CURRENT code...")
+
+            forecast = await self.coordinator.forecast_orchestrator.orchestrate_forecast(
+                current_weather=current_weather,
+                hourly_forecast=hourly_weather_forecast,
+                external_sensors=external_sensors,
+                ml_prediction_today=None,
+                ml_prediction_tomorrow=None,
+                correction_factor=self.coordinator.learned_correction_factor,
+            )
+
+            if not forecast or not forecast.get("hourly"):
+                _LOGGER.error("Forecast generation failed - no hourly data")
+                return
+
+            # Step 7: Extract today's hourly predictions
+            all_hourly = forecast.get("hourly", [])
+            today_hourly = [h for h in all_hourly if h.get("date") == today_str]
+
+            _LOGGER.info(f"Generated {len(today_hourly)} hourly predictions for today")
+
+            # Step 8: Build retrospective forecast result
+            result = {
+                "version": "1.0",
+                "generated_at": dt_util.now().isoformat(),
+                "simulation_context": {
+                    "simulated_forecast_time": simulation_time.isoformat(),
+                    "sunrise_today": sunrise.isoformat(),
+                    "target_date": today_str,
+                    "code_version": "CURRENT",
+                    "purpose": "Retrospective forecast to test code changes made after morning forecast",
+                },
+                "forecast_summary": {
+                    "today_kwh": forecast.get("today"),
+                    "today_kwh_raw": forecast.get("today_raw"),
+                    "safeguard_applied": forecast.get("safeguard_applied", False),
+                    "tomorrow_kwh": forecast.get("tomorrow"),
+                    "day_after_tomorrow_kwh": forecast.get("day_after_tomorrow"),
+                    "method": forecast.get("method"),
+                    "confidence": forecast.get("confidence"),
+                    "model_accuracy": forecast.get("model_accuracy"),
+                    "best_hour": forecast.get("best_hour"),
+                    "best_hour_kwh": forecast.get("best_hour_kwh"),
+                },
+                "hourly_predictions": [],
+                "weather_data_used": {
+                    "source": "weather_forecast_corrected.json",
+                    "hours_available": len(hourly_weather_forecast),
+                },
+                "astronomy_data_used": {
+                    "sunrise": astronomy_data.get("sunrise"),
+                    "sunset": astronomy_data.get("sunset"),
+                    "solar_noon": astronomy_data.get("solar_noon"),
+                    "daylight_hours": astronomy_data.get("daylight_hours"),
+                },
+                "correction_factor_used": self.coordinator.learned_correction_factor,
+            }
+
+            # Build detailed hourly predictions
+            for hour_data in today_hourly:
+                hour = hour_data.get("hour")
+                hour_datetime = hour_data.get("datetime")
+
+                # Get weather for this hour (filter by today's date to get correct day's data)
+                weather = self._find_weather_for_hour(hourly_weather_forecast, hour, today_str)
+
+                # Get astronomy for this hour
+                hourly_astro = astronomy_data.get("hourly", {}).get(str(hour), {})
+
+                prediction_entry = {
+                    "hour": hour,
+                    "datetime": hour_datetime,
+                    "prediction_kwh": hour_data.get("production_kwh", 0.0),
+                    "panel_group_predictions": hour_data.get("panel_group_predictions"),
+                    "weather": {
+                        "temperature_c": weather.get("temperature") if weather else None,
+                        "cloud_cover_percent": weather.get("cloud_cover") if weather else None,
+                        "humidity_percent": weather.get("humidity") if weather else None,
+                        "wind_speed_ms": weather.get("wind_speed") if weather else None,
+                        "precipitation_mm": weather.get("precipitation", 0) if weather else 0,
+                        "direct_radiation": weather.get("direct_radiation") if weather else None,
+                        "diffuse_radiation": weather.get("diffuse_radiation") if weather else None,
+                    },
+                    "astronomy": {
+                        "sun_elevation_deg": hourly_astro.get("elevation_deg"),
+                        "sun_azimuth_deg": hourly_astro.get("azimuth_deg"),
+                        "theoretical_max_kwh": hourly_astro.get("theoretical_max_pv_kwh"),
+                        "clear_sky_radiation_wm2": hourly_astro.get("clear_sky_solar_radiation_wm2"),
+                    },
+                }
+
+                result["hourly_predictions"].append(prediction_entry)
+
+            # Step 9: Write result to retrospective_forecast.json
+            output_file = self.coordinator.data_manager.data_dir / "stats" / "retrospective_forecast.json"
+
+            def _write_result():
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(output_file, "w", encoding="utf-8") as f:
+                    json.dump(result, f, indent=2, ensure_ascii=False, default=str)
+
+            await self.hass.async_add_executor_job(_write_result)
+
+            _LOGGER.info("=" * 70)
+            _LOGGER.info("RETROSPECTIVE FORECAST COMPLETE")
+            _LOGGER.info(f"  Total today: {forecast.get('today', 0):.2f} kWh")
+            _LOGGER.info(f"  Method: {forecast.get('method')}")
+            _LOGGER.info(f"  Best hour: {forecast.get('best_hour')} ({forecast.get('best_hour_kwh', 0):.3f} kWh)")
+            _LOGGER.info(f"  Hours predicted: {len(today_hourly)}")
+            _LOGGER.info(f"  Output file: {output_file}")
+            _LOGGER.info("=" * 70)
+
+            # Send notification
+            try:
+                await self.hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": "Retrospective Forecast erstellt",
+                        "message": (
+                            f"**Simulierter Zeitpunkt:** {simulation_time.strftime('%H:%M')} (1h vor Sonnenaufgang)\n\n"
+                            f"**Tagesprognose:** {forecast.get('today', 0):.2f} kWh\n"
+                            f"**Methode:** {forecast.get('method')}\n"
+                            f"**Beste Stunde:** {forecast.get('best_hour')} ({forecast.get('best_hour_kwh', 0):.3f} kWh)\n"
+                            f"**Stunden:** {len(today_hourly)}\n\n"
+                            f"Ergebnis gespeichert in:\n`{output_file}`\n\n"
+                            f"Vergleichen Sie mit `hourly_predictions.json` um Unterschiede zu sehen."
+                        ),
+                        "notification_id": "solar_forecast_ml_retrospective",
+                    },
+                )
+            except Exception:
+                pass
+
+        except Exception as e:
+            _LOGGER.error(f"Error in test_retrospective_forecast: {e}", exc_info=True)
+
+    async def _get_sunrise_for_today(self) -> "datetime | None":
+        """Get sunrise time for today from astronomy cache @zara"""
+        try:
+            today = dt_util.now().date()
+            astronomy_cache_file = self.coordinator.data_manager.data_dir / "stats" / "astronomy_cache.json"
+
+            if not astronomy_cache_file.exists():
+                _LOGGER.warning("Astronomy cache not found")
+                return None
+
+            def _read_sync():
+                with open(astronomy_cache_file, "r") as f:
+                    return json.load(f)
+
+            cache = await self.hass.async_add_executor_job(_read_sync)
+            day_data = cache.get("days", {}).get(today.isoformat())
+
+            if not day_data:
+                _LOGGER.warning(f"No astronomy data for {today}")
+                return None
+
+            sunrise_str = day_data.get("sunrise_local")
+            if not sunrise_str:
+                return None
+
+            from datetime import datetime
+            sunrise = datetime.fromisoformat(sunrise_str)
+
+            # Ensure timezone-aware
+            if sunrise.tzinfo is None:
+                local_tz = dt_util.now().tzinfo
+                if local_tz:
+                    sunrise = sunrise.replace(tzinfo=local_tz)
+
+            return sunrise
+
+        except Exception as e:
+            _LOGGER.error(f"Error getting sunrise: {e}")
+            return None
+
+    async def _get_astronomy_data_for_date(self, date_str: str) -> "dict | None":
+        """Get astronomy data for a specific date from cache @zara"""
+        try:
+            astronomy_cache_file = self.coordinator.data_manager.data_dir / "stats" / "astronomy_cache.json"
+
+            if not astronomy_cache_file.exists():
+                return None
+
+            def _read_sync():
+                with open(astronomy_cache_file, "r") as f:
+                    return json.load(f)
+
+            cache = await self.hass.async_add_executor_job(_read_sync)
+            day_data = cache.get("days", {}).get(date_str)
+
+            if not day_data:
+                return None
+
+            return {
+                "sunrise": day_data.get("sunrise_local"),
+                "sunset": day_data.get("sunset_local"),
+                "solar_noon": day_data.get("solar_noon_local"),
+                "daylight_hours": day_data.get("daylight_hours"),
+                "hourly": day_data.get("hourly", {}),
+            }
+
+        except Exception as e:
+            _LOGGER.error(f"Error getting astronomy data: {e}")
+            return None
+
+    def _find_weather_for_hour(self, weather_forecast: "list", hour: int, date: str = None) -> "dict | None":
+        """Find weather data for a specific hour and date @zara
+
+        Args:
+            weather_forecast: List of weather data entries
+            hour: The hour to find (0-23)
+            date: Optional date string (YYYY-MM-DD). If provided, filters by both date and hour.
+                  If not provided, returns first matching hour (legacy behavior).
+        """
+        for w in weather_forecast:
+            if w.get("local_hour") == hour:
+                # If date filter provided, also check the date
+                if date is not None:
+                    if w.get("date") == date:
+                        return w
+                else:
+                    return w
+        return None
+
     # =========================================================================
     # Weather Services
     # =========================================================================
@@ -259,11 +752,9 @@ class ServiceRegistry:
             _LOGGER.error(f"Error in run_weather_correction: {e}")
 
     async def _handle_refresh_open_meteo_cache(self, call: ServiceCall) -> None:
-        """Handle refresh_open_meteo_cache service - Refresh weather cache via MultiWeatherBlender @zara
+        """Handle refresh_open_meteo_cache service - Refresh weather with 5-source blending @zara
 
-        NOTE: This service now goes through the MultiWeatherBlender to ensure
-        blend_info is preserved for weight learning. The internal corrector cache
-        is also updated.
+        V12.3: Uses WeatherExpertBlender with 5 sources and creates corrected forecast.
         """
         try:
             if not hasattr(self.coordinator, 'weather_pipeline_manager'):
@@ -272,60 +763,22 @@ class ServiceRegistry:
 
             pipeline = self.coordinator.weather_pipeline_manager
 
-            # Use WeatherService.force_update() which routes through Blender
-            if pipeline.weather_service:
-                success = await pipeline.weather_service.force_update()
-                if success:
-                    _LOGGER.info("Weather cache refreshed via Blender")
-                else:
-                    _LOGGER.warning("Weather cache refresh failed")
-                    return
+            # V12.3: Use unified weather refresh
+            success = await pipeline.update_weather_cache()
+
+            if success:
+                _LOGGER.info("Weather cache refreshed via 5-source ExpertBlender")
             else:
-                _LOGGER.warning("Weather service not available")
-                return
-
-            # Also update the corrector's internal cache
-            if pipeline.weather_corrector and pipeline.weather_corrector._open_meteo_client:
-                corrector = pipeline.weather_corrector
-                # Read from memory cache (already updated by force_update)
-                forecast = corrector._open_meteo_client._cache.get("hourly_forecast", [])
-
-                if forecast:
-                    corrector._open_meteo_cache.clear()
-                    for entry in forecast:
-                        date = entry.get("date")
-                        hour = entry.get("hour")
-
-                        if date and hour is not None:
-                            if date not in corrector._open_meteo_cache:
-                                corrector._open_meteo_cache[date] = {}
-                            corrector._open_meteo_cache[date][hour] = {
-                                "direct_radiation": entry.get("direct_radiation", 0),
-                                "diffuse_radiation": entry.get("diffuse_radiation", 0),
-                                "ghi": entry.get("ghi", 0),
-                                "cloud_cover": entry.get("cloud_cover", 0),
-                                "temperature": entry.get("temperature"),
-                                "humidity": entry.get("humidity"),
-                                "precipitation": entry.get("precipitation", 0),
-                                "wind_speed": entry.get("wind_speed"),
-                            }
-                    _LOGGER.info(f"Corrector cache updated: {len(corrector._open_meteo_cache)} days")
+                _LOGGER.warning("Weather cache refresh failed")
 
         except Exception as e:
             _LOGGER.error(f"Error in refresh_open_meteo_cache: {e}", exc_info=True)
 
     async def _handle_refresh_multi_weather(self, call: ServiceCall) -> None:
-        """Handle refresh_multi_weather service - Refresh Multi-Weather cache (Open-Meteo + wttr.in) @zara
+        """Handle refresh_multi_weather service - Refresh 5-source weather blending @zara
 
-        Parameters (optional):
-            force_wttr_refresh: bool - Force wttr.in API call even if cache is valid (default: False)
-            migrate_cache: bool - Force migration of existing cache entries (default: False)
-
-        This service:
-        1. Ensures weather_source_weights.json exists
-        2. Optionally migrates existing cache entries with blend_info
-        3. Fetches fresh data from Open-Meteo (and wttr.in if cloud_cover > 50%)
-        4. Saves to cache with blend_info for weight learning
+        V12.3: Uses WeatherExpertBlender (Open-Meteo, wttr.in, ECMWF, Bright Sky, Pirate Weather).
+        This is now an alias for refresh_open_meteo_cache.
         """
         try:
             if not hasattr(self.coordinator, 'weather_pipeline_manager'):
@@ -334,1099 +787,24 @@ class ServiceRegistry:
 
             pipeline = self.coordinator.weather_pipeline_manager
 
-            if not hasattr(pipeline, 'multi_weather_blender') or not pipeline.multi_weather_blender:
-                _LOGGER.warning("Multi-Weather blender not available")
-                return
+            _LOGGER.info("Service: refresh_multi_weather (5-source ExpertBlender)")
 
-            blender = pipeline.multi_weather_blender
-            force_wttr = call.data.get("force_wttr_refresh", False)
-            migrate_cache = call.data.get("migrate_cache", False)
-
-            _LOGGER.info(f"Service: refresh_multi_weather (force_wttr={force_wttr}, migrate={migrate_cache})")
-
-            # Optionally run migration first (adds blend_info to existing entries)
-            if migrate_cache:
-                _LOGGER.info("Running cache migration to add blend_info...")
-                await blender._migrate_cache_blend_info()
-
-            # Invalidate wttr.in cache if forced
-            if force_wttr and blender.wttr_client:
-                blender.wttr_client.invalidate_cache()
-                _LOGGER.info("wttr.in cache invalidated")
-
-            # Fetch blended forecast and save to cache
-            # This also ensures weights file exists
-            success = await blender.update_and_save_cache()
+            # V12.3: Use unified weather refresh
+            success = await pipeline.update_weather_cache()
 
             if success:
-                stats = blender.get_blend_stats()
+                stats = {}
+                if pipeline.weather_expert_blender:
+                    stats = pipeline.weather_expert_blender.get_blend_stats()
                 _LOGGER.info(
-                    f"Multi-Weather refresh complete: "
-                    f"weights=OM:{stats['weights'].get('open_meteo', 0.5):.0%}/"
-                    f"WWO:{stats['weights'].get('wwo', 0.5):.0%}, "
-                    f"blended_fetches={stats.get('blended_fetches', 0)}"
+                    f"5-source weather refresh complete: "
+                    f"{stats.get('active_sources', 0)} sources active"
                 )
             else:
-                _LOGGER.warning("Multi-Weather refresh failed")
+                _LOGGER.warning("Weather refresh failed")
 
         except Exception as e:
             _LOGGER.error(f"Error in refresh_multi_weather: {e}", exc_info=True)
-
-    async def _handle_bootstrap_from_history(self, call: ServiceCall) -> None:
-        """Handle bootstrap_from_history service - Bootstrap pattern learning from HA history @zara"""
-        from datetime import datetime, timezone
-        from homeassistant.components.recorder import get_instance
-        from homeassistant.components.recorder.history import state_changes_during_period
-        from collections import defaultdict
-
-        days = call.data.get('days', 30)
-        cumulative_yield_sensor = call.data.get('cumulative_yield_sensor')
-
-        tz = dt_util.get_default_time_zone()
-
-        try:
-            required_sensors = {
-                'power': 'power_entity',
-                'yield': 'solar_yield_today',
-            }
-
-            optional_sensors = {
-                'solar_radiation_wm2': 'solar_radiation_sensor',
-                'temperature': 'temp_sensor',
-                'humidity': 'humidity_sensor',
-                'wind_speed': 'wind_sensor',
-                'rain': 'rain_sensor',
-                'lux': 'lux_sensor',
-                'pressure': 'pressure_sensor'
-            }
-
-            config_data = self.coordinator.config_entry.data
-            config_options = self.coordinator.config_entry.options
-
-            missing_required = []
-            configured_sensors = {}
-
-            for sensor_name, config_key in required_sensors.items():
-                entity_id = config_data.get(config_key) or config_options.get(config_key)
-                if not entity_id:
-                    missing_required.append(sensor_name)
-                else:
-                    configured_sensors[sensor_name] = entity_id
-
-            for sensor_name, config_key in optional_sensors.items():
-                entity_id = config_data.get(config_key) or config_options.get(config_key)
-                if entity_id:
-                    configured_sensors[sensor_name] = entity_id
-
-            if cumulative_yield_sensor:
-                configured_sensors['cumulative_yield'] = cumulative_yield_sensor
-
-            if missing_required:
-                _LOGGER.error(f"Bootstrap failed - Missing: {', '.join(missing_required)}")
-                return
-
-            now = datetime.now(timezone.utc)
-            start_time = now - timedelta(days=days)
-
-            history_data = {}
-            for sensor_name, entity_id in configured_sensors.items():
-                sensor_history = await get_instance(self.hass).async_add_executor_job(
-                    state_changes_during_period,
-                    self.hass,
-                    start_time,
-                    now,
-                    entity_id,
-                    True,
-                    False,
-                    0.0
-                )
-
-                if sensor_history and entity_id in sensor_history:
-                    history_data[entity_id] = sensor_history[entity_id]
-
-            if not history_data:
-                _LOGGER.warning("No history data found")
-                return
-
-            entity_to_sensor = {v: k for k, v in configured_sensors.items()}
-            hourly_data = defaultdict(lambda: defaultdict(list))
-
-            for entity_id, states in history_data.items():
-                sensor_type = entity_to_sensor.get(entity_id)
-                if not sensor_type:
-                    continue
-
-                for state in states:
-                    if state.state in ("unavailable", "unknown", "none", None):
-                        continue
-
-                    try:
-                        value = float(state.state)
-                        state_time = state.last_changed.astimezone(tz)
-                        date_key = state_time.strftime("%Y-%m-%d")
-                        hour_key = state_time.hour
-
-                        hourly_data[date_key][hour_key].append({
-                            "sensor": sensor_type,
-                            "value": value,
-                            "time": state_time
-                        })
-                    except (ValueError, TypeError):
-                        continue
-
-            aggregated = {}
-            for date_str, hours in hourly_data.items():
-                for hour, readings in hours.items():
-                    key = f"{date_str}_{hour:02d}"
-                    sensor_values = defaultdict(list)
-                    for reading in readings:
-                        sensor_values[reading["sensor"]].append(reading["value"])
-
-                    avg_data = {}
-                    for sensor, values in sensor_values.items():
-                        if sensor == "yield":
-                            avg_data[sensor] = max(values)
-                        else:
-                            avg_data[sensor] = sum(values) / len(values)
-
-                    # Calculate yield from power if power is available
-                    # Average power (W) over 1 hour = kWh
-                    if "power" in avg_data and avg_data["power"] > 0:
-                        power_based_yield = avg_data["power"] / 1000.0  # W to kWh for 1 hour
-                        avg_data["power_based_yield"] = power_based_yield
-
-                    if avg_data:
-                        aggregated[key] = {"date": date_str, "hour": hour, **avg_data}
-
-            if cumulative_yield_sensor and 'cumulative_yield' in configured_sensors:
-                cumulative_entity = configured_sensors['cumulative_yield']
-                if cumulative_entity in history_data:
-                    cumulative_states = history_data[cumulative_entity]
-                    sorted_cumulative = sorted(cumulative_states, key=lambda s: s.last_changed)
-                    _LOGGER.debug(f"Processing {len(cumulative_states)} cumulative yield states")
-
-                    hourly_cumulative = {}
-
-                    for state in sorted_cumulative:
-                        if state.state in ("unavailable", "unknown", "none", None):
-                            continue
-                        try:
-                            value = float(state.state)
-                            if value < 0:
-                                continue
-                            state_time = state.last_changed.astimezone(tz)
-                            date_str = state_time.strftime("%Y-%m-%d")
-                            hour = state_time.hour
-                            key = (date_str, hour)
-
-                            if key not in hourly_cumulative or value > hourly_cumulative[key]:
-                                hourly_cumulative[key] = value
-                        except (ValueError, TypeError):
-                            continue
-
-                    sorted_keys = sorted(hourly_cumulative.keys())
-
-                    prev_value = None
-                    prev_key = None
-                    cumulative_hours_added = 0
-                    large_deltas = []
-
-                    for key in sorted_keys:
-                        date_str, hour = key
-                        current_value = hourly_cumulative[key]
-
-                        if prev_value is not None:
-                            delta = current_value - prev_value
-                            if delta > 2.5:
-                                large_deltas.append((prev_key, key, delta))
-                            if 0.001 < delta < 5.0:
-                                agg_key = f"{date_str}_{hour:02d}"
-                                if agg_key not in aggregated:
-                                    aggregated[agg_key] = {"date": date_str, "hour": hour}
-                                existing = aggregated[agg_key].get("yield", 0)
-                                if delta > existing:
-                                    aggregated[agg_key]["yield"] = delta
-                                    cumulative_hours_added += 1
-
-                        prev_value = current_value
-                        prev_key = key
-
-                    _LOGGER.debug(f"Added {cumulative_hours_added} hourly cumulative deltas")
-
-            dates_in_data = set(hour_data["date"] for hour_data in aggregated.values())
-            astronomy_cache = {}
-
-            if dates_in_data:
-                from datetime import datetime as dt
-                min_date_str = min(dates_in_data)
-                max_date_str = max(dates_in_data)
-                min_date = dt.strptime(min_date_str, "%Y-%m-%d").date()
-                max_date = dt.strptime(max_date_str, "%Y-%m-%d").date()
-                days_span = (max_date - min_date).days
-
-                from ..astronomy.astronomy_cache import AstronomyCache
-                astro_cache = AstronomyCache(
-                    data_dir=self.coordinator.data_manager.data_dir,
-                    data_manager=self.coordinator.data_manager
-                )
-
-                lat = self.hass.config.latitude
-                lon = self.hass.config.longitude
-                tz_str = str(self.hass.config.time_zone)
-                elev = self.hass.config.elevation
-
-                astro_cache.initialize_location(lat, lon, tz_str, elev)
-
-                # Set panel groups for per-group theoretical max @zara
-                panel_groups = getattr(self.coordinator, 'panel_groups', [])
-                if panel_groups:
-                    astro_cache.set_panel_groups(panel_groups)
-
-                solar_capacity = self.coordinator.solar_capacity or 5.0
-
-                await astro_cache.rebuild_cache(
-                    system_capacity_kwp=solar_capacity,
-                    start_date=max_date,
-                    days_back=days_span + 1,
-                    days_ahead=7
-                )
-
-                astronomy_path = self.coordinator.data_manager.data_dir / "stats" / "astronomy_cache.json"
-                if astronomy_path.exists():
-                    try:
-                        def _load_astronomy():
-                            with open(astronomy_path, 'r', encoding='utf-8') as f:
-                                return json.load(f)
-                        astronomy_data = await self.hass.async_add_executor_job(_load_astronomy)
-                        astronomy_cache = astronomy_data.get("days", {})
-                    except Exception as e:
-                        _LOGGER.warning(f"Could not load astronomy cache: {e}")
-
-            # Step 5: Save hourly_weather_actual.json
-            _LOGGER.info("STEP 5/8: Saving to hourly_weather_actual.json...")
-
-            hourly_actual_path = self.coordinator.data_manager.data_dir / "stats" / "hourly_weather_actual.json"
-            existing_data = {
-                "version": "1.0",
-                "metadata": {
-                    "created_at": dt_util.now().isoformat(),
-                    "last_updated": dt_util.now().isoformat(),
-                },
-                "hourly_data": {}
-            }
-
-            if hourly_actual_path.exists():
-                try:
-                    def _load_hourly_actual():
-                        with open(hourly_actual_path, 'r', encoding='utf-8') as f:
-                            return json.load(f)
-                    existing_data = await self.hass.async_add_executor_job(_load_hourly_actual)
-                    if "metadata" not in existing_data:
-                        existing_data["metadata"] = {"created_at": dt_util.now().isoformat()}
-                    if "hourly_data" not in existing_data:
-                        existing_data["hourly_data"] = {}
-                except Exception:
-                    pass
-
-            for key, data in sorted(aggregated.items()):
-                date_str = data["date"]
-                hour_num = data["hour"]
-
-                if date_str not in existing_data["hourly_data"]:
-                    existing_data["hourly_data"][date_str] = {}
-
-                hour_entry = {
-                    "temperature_c": data.get("temperature"),
-                    "solar_radiation_wm2": data.get("solar_radiation_wm2"),
-                    "humidity_percent": data.get("humidity"),
-                    "wind_speed_ms": data.get("wind_speed"),
-                    "precipitation_mm": data.get("rain"),
-                    "pressure_hpa": data.get("pressure"),
-                    "lux": data.get("lux"),
-                    "timestamp": f"{date_str}T{hour_num:02d}:00:00",
-                    "source": "bootstrap_from_history"
-                }
-
-                existing_data["hourly_data"][date_str][str(hour_num)] = hour_entry
-
-            existing_data["metadata"]["last_updated"] = dt_util.now().isoformat()
-            merged_data = existing_data
-
-            def _save_hourly_actual():
-                with open(hourly_actual_path, 'w', encoding='utf-8') as f:
-                    json.dump(merged_data, f, indent=2, ensure_ascii=False)
-
-            await self.hass.async_add_executor_job(_save_hourly_actual)
-
-            total_hours = sum(len(hours) for hours in existing_data["hourly_data"].values())
-            _LOGGER.info(f"Saved {total_hours} hourly records")
-
-            # Step 6: Learn geometry patterns
-            _LOGGER.info("STEP 6/8: Learning geometry patterns...")
-
-            learned_patterns_path = self.coordinator.data_manager.data_dir / "ml" / "learned_patterns.json"
-            patterns = {
-                "version": "1.0.0",
-                "last_updated": dt_util.now().isoformat(),
-                "geometry_factors": {
-                    "sun_elevation_ranges": {
-                        "0_5": {"factor": 2.5, "samples": 0, "confidence": 0.3},
-                        "5_10": {"factor": 2.2, "samples": 0, "confidence": 0.3},
-                        "10_15": {"factor": 1.9, "samples": 0, "confidence": 0.3},
-                        "15_20": {"factor": 1.6, "samples": 0, "confidence": 0.3},
-                        "20_25": {"factor": 1.4, "samples": 0, "confidence": 0.3},
-                        "25_30": {"factor": 1.2, "samples": 0, "confidence": 0.3},
-                        "30_plus": {"factor": 1.1, "samples": 0, "confidence": 0.3},
-                    }
-                },
-                "geometry_corrections": {"monthly": {}},
-                "cloud_impacts": {"hour_patterns": {}},
-                "seasonal_adjustments": {"months": {}},
-                "efficiency_curves": {"radiation_buckets": {}},
-                "metadata": {
-                    "created": dt_util.now().strftime("%Y-%m-%d"),
-                    "total_learning_days": 0,
-                    "clear_sky_days_detected": 0,
-                    "cloudy_days_detected": 0,
-                    "last_pattern_update": dt_util.now().isoformat()
-                }
-            }
-
-            if learned_patterns_path.exists():
-                try:
-                    def _load_patterns():
-                        with open(learned_patterns_path, 'r', encoding='utf-8') as f:
-                            return json.load(f)
-                    existing_patterns = await self.hass.async_add_executor_job(_load_patterns)
-                    patterns.update(existing_patterns)
-                    if "geometry_corrections" not in patterns:
-                        patterns["geometry_corrections"] = {"monthly": {}}
-                except Exception:
-                    pass
-
-            geometry_samples = defaultdict(lambda: {"actual": [], "theoretical": []})
-
-            for date_str, day_hours in merged_data["hourly_data"].items():
-                if date_str not in astronomy_cache:
-                    continue
-
-                day_astro = astronomy_cache[date_str]
-                sorted_hours = sorted(day_hours.keys(), key=lambda x: int(x))
-
-                for i, hour_str in enumerate(sorted_hours):
-                    hour_num = int(hour_str)
-                    hour_astro = day_astro.get("hourly", {}).get(hour_str)
-
-                    if not hour_astro:
-                        continue
-
-                    sun_elevation = hour_astro.get("elevation_deg", 0)
-                    theoretical_kwh = hour_astro.get("theoretical_max_pv_kwh", 0)
-                    cumulative_yield = aggregated.get(f"{date_str}_{hour_num:02d}", {}).get("yield", 0)
-
-                    if i == 0:
-                        hourly_yield = cumulative_yield
-                    else:
-                        prev_hour_str = sorted_hours[i - 1]
-                        prev_hour_num = int(prev_hour_str)
-                        prev_cumulative = aggregated.get(f"{date_str}_{prev_hour_num:02d}", {}).get("yield", 0)
-                        hourly_yield = max(0, cumulative_yield - prev_cumulative)
-
-                    if sun_elevation <= 0 or theoretical_kwh <= 0 or hourly_yield <= 0:
-                        continue
-
-                    if hourly_yield > theoretical_kwh * 3:
-                        continue
-
-                    if sun_elevation < 5:
-                        bucket = "0_5"
-                    elif sun_elevation < 10:
-                        bucket = "5_10"
-                    elif sun_elevation < 15:
-                        bucket = "10_15"
-                    elif sun_elevation < 20:
-                        bucket = "15_20"
-                    elif sun_elevation < 25:
-                        bucket = "20_25"
-                    elif sun_elevation < 30:
-                        bucket = "25_30"
-                    else:
-                        bucket = "30_plus"
-
-                    geometry_samples[bucket]["actual"].append(hourly_yield)
-                    geometry_samples[bucket]["theoretical"].append(theoretical_kwh)
-
-            for bucket, samples in geometry_samples.items():
-                if len(samples["actual"]) >= 5:
-                    total_actual = sum(samples["actual"])
-                    total_theoretical = sum(samples["theoretical"])
-
-                    if total_theoretical > 0:
-                        factor = total_actual / total_theoretical
-                        patterns["geometry_factors"]["sun_elevation_ranges"][bucket]["factor"] = round(factor, 3)
-                        patterns["geometry_factors"]["sun_elevation_ranges"][bucket]["samples"] = len(samples["actual"])
-                        patterns["geometry_factors"]["sun_elevation_ranges"][bucket]["confidence"] = min(0.9, 0.3 + len(samples["actual"]) * 0.02)
-
-            def _save_patterns():
-                with open(learned_patterns_path, 'w', encoding='utf-8') as f:
-                    json.dump(patterns, f, indent=2, ensure_ascii=False)
-
-            await self.hass.async_add_executor_job(_save_patterns)
-            _LOGGER.info(f"Updated geometry factors for {len(geometry_samples)} elevation buckets")
-
-            # Step 7: Calculate statistics
-            _LOGGER.info("STEP 7/8: Calculating statistics...")
-
-            # SIMPLE AND RELIABLE: Calculate daily yield from POWER sensor
-            # Average power (W) per hour / 1000 = kWh per hour
-            # Sum all hourly kWh = daily kWh
-            # This is more reliable than cumulative yield sensors which can have reset issues
-
-            daily_yields = defaultdict(float)
-            peak_power = {"power_w": 0.0, "date": None, "at": None}
-
-            for key, hour_data in aggregated.items():
-                date_str = hour_data["date"]
-                hour_num = hour_data["hour"]
-                power_w = hour_data.get("power", 0) or 0
-
-                # Use power_based_yield (calculated from average power per hour)
-                # This is the most reliable method
-                power_based_yield = hour_data.get("power_based_yield", 0) or 0
-                daily_yields[date_str] += power_based_yield
-
-                if power_w > peak_power["power_w"]:
-                    peak_power["power_w"] = round(power_w, 1)
-                    peak_power["date"] = date_str
-                    peak_power["at"] = f"{date_str}T{hour_num:02d}:30:00+01:00"
-
-            sorted_days = sorted(daily_yields.items())
-            total_yield = sum(daily_yields.values())
-
-            last_7_days = sorted_days[-7:] if len(sorted_days) >= 7 else sorted_days
-            last_30_days = sorted_days[-30:] if len(sorted_days) >= 30 else sorted_days
-
-            avg_7 = sum(y for _, y in last_7_days) / len(last_7_days) if last_7_days else 0
-            avg_30 = sum(y for _, y in last_30_days) / len(last_30_days) if last_30_days else 0
-
-            _LOGGER.info(f"7-day average: {avg_7:.2f} kWh/day")
-            _LOGGER.info(f"30-day average: {avg_30:.2f} kWh/day")
-
-            # Step 8: Update daily_forecasts.json
-            _LOGGER.info("STEP 8/8: Updating daily_forecasts.json...")
-
-            daily_forecasts_path = self.coordinator.data_manager.data_dir / "stats" / "daily_forecasts.json"
-            forecasts = {
-                "version": "3.0.0",
-                "today": {},
-                "statistics": {
-                    "all_time_peak": {"power_w": 0.0, "date": None, "at": None},
-                    "last_7_days": {"avg_yield_kwh": 0.0, "total_yield_kwh": 0.0},
-                    "last_30_days": {"avg_yield_kwh": 0.0, "total_yield_kwh": 0.0},
-                    "last_365_days": {"total_yield_kwh": 0.0}
-                },
-                "history": [],
-                "metadata": {"retention_days": 730, "history_entries": 0}
-            }
-
-            if daily_forecasts_path.exists():
-                try:
-                    def _load_forecasts():
-                        with open(daily_forecasts_path, 'r', encoding='utf-8') as f:
-                            return json.load(f)
-                    forecasts = await self.hass.async_add_executor_job(_load_forecasts)
-                except Exception:
-                    pass
-
-            forecasts["statistics"]["all_time_peak"] = peak_power
-            forecasts["statistics"]["last_7_days"] = {
-                "avg_yield_kwh": round(avg_7, 2),
-                "total_yield_kwh": round(sum(y for _, y in last_7_days), 2),
-                "calculated_at": dt_util.now().isoformat()
-            }
-            forecasts["statistics"]["last_30_days"] = {
-                "avg_yield_kwh": round(avg_30, 2),
-                "total_yield_kwh": round(sum(y for _, y in last_30_days), 2),
-                "calculated_at": dt_util.now().isoformat()
-            }
-            forecasts["statistics"]["last_365_days"] = {
-                "total_yield_kwh": round(total_yield, 2),
-                "calculated_at": dt_util.now().isoformat()
-            }
-
-            # Build lookup of existing history entries by date
-            existing_history_by_date = {h.get("date"): i for i, h in enumerate(forecasts.get("history", []))}
-
-            for date_str, yield_kwh in sorted_days:
-                if yield_kwh <= 0:
-                    continue  # Skip days with no production
-
-                if date_str in existing_history_by_date:
-                    # Update existing entry if it was from bootstrap (has yield_kwh, not actual_kwh)
-                    idx = existing_history_by_date[date_str]
-                    existing_entry = forecasts["history"][idx]
-                    # Only overwrite bootstrap entries (those with yield_kwh), not finalized entries (those with actual_kwh)
-                    if "yield_kwh" in existing_entry and "actual_kwh" not in existing_entry:
-                        forecasts["history"][idx] = {
-                            "date": date_str,
-                            "yield_kwh": round(yield_kwh, 2),
-                            "source": "bootstrap_from_history"
-                        }
-                else:
-                    # Add new entry
-                    forecasts["history"].append({
-                        "date": date_str,
-                        "yield_kwh": round(yield_kwh, 2),
-                        "source": "bootstrap_from_history"
-                    })
-
-            forecasts["metadata"]["history_entries"] = len(forecasts["history"])
-            forecasts["metadata"]["last_update"] = dt_util.now().isoformat()
-
-            def _save_forecasts():
-                with open(daily_forecasts_path, 'w', encoding='utf-8') as f:
-                    json.dump(forecasts, f, indent=2, ensure_ascii=False)
-
-            await self.hass.async_add_executor_job(_save_forecasts)
-
-            _LOGGER.info("=" * 80)
-            _LOGGER.info("BOOTSTRAP COMPLETE!")
-            _LOGGER.info(f"Peak power: {peak_power['power_w']} W")
-            _LOGGER.info(f"Historical entries: {len(forecasts['history'])} days")
-            _LOGGER.info("=" * 80)
-
-        except Exception as e:
-            _LOGGER.error(f"ERROR in bootstrap_from_history: {e}", exc_info=True)
-
-    # =========================================================================
-    # Physics Services
-    # =========================================================================
-
-    async def _handle_bootstrap_physics_from_history(self, call: ServiceCall) -> None:
-        """Handle bootstrap_physics_from_history service @zara
-
-        Bootstrap Physics-First models (GeometryLearner, ResidualTrainer) from HA history.
-
-        This service:
-        1. Fetches historical production data from HA Recorder
-        2. Fetches historical weather from Open-Meteo Archive API
-        3. Calculates astronomy (sun position) retroactively for each hour
-        4. Trains GeometryLearner with clear-sky samples
-        5. Trains ResidualTrainer with all samples
-
-        Requires: power_entity configured
-        Optional: W/m² sensor, Lux sensor (improves training quality)
-        """
-        from datetime import datetime, timezone, timedelta
-        from homeassistant.components.recorder import get_instance
-        from homeassistant.components.recorder.history import state_changes_during_period
-        from collections import defaultdict
-
-        _LOGGER.info("=" * 80)
-        _LOGGER.info("SERVICE: bootstrap_physics_from_history - Physics-First Bootstrap")
-        _LOGGER.info("=" * 80)
-
-        # Get parameters
-        days = call.data.get('days', 180)  # Default 6 months
-        cumulative_yield_sensor = call.data.get('cumulative_yield_sensor')  # Optional cumulative sensor
-        _LOGGER.info(f"Requested days: {days}")
-        if cumulative_yield_sensor:
-            _LOGGER.info(f"Using cumulative yield sensor: {cumulative_yield_sensor}")
-
-        tz = dt_util.get_default_time_zone()
-
-        try:
-            # =================================================================
-            # STEP 1: Validate required sensors
-            # =================================================================
-            _LOGGER.info("STEP 1/8: Validating sensor configuration...")
-
-            config_data = self.coordinator.config_entry.data
-            config_options = self.coordinator.config_entry.options
-
-            # Required: power_entity and yield
-            power_entity = config_data.get('power_entity') or config_options.get('power_entity')
-            yield_entity = config_data.get('solar_yield_today') or config_options.get('solar_yield_today')
-
-            if not power_entity or not yield_entity:
-                _LOGGER.error("BOOTSTRAP FAILED - Missing required sensors!")
-                _LOGGER.error("Required: power_entity, solar_yield_today")
-                return
-
-            _LOGGER.info(f"  ✓ power_entity: {power_entity}")
-            _LOGGER.info(f"  ✓ yield_entity: {yield_entity}")
-            if cumulative_yield_sensor:
-                _LOGGER.info(f"  ✓ cumulative_yield_sensor: {cumulative_yield_sensor} (service parameter)")
-
-            # Optional sensors
-            solar_radiation_sensor = config_data.get('solar_radiation_sensor') or config_options.get('solar_radiation_sensor')
-            lux_sensor = config_data.get('lux_sensor') or config_options.get('lux_sensor')
-            temp_sensor = config_data.get('temp_sensor') or config_options.get('temp_sensor')
-
-            if solar_radiation_sensor:
-                _LOGGER.info(f"  ✓ solar_radiation_sensor: {solar_radiation_sensor} (optional)")
-            if lux_sensor:
-                _LOGGER.info(f"  ✓ lux_sensor: {lux_sensor} (optional)")
-            if temp_sensor:
-                _LOGGER.info(f"  ✓ temp_sensor: {temp_sensor} (optional)")
-
-            # =================================================================
-            # STEP 2: Fetch production history from HA Recorder
-            # =================================================================
-            _LOGGER.info(f"STEP 2/8: Fetching production history ({days} days)...")
-
-            now = datetime.now(timezone.utc)
-            start_time = now - timedelta(days=days)
-
-            # Fetch yield history (cumulative daily kWh)
-            yield_history = await get_instance(self.hass).async_add_executor_job(
-                state_changes_during_period,
-                self.hass,
-                start_time,
-                now,
-                yield_entity,
-                True,
-                False,
-                0.0
-            )
-
-            yield_states = []
-            if yield_history and yield_entity in yield_history:
-                yield_states = yield_history[yield_entity]
-                _LOGGER.info(f"Found {len(yield_states)} daily yield history states")
-
-            # Also fetch cumulative sensor if provided
-            cumulative_states = []
-            if cumulative_yield_sensor:
-                cumulative_history = await get_instance(self.hass).async_add_executor_job(
-                    state_changes_during_period,
-                    self.hass,
-                    start_time,
-                    now,
-                    cumulative_yield_sensor,
-                    True,
-                    False,
-                    0.0
-                )
-                if cumulative_history and cumulative_yield_sensor in cumulative_history:
-                    cumulative_states = cumulative_history[cumulative_yield_sensor]
-                    _LOGGER.info(f"Found {len(cumulative_states)} cumulative yield history states")
-
-            if not yield_states and not cumulative_states:
-                _LOGGER.error("No yield history found from either sensor!")
-                return
-
-            # Fetch optional sensor history
-            sensor_history = {}
-            for sensor_name, entity_id in [
-                ('solar_radiation', solar_radiation_sensor),
-                ('lux', lux_sensor),
-                ('temperature', temp_sensor),
-            ]:
-                if entity_id:
-                    history = await get_instance(self.hass).async_add_executor_job(
-                        state_changes_during_period,
-                        self.hass,
-                        start_time,
-                        now,
-                        entity_id,
-                        True,
-                        False,
-                        0.0
-                    )
-                    if history and entity_id in history:
-                        sensor_history[sensor_name] = history[entity_id]
-                        _LOGGER.info(f"  ✓ {sensor_name}: {len(history[entity_id])} states")
-
-            # =================================================================
-            # STEP 3: Aggregate to hourly production
-            # =================================================================
-            _LOGGER.info("STEP 3/8: Aggregating hourly production...")
-
-            # Group yield by date and track hourly changes
-            hourly_production = defaultdict(lambda: defaultdict(float))
-
-            # ---------------------------------------------------------------
-            # METHOD 1: Process daily yield sensor (resets daily)
-            # ---------------------------------------------------------------
-            if yield_states:
-                _LOGGER.info("  Processing daily yield sensor (solar_yield_today)...")
-                sorted_yields = sorted(yield_states, key=lambda s: s.last_changed)
-
-                prev_yield = 0.0
-                prev_date = None
-                prev_hour = None
-
-                for state in sorted_yields:
-                    if state.state in ("unavailable", "unknown", "none", None):
-                        continue
-
-                    try:
-                        current_yield = float(state.state)
-                        state_time = state.last_changed.astimezone(tz)
-                        date_str = state_time.strftime("%Y-%m-%d")
-                        hour = state_time.hour
-
-                        # Detect day change (yield reset)
-                        if prev_date and date_str != prev_date:
-                            prev_yield = 0.0
-
-                        # Calculate hourly delta
-                        if prev_date == date_str and prev_hour == hour:
-                            delta = max(0, current_yield - prev_yield)
-                            if delta > 0 and delta < 5.0:  # Sanity check
-                                hourly_production[date_str][hour] = delta
-
-                        prev_yield = current_yield
-                        prev_date = date_str
-                        prev_hour = hour
-
-                    except (ValueError, TypeError):
-                        continue
-
-                # Also calculate from cumulative differences within day
-                daily_data = defaultdict(dict)
-                for state in sorted_yields:
-                    if state.state in ("unavailable", "unknown", "none", None):
-                        continue
-                    try:
-                        state_time = state.last_changed.astimezone(tz)
-                        date_str = state_time.strftime("%Y-%m-%d")
-                        hour = state_time.hour
-                        value = float(state.state)
-
-                        key = f"{hour:02d}"
-                        if key not in daily_data[date_str] or value > daily_data[date_str][key]:
-                            daily_data[date_str][key] = value
-                    except (ValueError, TypeError):
-                        continue
-
-                # Calculate hourly from cumulative within day
-                for date_str, hours in daily_data.items():
-                    sorted_hours = sorted(hours.keys())
-                    for i, hour_str in enumerate(sorted_hours):
-                        hour = int(hour_str)
-                        current = hours[hour_str]
-                        prev = hours[sorted_hours[i-1]] if i > 0 else 0
-                        delta = max(0, current - prev)
-                        if 0 < delta < 5.0:  # Sanity check
-                            if delta > hourly_production[date_str][hour]:
-                                hourly_production[date_str][hour] = delta
-
-                daily_yield_hours = sum(len(h) for h in hourly_production.values())
-                _LOGGER.info(f"  → Daily yield: {daily_yield_hours} hourly records from {len(hourly_production)} days")
-
-            # ---------------------------------------------------------------
-            # METHOD 2: Process CUMULATIVE yield sensor (never resets)
-            # ---------------------------------------------------------------
-            if cumulative_states:
-                _LOGGER.info("  Processing cumulative yield sensor (total kWh)...")
-                sorted_cumulative = sorted(cumulative_states, key=lambda s: s.last_changed)
-
-                # Build hourly max values across ALL time
-                hourly_cumulative = {}  # key = (date_str, hour) -> max cumulative value at that hour
-
-                for state in sorted_cumulative:
-                    if state.state in ("unavailable", "unknown", "none", None):
-                        continue
-                    try:
-                        value = float(state.state)
-                        if value < 0:
-                            continue
-                        state_time = state.last_changed.astimezone(tz)
-                        date_str = state_time.strftime("%Y-%m-%d")
-                        hour = state_time.hour
-                        key = (date_str, hour)
-
-                        # Keep max value for each hour
-                        if key not in hourly_cumulative or value > hourly_cumulative[key]:
-                            hourly_cumulative[key] = value
-                    except (ValueError, TypeError):
-                        continue
-
-                # Sort by time and calculate deltas
-                sorted_keys = sorted(hourly_cumulative.keys())
-                _LOGGER.info(f"  → Found {len(sorted_keys)} hourly cumulative readings")
-
-                prev_value = None
-                cumulative_hours_added = 0
-
-                for i, key in enumerate(sorted_keys):
-                    date_str, hour = key
-                    current_value = hourly_cumulative[key]
-
-                    if prev_value is not None:
-                        delta = current_value - prev_value
-                        # Valid production: positive, not too large (< 5 kWh/hour for typical home systems)
-                        if 0.001 < delta < 5.0:
-                            # Only add if we don't already have a value from daily sensor
-                            # OR if cumulative gives a larger (likely more accurate) value
-                            existing = hourly_production[date_str].get(hour, 0)
-                            if delta > existing:
-                                hourly_production[date_str][hour] = delta
-                                cumulative_hours_added += 1
-
-                    prev_value = current_value
-
-                _LOGGER.info(f"  → Cumulative sensor added/updated {cumulative_hours_added} hourly records")
-
-            total_hours = sum(len(h) for h in hourly_production.values())
-            _LOGGER.info(f"  TOTAL: {total_hours} hourly production records across {len(hourly_production)} days")
-
-            # =================================================================
-            # STEP 4: Fetch historical weather from Open-Meteo Archive
-            # =================================================================
-            _LOGGER.info("STEP 4/8: Fetching historical weather from Open-Meteo Archive API...")
-
-            from ..data.data_open_meteo_client import OpenMeteoArchiveClient
-
-            lat = self.hass.config.latitude
-            lon = self.hass.config.longitude
-
-            archive_client = OpenMeteoArchiveClient(lat, lon)
-
-            start_date_str = (now - timedelta(days=days)).strftime("%Y-%m-%d")
-            end_date_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")  # Yesterday (archive has delay)
-
-            historical_weather = await archive_client.get_historical_weather(
-                start_date=start_date_str,
-                end_date=end_date_str,
-            )
-
-            if not historical_weather:
-                _LOGGER.warning("Could not fetch historical weather - continuing with local sensors only")
-                historical_weather = []
-
-            # Index weather by date+hour
-            weather_index = {}
-            for entry in historical_weather:
-                date_str = entry.get("date")
-                hour = entry.get("hour")
-                if date_str and hour is not None:
-                    weather_index[f"{date_str}_{hour:02d}"] = entry
-
-            _LOGGER.info(f"Indexed {len(weather_index)} hours of historical weather")
-
-            # =================================================================
-            # STEP 5: Build astronomy cache for historical dates
-            # =================================================================
-            _LOGGER.info("STEP 5/8: Building astronomy cache for historical dates...")
-
-            from ..astronomy.astronomy_cache import AstronomyCache
-
-            astro_cache = AstronomyCache(
-                data_dir=self.coordinator.data_manager.data_dir,
-                data_manager=self.coordinator.data_manager
-            )
-
-            tz_str = str(self.hass.config.time_zone)
-            elev = self.hass.config.elevation
-            astro_cache.initialize_location(lat, lon, tz_str, elev)
-
-            # Set panel groups for per-group theoretical max @zara
-            panel_groups = getattr(self.coordinator, 'panel_groups', [])
-            if panel_groups:
-                astro_cache.set_panel_groups(panel_groups)
-                _LOGGER.info(f"AstronomyCache: Panel groups set ({len(panel_groups)} groups)")
-
-            solar_capacity = self.coordinator.solar_capacity or 5.0
-
-            # Rebuild cache including historical dates
-            await astro_cache.rebuild_cache(
-                system_capacity_kwp=solar_capacity,
-                start_date=datetime.now(tz).date(),
-                days_back=days,
-                days_ahead=7
-            )
-
-            # Load astronomy data
-            astronomy_path = self.coordinator.data_manager.data_dir / "stats" / "astronomy_cache.json"
-            astronomy_data = {}
-            if astronomy_path.exists():
-                def _load_astro():
-                    with open(astronomy_path, 'r') as f:
-                        return json.load(f)
-                data = await self.hass.async_add_executor_job(_load_astro)
-                astronomy_data = data.get("days", {})
-
-            _LOGGER.info(f"Astronomy cache built: {len(astronomy_data)} days")
-
-            # =================================================================
-            # STEP 6: Build training samples for GeometryLearner
-            # =================================================================
-            _LOGGER.info("STEP 6/8: Building training samples for GeometryLearner...")
-
-            geometry_samples = []
-            residual_samples = []
-
-            for date_str, hours in hourly_production.items():
-                if date_str not in astronomy_data:
-                    continue
-
-                day_astro = astronomy_data[date_str]
-
-                for hour, production_kwh in hours.items():
-                    if production_kwh <= 0.01:  # Skip negligible production
-                        continue
-
-                    hour_str = str(hour)
-                    hour_astro = day_astro.get("hourly", {}).get(hour_str)
-                    if not hour_astro:
-                        continue
-
-                    # Get weather for this hour
-                    weather_key = f"{date_str}_{hour:02d}"
-                    weather = weather_index.get(weather_key, {})
-
-                    # Extract data
-                    elevation = hour_astro.get("elevation_deg", 0)
-                    azimuth = hour_astro.get("azimuth_deg", 180)
-                    clear_sky_wm2 = hour_astro.get("clear_sky_solar_radiation_wm2", 0)
-
-                    ghi = weather.get("ghi", 0) or 0
-                    dni = weather.get("direct_radiation", 0) or 0
-                    dhi = weather.get("diffuse_radiation", 0) or 0
-                    cloud_cover = weather.get("cloud_cover", 50) or 50
-                    temperature = weather.get("temperature", 15) or 15
-
-                    # Build sample
-                    sample = {
-                        "timestamp": f"{date_str}T{hour:02d}:30:00",
-                        "sun_elevation_deg": elevation,
-                        "sun_azimuth_deg": azimuth,
-                        "actual_power_kwh": production_kwh,
-                        "ghi_wm2": ghi,
-                        "dni_wm2": dni,
-                        "dhi_wm2": dhi,
-                        "ambient_temp_c": temperature,
-                        "cloud_cover_percent": cloud_cover,
-                        "theoretical_max_wm2": clear_sky_wm2,
-                    }
-
-                    geometry_samples.append(sample)
-
-                    # Also build residual sample (needs different format)
-                    residual_sample = {
-                        "timestamp": f"{date_str}T{hour:02d}:30:00",
-                        "actual_kwh": production_kwh,
-                        "corrected_weather": {
-                            "ghi": ghi,
-                            "solar_radiation_wm2": ghi,
-                            "direct_radiation": dni,
-                            "diffuse_radiation": dhi,
-                            "temperature": temperature,
-                            "clouds": cloud_cover,
-                            "humidity": weather.get("humidity", 50),
-                        },
-                        "astronomy": {
-                            "elevation_deg": elevation,
-                            "azimuth_deg": azimuth,
-                            "clear_sky_solar_radiation_wm2": clear_sky_wm2,
-                        },
-                    }
-                    residual_samples.append(residual_sample)
-
-            _LOGGER.info(f"Built {len(geometry_samples)} training samples")
-
-            # =================================================================
-            # STEP 7: Train GeometryLearner or PanelGroupEfficiencyLearner
-            # =================================================================
-            panel_groups = getattr(self.coordinator, 'panel_groups', [])
-            use_panel_groups = bool(panel_groups)
-
-            if use_panel_groups:
-                _LOGGER.info(f"STEP 7/8: Training PanelGroupEfficiencyLearner ({len(panel_groups)} groups)...")
-                from ..physics import PanelGroupEfficiencyLearner
-
-                # Use async factory to avoid blocking file I/O in event loop
-                efficiency_learner = await PanelGroupEfficiencyLearner.async_create(
-                    data_path=self.coordinator.data_manager.data_dir,
-                    panel_groups=panel_groups,
-                )
-
-                geometry_result = await efficiency_learner.bulk_add_historical_data(geometry_samples)
-
-                _LOGGER.info(f"PanelGroupEfficiencyLearner result:")
-                _LOGGER.info(f"  - Samples processed: {geometry_result['samples_processed']}")
-                _LOGGER.info(f"  - Accepted: {geometry_result['accepted']}")
-                _LOGGER.info(f"  - Rejected: {geometry_result['rejected']}")
-                if geometry_result['optimization_ran']:
-                    for group in geometry_result['current_estimate'].get('groups', []):
-                        _LOGGER.info(f"  - {group['name']}: efficiency={group['learned_efficiency_factor']:.3f}, "
-                                   f"shadow_hours={group['learned_shadow_hours']}")
-            else:
-                _LOGGER.info("STEP 7/8: Training GeometryLearner...")
-                from ..physics import GeometryLearner
-
-                geometry_learner = GeometryLearner(
-                    data_path=self.coordinator.data_manager.data_dir,
-                    system_capacity_kwp=solar_capacity,
-                    skip_load=True,
-                )
-                await geometry_learner.async_load_state()
-
-                geometry_result = await geometry_learner.bulk_add_historical_data(geometry_samples)
-
-                _LOGGER.info(f"GeometryLearner result:")
-                _LOGGER.info(f"  - Samples processed: {geometry_result['samples_processed']}")
-                _LOGGER.info(f"  - Accepted (clear-sky): {geometry_result['accepted']}")
-                _LOGGER.info(f"  - Rejected: {geometry_result['rejected']}")
-                if geometry_result['optimization_ran']:
-                    estimate = geometry_result['current_estimate']
-                    _LOGGER.info(f"  - Learned tilt: {estimate['tilt_deg']:.1f}°")
-                    _LOGGER.info(f"  - Learned azimuth: {estimate['azimuth_deg']:.1f}°")
-                    _LOGGER.info(f"  - Confidence: {estimate['confidence']:.2%}")
-
-            # =================================================================
-            # STEP 8: Train ResidualTrainer
-            # =================================================================
-            _LOGGER.info("STEP 8/8: Training ResidualTrainer...")
-
-            from ..ml.ml_residual_trainer import ResidualTrainer
-
-            residual_trainer = ResidualTrainer(
-                data_dir=self.coordinator.data_manager.data_dir,
-                system_capacity_kwp=solar_capacity,
-                panel_groups=panel_groups if use_panel_groups else None,
-                skip_load=True,
-            )
-            await residual_trainer.async_load_state()
-
-            if len(residual_samples) >= 10:
-                success, accuracy, algo = await residual_trainer.train_residual_model(
-                    training_records=residual_samples,
-                    algorithm="auto",
-                )
-                _LOGGER.info(f"ResidualTrainer result:")
-                _LOGGER.info(f"  - Success: {success}")
-                _LOGGER.info(f"  - Algorithm: {algo}")
-                _LOGGER.info(f"  - Accuracy: {accuracy:.3f}")
-            else:
-                _LOGGER.warning(f"Not enough samples for ResidualTrainer: {len(residual_samples)} < 10")
-
-            # =================================================================
-            # COMPLETE
-            # =================================================================
-            _LOGGER.info("=" * 80)
-            _LOGGER.info("PHYSICS BOOTSTRAP COMPLETE!")
-            _LOGGER.info(f"  - Days processed: {days}")
-            _LOGGER.info(f"  - Total hourly samples: {len(geometry_samples)}")
-            _LOGGER.info(f"  - Historical weather hours: {len(weather_index)}")
-            _LOGGER.info(f"  - Learner samples: {geometry_result['total_data_points']}")
-            if geometry_result.get('optimization_ran'):
-                if use_panel_groups:
-                    # Panel Groups Mode: Log efficiency factors @zara
-                    for group in geometry_result['current_estimate'].get('groups', []):
-                        _LOGGER.info(f"  - {group['name']}: efficiency={group['learned_efficiency_factor']:.3f}, "
-                                   f"shadow_hours={group.get('learned_shadow_hours', [])}")
-                else:
-                    # Legacy Mode: Log learned geometry
-                    _LOGGER.info(f"  - Learned geometry: tilt={geometry_result['current_estimate']['tilt_deg']:.1f}°, "
-                               f"azimuth={geometry_result['current_estimate']['azimuth_deg']:.1f}°")
-            _LOGGER.info("=" * 80)
-
-        except Exception as e:
-            _LOGGER.error(f"ERROR in bootstrap_physics_from_history: {e}", exc_info=True)
 
     # =========================================================================
     # Astronomy Services
@@ -1552,8 +930,7 @@ class ServiceRegistry:
         "We are the Borg. Your data distinctiveness will be... restored."
 
         This service allows users to selectively reset learned data:
-        - panel_groups: Reset learned_panel_group_efficiency.json
-        - ml_weights: Reset learned_weights.json
+        - ai_weights: Reset AI learned weights
         - hourly_history: Clean hourly_predictions.json
         - all: Reset everything above
 
@@ -1582,28 +959,22 @@ class ServiceRegistry:
 
         try:
             data_dir = self.coordinator.data_manager.data_dir
-            ml_dir = data_dir / "ml"
+            ai_dir = data_dir / "ai"
             stats_dir = data_dir / "stats"
             backups_dir = data_dir / "backups" / "borg_assimilation"
 
-            # Ensure backup directory exists
             def _ensure_backup_dir():
                 backups_dir.mkdir(parents=True, exist_ok=True)
             await self.hass.async_add_executor_job(_ensure_backup_dir)
 
-            # Create timestamp for backup
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_subdir = backups_dir / f"backup_{timestamp}"
 
-            # Define target files
             target_files = {
-                "panel_groups": [
-                    ml_dir / "learned_panel_group_efficiency.json",
-                ],
-                "ml_weights": [
-                    ml_dir / "learned_weights.json",
-                    ml_dir / "hourly_profile.json",
-                    ml_dir / "model_state.json",
+                "ai_weights": [
+                    ai_dir / "learned_weights.json",
+                    ai_dir / "seasonal.json",
+                    ai_dir / "dni_tracker.json",
                 ],
                 "hourly_history": [
                     stats_dir / "hourly_predictions.json",
@@ -1611,7 +982,6 @@ class ServiceRegistry:
                 ],
             }
 
-            # Determine which files to process
             files_to_reset = []
             if target == "all":
                 for file_list in target_files.values():
@@ -1620,7 +990,7 @@ class ServiceRegistry:
                 files_to_reset = target_files[target]
             else:
                 _LOGGER.error(f"Unknown target: {target}")
-                _LOGGER.error("Valid targets: panel_groups, ml_weights, hourly_history, all")
+                _LOGGER.error("Valid targets: ai_weights, hourly_history, all")
                 return
 
             # Filter to only existing files

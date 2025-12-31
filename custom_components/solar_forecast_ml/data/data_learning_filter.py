@@ -1,4 +1,12 @@
-"""Learning Filter - Central helper for excluding flagged hours from learning V12.2.0 @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
+"""Learning Filter - Central helper for excluding flagged hours from learning V12.4.0
 
 This module provides centralized logic for:
 1. Checking if individual hours should be excluded from learning
@@ -10,20 +18,9 @@ Design Decision:
 - Daily learning (Pattern Learner) is skipped if >25% of production hours are excluded
 - This prevents learning from anomalous data (unexpected weather, sensor issues)
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
+Note: "unexpected_clouds" is NOT excluded from Panel Group Efficiency learning.
+The geometry_learner reclassifies weather (CLEAR->CLOUDY) based on DNI/DHI ratio.
+This allows learning CLOUDY efficiency factors when the forecast was wrong.
 """
 
 import logging
@@ -35,33 +32,54 @@ _LOGGER = logging.getLogger(__name__)
 DAILY_LEARNING_EXCLUSION_THRESHOLD = 0.25
 
 
-def should_exclude_hour_from_learning(prediction: Dict[str, Any]) -> Tuple[bool, str]:
+def should_exclude_hour_from_learning(
+    prediction: Dict[str, Any],
+    context: str = "general"
+) -> Tuple[bool, str]:
     """Check if an hour should be excluded from learning.
 
     Checks all relevant flags that indicate anomalous data:
     - exclude_from_learning (master flag)
-    - has_weather_alert (unexpected weather event)
+    - has_weather_alert (unexpected weather event) - EXCEPT unexpected_clouds for panel_group context
     - inverter_clipped (hardware limitation, not weather)
     - frost_detected == "heavy_frost" (in weather_actual)
 
     Args:
         prediction: Hourly prediction dict from hourly_predictions.json
+        context: Learning context - "general" (default), "panel_group", or "ml"
+                 "panel_group" context does NOT exclude unexpected_clouds since
+                 the geometry_learner handles weather reclassification.
 
     Returns:
         Tuple of (should_exclude: bool, reason: str)
     """
     flags = prediction.get("flags") or {}
     weather_actual = prediction.get("weather_actual") or {}
+    alert_type = flags.get("weather_alert_type") or ""
 
-    # Master flag - explicitly marked for exclusion
-    if flags.get("exclude_from_learning"):
-        reason = flags.get("weather_alert_type") or "manually_excluded"
-        return True, reason
+    # Check for unexpected_clouds exception FIRST
+    # For panel_group context, learn from unexpected_clouds hours
+    # because geometry_learner will reclassify weather based on DNI/DHI
+    is_unexpected_clouds_exception = (
+        alert_type == "unexpected_clouds" and context == "panel_group"
+    )
 
-    # Weather alert - unexpected weather event
-    if flags.get("has_weather_alert"):
-        reason = flags.get("weather_alert_type") or "weather_alert"
-        return True, reason
+    if is_unexpected_clouds_exception:
+        _LOGGER.debug(
+            f"Allowing unexpected_clouds for panel_group learning "
+            f"(weather will be reclassified by geometry_learner)"
+        )
+        # Skip weather-related exclusions, but still check hardware issues below
+
+    else:
+        # Master flag - explicitly marked for exclusion
+        if flags.get("exclude_from_learning"):
+            reason = alert_type or "manually_excluded"
+            return True, reason
+
+        # Weather alert - unexpected weather event
+        if flags.get("has_weather_alert"):
+            return True, alert_type or "weather_alert"
 
     # Inverter clipping - hardware limitation
     if flags.get("inverter_clipped"):
@@ -71,6 +89,10 @@ def should_exclude_hour_from_learning(prediction: Dict[str, Any]) -> Tuple[bool,
     frost_detected = weather_actual.get("frost_detected")
     if frost_detected == "heavy_frost":
         return True, "heavy_frost"
+
+    # Snow-covered panels - exclude from learning as production is anomalous
+    if weather_actual.get("snow_covered_panels"):
+        return True, "snow_covered_panels"
 
     return False, ""
 

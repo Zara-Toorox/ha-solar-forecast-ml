@@ -1,25 +1,11 @@
-"""Weather Data Provider - Open-Meteo ONLY V12.2.0 @zara
-
-IMPORTANT: This module now uses Open-Meteo as the ONLY data source.
-- NO HA Weather Entity dependency for forecasts
-- All weather data comes from Open-Meteo API
-- GHI, cloud_cover, temperature etc. are used DIRECTLY
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 from __future__ import annotations
 
@@ -51,10 +37,10 @@ DEFAULT_WEATHER_DATA = {
 
 
 class WeatherService:
-    """Weather Service using Open-Meteo as SINGLE data source
+    """Weather Service using Open-Meteo as data source
 
-    IMPORTANT: All cache updates should go through the MultiWeatherBlender
-    when available to ensure blend_info is preserved for weight learning.
+    V12.3: All blending now goes through WeatherExpertBlender in the pipeline.
+    This service only fetches raw Open-Meteo data for the ExpertBlender to use.
     """
 
     def __init__(
@@ -80,12 +66,8 @@ class WeatherService:
         self._cached_forecast: List[Dict[str, Any]] = []
         self._background_update_task: Optional[asyncio.Task] = None
 
-        # Reference to MultiWeatherBlender for proper cache updates
-        # Set by WeatherDataPipelineManager after initialization
-        self._multi_weather_blender = None
-
         _LOGGER.info(
-            f"WeatherService initialized - Open-Meteo ONLY "
+            f"WeatherService initialized - Open-Meteo "
             f"(lat={latitude:.4f}, lon={longitude:.4f})"
         )
 
@@ -194,21 +176,88 @@ class WeatherService:
     async def get_corrected_hourly_forecast(
         self, strict: bool = False
     ) -> List[Dict[str, Any]]:
-        """Get forecast data - Open-Meteo data is already high quality
+        """Get CORRECTED forecast data from weather_forecast_corrected.json
 
-        Note: With Open-Meteo as single source, no "corrections" are needed.
-        This method exists for backwards compatibility.
+        This is the SINGLE SOURCE OF TRUTH for all forecast calculations.
+        The corrected file contains precision-adjusted weather data that
+        should be used for Today, Tomorrow, and Day After Tomorrow forecasts.
 
         Args:
             strict: If True, raise error if no data available
 
         Returns:
-            List of hourly forecast entries
+            List of hourly forecast entries from weather_forecast_corrected.json
         """
+        import json
+
+        corrected_file = self.data_dir / "stats" / "weather_forecast_corrected.json"
+
+        try:
+            if corrected_file.exists():
+                def _load_corrected():
+                    with open(corrected_file, "r") as f:
+                        return json.load(f)
+
+                loop = asyncio.get_event_loop()
+                data = await loop.run_in_executor(None, _load_corrected)
+
+                if data and "forecast" in data:
+                    forecast_by_date = data.get("forecast", {})
+                    result = []
+
+                    # Convert dict structure to list format expected by callers
+                    for date_str in sorted(forecast_by_date.keys()):
+                        day_data = forecast_by_date[date_str]
+                        for hour_str in sorted(day_data.keys(), key=int):
+                            hour_data = day_data[hour_str]
+                            hour = int(hour_str)
+
+                            entry = {
+                                "datetime": f"{date_str}T{hour:02d}:00:00",
+                                "local_datetime": f"{date_str}T{hour:02d}:00:00",
+                                "date": date_str,
+                                "hour": hour,
+                                "local_hour": hour,
+                                "temperature": hour_data.get("temperature", DEFAULT_WEATHER_DATA["temperature"]),
+                                "humidity": hour_data.get("humidity", DEFAULT_WEATHER_DATA["humidity"]),
+                                "cloud_cover": hour_data.get("clouds", DEFAULT_WEATHER_DATA["cloud_cover"]),
+                                "clouds": hour_data.get("clouds", DEFAULT_WEATHER_DATA["cloud_cover"]),
+                                "wind_speed": hour_data.get("wind", DEFAULT_WEATHER_DATA["wind_speed"]),
+                                "precipitation": hour_data.get("rain", DEFAULT_WEATHER_DATA["precipitation"]),
+                                "pressure": hour_data.get("pressure", DEFAULT_WEATHER_DATA["pressure"]),
+                                "ghi": hour_data.get("solar_radiation_wm2", 0.0),
+                                "solar_radiation": hour_data.get("solar_radiation_wm2", 0.0),
+                                "solar_radiation_wm2": hour_data.get("solar_radiation_wm2", 0.0),
+                                "direct_radiation": hour_data.get("direct_radiation", 0.0),
+                                "diffuse_radiation": hour_data.get("diffuse_radiation", 0.0),
+                                "_source": "weather_forecast_corrected",
+                            }
+                            result.append(entry)
+
+                    if result:
+                        # Count days for logging
+                        dates = set(entry["date"] for entry in result)
+                        _LOGGER.info(
+                            f"✓ Forecast using weather_forecast_corrected.json: "
+                            f"{len(result)} hours across {len(dates)} days "
+                            f"({', '.join(sorted(dates)[-3:])})"
+                        )
+                        return result
+
+            _LOGGER.warning(
+                "⚠ weather_forecast_corrected.json not available, falling back to Open-Meteo"
+            )
+
+        except Exception as e:
+            _LOGGER.warning(
+                f"Failed to load weather_forecast_corrected.json: {e}, falling back to Open-Meteo"
+            )
+
+        # Fallback to Open-Meteo if corrected file not available
         forecast = await self.get_hourly_forecast()
 
         if not forecast and strict:
-            raise FileNotFoundError("No Open-Meteo forecast data available")
+            raise FileNotFoundError("No forecast data available")
 
         return forecast
 
@@ -254,51 +303,18 @@ class WeatherService:
         """Get all forecast entries for a specific date"""
         return self._open_meteo.get_forecast_for_date(date)
 
-    def set_multi_weather_blender(self, blender) -> None:
-        """Set reference to MultiWeatherBlender for proper cache updates.
-
-        Args:
-            blender: MultiWeatherBlender instance
-        """
-        self._multi_weather_blender = blender
-        _LOGGER.debug("MultiWeatherBlender reference set in WeatherService")
-
     async def force_update(self) -> bool:
-        """Force immediate forecast update - uses MultiWeatherBlender if available.
+        """Force immediate forecast update from Open-Meteo API.
 
-        IMPORTANT: When MultiWeatherBlender is available, all updates go through it
-        to ensure blend_info is preserved for weight learning. This prevents the
-        cache from being overwritten with data lacking blend_info.
+        V12.3: Direct Open-Meteo fetch only. All blending happens in the pipeline
+        through WeatherExpertBlender.
         """
         try:
-            # Prefer MultiWeatherBlender for cache updates (preserves blend_info)
-            if self._multi_weather_blender:
-                _LOGGER.info("Force update - using MultiWeatherBlender for proper blend_info...")
-                success = await self._multi_weather_blender.update_and_save_cache()
-
-                if success:
-                    # Refresh internal cache from the blended data
-                    forecast = await self._open_meteo.get_hourly_forecast(hours=72)
-                    if forecast:
-                        self._cached_forecast = self._transform_open_meteo_forecast(forecast)
-                    _LOGGER.info(
-                        f"Force update via Blender successful: {len(self._cached_forecast)} hours"
-                    )
-                    return True
-                else:
-                    _LOGGER.warning("Blender update failed - falling back to direct Open-Meteo")
-                    # Fall through to direct update
-
-            # Fallback: Direct Open-Meteo update
-            # Note: Even without blending, data will have blend_info from _parse_hourly_response
-            _LOGGER.info("Force update - fetching directly from Open-Meteo API...")
+            _LOGGER.info("Force update - fetching from Open-Meteo API...")
             forecast = await self._open_meteo.get_hourly_forecast(hours=72)
 
             if forecast:
-                # Ensure cache is saved (auto_save might be disabled by Blender)
-                # This ensures blend_info is persisted even in fallback mode
                 await self._open_meteo._save_file_cache(forecast)
-
                 self._cached_forecast = self._transform_open_meteo_forecast(forecast)
                 _LOGGER.info(f"Force update successful: {len(self._cached_forecast)} hours")
                 return True
@@ -311,10 +327,7 @@ class WeatherService:
             return False
 
     async def _background_forecast_update(self):
-        """Background task to periodically update forecast.
-
-        Uses MultiWeatherBlender when available to preserve blend_info.
-        """
+        """Background task to periodically update forecast."""
         update_interval = 3600
 
         while True:

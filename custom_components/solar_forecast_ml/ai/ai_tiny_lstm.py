@@ -1,20 +1,11 @@
-"""TinyML LSTM - NumPy-only implementation for Home Assistant V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import asyncio
 import logging
@@ -24,46 +15,41 @@ _LOGGER = logging.getLogger(__name__)
 
 _np: Optional[Any] = None
 
+
 def _ensure_numpy() -> Any:
-    """Lazily imports and returns the NumPy module @zara"""
+    """Lazy import numpy @zara"""
     global _np
     if _np is None:
-        try:
-            import numpy as np
-            _np = np
-        except ImportError as e:
-            _LOGGER.error(f"NumPy is required for TinyLSTM: {e}")
-            raise ImportError(f"NumPy library is required for TinyLSTM: {e}") from e
+        import numpy as np
+        _np = np
     return _np
 
-class TinyLSTM:
-    """
-    Lightweight LSTM implementation using only NumPy.
 
-    Features:
-    - Single LSTM layer (no stacking for simplicity)
-    - Adam optimizer (momentum + RMSprop)
-    - Gradient clipping (prevent exploding gradients)
-    - Early stopping (prevent overfitting)
-    - Checkpoint saving (interrupt-safe)
+class TinyLSTM:
+    """Multi-Output LSTM neural network with 20 features for solar forecasting @zara
+
+    Supports multiple output neurons for per-group predictions.
+    Input: 17 base features + 3 group-specific features = 20 total
+    Output: num_outputs predictions (1 per panel group, or 1 for total)
     """
 
     def __init__(
         self,
-        input_size: int = 14,
+        input_size: int = 20,
         hidden_size: int = 32,
         sequence_length: int = 24,
-        learning_rate: float = 0.001,
+        num_outputs: int = 1,
+        learning_rate: float = 0.005,
         dropout: float = 0.2
     ):
-        """
-        Initialize TinyLSTM.
+        """Initialize Multi-Output LSTM with given parameters @zara
 
         Args:
-            input_size: Number of input features (14: time + weather + astronomy + lag)
-            hidden_size: Number of LSTM neurons (32 = good balance)
-            sequence_length: Length of input sequences (24 = 24 hours lookback)
-            learning_rate: Learning rate for Adam optimizer
+            input_size: Number of input features (default 20 for base+group)
+            hidden_size: LSTM hidden layer size
+            sequence_length: Number of timesteps in input sequence
+            num_outputs: Number of output predictions (1 per panel group)
+            learning_rate: Adam optimizer learning rate
             dropout: Dropout rate for regularization
         """
         np = _ensure_numpy()
@@ -71,12 +57,14 @@ class TinyLSTM:
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.sequence_length = sequence_length
+        self.num_outputs = num_outputs
         self.learning_rate = learning_rate
         self.dropout = dropout
 
         limit = np.sqrt(6 / (input_size + hidden_size))
         concat_size = input_size + hidden_size
 
+        # LSTM gate weights (unchanged)
         self.Wf = np.random.uniform(-limit, limit, (hidden_size, concat_size))
         self.Wi = np.random.uniform(-limit, limit, (hidden_size, concat_size))
         self.Wc = np.random.uniform(-limit, limit, (hidden_size, concat_size))
@@ -87,10 +75,13 @@ class TinyLSTM:
         self.bc = np.zeros((hidden_size, 1))
         self.bo = np.zeros((hidden_size, 1))
 
-        limit_out = np.sqrt(6 / (hidden_size + 1))
-        self.Wy = np.random.uniform(-limit_out, limit_out, (1, hidden_size))
-        self.by = np.zeros((1, 1))
+        # Output layer - now supports multiple outputs!
+        # Shape: (num_outputs, hidden_size) instead of (1, hidden_size)
+        limit_out = np.sqrt(6 / (hidden_size + num_outputs))
+        self.Wy = np.random.uniform(-limit_out, limit_out, (num_outputs, hidden_size))
+        self.by = np.zeros((num_outputs, 1))
 
+        # Adam optimizer parameters
         self.beta1 = 0.9
         self.beta2 = 0.999
         self.epsilon = 1e-8
@@ -113,18 +104,17 @@ class TinyLSTM:
 
         _LOGGER.info(
             f"TinyLSTM initialized: input={input_size}, hidden={hidden_size}, "
-            f"sequence={sequence_length}, lr={learning_rate}"
+            f"seq={sequence_length}, outputs={num_outputs}"
         )
 
     def _sigmoid(self, x: Any) -> Any:
-        """Sigmoid activation with numerical stability @zara"""
+        """Sigmoid activation @zara"""
         np = _ensure_numpy()
-
         x_clipped = np.clip(x, -500, 500)
         return 1 / (1 + np.exp(-x_clipped))
 
     def _tanh(self, x: Any) -> Any:
-        """Tanh activation with numerical stability @zara"""
+        """Tanh activation @zara"""
         np = _ensure_numpy()
         x_clipped = np.clip(x, -500, 500)
         return np.tanh(x_clipped)
@@ -135,24 +125,7 @@ class TinyLSTM:
         h_prev: Any,
         c_prev: Any
     ) -> Tuple[Any, Any, Dict[str, Any]]:
-        """
-        Single LSTM cell forward pass.
-
-        Gates:
-        - Forget gate: ft = sigmoid(Wf @ [h_prev, xt] + bf)
-        - Input gate:  it = sigmoid(Wi @ [h_prev, xt] + bi)
-        - Cell gate:   ct_hat = tanh(Wc @ [h_prev, xt] + bc)
-        - Output gate: ot = sigmoid(Wo @ [h_prev, xt] + bo)
-
-        Updates:
-        - Cell state:   ct = ft * c_prev + it * ct_hat
-        - Hidden state: ht = ot * tanh(ct)
-
-        Returns:
-            ht: Hidden state
-            ct: Cell state
-            cache: Intermediate values for backprop
-        """
+        """Single LSTM cell forward pass @zara"""
         np = _ensure_numpy()
 
         concat = np.vstack([h_prev, xt])
@@ -163,7 +136,6 @@ class TinyLSTM:
         ot = self._sigmoid(np.dot(self.Wo, concat) + self.bo)
 
         ct = ft * c_prev + it * ct_hat
-
         ht = ot * self._tanh(ct)
 
         cache = {
@@ -180,22 +152,11 @@ class TinyLSTM:
         X: Any,
         training: bool = False
     ) -> Tuple[Any, Optional[Dict[str, Any]]]:
-        """
-        Forward pass through entire sequence.
-
-        Args:
-            X: Input sequence (sequence_length, input_size) for single sample
-            training: If True, apply dropout and return cache for backprop
-
-        Returns:
-            y_pred: Prediction (scalar)
-            cache: Cache for backprop (only if training=True)
-        """
+        """Forward pass through sequence @zara"""
         np = _ensure_numpy()
 
         h = np.zeros((self.hidden_size, 1))
         c = np.zeros((self.hidden_size, 1))
-
         caches = []
 
         for t in range(X.shape[0]):
@@ -215,8 +176,7 @@ class TinyLSTM:
 
         if training:
             return y_pred, {'caches': caches, 'final_h': h}
-        else:
-            return y_pred, None
+        return y_pred, None
 
     def _lstm_cell_backward(
         self,
@@ -224,14 +184,7 @@ class TinyLSTM:
         dc_next: Any,
         cache: Dict[str, Any]
     ) -> Tuple[Any, Any, Dict[str, Any]]:
-        """
-        Single LSTM cell backward pass (BPTT).
-
-        Returns:
-            dh_prev: Gradient w.r.t. previous hidden state
-            dc_prev: Gradient w.r.t. previous cell state
-            grads: Weight/bias gradients
-        """
+        """Single LSTM cell backward pass @zara"""
         np = _ensure_numpy()
 
         concat = cache['concat']
@@ -264,33 +217,18 @@ class TinyLSTM:
         )
 
         dh_prev = dconcat[:self.hidden_size, :]
-
         dc_prev = dc * ft
 
         return dh_prev, dc_prev, grads
 
-    def backward(
-        self,
-        dy: Any,
-        cache: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Backward pass through entire sequence (BPTT).
-
-        Args:
-            dy: Gradient of loss w.r.t. output
-            cache: Cached values from forward pass
-
-        Returns:
-            grads: Dictionary of all gradients
-        """
+    def backward(self, dy: Any, cache: Dict[str, Any]) -> Dict[str, Any]:
+        """Backward pass through sequence (BPTT) @zara"""
         np = _ensure_numpy()
 
         caches = cache['caches']
         final_h = cache['final_h']
 
         dh = np.dot(self.Wy.T, dy)
-
         grads_Wy = np.dot(dy, final_h.T)
         grads_by = dy
 
@@ -328,24 +266,12 @@ class TinyLSTM:
 
         return grads_accum
 
-    def _update_weights_adam(
-        self,
-        grads: Dict[str, Any],
-        t: int
-    ):
-        """
-        Update weights using Adam optimizer.
-
-        Args:
-            grads: Gradients from backward pass
-            t: Current timestep (for bias correction)
-        """
+    def _update_weights_adam(self, grads: Dict[str, Any], t: int):
+        """Update weights using Adam optimizer @zara"""
         np = _ensure_numpy()
 
         for key in grads:
-
             self.m[key] = self.beta1 * self.m[key] + (1 - self.beta1) * grads[key]
-
             self.v[key] = self.beta2 * self.v[key] + (1 - self.beta2) * (grads[key] ** 2)
 
             m_hat = self.m[key] / (1 - self.beta1 ** t)
@@ -358,31 +284,50 @@ class TinyLSTM:
     async def train(
         self,
         X_sequences: List[Any],
-        y_targets: List[float],
+        y_targets: List[Any],
         epochs: int = 100,
         batch_size: int = 16,
         validation_split: float = 0.2,
         early_stopping_patience: int = 10,
         checkpoint_callback: Optional[callable] = None
     ) -> Dict[str, Any]:
-        """
-        Train LSTM using BPTT and Adam optimizer.
+        """Train Multi-Output LSTM with backpropagation @zara
 
         Args:
-            X_sequences: List of input sequences (each: [seq_len, features])
-            y_targets: List of target values (kWh)
-            epochs: Number of training epochs
+            X_sequences: List of input sequences, each shape (seq_len, input_size)
+            y_targets: List of targets - List[List[float]] for multi-output
+            epochs: Maximum training epochs
             batch_size: Mini-batch size
-            validation_split: Fraction for validation
-            early_stopping_patience: Stop if no improvement for N epochs
-            checkpoint_callback: Function to call for checkpoints
+            validation_split: Fraction of data for validation
+            early_stopping_patience: Stop if no improvement for this many epochs
+            checkpoint_callback: Optional callback for checkpointing
 
         Returns:
-            training_result: Dict with accuracy, loss, epochs_trained, etc.
+            Training results dict with accuracy, losses, etc.
         """
         np = _ensure_numpy()
 
-        _LOGGER.info(f"Starting TinyLSTM training: {len(X_sequences)} samples, {epochs} epochs")
+        _LOGGER.info(
+            f"Training: {len(X_sequences)} samples, {epochs} epochs, "
+            f"{self.num_outputs} outputs"
+        )
+
+        def _to_target_array(y):
+            """Convert target to (num_outputs, 1) array @zara"""
+            if isinstance(y, (int, float)):
+                return np.array([[float(y)]] * self.num_outputs)
+            elif isinstance(y, (list, tuple)):
+                # List of values - one per output
+                arr = np.array([[float(v)] for v in y])
+                if arr.shape[0] != self.num_outputs:
+                    # Pad or truncate
+                    if arr.shape[0] < self.num_outputs:
+                        arr = np.vstack([arr, np.zeros((self.num_outputs - arr.shape[0], 1))])
+                    else:
+                        arr = arr[:self.num_outputs]
+                return arr
+            else:
+                return np.array([[0.0]] * self.num_outputs)
 
         n_samples = len(X_sequences)
         n_val = int(n_samples * validation_split)
@@ -399,13 +344,11 @@ class TinyLSTM:
 
         best_val_loss = float('inf')
         patience_counter = 0
-        training_history = {'train_loss': [], 'val_loss': []}
+        history = {'train_loss': [], 'val_loss': []}
 
         for epoch in range(1, epochs + 1):
-
             train_indices = np.random.permutation(n_train)
             epoch_loss = 0.0
-            n_batches = 0
 
             for batch_start in range(0, n_train, batch_size):
                 batch_end = min(batch_start + batch_size, n_train)
@@ -416,10 +359,9 @@ class TinyLSTM:
 
                 for idx in batch_indices:
                     X = np.array(X_train[idx])
-                    y_true = np.array([[y_train[idx]]])
+                    y_true = _to_target_array(y_train[idx])
 
                     y_pred, cache = self.forward(X, training=True)
-
                     loss = ((y_pred - y_true) ** 2).mean()
                     batch_loss += loss
 
@@ -436,28 +378,23 @@ class TinyLSTM:
                     batch_grads[key] /= len(batch_indices)
 
                 self._update_weights_adam(batch_grads, epoch)
-
                 epoch_loss += batch_loss
-                n_batches += 1
 
             train_loss = epoch_loss / n_train
 
             val_loss = 0.0
             for i in range(len(X_val)):
                 X = np.array(X_val[i])
-                y_true = np.array([[y_val[i]]])
+                y_true = _to_target_array(y_val[i])
                 y_pred, _ = self.forward(X, training=False)
                 val_loss += ((y_pred - y_true) ** 2).mean()
             val_loss /= len(X_val) if len(X_val) > 0 else 1
 
-            training_history['train_loss'].append(float(train_loss))
-            training_history['val_loss'].append(float(val_loss))
+            history['train_loss'].append(float(train_loss))
+            history['val_loss'].append(float(val_loss))
 
-            if epoch % 10 == 0 or epoch == 1:
-                _LOGGER.info(
-                    f"Epoch {epoch}/{epochs}: train_loss={train_loss:.4f}, "
-                    f"val_loss={val_loss:.4f}"
-                )
+            if epoch % 10 == 0:
+                _LOGGER.info(f"Epoch {epoch}: train={train_loss:.4f}, val={val_loss:.4f}")
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -475,81 +412,89 @@ class TinyLSTM:
             if epoch % 5 == 0:
                 await asyncio.sleep(0)
 
-        y_pred_all = []
-        for X in X_val:
-            X_arr = np.array(X)
-            y_pred, _ = self.forward(X_arr, training=False)
-            y_pred_all.append(float(y_pred[0, 0]))
+        # Calculate R2 score for total prediction (sum of outputs)
+        y_pred_totals = []
+        y_true_totals = []
+        for i, X in enumerate(X_val):
+            y_pred, _ = self.forward(np.array(X), training=False)
+            y_pred_totals.append(float(np.sum(y_pred)))
 
-        if len(y_val) > 0:
-            y_val_arr = np.array(y_val)
-            y_pred_arr = np.array(y_pred_all)
-            ss_res = np.sum((y_val_arr - y_pred_arr) ** 2)
-            ss_tot = np.sum((y_val_arr - np.mean(y_val_arr)) ** 2)
+            y_true_arr = _to_target_array(y_val[i])
+            y_true_totals.append(float(np.sum(y_true_arr)))
+
+        r2_score = 0.0
+        rmse = 0.0
+        if len(y_true_totals) > 0:
+            y_true_arr = np.array(y_true_totals)
+            y_pred_arr = np.array(y_pred_totals)
+            ss_res = np.sum((y_true_arr - y_pred_arr) ** 2)
+            ss_tot = np.sum((y_true_arr - np.mean(y_true_arr)) ** 2)
             r2_score = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-        else:
-            r2_score = 0.0
+            # RMSE: Root Mean Squared Error in kWh
+            rmse = float(np.sqrt(np.mean((y_true_arr - y_pred_arr) ** 2)))
 
-        _LOGGER.info(f"Training complete: R²={r2_score:.3f}, best_val_loss={best_val_loss:.4f}")
+        _LOGGER.info(f"Training complete: R2={r2_score:.3f}, RMSE={rmse:.3f} kWh, outputs={self.num_outputs}")
 
         return {
             'success': True,
             'accuracy': float(r2_score),
-            'final_train_loss': float(training_history['train_loss'][-1]),
-            'final_val_loss': float(training_history['val_loss'][-1]),
+            'rmse': rmse,
+            'final_train_loss': float(history['train_loss'][-1]),
+            'final_val_loss': float(history['val_loss'][-1]),
             'best_val_loss': float(best_val_loss),
             'epochs_trained': epoch,
-            'training_history': training_history
+            'num_outputs': self.num_outputs,
+            'history': history
         }
 
-    def predict(self, X_sequence: Any) -> float:
-        """Predict for single sequence (inference mode) @zara
+    def predict(self, X_sequence: Any) -> List[float]:
+        """Predict production for single sequence - returns all outputs @zara
 
         Args:
-            X_sequence: Input sequence. Accepts:
-                - 2D array (sequence_length, features) - PREFERRED
-                - 3D array (1, sequence_length, features) - will be squeezed
+            X_sequence: Input sequence of shape (seq_len, input_size)
 
         Returns:
-            Predicted value (float)
-
-        Raises:
-            ValueError: If input has wrong dimensions or shape
+            List of predictions, one per output neuron (one per panel group)
         """
         np = _ensure_numpy()
         X_arr = np.array(X_sequence)
 
-        # Defensive: Handle both 2D and 3D inputs
         if X_arr.ndim == 3:
             if X_arr.shape[0] != 1:
-                raise ValueError(
-                    f"Batch prediction not supported. Expected batch_size=1, got {X_arr.shape[0]}"
-                )
-            X_arr = X_arr.squeeze(0)  # (1, 24, 14) -> (24, 14)
-            _LOGGER.debug("Squeezed 3D input to 2D for LSTM prediction")
+                raise ValueError(f"Batch not supported, got shape {X_arr.shape}")
+            X_arr = X_arr.squeeze(0)
 
         if X_arr.ndim != 2:
-            raise ValueError(
-                f"Expected 2D sequence (seq_len, features), got {X_arr.ndim}D with shape {X_arr.shape}"
-            )
+            raise ValueError(f"Expected 2D, got {X_arr.ndim}D shape {X_arr.shape}")
 
         if X_arr.shape[0] != self.sequence_length:
             raise ValueError(
-                f"Sequence length mismatch: expected {self.sequence_length}, got {X_arr.shape[0]}"
+                f"Sequence length: expected {self.sequence_length}, got {X_arr.shape[0]}"
             )
 
         if X_arr.shape[1] != self.input_size:
             raise ValueError(
-                f"Feature count mismatch: expected {self.input_size}, got {X_arr.shape[1]}"
+                f"Features: expected {self.input_size}, got {X_arr.shape[1]}"
             )
 
         y_pred, _ = self.forward(X_arr, training=False)
-        return float(y_pred[0, 0])
+        # y_pred has shape (num_outputs, 1) - flatten to list
+        return [float(y_pred[i, 0]) for i in range(self.num_outputs)]
+
+    def predict_total(self, X_sequence: Any) -> float:
+        """Predict total production (sum of all group outputs) @zara
+
+        Args:
+            X_sequence: Input sequence of shape (seq_len, input_size)
+
+        Returns:
+            Sum of all output predictions
+        """
+        predictions = self.predict(X_sequence)
+        return sum(predictions)
 
     def get_weights(self) -> Dict[str, Any]:
-        """Export weights for saving to learned_weights.json @zara"""
-        np = _ensure_numpy()
-
+        """Export weights for persistence @zara"""
         return {
             'Wf': self.Wf.tolist(), 'Wi': self.Wi.tolist(),
             'Wc': self.Wc.tolist(), 'Wo': self.Wo.tolist(),
@@ -558,11 +503,12 @@ class TinyLSTM:
             'Wy': self.Wy.tolist(), 'by': self.by.tolist(),
             'input_size': self.input_size,
             'hidden_size': self.hidden_size,
-            'sequence_length': self.sequence_length
+            'sequence_length': self.sequence_length,
+            'num_outputs': self.num_outputs,
         }
 
     def set_weights(self, weights: Dict[str, Any]):
-        """Load weights from learned_weights.json @zara"""
+        """Load weights from persistence @zara"""
         np = _ensure_numpy()
 
         self.Wf = np.array(weights['Wf'])
@@ -579,18 +525,15 @@ class TinyLSTM:
         self.input_size = weights.get('input_size', self.input_size)
         self.hidden_size = weights.get('hidden_size', self.hidden_size)
         self.sequence_length = weights.get('sequence_length', self.sequence_length)
+        self.num_outputs = weights.get('num_outputs', self.Wy.shape[0])
 
-        _LOGGER.info("TinyLSTM weights loaded successfully")
+        _LOGGER.info(f"Weights loaded: {self.num_outputs} outputs")
 
     def get_model_size_kb(self) -> float:
-        """Calculate model size in KB (for monitoring) @zara"""
-        np = _ensure_numpy()
-
+        """Calculate model size in KB @zara"""
         total_params = (
             self.Wf.size + self.Wi.size + self.Wc.size + self.Wo.size +
             self.bf.size + self.bi.size + self.bc.size + self.bo.size +
             self.Wy.size + self.by.size
         )
-
-        size_kb = (total_params * 8) / 1024
-        return size_kb
+        return (total_params * 8) / 1024

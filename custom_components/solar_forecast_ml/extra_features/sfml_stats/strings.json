@@ -128,6 +128,16 @@
           "sensor_smartmeter_export_kwh": "Absoluter Zählerstand für Einspeisung in kWh. MUSS 'total_increasing' sein. Beispiel: sensor.power_meter_total_export mit Wert wie 5432.10 kWh.",
           "sensor_solar_yield_total_kwh": "Absoluter Gesamtertrag der PV-Anlage in kWh. MUSS 'total_increasing' sein. Beispiel: sensor.inverter_total_yield mit Wert wie 15000.00 kWh."
         }
+      },
+      "panel_group_names": {
+        "title": "Panel-Gruppen Namen",
+        "description": "Überschreibe die automatisch generierten Namen der Panel-Gruppen aus Solar Forecast ML.\n\n📝 Format: OriginalName=NeuerName (kommagetrennt)\n\nBeispiel: {example}",
+        "data": {
+          "panel_group_names_input": "Namens-Mapping"
+        },
+        "data_description": {
+          "panel_group_names_input": "Mapping der Panel-Gruppen-Namen. Format: Gruppe 1=String Süd, Gruppe 2=String West. Leer lassen für Standard-Namen."
+        }
       }
     },
     "abort": {
@@ -151,7 +161,8 @@
           "battery": "Batterie & Verbrauch",
           "statistics": "Statistik-Sensoren",
           "panels": "PV-Panel Sensoren",
-          "billing": "Stromrechnung & Abrechnung"
+          "billing": "Stromrechnung & Abrechnung",
+          "panel_group_names": "Panel-Gruppen Namen"
         }
       },
       "general": {
@@ -280,6 +291,16 @@
           "sensor_smartmeter_import_kwh": "Zählerstand Netzbezug in kWh (total_increasing). Startwert wird aus Recorder geholt.",
           "sensor_smartmeter_export_kwh": "Zählerstand Einspeisung in kWh (total_increasing). Startwert wird aus Recorder geholt.",
           "sensor_solar_yield_total_kwh": "Gesamter Solarertrag in kWh (total_increasing). Startwert wird aus Recorder geholt."
+        }
+      },
+      "panel_group_names": {
+        "title": "Panel-Gruppen Namen",
+        "description": "Überschreibe die automatisch generierten Namen der Panel-Gruppen aus Solar Forecast ML.\n\n📝 Format: OriginalName=NeuerName (kommagetrennt)\n\nBeispiel: {example}",
+        "data": {
+          "panel_group_names_input": "Namens-Mapping"
+        },
+        "data_description": {
+          "panel_group_names_input": "Mapping der Panel-Gruppen-Namen. Format: Gruppe 1=String Süd, Gruppe 2=String West. Leer lassen für Standard-Namen."
         }
       }
     }

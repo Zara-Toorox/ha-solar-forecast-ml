@@ -143,8 +143,8 @@
   },
   "services": {
     "train_model": {
-      "name": "ML-Modell trainieren",
-      "description": "Manuelles Training des ML-Modells mit gesammelten Produktionsdaten",
+      "name": "AI-Modell trainieren",
+      "description": "Manuelles Training des AI-Modells mit gesammelten Produktionsdaten",
       "fields": {
         "force": {
           "name": "Training erzwingen",
@@ -161,7 +161,7 @@
       "description": "Alle gesammelten Trainings-Samples löschen (erfordert Bestätigung)"
     },
     "reset_model": {
-      "name": "ML-Modell zurücksetzen",
+      "name": "AI-Modell zurücksetzen",
       "description": "Trainiertes Modell zurücksetzen und auf regelbasierte Prognose umschalten"
     }
   },
@@ -203,17 +203,28 @@
       "data_age": {
         "name": "Datenalter"
       },
-      "last_ml_training": {
-        "name": "Letztes ML-Training"
+      "last_ai_training": {
+        "name": "Letztes AI-Training"
       },
       "next_scheduled_task": {
         "name": "Nächste geplante Aufgabe"
       },
-      "ml_service_status": {
-        "name": "ML-Service Status"
+      "ai_service_status": {
+        "name": "AI-Service Status"
       },
-      "ml_metrics": {
-        "name": "ML-Modell Metriken"
+      "ai_metrics": {
+        "name": "AI-Modell Metriken"
+      },
+      "ai_rmse": {
+        "name": "AI RMSE",
+        "state": {
+          "excellent": "Ausgezeichnet",
+          "very_good": "Sehr gut",
+          "good": "Gut",
+          "fair": "Akzeptabel",
+          "moderate": "Moderat",
+          "learning": "Lernend"
+        }
       },
       "active_prediction_model": {
         "name": "Aktives Vorhersagemodell"

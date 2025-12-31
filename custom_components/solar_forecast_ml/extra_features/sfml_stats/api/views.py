@@ -1,20 +1,12 @@
-"""REST API views for SFML Stats Dashboard. @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
 from __future__ import annotations
 
 import json
@@ -64,6 +56,7 @@ from ..const import (
     DEFAULT_PANEL4_NAME,
     CONF_FEED_IN_TARIFF,
     DEFAULT_FEED_IN_TARIFF,
+    CONF_PANEL_GROUP_NAMES,
 )
 
 if TYPE_CHECKING:
@@ -293,9 +286,9 @@ class SolarDataView(HomeAssistantView):
                 if date.fromisoformat(k) >= cutoff
             }
 
-        ml_state = await _read_json_file(SOLAR_PATH / "ml" / "model_state.json")
-        if ml_state:
-            result["data"]["ml_state"] = ml_state
+        ai_weights = await _read_json_file(SOLAR_PATH / "ai" / "learned_weights.json")
+        if ai_weights:
+            result["data"]["ai_state"] = ai_weights
 
         if forecasts_data and "today" in forecasts_data:
             forecast_day = forecasts_data["today"].get("forecast_day", {})
@@ -473,10 +466,9 @@ class SummaryDataView(HomeAssistantView):
                 result["kpis"]["price_min"] = min(recent_prices)
                 result["kpis"]["price_max"] = max(recent_prices)
 
-        ml_state = await _read_json_file(SOLAR_PATH / "ml" / "model_state.json")
-        if ml_state:
-            result["kpis"]["ml_accuracy"] = ml_state.get("current_accuracy", 0)
-            result["kpis"]["ml_training_days"] = ml_state.get("training_days", 0)
+        ai_weights = await _read_json_file(SOLAR_PATH / "ai" / "learned_weights.json")
+        if ai_weights:
+            result["kpis"]["ai_training_samples"] = ai_weights.get("training_samples", 0)
 
         def extract_time(iso_string: str | None) -> str | None:
             """Extract HH:MM from ISO string. @zara"""
@@ -947,10 +939,20 @@ class StatisticsView(HomeAssistantView):
         if not group_names:
             return {"available": False, "groups": {}}
 
+        # Get panel group name mapping from config
+        config = _get_config()
+        name_mapping = config.get(CONF_PANEL_GROUP_NAMES, {})
+        if not isinstance(name_mapping, dict):
+            name_mapping = {}
+
         groups = {}
         for group_name in sorted(group_names):
+            # Apply name mapping: use custom name if configured, otherwise original name
+            display_name = name_mapping.get(group_name, group_name)
+
             group_data = {
-                "name": group_name,
+                "name": display_name,
+                "original_name": group_name,  # Keep original for reference
                 "prediction_total_kwh": 0.0,
                 "actual_total_kwh": 0.0,
                 "hourly": [],
@@ -986,7 +988,8 @@ class StatisticsView(HomeAssistantView):
             else:
                 group_data["accuracy_percent"] = None
 
-            groups[group_name] = group_data
+            # Use display_name as key for the groups dict
+            groups[display_name] = group_data
 
         result = {"available": True, "groups": groups}
         await self._save_panel_group_cache(result, today_str)

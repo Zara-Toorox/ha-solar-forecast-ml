@@ -1,20 +1,11 @@
-"""Data Update Coordinator for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import asyncio
 import logging
@@ -53,8 +44,8 @@ from .forecast.forecast_orchestrator import ForecastOrchestrator
 from .forecast.forecast_weather import WeatherService
 
 from .forecast.forecast_weather_calculator import WeatherCalculator
-from .ml.ml_best_hour_calculator import BestHourCalculator
-from .ml.ml_predictor import MLPredictor, ModelState
+from .ai import AIPredictor, ModelState, BestHourCalculator
+from .physics.physics_calibrator import PhysicsCalibrator
 from .production.production_history import ProductionCalculator as HistoricalProductionCalculator
 from .production.production_scheduled_tasks import ScheduledTasksManager
 from .production.production_tracker import ProductionTimeCalculator
@@ -132,7 +123,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
         self.error_handler = ErrorHandlingService()
         self.weather_service: Optional[WeatherService] = None
-        self.ml_predictor: Optional[MLPredictor] = None
+        self.ai_predictor: Optional[AIPredictor] = None
         self._services_initialized = False
         self._ml_ready = False
 
@@ -175,7 +166,10 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         # Panel group sensor reader for per-group learning
         self.panel_group_sensor_reader = None
 
-        # CRITICAL FIX V12.2.0: Store unsubscribe callbacks to prevent listener accumulation
+        # Physics calibrator for self-learning correction factors
+        self.physics_calibrator: Optional[PhysicsCalibrator] = None
+
+        # CRITICAL FIX V12.4.0: Store unsubscribe callbacks to prevent listener accumulation
         self._unsub_power_peak_listener: Optional[callable] = None
         self._unsub_weekly_retraining_listener: Optional[callable] = None
 
@@ -201,37 +195,43 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                         "notification_service"
                     )
 
-                    self.ml_predictor = MLPredictor(
+                    self.ai_predictor = AIPredictor(
                         hass=self.hass,
                         data_manager=self.data_manager,
                         error_handler=self.error_handler,
                         notification_service=notification_service,
                         config_entry=self.entry,
+                        panel_groups=self.panel_groups,
+                        solar_capacity=self.solar_capacity,
                     )
 
-                    self.ml_predictor.set_entities(
+                    self.ai_predictor.set_entities(
                         solar_capacity=self.solar_capacity,
                         power_entity=self.power_entity,
                         weather_entity=self.current_weather_entity,
-                        temp_sensor=self.entry.data.get(CONF_TEMP_SENSOR),
-                        wind_sensor=self.entry.data.get(CONF_WIND_SENSOR),
-                        rain_sensor=self.entry.data.get(CONF_RAIN_SENSOR),
-                        lux_sensor=self.entry.data.get(CONF_LUX_SENSOR),
-                        humidity_sensor=self.entry.data.get(CONF_HUMIDITY_SENSOR),
-                        pressure_sensor=self.entry.data.get(CONF_PRESSURE_SENSOR),
-                        solar_radiation_sensor=self.entry.data.get(CONF_SOLAR_RADIATION_SENSOR),
                     )
 
-                    init_success = await self.ml_predictor.initialize()
+                    init_success = await self.ai_predictor.initialize()
                     if init_success:
                         self._ml_ready = True
-                        self.best_hour_calculator.ml_predictor = self.ml_predictor
+                        self.best_hour_calculator.ai_predictor = self.ai_predictor
                     else:
-                        _LOGGER.error("MLPredictor initialization failed")
-                        self.ml_predictor = None
+                        _LOGGER.error("AIPredictor initialization failed")
+                        self.ai_predictor = None
                 except Exception as e:
-                    _LOGGER.error(f"Failed to initialize MLPredictor: {e}")
-                    self.ml_predictor = None
+                    _LOGGER.error(f"Failed to initialize AIPredictor: {e}")
+                    self.ai_predictor = None
+
+            # Initialize Physics Calibrator for self-learning physics corrections
+            try:
+                self.physics_calibrator = PhysicsCalibrator(
+                    data_dir=self.data_manager.data_dir
+                )
+                await self.physics_calibrator.async_init()
+                _LOGGER.info("PhysicsCalibrator initialized for self-learning corrections")
+            except Exception as e:
+                _LOGGER.warning(f"Failed to initialize PhysicsCalibrator: {e}")
+                self.physics_calibrator = None
 
             self._services_initialized = True
             return True
@@ -242,14 +242,23 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
     async def _initialize_forecast_orchestrator(self) -> None:
         """Initialize the forecast orchestrator strategies @zara"""
-        if not self.ml_predictor:
-            self.forecast_orchestrator.initialize_strategies(
-                ml_predictor=None, error_handler=self.error_handler
-            )
-        else:
-            self.forecast_orchestrator.initialize_strategies(
-                ml_predictor=self.ml_predictor, error_handler=self.error_handler
-            )
+        self.forecast_orchestrator.initialize_strategies(
+            ai_predictor=self.ai_predictor, error_handler=self.error_handler
+        )
+
+        # Connect PhysicsCalibrator to the RuleBasedStrategy for self-learning
+        # The strategy will connect it to PanelGroupCalculator when it's created
+        if self.physics_calibrator:
+            try:
+                strategy = self.forecast_orchestrator.rule_based_strategy
+                if strategy:
+                    strategy.set_physics_calibrator(self.physics_calibrator)
+                    _LOGGER.info(
+                        "PhysicsCalibrator passed to RuleBasedStrategy - "
+                        "self-learning physics corrections enabled"
+                    )
+            except Exception as e:
+                _LOGGER.warning(f"Could not connect PhysicsCalibrator: {e}")
 
     async def async_setup(self) -> bool:
         """Setup coordinator and start tracking @zara"""
@@ -334,6 +343,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             await self._load_persistent_state()
 
             # Initialize panel group sensor reader if any group has an energy sensor
+            # NOTE: Validation runs in background to not block HA startup
             await self._initialize_panel_group_sensor_reader()
 
             try:
@@ -351,21 +361,21 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             except Exception:
                 pass
 
-            if self.ml_predictor:
+            if self.ai_predictor:
                 @callback
                 def _scheduled_weekly_retraining(now: datetime) -> None:
                     """Callback for weekly model retraining - Sundays only. @zara"""
                     if now.weekday() == 6:
-                        asyncio.create_task(self.ml_predictor.train_model())
+                        asyncio.create_task(self.ai_predictor.train_model())
 
-                # CRITICAL FIX V12.2.0: Store unsubscribe callback
+                # CRITICAL FIX V12.4.0: Store unsubscribe callback
                 self._unsub_weekly_retraining_listener = async_track_time_change(
                     self.hass, _scheduled_weekly_retraining, hour=3, minute=0, second=0
                 )
 
             await self.scheduled_tasks.calculate_yesterday_deviation_on_startup()
 
-            ml_status = "ML-Ready" if self._ml_ready else "Rule-Based"
+            ml_status = "AI-Ready" if self._ml_ready else "Rule-Based"
             _LOGGER.info(f"Solar Forecast Coordinator ready ({ml_status}, {self.solar_capacity} kWp)")
 
             return True
@@ -377,7 +387,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
     async def async_shutdown(self) -> None:
         """Cleanup coordinator resources @zara
 
-        CRITICAL FIX V12.2.0: Now properly removes all event listeners
+        CRITICAL FIX V12.4.0: Now properly removes all event listeners
         to prevent listener accumulation on reload.
         """
 
@@ -388,7 +398,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             await self.production_time_calculator.stop_tracking()
             self.scheduled_tasks.cancel_listeners()
 
-            # CRITICAL FIX V12.2.0: Remove power peak tracking listener
+            # CRITICAL FIX V12.4.0: Remove power peak tracking listener
             if self._unsub_power_peak_listener is not None:
                 try:
                     self._unsub_power_peak_listener()
@@ -397,7 +407,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 except Exception as e:
                     _LOGGER.warning(f"Error removing power peak listener: {e}")
 
-            # CRITICAL FIX V12.2.0: Remove weekly retraining listener
+            # CRITICAL FIX V12.4.0: Remove weekly retraining listener
             if self._unsub_weekly_retraining_listener is not None:
                 try:
                     self._unsub_weekly_retraining_listener()
@@ -410,7 +420,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Error during coordinator shutdown: {e}")
 
     async def _initialize_panel_group_sensor_reader(self) -> None:
-        """Initialize the panel group sensor reader if any group has an energy sensor. @zara"""
+        """Initialize the panel group sensor reader if any group has an energy sensor. @zara
+
+        CRITICAL FIX V12.4.1: Sensor validation now runs in background task
+        to prevent blocking Home Assistant startup (was causing 15+ minute delays).
+        """
         try:
             if not self.panel_groups:
                 return
@@ -444,22 +458,44 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     f"energy_sensor={pg.get('energy_sensor')}"
                 )
 
-            # Validate sensors with retry (entities might not be available at startup)
-            await self._validate_panel_group_sensors_with_retry()
+            # CRITICAL FIX V12.4.1: Run sensor validation in background
+            # This prevents blocking HA startup for up to 90 seconds
+            # Sensors will be validated after HA is fully loaded
+            self.hass.async_create_task(
+                self._validate_panel_group_sensors_with_retry(),
+                name="solar_forecast_ml_sensor_validation"
+            )
+            _LOGGER.info("Panel group sensor validation scheduled (background task)")
 
         except Exception as e:
             _LOGGER.error(f"Failed to initialize panel group sensor reader: {e}")
             self.panel_group_sensor_reader = None
 
     async def _validate_panel_group_sensors_with_retry(self) -> None:
-        """Validate panel group sensors with retry for startup race condition. @zara"""
+        """Validate panel group sensors with retry for startup race condition. @zara
+
+        CRITICAL FIX V12.4.1: This now runs as a background task to prevent
+        blocking Home Assistant startup. Reduced retry delay from 30s to 15s.
+        """
         import asyncio
 
+        # Guard: Ensure sensor reader was initialized
+        if not self.panel_group_sensor_reader:
+            _LOGGER.debug("Panel group sensor reader not initialized - skipping validation")
+            return
+
         max_retries = 3
-        retry_delay_seconds = 30
+        retry_delay_seconds = 15  # Reduced from 30s to 15s
 
         for attempt in range(1, max_retries + 1):
-            validation_results = await self.panel_group_sensor_reader.validate_sensors()
+            try:
+                validation_results = await self.panel_group_sensor_reader.validate_sensors()
+            except Exception as e:
+                _LOGGER.warning(f"Sensor validation attempt {attempt} failed: {e}")
+                if attempt < max_retries:
+                    await asyncio.sleep(retry_delay_seconds)
+                continue
+
             valid_count = sum(1 for r in validation_results.values() if r.get("valid"))
             total_count = len(validation_results)
 
@@ -500,7 +536,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
     async def _setup_power_peak_tracking(self) -> None:
         """Setup event listener for power peak tracking @zara
 
-        CRITICAL FIX V12.2.0: Now stores unsubscribe callback to prevent
+        CRITICAL FIX V12.4.0: Now stores unsubscribe callback to prevent
         listener accumulation on reload.
         """
         if not self.power_entity:
@@ -539,7 +575,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
         from homeassistant.helpers.event import async_track_state_change_event
 
-        # CRITICAL FIX V12.2.0: Store unsubscribe callback
+        # CRITICAL FIX V12.4.0: Store unsubscribe callback
         self._unsub_power_peak_listener = async_track_state_change_event(
             self.hass, [self.power_entity], power_state_changed
         )
@@ -625,22 +661,16 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             _LOGGER.debug(f"Could not calculate autarky: {e}")
             self.autarky_today = None
 
-        ml_predictor = self.ml_predictor
-        if ml_predictor:
-            self.last_successful_learning = getattr(ml_predictor, "last_training_time", None)
+        ai_predictor = self.ai_predictor
+        if ai_predictor:
+            self.last_successful_learning = getattr(ai_predictor, "last_training_time", None)
             if self.model_accuracy is None:
-                self.model_accuracy = getattr(ml_predictor, "current_accuracy", None)
+                self.model_accuracy = getattr(ai_predictor, "current_accuracy", None)
 
-            try:
-                await ml_predictor._load_recent_weather_samples(hours_back=6)
-                trends = ml_predictor._calculate_cloudiness_trends()
-                self.cloudiness_trend_1h = trends.get("cloudiness_trend_1h", 0.0)
-                self.cloudiness_trend_3h = trends.get("cloudiness_trend_3h", 0.0)
-                self.cloudiness_volatility = trends.get("cloudiness_volatility", 0.0)
-            except Exception:
-                self.cloudiness_trend_1h = 0.0
-                self.cloudiness_trend_3h = 0.0
-                self.cloudiness_volatility = 0.0
+            # Cloudiness trends not used in new AI architecture
+            self.cloudiness_trend_1h = 0.0
+            self.cloudiness_trend_3h = 0.0
+            self.cloudiness_volatility = 0.0
 
             try:
                 training_count = await self._get_training_ready_count()
@@ -665,10 +695,9 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             day_after_kwh = forecast_data.get("day_after_tomorrow")
 
             source = (
-                "ML"
-                if self.forecast_orchestrator.ml_strategy
-                and self.forecast_orchestrator.ml_strategy.is_available()
-                else "Weather"
+                "TinyLSTM"
+                if self.ai_predictor and self.ai_predictor.is_ready()
+                else "Physics"
             )
 
             if tomorrow_kwh is not None:
@@ -710,7 +739,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
                     if best_hour is not None:
                         if best_hour_kwh is not None and best_hour_kwh > 0:
-                            source = "ML-Hourly" if self.ml_predictor else "Profile"
+                            source = "ML-Hourly" if self.ai_predictor else "Profile"
                         else:
                             source = "Solar-Noon"
 
@@ -785,7 +814,7 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         if ml_active and weather_healthy and update_age_ok:
             return "Optimal (ML Active)"
         elif weather_healthy and update_age_ok:
-            reason = "ML Disabled/Unavailable" if not self.ml_predictor else "ML Not Ready"
+            reason = "ML Disabled/Unavailable" if not self.ai_predictor else "ML Not Ready"
             return f"Degraded ({reason})"
         elif not weather_healthy:
             return "Error (Weather Unavailable)"
@@ -794,11 +823,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         else:
             return "Initializing"
 
-    def on_ml_training_complete(
+    def on_ai_training_complete(
         self, timestamp: datetime, accuracy: Optional[float] = None
     ) -> None:
         _LOGGER.info(
-            f"Coordinator notified of ML Training completion at {timestamp}. Accuracy: {accuracy}"
+            f"Coordinator notified of AI Training completion at {timestamp}. Accuracy: {accuracy}"
         )
         self.last_successful_learning = timestamp
         if accuracy is not None:
@@ -806,11 +835,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         self.async_update_listeners()
 
         if accuracy is not None:
-            samples = self.ml_predictor.training_samples if self.ml_predictor else 0
+            samples = self.ai_predictor.training_samples if self.ai_predictor else 0
             self.update_system_status(
-                event_type="ml_training",
+                event_type="ai_training",
                 event_status="success",
-                event_summary=f"ML Training erfolgreich - Genauigkeit: {accuracy*100:.1f}%",
+                event_summary=f"AI Training erfolgreich - Genauigkeit: {accuracy*100:.1f}%",
                 event_details={
                     "accuracy_percent": round(accuracy * 100, 1),
                     "samples_used": samples,
@@ -819,9 +848,9 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             )
         else:
             self.update_system_status(
-                event_type="ml_training",
+                event_type="ai_training",
                 event_status="failed",
-                event_summary="ML Training fehlgeschlagen",
+                event_summary="AI Training fehlgeschlagen",
                 event_details={},
             )
 

@@ -1,20 +1,12 @@
-"""REST API views for SFML Stats Dashboard. @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
 from __future__ import annotations
 
 import json
@@ -284,9 +276,9 @@ class SolarDataView(HomeAssistantView):
                 if date.fromisoformat(k) >= cutoff
             }
 
-        ml_state = await _read_json_file(SOLAR_PATH / "ml" / "model_state.json")
-        if ml_state:
-            result["data"]["ml_state"] = ml_state
+        ai_weights = await _read_json_file(SOLAR_PATH / "ai" / "learned_weights.json")
+        if ai_weights:
+            result["data"]["ai_state"] = ai_weights
 
         if forecasts_data and "today" in forecasts_data:
             forecast_day = forecasts_data["today"].get("forecast_day", {})
@@ -461,10 +453,9 @@ class SummaryDataView(HomeAssistantView):
                 result["kpis"]["price_min"] = min(recent_prices)
                 result["kpis"]["price_max"] = max(recent_prices)
 
-        ml_state = await _read_json_file(SOLAR_PATH / "ml" / "model_state.json")
-        if ml_state:
-            result["kpis"]["ml_accuracy"] = ml_state.get("current_accuracy", 0)
-            result["kpis"]["ml_training_days"] = ml_state.get("training_days", 0)
+        ai_weights = await _read_json_file(SOLAR_PATH / "ai" / "learned_weights.json")
+        if ai_weights:
+            result["kpis"]["ai_training_samples"] = ai_weights.get("training_samples", 0)
 
         def extract_time(iso_string: str | None) -> str | None:
             """Extract HH:MM from ISO string. @zara"""

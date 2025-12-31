@@ -1,14 +1,16 @@
-# Solar Forecast ML V12.2 "Sarpeidon" - 1st HA Full AI & ML Solar Forecast
+# Solar Forecast ML V12.4 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
 
-[![Version](https://img.shields.io/badge/version-12.2.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-12.4.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 
 <a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee ' /></a>
 
-**Intelligent Solar Forecasting for Home Assistant with Physics-First ML Architecture**
+🌐 **[Website & Documentation](https://zara-toorox.github.io/index.html)**
 
-Imagine your smart home not just reacting, but *predicting* - using machine learning that adapts daily to your unique solar installation. That's exactly what Solar Forecast ML does. With **Version 12.2.0 "Sarpeidon"** we introduce enhanced **Multi-Weather Blending**, **Per-Panel-Group Learning**, **Learning Filters**, and the new **SFML Stats Lite** dashboard for all platforms.
+**Intelligent Solar Forecasting for Home Assistant with Physics-First Hybrid-AI Architecture**
+
+Imagine your smart home not just reacting, but *predicting* - using Hybrid-AI that adapts daily to your unique solar installation. That's exactly what Solar Forecast ML does. With **Version 12.4.0 "Sarpeidon"** we introduce enhanced **Multi-Weather Blending**, **Per-Panel-Group Learning**, **Learning Filters**, and the new **SFML Stats Lite** dashboard for all platforms.
 
 <p align="center">
   <img src="docs/images/progose_graph.png" alt="Solar Forecast ML Prognose" width="600">
@@ -22,14 +24,14 @@ Unlike simple weather API services, Solar Forecast ML learns from your real data
 
 - **Day 1:** Accurate forecasts using real physics (POA irradiance, temperature correction)
 - **Week 1:** System learns your panel geometry (tilt/azimuth) automatically
-- **Week 2+:** ML enhances physics predictions with local patterns (shadows, obstructions)
-- **Month 1+:** 93-97% accuracy with full Physics+ML ensemble
+- **Week 2+:** AI enhances physics predictions with local patterns (shadows, obstructions)
+- **Month 1+:** 93-97% accuracy with full Physics+AI ensemble
 
 The integration adapts to your specific roof orientation, local weather conditions, shading patterns, and seasonal characteristics - all without manual configuration.
 
 ---
 
-## New in Version 12.2.0 "Sarpeidon"
+## New in Version 12.4.0 "Sarpeidon"
 
 ### SFML Stats Lite (NEW)
 - **Universal Dashboard** - Works on ALL platforms including Raspberry Pi and ARM
@@ -39,7 +41,7 @@ The integration adapts to your specific roof orientation, local weather conditio
 - **Automated Reports** - Weekly and monthly chart generation
 
 ### Learning Filter System (NEW)
-- **Intelligent Data Filtering** - Excludes anomalous hours from ML training
+- **Intelligent Data Filtering** - Excludes anomalous hours from AI training
 - **Weather Alert Detection** - Automatically flags unexpected weather events
 - **Inverter Clipping Detection** - Excludes hardware-limited data points
 - **Daily Learning Protection** - Skips training if >25% of data is flagged
@@ -64,14 +66,14 @@ The integration adapts to your specific roof orientation, local weather conditio
 - **Morning/Afternoon Optimization** - Addresses systematic forecast biases at different times
 - **7-day Rolling Learning** - Continuously improves based on recent performance
 
-### Physics-First Architecture
+### Physics-First Hybrid-AI Architecture
 The core architecture - a complete redesign from traditional solar forecasting:
 
 - **PhysicsEngine** - Real solar physics calculations (POA, temperature correction, cell efficiency)
 - **GeometryLearner** - Automatically learns your panel tilt & azimuth using Levenberg-Marquardt optimization
-- **AI Neural Network** - Pure NumPy LSTM AI that captures temporal patterns
-- **Residual Learning** - ML learns the difference between physics and reality
-- **Weighted Ensemble** - Confidence-based blending of physics + ML predictions
+- **AI Neural Network** - Pure NumPy AI that captures temporal patterns
+- **Residual Learning** - AI learns the difference between physics and reality
+- **Weighted Ensemble** - Confidence-based blending of physics + AI predictions
 - **Captain's LOG** - Monthly system health report (tilt, azimuth, seasonal tracking)
 
 ### Intelligent Detection Systems
@@ -93,16 +95,16 @@ The core architecture - a complete redesign from traditional solar forecasting:
 ## Core Features
 
 ### Forecasting
-- **3-day yield forecasts** (today, tomorrow, day after) with Physics+ML optimization
+- **3-day yield forecasts** (today, tomorrow, day after) with Physics+AI optimization
 - **Hourly predictions** for detailed planning
 - **Physics-based calculations** using GHI, DNI, DHI from Open-Meteo
 - **Automatic panel geometry learning** - no manual tilt/azimuth configuration needed
 - **Temperature-corrected efficiency** - accounts for cell temperature effects
 
-### Machine Learning supported by AI
+### Hybrid-AI Engine
 - **Adaptive Algorithm Selection:**
   - < 100 samples: Ridge Regression (fast, stable)
-  - 100+ samples: TinyLSTM Neural Network (+5-10% accuracy)
+  - 100+ samples: AI Neural Network (+5-10% accuracy)
 - **14 optimized features** per hour (time, weather, astronomy, lag)
 - **24-hour sequence learning** for temporal pattern recognition
 - **Zero external dependencies** - pure NumPy implementation
@@ -116,7 +118,7 @@ The core architecture - a complete redesign from traditional solar forecasting:
 
 ### Data Privacy
 - **100% local processing** - Everything calculated on your system
-- **100% local AI and ML** - No ChatGPT, Claude, Gemini, Grok needed
+- **100% local Hybrid-AI** - No ChatGPT, Claude, Gemini, Grok needed
 - **No cloud services** - All data stays on your disk
 - **No API keys required** - Uses free Open-Meteo API
 
@@ -262,10 +264,10 @@ automation:
 | `sensor.solar_forecast_ml_next_hour` | Next hour prediction (kWh) |
 | `sensor.solar_forecast_ml_production_time` | Production hours today |
 
-### ML & Analytics Sensors
+### AI & Analytics Sensors
 | Sensor | Description |
 |--------|-------------|
-| `sensor.solar_forecast_ml_model_state` | ML model training status |
+| `sensor.solar_forecast_ml_model_state` | AI model training status |
 | `sensor.solar_forecast_ml_model_accuracy` | Current prediction accuracy (%) |
 | `sensor.solar_forecast_ml_training_samples` | Number of training samples |
 | `sensor.solar_forecast_ml_shadow_current` | Current shadow detection |
@@ -282,16 +284,16 @@ automation:
 
 ## Services (Developer)
 
-### ML Services (Developers only or on advice)
+### AI Services (Developers only or on advice)
 | Service | Description |
 |---------|-------------|
-| `force_retrain` | Retrain ML model with all available data |
-| `reset_model` | Reset ML model to initial state |
+| `force_retrain` | Retrain AI model with all available data |
+| `reset_model` | Reset AI model to initial state |
 
 ### Bootstrap Services (Developers only or on advice)
 | Service | Description |
 |---------|-------------|
-| `bootstrap_physics_from_history` | Train Physics+ML from HA history (up to 6 months) |
+| `bootstrap_physics_from_history` | Train Physics+AI from HA history (up to 6 months) |
 | `bootstrap_from_history` | Bootstrap pattern learning from history |
 
 ### Multi-Weather Services (Developers only or on advice)
@@ -407,14 +409,14 @@ This will:
 1. Fetch your production history from Home Assistant
 2. Get historical weather from Open-Meteo Archive
 3. Train the GeometryLearner (learns panel tilt/azimuth)
-4. Train the ResidualTrainer (ML corrections)
+4. Train the ResidualTrainer (AI corrections)
 5. Your system is fully calibrated!
 
 ---
 
 ## How It Works
 
-### Architecture: "Physics-First, ML-Enhanced"
+### Architecture: "Physics-First, AI-Enhanced"
 
 ```
 +-------------------------------------------------------------------+
@@ -428,7 +430,7 @@ This will:
 |  GeometryLearner + ShadowLearner + WeatherPrecision + PanelGroups  |
 +-------------------------------------------------------------------+
 |  LAYER 4: PREDICTION ENSEMBLE                                      |
-|  Physics (Rule-Based) + TinyLSTM (ML) -> Weighted Combination      |
+|  Physics (Rule-Based) + AI Neural Network -> Weighted Combination  |
 +-------------------------------------------------------------------+
 |  LAYER 5: ANOMALY DETECTION                                        |
 |  Frost Detection + Shadow Detection + Cloud Physics                |
@@ -442,9 +444,9 @@ This will:
 | Phase | Duration | What Happens |
 |-------|----------|--------------|
 | **Fresh Install** | Day 0 | Physics engine active with defaults, ~70% accuracy |
-| **Initial Learning** | Day 1-7 | Geometry converges, Ridge ML available |
+| **Initial Learning** | Day 1-7 | Geometry converges, Ridge AI available |
 | **Geometry Convergence** | Day 7-14 | +/-3 deg tilt, +/-8 deg azimuth accuracy, ~85-90% |
-| **ML Activation** | Day 14-30 | TinyLSTM enabled, ensemble: 70% physics + 30% ML |
+| **AI Activation** | Day 14-30 | AI Neural Network enabled, ensemble: 70% physics + 30% AI |
 | **Production** | Day 30+ | Full calibration, 93-97% accuracy |
 
 *With `bootstrap_physics_from_history`: Skip to "Production" phase immediately!*
@@ -457,7 +459,7 @@ This will:
 - Power sensor (Watts)
 - Daily yield sensor (kWh, resets at midnight)
 - ~50 MB disk space for data files
-- ~100-150 MB RAM during ML training
+- ~100-150 MB RAM during AI training
 
 **Note:** Solar Forecast ML runs on all platforms including Raspberry Pi and ARM devices. Only the optional SFM-Stats companion integration requires x86_64 architecture.
 
@@ -483,8 +485,8 @@ This will:
 - Check if `yield-sensor` is set correctly (kWh of your panels! must reset at midnight)
 - Check if `power-sensor` is set correctly (W of your panels!)
 
-**ML not training?**
-- Need 10+ samples for Ridge, 100+ for TinyLSTM
+**AI not training?**
+- Need 10+ samples for Ridge, 100+ for AI Neural Network
 - Check `sensor.solar_forecast_ml_training_samples`
 
 **Shadow detection wrong?**
@@ -518,14 +520,14 @@ Contributions are welcome! Please read our contributing guidelines and submit pu
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under a **Proprietary Non-Commercial License** - see the [LICENSE](LICENSE) file for details. Free for personal, educational, and non-commercial use.
 
 ---
 
 ## Credits
 
 - **Developer:** [Zara-Toorox](https://github.com/Zara-Toorox)
-- **Architecture Design:** Physics-First ML in Python , SFML-STATS in VUE, Grid Price Monitor in Python
+- **Architecture Design:** Physics-First Hybrid-AI in Python, SFML-STATS in VUE, Grid Price Monitor in Python
 - **Weather Data:** [Open-Meteo](https://open-meteo.com/) + [wttr.in](https://wttr.in/) (free, no API key required)
 
 ---

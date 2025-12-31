@@ -1,20 +1,12 @@
-"""Solar data reader for SFML Stats. @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
 from __future__ import annotations
 
 import json
@@ -28,11 +20,10 @@ import aiofiles
 
 from ..const import (
     SOLAR_FORECAST_ML_STATS,
-    SOLAR_FORECAST_ML_ML,
+    SOLAR_FORECAST_ML_AI,
     SOLAR_DAILY_SUMMARIES,
     SOLAR_HOURLY_PREDICTIONS,
     SOLAR_LEARNED_WEIGHTS,
-    SOLAR_MODEL_STATE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -117,12 +108,12 @@ class SolarDataReader:
         """Initialize the solar data reader. @zara"""
         self._config_path = config_path
         self._stats_path = config_path / SOLAR_FORECAST_ML_STATS
-        self._ml_path = config_path / SOLAR_FORECAST_ML_ML
+        self._ai_path = config_path / SOLAR_FORECAST_ML_AI
 
     @property
     def is_available(self) -> bool:
         """Check if Solar Forecast ML data is available. @zara"""
-        return self._stats_path.exists() and self._ml_path.exists()
+        return self._stats_path.exists() and self._ai_path.exists()
 
     async def _read_json_file(self, file_path: Path) -> dict | None:
         """Read a JSON file asynchronously. @zara"""
@@ -264,38 +255,34 @@ class SolarDataReader:
         return predictions
 
     async def async_get_model_state(self) -> ModelState | None:
-        """Read the current ML model state. @zara"""
-        state_path = self._ml_path / SOLAR_MODEL_STATE
-        state_data = await self._read_json_file(state_path)
-
-        weights_path = self._ml_path / SOLAR_LEARNED_WEIGHTS
+        """Read the current ML model state from ai/learned_weights.json. @zara"""
+        weights_path = self._ai_path / SOLAR_LEARNED_WEIGHTS
         weights_data = await self._read_json_file(weights_path)
 
-        if not state_data:
+        if not weights_data:
             return None
 
         try:
             last_training = None
-            if state_data.get("last_training"):
+            if weights_data.get("last_trained"):
                 try:
                     last_training = datetime.fromisoformat(
-                        state_data["last_training"].replace("Z", "+00:00")
+                        weights_data["last_trained"].replace("Z", "+00:00")
                     )
                 except ValueError:
                     pass
 
-            feature_weights = {}
-            if weights_data and "weights" in weights_data:
-                feature_weights = weights_data["weights"]
+            # Check if model has trained weights
+            model_loaded = bool(weights_data.get("Wf") and len(weights_data.get("Wf", [])) > 0)
 
             return ModelState(
-                model_loaded=state_data.get("model_loaded", False),
-                algorithm_used=weights_data.get("algorithm_used", "unknown") if weights_data else "unknown",
-                training_samples=state_data.get("training_samples", 0),
-                current_accuracy=state_data.get("current_accuracy", 0.0),
+                model_loaded=model_loaded,
+                algorithm_used="TinyLSTM",
+                training_samples=weights_data.get("trained_samples", 0),
+                current_accuracy=0.0,  # Not stored in learned_weights.json
                 last_training=last_training,
-                peak_power_kw=state_data.get("peak_power_kw", 0.0),
-                feature_weights=feature_weights,
+                peak_power_kw=0.0,  # Not stored in learned_weights.json
+                feature_weights={},
             )
 
         except Exception as err:

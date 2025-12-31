@@ -1,20 +1,11 @@
-"""Constants for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 from datetime import timedelta
 
@@ -22,12 +13,12 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "12.2.0"
-RELEASE_VERSION = "12.2.0"
+VERSION = "12.4.0"
+RELEASE_VERSION = "12.4.0"
 RELEASE_NAME = "Sarpeidon"
-SOFTWARE_VERSION = "12.2.0"
-INTEGRATION_MODEL = "V12.2.0"
-ML_VERSION = "12.2.0"
+SOFTWARE_VERSION = "12.4.0"
+INTEGRATION_MODEL = "V12.4.0"
+AI_VERSION = "12.4.0"
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -89,12 +80,16 @@ CONF_NOTIFY_LEARNING = "notify_learning"
 CONF_NOTIFY_SUCCESSFUL_LEARNING = "notify_successful_learning"
 CONF_NOTIFY_FROST = "notify_frost"
 CONF_NOTIFY_WEATHER_ALERT = "notify_weather_alert"
+CONF_NOTIFY_SNOW_COVERED = "notify_snow_covered_panels"
 CONF_LEARNING_ENABLED = "learning_enabled"
 
 CONF_ML_ALGORITHM = "ml_algorithm"
 CONF_ENABLE_TINY_LSTM = "enable_tiny_lstm"
 DEFAULT_ML_ALGORITHM = "auto"
 DEFAULT_ENABLE_TINY_LSTM = True
+
+# Weather Expert API Keys
+CONF_PIRATE_WEATHER_API_KEY = "pirate_weather_api_key"
 
 DEFAULT_SOLAR_CAPACITY = 5.0
 UPDATE_INTERVAL = timedelta(minutes=60)
@@ -126,6 +121,8 @@ BACKUPS_AUTO_DIR = "auto"
 BACKUPS_MANUAL_DIR = "manual"
 
 LEARNED_WEIGHTS_FILE = "learned_weights.json"
+SEASONAL_FILE = "seasonal.json"
+DNI_TRACKER_FILE = "dni_tracker.json"
 HOURLY_PROFILE_FILE = "hourly_profile.json"
 MODEL_STATE_FILE = "model_state.json"
 
@@ -166,15 +163,24 @@ ATTR_WEATHER_SOURCE = "weather_source"
 ATTR_RETRY_COUNT = "retry_count"
 ATTR_FALLBACK_ACTIVE = "fallback_active"
 
-# ML Services
-SERVICE_RETRAIN_MODEL = "force_retrain"
-SERVICE_RESET_LEARNING_DATA = "reset_model"
+# AI Services
+SERVICE_RETRAIN_AI_MODEL = "retrain_ai_model"
+SERVICE_RESET_AI_MODEL = "reset_ai_model"
+SERVICE_RUN_GRID_SEARCH = "run_grid_search"
+
+# Grid-Search Configuration
+CONF_GRID_SEARCH_ENABLED = "grid_search_enabled"
+CONF_GRID_SEARCH_INTERVAL_DAYS = "grid_search_interval_days"
+DEFAULT_GRID_SEARCH_ENABLED = False  # Opt-in, not default
+DEFAULT_GRID_SEARCH_INTERVAL_DAYS = 30  # Monthly
+MIN_GRID_SEARCH_INTERVAL_DAYS = 14  # Not more often than every 2 weeks
 
 # Emergency Services
 SERVICE_RUN_ALL_DAY_END_TASKS = "run_all_day_end_tasks"
 
 # Testing Services
 SERVICE_TEST_MORNING_ROUTINE = "test_morning_routine"
+SERVICE_TEST_RETROSPECTIVE_FORECAST = "test_retrospective_forecast"
 
 # Astronomy Services
 SERVICE_BUILD_ASTRONOMY_CACHE = "build_astronomy_cache"
@@ -184,10 +190,6 @@ SERVICE_REFRESH_CACHE_TODAY = "refresh_cache_today"
 SERVICE_RUN_WEATHER_CORRECTION = "run_weather_correction"
 SERVICE_REFRESH_OPEN_METEO_CACHE = "refresh_open_meteo_cache"
 SERVICE_REFRESH_MULTI_WEATHER = "refresh_multi_weather"
-SERVICE_BOOTSTRAP_FROM_HISTORY = "bootstrap_from_history"
-
-# Physics Services
-SERVICE_BOOTSTRAP_PHYSICS_FROM_HISTORY = "bootstrap_physics_from_history"
 
 # Notification Services
 SERVICE_SEND_DAILY_BRIEFING = "send_daily_briefing"

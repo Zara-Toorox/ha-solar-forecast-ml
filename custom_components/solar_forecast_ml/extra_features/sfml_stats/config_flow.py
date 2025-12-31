@@ -1,20 +1,12 @@
-"""Config flow for SFML Stats integration. @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
 from __future__ import annotations
 
 import logging
@@ -89,6 +81,7 @@ from .const import (
     DEFAULT_BILLING_PRICE_MODE,
     DEFAULT_BILLING_FIXED_PRICE,
     DEFAULT_FEED_IN_TARIFF,
+    CONF_PANEL_GROUP_NAMES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -359,10 +352,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(
-                title=NAME,
-                data=self._data,
-            )
+            return await self.async_step_panel_group_names()
 
         months = {
             1: "January", 2: "February", 3: "March", 4: "April",
@@ -418,6 +408,50 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_panel_group_names(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Handle step 7 - Panel Group Names (override Solar Forecast ML names). @zara"""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # Parse the input: "Gruppe 1=String Süd, Gruppe 2=String West"
+            names_mapping = {}
+            raw_input = user_input.get("panel_group_names_input", "").strip()
+            if raw_input:
+                for entry in raw_input.split(","):
+                    entry = entry.strip()
+                    if "=" in entry:
+                        parts = entry.split("=", 1)
+                        old_name = parts[0].strip()
+                        new_name = parts[1].strip()
+                        if old_name and new_name:
+                            names_mapping[old_name] = new_name
+
+            self._data[CONF_PANEL_GROUP_NAMES] = names_mapping
+            return self.async_create_entry(
+                title=NAME,
+                data=self._data,
+            )
+
+        # Show example format
+        return self.async_show_form(
+            step_id="panel_group_names",
+            data_schema=vol.Schema({
+                vol.Optional("panel_group_names_input", default=""): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.TEXT,
+                        multiline=True,
+                    )
+                ),
+            }),
+            errors=errors,
+            description_placeholders={
+                "example": "Gruppe 1=String Süd, Gruppe 2=String West"
+            },
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(
@@ -441,7 +475,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         """Manage the options - Menu. @zara"""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["general", "energy_flow", "battery", "statistics", "panels", "billing"],
+            menu_options=["general", "energy_flow", "battery", "statistics", "panels", "billing", "panel_group_names"],
         )
 
     async def async_step_general(
@@ -727,4 +761,53 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="billing",
             data_schema=vol.Schema(schema_dict),
+        )
+
+    async def async_step_panel_group_names(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage panel group name mappings (override Solar Forecast ML names). @zara"""
+        if user_input is not None:
+            # Parse the input: "Gruppe 1=String Süd, Gruppe 2=String West"
+            names_mapping = {}
+            raw_input = user_input.get("panel_group_names_input", "").strip()
+            if raw_input:
+                for entry in raw_input.split(","):
+                    entry = entry.strip()
+                    if "=" in entry:
+                        parts = entry.split("=", 1)
+                        old_name = parts[0].strip()
+                        new_name = parts[1].strip()
+                        if old_name and new_name:
+                            names_mapping[old_name] = new_name
+
+            new_data = {**self._config_entry.data}
+            new_data[CONF_PANEL_GROUP_NAMES] = names_mapping
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            return self.async_create_entry(title="", data={})
+
+        current = self._config_entry.data
+        # Convert dict back to string format for editing
+        existing_mapping = current.get(CONF_PANEL_GROUP_NAMES, {})
+        if existing_mapping and isinstance(existing_mapping, dict):
+            default_value = ", ".join(f"{k}={v}" for k, v in existing_mapping.items())
+        else:
+            default_value = ""
+
+        return self.async_show_form(
+            step_id="panel_group_names",
+            data_schema=vol.Schema({
+                vol.Optional("panel_group_names_input", default=default_value): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.TEXT,
+                        multiline=True,
+                    )
+                ),
+            }),
+            description_placeholders={
+                "example": "Gruppe 1=String Süd, Gruppe 2=String West"
+            },
         )

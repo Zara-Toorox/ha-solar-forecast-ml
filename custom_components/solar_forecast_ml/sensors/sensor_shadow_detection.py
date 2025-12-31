@@ -1,20 +1,11 @@
-"""Shadow Detection Sensors V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from datetime import datetime
@@ -27,7 +18,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from ..const import DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, ML_VERSION
+from ..const import DOMAIN, INTEGRATION_MODEL, SOFTWARE_VERSION, AI_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,7 +84,7 @@ class ShadowCurrentSensor(CoordinatorEntity, SensorEntity):
             name="Solar Forecast ML",
             manufacturer="Zara-Toorox",
             model=INTEGRATION_MODEL,
-            sw_version=f"SW {SOFTWARE_VERSION} | ML {ML_VERSION}",
+            sw_version=f"SW {SOFTWARE_VERSION} | AI {AI_VERSION}",
             configuration_url="https://github.com/Zara-Toorox/ha-solar-forecast-ml",
         )
 
@@ -254,7 +245,7 @@ class ShadowTodaySensor(CoordinatorEntity, SensorEntity):
             name="Solar Forecast ML",
             manufacturer="Zara-Toorox",
             model=INTEGRATION_MODEL,
-            sw_version=f"SW {SOFTWARE_VERSION} | ML {ML_VERSION}",
+            sw_version=f"SW {SOFTWARE_VERSION} | AI {AI_VERSION}",
             configuration_url="https://github.com/Zara-Toorox/ha-solar-forecast-ml",
         )
 
@@ -278,6 +269,22 @@ class ShadowTodaySensor(CoordinatorEntity, SensorEntity):
                 return self._cached_analysis
 
             shadow_types = {"none": 0, "light": 0, "moderate": 0, "heavy": 0}
+            # NEW: Track root causes separately
+            root_cause_counts = {
+                "weather_clouds": 0,
+                "building_tree_obstruction": 0,
+                "low_sun_angle": 0,
+                "other": 0
+            }
+            root_cause_hours = {
+                "weather_clouds": [],
+                "building_tree_obstruction": [],
+                "low_sun_angle": [],
+                "other": []
+            }
+            # NEW: Hourly breakdown for timeline chart
+            hourly_breakdown = []
+
             total_loss_kwh = 0.0
             total_theoretical_kwh = 0.0
             shadow_hours_list = []
@@ -287,14 +294,42 @@ class ShadowTodaySensor(CoordinatorEntity, SensorEntity):
             for pred in valid_predictions:
                 shadow_det = pred.get("shadow_detection", {})
                 shadow_type = shadow_det.get("shadow_type", "unknown")
+                root_cause = shadow_det.get("root_cause", "unknown")
+                hour = pred.get("target_hour")
+                shadow_pct = shadow_det.get("shadow_percent", 0)
+
+                # Build hourly breakdown for timeline
+                if hour is not None:
+                    # Map root_cause to numeric for stacked bar chart
+                    cause_values = {
+                        "weather_clouds": shadow_pct if root_cause == "weather_clouds" else 0,
+                        "building_tree_obstruction": shadow_pct if root_cause == "building_tree_obstruction" else 0,
+                        "low_sun_angle": shadow_pct if root_cause == "low_sun_angle" else 0,
+                    }
+                    hourly_breakdown.append({
+                        "hour": hour,
+                        "shadow_percent": round(shadow_pct, 1),
+                        "root_cause": root_cause,
+                        "shadow_type": shadow_type,
+                        "cloud_pct": cause_values["weather_clouds"],
+                        "shadow_pct": cause_values["building_tree_obstruction"],
+                        "sun_pct": cause_values["low_sun_angle"],
+                    })
 
                 if shadow_type in shadow_types:
                     shadow_types[shadow_type] += 1
 
+                # Track root causes for moderate/heavy shadow hours
                 if shadow_type in ["moderate", "heavy"]:
-                    hour = pred.get("target_hour")
                     if hour is not None:
                         shadow_hours_list.append(hour)
+                        # Categorize by root cause
+                        if root_cause in root_cause_counts:
+                            root_cause_counts[root_cause] += 1
+                            root_cause_hours[root_cause].append(hour)
+                        else:
+                            root_cause_counts["other"] += 1
+                            root_cause_hours["other"].append(hour)
 
                 loss_kwh = shadow_det.get("loss_kwh")
                 theoretical_max = shadow_det.get("theoretical_max_kwh")
@@ -327,7 +362,16 @@ class ShadowTodaySensor(CoordinatorEntity, SensorEntity):
                 "peak_shadow_percent": round(peak_shadow_percent, 1),
                 "cumulative_loss_kwh": round(total_loss_kwh, 3),
                 "daily_loss_percent": round(daily_loss_percent, 1),
-                "date": today
+                "date": today,
+                # NEW: Root cause breakdown
+                "cloud_hours": root_cause_counts["weather_clouds"],
+                "cloud_hours_list": root_cause_hours["weather_clouds"],
+                "real_shadow_hours": root_cause_counts["building_tree_obstruction"],
+                "real_shadow_hours_list": root_cause_hours["building_tree_obstruction"],
+                "low_sun_hours": root_cause_counts["low_sun_angle"],
+                "low_sun_hours_list": root_cause_hours["low_sun_angle"],
+                # NEW: Full hourly breakdown for timeline charts
+                "hourly_breakdown": sorted(hourly_breakdown, key=lambda x: x["hour"]),
             }
             self._cache_date = today
 
@@ -365,10 +409,10 @@ class ShadowTodaySensor(CoordinatorEntity, SensorEntity):
         analysis = self._get_today_analysis()
 
         if analysis.get("status") == "no_data":
-            return {"status": "no_data"}
+            return {"status": "no_data", "hourly_breakdown": []}
 
         if analysis.get("status") == "error":
-            return {"error": analysis.get("error", "unknown")}
+            return {"error": analysis.get("error", "unknown"), "hourly_breakdown": []}
 
         return {
             "shadow_hours_count": analysis.get("shadow_hours_count", 0),
@@ -381,8 +425,17 @@ class ShadowTodaySensor(CoordinatorEntity, SensorEntity):
             "peak_shadow_hour": analysis.get("peak_shadow_hour"),
             "peak_shadow_percent": analysis.get("peak_shadow_percent", 0),
             "cumulative_loss_kwh": analysis.get("cumulative_loss_kwh", 0),
+            # NEW: Root cause breakdown (for ApexCharts)
+            "cloud_hours": analysis.get("cloud_hours", 0),
+            "cloud_hours_list": analysis.get("cloud_hours_list", []),
+            "real_shadow_hours": analysis.get("real_shadow_hours", 0),
+            "real_shadow_hours_list": analysis.get("real_shadow_hours_list", []),
+            "low_sun_hours": analysis.get("low_sun_hours", 0),
+            "low_sun_hours_list": analysis.get("low_sun_hours_list", []),
             "daily_loss_percent": analysis.get("daily_loss_percent", 0),
-            "date": analysis.get("date", "")
+            "date": analysis.get("date", ""),
+            # NEW: Hourly breakdown for timeline visualization
+            "hourly_breakdown": analysis.get("hourly_breakdown", []),
         }
 
 class PerformanceLossTodaySensor(CoordinatorEntity, SensorEntity):
@@ -407,7 +460,7 @@ class PerformanceLossTodaySensor(CoordinatorEntity, SensorEntity):
             name="Solar Forecast ML",
             manufacturer="Zara-Toorox",
             model=INTEGRATION_MODEL,
-            sw_version=f"SW {SOFTWARE_VERSION} | ML {ML_VERSION}",
+            sw_version=f"SW {SOFTWARE_VERSION} | AI {AI_VERSION}",
             configuration_url="https://github.com/Zara-Toorox/ha-solar-forecast-ml",
         )
 

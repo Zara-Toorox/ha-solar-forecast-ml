@@ -1,20 +1,11 @@
-"""Coordinator Update Helpers - Extract methods from _async_update_data V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from typing import Any, Dict, Optional, Tuple
@@ -127,25 +118,26 @@ class CoordinatorUpdateHelpers:
         return result
 
     def _load_cached_patterns(self) -> Dict[str, Any]:
-        """Load pattern data for diagnostic sensors (called from async context) @zara"""
+        """Load AI seasonal data for diagnostic sensors (called from async context) @zara"""
         try:
             data_manager = getattr(self.coordinator, "data_manager", None)
             if not data_manager:
                 return {}
 
-            patterns_file = data_manager.data_dir / "ml" / "learned_patterns.json"
-            if not patterns_file.exists():
+            # Load seasonal.json from ai/ directory (replaces learned_patterns.json)
+            seasonal_file = data_manager.data_dir / "ai" / "seasonal.json"
+            if not seasonal_file.exists():
                 return {}
 
             import json
-            with open(patterns_file, "r") as f:
+            with open(seasonal_file, "r") as f:
                 return json.load(f)
         except Exception as e:
             _LOGGER.debug(f"Error loading cached patterns: {e}")
             return {}
 
     def _load_cached_physics(self) -> Dict[str, Any]:
-        """Load physics data for diagnostic sensors (called from async context) @zara"""
+        """Load AI weights for diagnostic sensors (called from async context) @zara"""
         try:
             data_manager = getattr(self.coordinator, "data_manager", None)
             if not data_manager:
@@ -153,20 +145,12 @@ class CoordinatorUpdateHelpers:
 
             import json
 
-            # Try residual_model_state.json first (Physics-First architecture)
-            residual_file = data_manager.data_dir / "ml" / "residual_model_state.json"
-            if residual_file.exists():
-                with open(residual_file, "r") as f:
+            # Load learned_weights.json from ai/ directory (TinyLSTM weights)
+            weights_file = data_manager.data_dir / "ai" / "learned_weights.json"
+            if weights_file.exists():
+                with open(weights_file, "r") as f:
                     data = json.load(f)
-                    data["_source"] = "residual_model_state"
-                    return data
-
-            # Fallback to learned_geometry.json (GeometryLearner) - in physics/ subdirectory
-            geometry_file = data_manager.data_dir / "physics" / "learned_geometry.json"
-            if geometry_file.exists():
-                with open(geometry_file, "r") as f:
-                    data = json.load(f)
-                    data["_source"] = "learned_geometry"
+                    data["_source"] = "ai_weights"
                     return data
 
             return {}

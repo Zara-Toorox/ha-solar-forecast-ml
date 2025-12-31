@@ -1,20 +1,11 @@
-"""Weather Precision Tracker - Learns weather forecast accuracy for local location V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import json
 import logging
@@ -37,6 +28,7 @@ from ..const import (
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
 from ..core.core_user_messages import user_msg
 from .data_io import DataManagerIO
+from .data_schemas import get_schema
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +67,8 @@ class WeatherPrecisionTracker(DataManagerIO):
 
             data = await self._read_json_file(self.precision_file, None)
             if data:
+                # Self-healing: ensure required structure exists
+                data = self._ensure_data_structure(data)
                 _LOGGER.debug(f"Loaded weather precision data: {len(data.get('daily_tracking', {}))} days tracked")
                 return data
             return self._create_empty_precision_data()
@@ -83,43 +77,71 @@ class WeatherPrecisionTracker(DataManagerIO):
             return self._create_empty_precision_data()
 
     def _create_empty_precision_data(self) -> Dict[str, Any]:
-        """Create empty weather precision data structure @zara"""
-        return {
-            "daily_tracking": {},
-            "rolling_averages": {
-                "sample_days": 0,
-                "correction_factors": {
-                    "temperature": 0.0,
-                    "solar_radiation_wm2": 1.0,
-                    "clouds": 1.0,
-                    "humidity": 1.0,
-                    "wind": 1.0,
-                    "rain": 1.0,
-                    "pressure": 0.0,
-                },
-                "confidence": {
-                    "temperature": 0.0,
-                    "solar_radiation_wm2": 0.0,
-                    "clouds": 0.0,
-                    "humidity": 0.0,
-                    "wind": 0.0,
-                    "rain": 0.0,
-                    "pressure": 0.0,
-                },
-                "updated_at": None,
-            },
-            "metadata": {
-                "created": dt_util.now().isoformat(),
-                "last_updated": None,
-                "total_days_tracked": 0,
-                "sensors_configured": [k for k, v in self.sensors.items() if v],
-                "sensors_optional": True
-            }
-        }
+        """Create empty weather precision data structure @zara
+
+        Uses centralized schema from data_schemas.py (Single Source of Truth).
+        """
+        schema = get_schema("weather_precision_daily")
+        # Set dynamic values
+        schema["metadata"]["created"] = dt_util.now().isoformat()
+        schema["metadata"]["sensors_configured"] = [k for k, v in self.sensors.items() if v]
+        return schema
+
+    def _ensure_data_structure(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure loaded data has all required fields (self-healing) @zara
+
+        Uses centralized schema from data_schemas.py (Single Source of Truth).
+        Recursively adds missing fields while preserving existing data.
+        """
+        schema = get_schema("weather_precision_daily")
+        data, healed = self._recursive_ensure_schema(data, schema)
+
+        # Set dynamic values if they were just created
+        if data.get("metadata", {}).get("created") is None:
+            data["metadata"]["created"] = dt_util.now().isoformat()
+        if "sensors_configured" not in data.get("metadata", {}):
+            data["metadata"]["sensors_configured"] = [k for k, v in self.sensors.items() if v]
+        if "total_days_tracked" not in data.get("metadata", {}):
+            data["metadata"]["total_days_tracked"] = len(data.get("daily_tracking", {}))
+
+        if healed:
+            _LOGGER.info("Self-healed weather precision data structure (missing fields added)")
+
+        return data
+
+    def _recursive_ensure_schema(
+        self,
+        data: Dict[str, Any],
+        schema: Dict[str, Any]
+    ) -> tuple[Dict[str, Any], bool]:
+        """Recursively ensure data matches schema, adding missing fields.
+
+        Args:
+            data: The existing data to heal
+            schema: The expected schema with default values
+
+        Returns:
+            Tuple of (healed_data, was_healed_flag)
+        """
+        healed = False
+
+        for key, default_value in schema.items():
+            if key not in data:
+                data[key] = default_value
+                healed = True
+            elif isinstance(default_value, dict) and isinstance(data[key], dict):
+                data[key], nested_healed = self._recursive_ensure_schema(data[key], default_value)
+                if nested_healed:
+                    healed = True
+
+        return data, healed
 
     async def _save_precision_data(self, data: Dict[str, Any]) -> bool:
         """Save weather precision data to file (ASYNC) @zara"""
         try:
+            # Defensive: ensure metadata exists before accessing
+            if "metadata" not in data:
+                data["metadata"] = {}
             data["metadata"]["last_updated"] = dt_util.now().isoformat()
 
             await self._atomic_write_json(self.precision_file, data)
@@ -132,10 +154,7 @@ class WeatherPrecisionTracker(DataManagerIO):
             return False
 
     async def capture_morning_forecast(self, weather_cache: Dict[str, Any]) -> bool:
-        """Capture morning weather forecast at 06:00 LOCAL time @zara
-
-        Supports both old format (forecasts[date]["hourly"]) and new format (forecast[date][hour]).
-        """
+        """Capture morning weather forecast at 06:00 LOCAL time @zara"""
         try:
             today = dt_util.now().date().isoformat()
 
@@ -150,53 +169,19 @@ class WeatherPrecisionTracker(DataManagerIO):
                     "daily_summary": None
                 }
 
-            # Try new format first (open_meteo_cache.json): forecast[date][hour]
             today_forecast = weather_cache.get("forecast", {}).get(today, {})
 
-            if today_forecast and isinstance(today_forecast, dict):
-                # New format: forecast[date][hour] where hour is string key
-                hours_captured = 0
-                for hour_str, hour_data in today_forecast.items():
-                    if not isinstance(hour_data, dict):
-                        continue
-                    try:
-                        hour = int(hour_str)
-                    except (ValueError, TypeError):
-                        continue
-
-                    precision_data["daily_tracking"][today]["hourly_data"][str(hour)] = {
-                        "forecast": {
-                            "temp": hour_data.get("temperature"),
-                            "clouds": hour_data.get("cloud_cover"),
-                            "humidity": hour_data.get("humidity"),
-                            "wind": hour_data.get("wind_speed"),
-                            "rain": hour_data.get("precipitation", 0),
-                            "pressure": hour_data.get("pressure"),
-                        },
-                        "actual": None,
-                        "deviation": None
-                    }
-                    hours_captured += 1
-
-                if hours_captured > 0:
-                    await self._save_precision_data(precision_data)
-                    _LOGGER.info(f"Captured {hours_captured} hourly forecasts for {today} (new format)")
-                    return True
-
-            # Fallback to old format (legacy weather_cache.json): forecasts[date]["hourly"]
-            today_forecast_legacy = weather_cache.get("forecasts", {}).get(today, {})
-            if not today_forecast_legacy:
+            if not today_forecast or not isinstance(today_forecast, dict):
                 _LOGGER.debug(f"No weather forecast found for {today} in weather cache")
                 return False
 
-            hourly_forecast = today_forecast_legacy.get("hourly", [])
-            if not hourly_forecast:
-                _LOGGER.debug(f"No hourly forecast data for {today}")
-                return False
-
-            for hour_data in hourly_forecast:
-                hour = hour_data.get("hour")
-                if hour is None:
+            hours_captured = 0
+            for hour_str, hour_data in today_forecast.items():
+                if not isinstance(hour_data, dict):
+                    continue
+                try:
+                    hour = int(hour_str)
+                except (ValueError, TypeError):
                     continue
 
                 precision_data["daily_tracking"][today]["hourly_data"][str(hour)] = {
@@ -211,11 +196,14 @@ class WeatherPrecisionTracker(DataManagerIO):
                     "actual": None,
                     "deviation": None
                 }
+                hours_captured += 1
 
-            await self._save_precision_data(precision_data)
+            if hours_captured > 0:
+                await self._save_precision_data(precision_data)
+                _LOGGER.info(f"Captured {hours_captured} hourly forecasts for {today}")
+                return True
 
-            _LOGGER.info(f"Captured {len(hourly_forecast)} hourly forecasts for {today} (legacy format)")
-            return True
+            return False
 
         except Exception as e:
             _LOGGER.error(f"Error capturing morning forecast: {e}", exc_info=True)

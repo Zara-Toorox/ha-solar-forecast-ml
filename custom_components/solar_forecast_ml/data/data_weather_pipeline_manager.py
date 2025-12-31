@@ -1,23 +1,11 @@
-"""Weather Data Pipeline Manager V12.2.0 @zara
-
-Open-Meteo is the SINGLE DATA SOURCE for all weather data.
-No HA Weather Entity required.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import asyncio
 import logging
@@ -31,7 +19,13 @@ from homeassistant.helpers.event import async_track_time_change
 from .data_weather_actual_tracker import WeatherActualTracker
 from .data_weather_precision import WeatherPrecisionTracker
 from .data_weather_corrector import WeatherForecastCorrector
-from .data_multi_weather_client import MultiWeatherBlender, WeatherSourceLearner
+# V12.3: MultiWeatherBlender removed - using only WeatherExpertBlender
+# All blending now goes through WeatherExpertBlender with 5 sources
+from .data_weather_expert_blender import (
+    WeatherExpertBlender,
+    WeatherExpertLearner,
+    CloudType,
+)
 from ..forecast.forecast_weather import WeatherService
 from ..astronomy.astronomy_cache import AstronomyCache
 
@@ -83,22 +77,23 @@ class WeatherDataPipelineManager:
         self.weather_actual_tracker: Optional[WeatherActualTracker] = None
         self.weather_precision: Optional[WeatherPrecisionTracker] = None
         self.weather_corrector: Optional[WeatherForecastCorrector] = None
-        self.multi_weather_blender: Optional[MultiWeatherBlender] = None
-        self.weather_source_learner: Optional[WeatherSourceLearner] = None
+        self.weather_expert_blender: Optional[WeatherExpertBlender] = None
+        self.weather_expert_learner: Optional[WeatherExpertLearner] = None
 
         _LOGGER.info(
             "Weather Data Pipeline Manager initialized - "
-            "Multi-Source Weather (Open-Meteo + wttr.in with learned weights)"
+            "5-Source Expert Blending (V12.3)"
         )
 
     async def async_setup(self) -> bool:
-        """Setup weather data pipeline components @zara"""
+        """Setup weather data pipeline components - V12.3 with unified ExpertBlender."""
         try:
-            _LOGGER.info("Setting up Weather Data Pipeline Manager (Open-Meteo ONLY)...")
+            _LOGGER.info("Setting up Weather Data Pipeline Manager (5-Source Expert Blending)...")
 
             latitude = self.hass.config.latitude
             longitude = self.hass.config.longitude
 
+            # WeatherService for Open-Meteo raw data fetching
             self.weather_service = WeatherService(
                 hass=self.hass,
                 latitude=latitude,
@@ -107,7 +102,7 @@ class WeatherDataPipelineManager:
                 data_manager=self.data_manager,
             )
             _LOGGER.info(
-                f"Weather Service initialized - Open-Meteo ONLY "
+                f"Weather Service initialized "
                 f"(lat={latitude:.4f}, lon={longitude:.4f})"
             )
 
@@ -123,47 +118,53 @@ class WeatherDataPipelineManager:
                 data_dir=self.data_dir,
             )
 
+            # Get optional Pirate Weather API key from config
+            pirate_weather_key = None
+            if self.config_entry and self.config_entry.options:
+                pirate_weather_key = self.config_entry.options.get("pirate_weather_api_key")
+
+            # V12.3: Single unified ExpertBlender for ALL 5 weather sources
+            # No more MultiWeatherBlender - all blending through ExpertBlender
+            self.weather_expert_blender = WeatherExpertBlender(
+                hass=self.hass,
+                data_dir=self.data_dir,
+                open_meteo_cache={},  # Will load from file cache
+                wttr_cache={},  # Will load from file cache
+                latitude=latitude,
+                longitude=longitude,
+                pirate_weather_api_key=pirate_weather_key,
+            )
+            await self.weather_expert_blender.async_init()
+
+            self.weather_expert_learner = WeatherExpertLearner(
+                hass=self.hass,
+                data_dir=self.data_dir,
+                blender=self.weather_expert_blender,
+            )
+
+            active_count = len([
+                e for e in self.weather_expert_blender._experts
+                if self.weather_expert_blender._is_expert_enabled(e)
+            ])
+            _LOGGER.info(
+                f"Weather Expert Blender initialized with {active_count} active experts "
+                f"(Open-Meteo, wttr.in, ECMWF Layers, Bright Sky/DWD, "
+                f"Pirate Weather: {'enabled' if pirate_weather_key else 'disabled'})"
+            )
+
+            # WeatherForecastCorrector creates the SINGLE SOURCE OF TRUTH
             self.weather_corrector = WeatherForecastCorrector(
                 hass=self.hass,
                 data_manager=self.data_manager,
+                expert_blender=self.weather_expert_blender,
             )
-
             await self.weather_corrector.async_init()
-
-            # Initialize Multi-Weather Blender (Open-Meteo + wttr.in)
-            if self.weather_service and hasattr(self.weather_service, '_open_meteo'):
-                self.multi_weather_blender = MultiWeatherBlender(
-                    hass=self.hass,
-                    latitude=latitude,
-                    longitude=longitude,
-                    data_dir=self.data_dir,
-                    open_meteo_client=self.weather_service._open_meteo,
-                )
-                await self.multi_weather_blender.async_init()
-
-                # CRITICAL: Set blender reference in WeatherService
-                # This ensures all cache updates go through the blender
-                # to preserve blend_info for weight learning
-                self.weather_service.set_multi_weather_blender(self.multi_weather_blender)
-
-                _LOGGER.info(
-                    "Multi-Weather Blender initialized and linked to WeatherService - "
-                    f"Weights: {self.multi_weather_blender.get_current_weights()}"
-                )
-            else:
-                _LOGGER.warning(
-                    "Multi-Weather Blender not initialized - "
-                    "OpenMeteoClient not available"
-                )
-
-            # Initialize Weather Source Learner
-            self.weather_source_learner = WeatherSourceLearner(
-                hass=self.hass,
-                data_dir=self.data_dir,
+            _LOGGER.info(
+                "Weather Corrector initialized with Expert Blender - "
+                "weather_forecast_corrected.json is SINGLE SOURCE OF TRUTH"
             )
-            _LOGGER.info("Weather Source Learner initialized")
 
-            _LOGGER.info("Weather Data Pipeline Manager setup complete")
+            _LOGGER.info("Weather Data Pipeline Manager setup complete (V12.3)")
             return True
 
         except Exception as e:
@@ -235,29 +236,17 @@ class WeatherDataPipelineManager:
             self._listeners.append(forecast_listener)
             _LOGGER.info("Scheduled: Daily corrected forecast (00:15 LOCAL - before morning routine at 00:25)")
 
-            midday_forecast_listener = async_track_time_change(
-                self.hass,
-                self._scheduled_corrected_forecast,
-                hour=12,
-                minute=15,
-                second=0,
-            )
-            self._listeners.append(midday_forecast_listener)
-            _LOGGER.info("Scheduled: Mid-day corrected forecast refresh (12:15 LOCAL)")
+            # NOTE: Mid-day refresh (12:15) REMOVED - it was useless since the forecast
+            # is already locked at 00:25. Dynamic tasks in production_scheduled_tasks.py
+            # now handle fresh weather data before the final morning forecast:
+            # sunrise-45min: Weather Blend, sunrise-40min: Corrected Forecast, sunrise-30min: Final Forecast
 
             # NOTE: Daily precision calculation (23:30) moved to End-of-Day Workflow
             # in production_scheduled_tasks.py for better task coordination
 
-            # Weather source weight learning (23:30) - learns from today's data
-            weight_learning_listener = async_track_time_change(
-                self.hass,
-                self._scheduled_weight_learning,
-                hour=23,
-                minute=30,
-                second=0,
-            )
-            self._listeners.append(weight_learning_listener)
-            _LOGGER.info("Scheduled: Weather source weight learning (23:30 LOCAL)")
+            # NOTE: Weather source weight learning (23:30) REMOVED - now handled by
+            # End-of-Day Workflow Step 12 in production_scheduled_tasks.py
+            # This avoids duplicate learn_from_day() calls at 23:30
 
             self._running = True
             _LOGGER.info(f"Weather Data Pipeline started successfully ({len(self._listeners)} scheduled listeners)")
@@ -317,6 +306,9 @@ class WeatherDataPipelineManager:
 
             await self._ensure_open_meteo_cache()
 
+            # Also fetch Expert weather sources (Bright Sky, Pirate Weather)
+            await self._fetch_expert_weather_sources()
+
         except Exception as e:
             _LOGGER.error(f"Pipeline: Startup Open-Meteo refresh error: {e}", exc_info=True)
 
@@ -374,26 +366,10 @@ class WeatherDataPipelineManager:
                     reason = f"read error: {e}"
 
             if needs_fetch:
-                _LOGGER.info(f"Pipeline: Open-Meteo cache needs refresh ({reason}) - fetching now...")
+                _LOGGER.info(f"Pipeline: Weather data needs refresh ({reason}) - fetching now...")
 
-                # Use MultiWeatherBlender if available (preserves blend_info)
-                if self.multi_weather_blender:
-                    success = await self.multi_weather_blender.update_and_save_cache()
-                    if success:
-                        _LOGGER.info(
-                            "Pipeline: Open-Meteo cache refresh via Blender SUCCESS - "
-                            "blend_info preserved for weight learning"
-                        )
-                    else:
-                        _LOGGER.warning(
-                            "Pipeline: Blender cache refresh FAILED - "
-                            "falling back to direct Open-Meteo fetch"
-                        )
-                        # Fallback to direct fetch
-                        success = await self.weather_corrector._fetch_open_meteo_forecast()
-                else:
-                    # No blender available, use direct fetch
-                    success = await self.weather_corrector._fetch_open_meteo_forecast()
+                # V12.3: Fetch all expert sources and create corrected forecast
+                success = await self._refresh_all_weather_sources()
 
                 if success:
                     _LOGGER.info(
@@ -605,53 +581,133 @@ class WeatherDataPipelineManager:
         return False
 
     async def _scheduled_open_meteo_update(self, now):
-        """Scheduled task: Update weather forecast with multi-source blending (3x daily) @zara
+        """Scheduled task: Update weather forecast with 5-source blending (3x daily) @zara
 
-        Uses MultiWeatherBlender to:
-        1. Fetch Open-Meteo data
-        2. If cloud_cover > 50%, also fetch wttr.in (WWO)
-        3. Blend cloud_cover using learned weights
-        4. Save to cache for downstream components
+        V12.3: Uses WeatherExpertBlender with 5 sources:
+        - Open-Meteo (primary)
+        - wttr.in (World Weather Online)
+        - ECMWF Layers
+        - Bright Sky (DWD ICON) - free API
+        - Pirate Weather (NOAA GFS/HRRR) - if API key configured
         """
         try:
-            _LOGGER.info("Pipeline: Multi-weather scheduled update triggered")
+            _LOGGER.info("Pipeline: Scheduled weather update triggered (V12.3 - 5 sources)")
 
-            # Try multi-weather blending first
-            if self.multi_weather_blender:
-                # Use update_and_save_cache to persist blended data
-                success = await self.multi_weather_blender.update_and_save_cache()
+            # V12.3: Unified update - fetch all sources and create corrected forecast
+            success = await self._refresh_all_weather_sources()
 
+            if success:
+                stats = self.weather_expert_blender.get_blend_stats() if self.weather_expert_blender else {}
+                _LOGGER.info(
+                    f"Pipeline: Weather update SUCCESS - "
+                    f"5-source blending complete, corrected forecast updated"
+                )
+            else:
+                _LOGGER.warning("Pipeline: Weather update failed - using cached data")
+
+        except Exception as e:
+            _LOGGER.error(f"Pipeline: Weather update error: {e}", exc_info=True)
+
+    async def _fetch_expert_weather_sources(self):
+        """Fetch data from all Expert Blender weather sources (Bright Sky, Pirate Weather) @zara
+
+        Called during scheduled updates (3x daily) to keep file caches populated.
+        Each source has its own file cache with 2-year retention.
+        """
+        if not self.weather_expert_blender:
+            return
+
+        fetch_results = []
+
+        # Fetch Bright Sky (DWD ICON) - free, no API key needed
+        try:
+            bright_sky = self.weather_expert_blender._bright_sky_expert
+            success = await bright_sky._fetch_forecast()
+            if success:
+                fetch_results.append("Bright Sky: OK")
+                _LOGGER.debug("Pipeline: Bright Sky cache updated")
+            else:
+                error = bright_sky.get_last_error() or "unknown"
+                fetch_results.append(f"Bright Sky: FAILED ({error})")
+                _LOGGER.debug(f"Pipeline: Bright Sky fetch failed: {error}")
+        except Exception as e:
+            fetch_results.append(f"Bright Sky: ERROR ({e})")
+            _LOGGER.debug(f"Pipeline: Bright Sky fetch error: {e}")
+
+        # Fetch Pirate Weather (NOAA GFS/HRRR) - requires API key
+        try:
+            pirate = self.weather_expert_blender._pirate_weather_expert
+            if pirate._enabled:
+                success = await pirate._fetch_forecast()
                 if success:
-                    stats = self.multi_weather_blender.get_blend_stats()
-                    blended_count = stats.get("blended_fetches", 0)
-
-                    if blended_count > 0:
-                        _LOGGER.info(
-                            f"Pipeline: Multi-weather update SUCCESS - "
-                            f"blended and saved to cache "
-                            f"(weights: {self.multi_weather_blender.get_current_weights()})"
-                        )
-                    else:
-                        _LOGGER.info(
-                            f"Pipeline: Multi-weather update SUCCESS - "
-                            f"Open-Meteo only (all cloud_cover <= 50%)"
-                        )
-                    return
+                    fetch_results.append("Pirate Weather: OK")
+                    _LOGGER.debug("Pipeline: Pirate Weather cache updated")
                 else:
-                    _LOGGER.warning("Pipeline: Multi-weather blending failed - falling back to Open-Meteo only")
+                    error = pirate.get_last_error() or "unknown"
+                    fetch_results.append(f"Pirate Weather: FAILED ({error})")
+                    _LOGGER.debug(f"Pipeline: Pirate Weather fetch failed: {error}")
+            else:
+                fetch_results.append("Pirate Weather: disabled (no API key)")
+        except Exception as e:
+            fetch_results.append(f"Pirate Weather: ERROR ({e})")
+            _LOGGER.debug(f"Pipeline: Pirate Weather fetch error: {e}")
 
-            # Fallback to original Open-Meteo only
+        if fetch_results:
+            _LOGGER.info(f"Pipeline: Expert weather sources: {', '.join(fetch_results)}")
+
+    async def _refresh_all_weather_sources(self) -> bool:
+        """Refresh all 5 weather sources and create corrected forecast. V12.3
+
+        This is the unified weather update method that:
+        1. Fetches Open-Meteo data via WeatherService
+        2. Fetches all Expert sources (Bright Sky, Pirate Weather)
+        3. Creates the corrected forecast (blending happens inside via get_blended_cloud_cover)
+
+        The blending is performed per-hour inside create_corrected_forecast() which calls
+        _get_weather_for_hour_async() -> expert_blender.get_blended_cloud_cover().
+        This design ensures all 5 sources are blended correctly for each hour.
+
+        Returns:
+            True if weather data was successfully refreshed and corrected forecast created
+        """
+        try:
+            _LOGGER.info("Pipeline: Refreshing all 5 weather sources...")
+
+            # Step 1: Fetch Open-Meteo via WeatherService
             if self.weather_service:
-                success = await self.weather_service.force_update()
-                if success:
-                    _LOGGER.info("Pipeline: Open-Meteo update SUCCESS (fallback)")
+                om_success = await self.weather_service.force_update()
+                if om_success:
+                    _LOGGER.debug("Pipeline: Open-Meteo fetch SUCCESS")
                 else:
-                    _LOGGER.warning("Pipeline: Open-Meteo update failed - using cached data")
+                    _LOGGER.warning("Pipeline: Open-Meteo fetch FAILED - using cached data")
             else:
                 _LOGGER.warning("Pipeline: Weather service not initialized")
 
+            # Step 2: Fetch all Expert sources (Bright Sky, Pirate Weather)
+            await self._fetch_expert_weather_sources()
+
+            # Step 3: Create corrected forecast (SINGLE SOURCE OF TRUTH)
+            # NOTE: Blending happens INSIDE create_corrected_forecast() via
+            # _get_weather_for_hour_async() which calls expert_blender.get_blended_cloud_cover()
+            # This is the correct design - no separate blend_forecast() call needed
+            if self.weather_corrector:
+                success = await self.weather_corrector.create_corrected_forecast()
+                if success:
+                    _LOGGER.info(
+                        "Pipeline: Corrected forecast updated - "
+                        "weather_forecast_corrected.json is SINGLE SOURCE OF TRUTH"
+                    )
+                    return True
+                else:
+                    _LOGGER.warning("Pipeline: Corrected forecast creation failed")
+                    return False
+            else:
+                _LOGGER.warning("Pipeline: Weather corrector not initialized")
+                return False
+
         except Exception as e:
-            _LOGGER.error(f"Pipeline: Multi-weather update error: {e}", exc_info=True)
+            _LOGGER.error(f"Pipeline: Weather refresh error: {e}", exc_info=True)
+            return False
 
     async def _scheduled_actual_tracking(self, now):
         """Scheduled task: Track actual weather from local sensors every hour at :00 @zara"""
@@ -736,117 +792,35 @@ class WeatherDataPipelineManager:
         except Exception as e:
             _LOGGER.error(f"Pipeline: Corrected forecast generation error: {e}", exc_info=True)
 
-    async def _scheduled_weight_learning(self, now):
-        """Scheduled task: Learn weather source weights from today's data (23:30) @zara
-
-        Compares forecasted cloud_cover with actual sensor readings to
-        determine which weather source (Open-Meteo vs wttr.in) was more accurate.
-        Updates blending weights accordingly.
-        """
-        try:
-            _LOGGER.info("Pipeline: Weather source weight learning (23:30 LOCAL)")
-
-            if not self.weather_source_learner:
-                _LOGGER.debug("Pipeline: Weather source learner not initialized - skipping")
-                return
-
-            # Learn from today's data
-            today = datetime.now().strftime("%Y-%m-%d")
-
-            result = await self.weather_source_learner.learn_from_day(date_str=today)
-
-            if result.get("success"):
-                _LOGGER.info(
-                    f"Pipeline: Weight learning SUCCESS for {today} - "
-                    f"MAE: Open-Meteo={result.get('mae_open_meteo', 0):.1f}%, "
-                    f"WWO={result.get('mae_wwo', 0):.1f}% - "
-                    f"New weights: {result.get('new_weights', {})}"
-                )
-
-                # Reload weights in blender if available
-                if self.multi_weather_blender:
-                    await self.multi_weather_blender._load_weights()
-                    _LOGGER.info(
-                        f"Pipeline: Blender weights reloaded: "
-                        f"{self.multi_weather_blender.get_current_weights()}"
-                    )
-            else:
-                _LOGGER.debug(
-                    f"Pipeline: Weight learning skipped for {today}: "
-                    f"{result.get('reason', 'unknown')}"
-                )
-
-        except Exception as e:
-            _LOGGER.error(f"Pipeline: Weight learning error: {e}", exc_info=True)
-
-    async def _scheduled_precision_calculation(self, now):
-        """DEPRECATED: Precision calculation moved to End-of-Day Workflow.
-
-        This method is kept for backwards compatibility and manual service calls.
-        The scheduled 23:30 task now runs in production_scheduled_tasks.py
-        as part of the unified End-of-Day Workflow (Step 6).
-        @zara
-        """
-        try:
-            _LOGGER.info("Pipeline: Daily precision calculation (23:30 LOCAL)")
-
-            if self.weather_precision and self.weather_actual_tracker and self.weather_corrector:
-
-                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-
-                success = await self.weather_precision.calculate_correction_factors_v2(
-                    weather_actual_tracker=self.weather_actual_tracker,
-                    weather_corrector=self.weather_corrector,
-                    date_str=yesterday,
-                )
-
-                if success:
-                    _LOGGER.info(f"Pipeline: Precision calculated for {yesterday}")
-                else:
-                    _LOGGER.info(
-                        f"ℹ️ Pipeline: Precision calculation skipped for {yesterday}. "
-                        "This is normal if no weather data was collected that day (new installation or restart)."
-                    )
-            else:
-                _LOGGER.info(
-                    "ℹ️ Pipeline: Precision components not yet initialized. "
-                    "This will resolve automatically after the first complete day of data collection."
-                )
-
-        except Exception as e:
-            _LOGGER.error(f"Pipeline: Precision calculation error: {e}", exc_info=True)
+    # NOTE: _scheduled_weight_learning() REMOVED
+    # Weather expert learning is now handled exclusively by End-of-Day Workflow
+    # Step 12 in production_scheduled_tasks.py._run_weather_expert_learning()
+    # This avoids duplicate learn_from_day() calls at 23:30
 
     async def update_weather_cache(self) -> bool:
-        """Manually trigger multi-weather update (Open-Meteo + wttr.in blending) @zara
+        """Manually trigger 5-source weather update @zara
 
-        Note: This method goes through the WeatherService.force_update() which
-        automatically uses the MultiWeatherBlender when available.
+        V12.3: Uses WeatherExpertBlender with 5 sources (Open-Meteo, wttr.in,
+        ECMWF Layers, Bright Sky/DWD, Pirate Weather) for blending.
         """
         try:
-            _LOGGER.info("Pipeline: Manual multi-weather update triggered")
+            _LOGGER.info("Pipeline: Manual 5-source weather update triggered")
 
-            if not self.weather_service:
-                _LOGGER.error("Pipeline: Weather service not initialized")
-                return False
-
-            # force_update() automatically uses Blender when available
-            success = await self.weather_service.force_update()
+            success = await self._refresh_all_weather_sources()
 
             if success:
-                if self.multi_weather_blender:
-                    _LOGGER.info(
-                        f"Pipeline: Multi-weather update SUCCESS "
-                        f"(weights: {self.multi_weather_blender.get_current_weights()})"
-                    )
-                else:
-                    _LOGGER.info("Pipeline: Open-Meteo update SUCCESS")
+                stats = self.weather_expert_blender.get_blend_stats() if self.weather_expert_blender else {}
+                _LOGGER.info(
+                    f"Pipeline: 5-source weather update SUCCESS - "
+                    f"{stats.get('active_sources', 0)} sources active"
+                )
                 return True
             else:
                 _LOGGER.warning("Pipeline: Weather update failed")
                 return False
 
         except Exception as e:
-            _LOGGER.error(f"Pipeline: Multi-weather update error: {e}", exc_info=True)
+            _LOGGER.error(f"Pipeline: Weather update error: {e}", exc_info=True)
             return False
 
     async def update_astronomy_cache(self, days_ahead: int = 7) -> bool:
@@ -943,7 +917,7 @@ class WeatherDataPipelineManager:
         return self._running
 
     async def get_status(self) -> Dict[str, Any]:
-        """Get pipeline status @zara"""
+        """Get pipeline status @zara - V12.3 with 5-source ExpertBlender"""
         status = {
             "running": self._running,
             "background_tasks": len([t for t in self._background_tasks if not t.done()]),
@@ -954,13 +928,13 @@ class WeatherDataPipelineManager:
                 "weather_precision": self.weather_precision is not None,
                 "weather_corrector": self.weather_corrector is not None,
                 "astronomy_cache": self.astronomy_cache is not None,
-                "multi_weather_blender": self.multi_weather_blender is not None,
-                "weather_source_learner": self.weather_source_learner is not None,
+                "weather_expert_blender": self.weather_expert_blender is not None,
+                "weather_expert_learner": self.weather_expert_learner is not None,
             },
         }
 
-        # Add blender stats if available
-        if self.multi_weather_blender:
-            status["multi_weather"] = self.multi_weather_blender.get_blend_stats()
+        # V12.3: Add ExpertBlender stats
+        if self.weather_expert_blender:
+            status["expert_blender"] = self.weather_expert_blender.get_blend_stats()
 
         return status

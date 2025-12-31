@@ -1,20 +1,11 @@
-"""Astronomy Services for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from datetime import date, datetime, timedelta
@@ -365,74 +356,10 @@ class AstronomyServiceHandler:
                     f"global max: {result['global_max']['kwh']} kWh"
                 )
 
-            await self._import_all_time_peak_if_available()
+            # Note: all_time_peak import to astronomy_cache.json was removed because:
+            # 1. The data was never read from astronomy_cache.json (dead code)
+            # 2. all_time_peak lives in daily_forecasts.json (Single Source of Truth)
+            # 3. astronomy_cache.json uses hourly_max_peaks for Clear-Sky calculations
 
         except Exception as e:
             _LOGGER.error(f"Failed to auto-extract max peaks: {e}", exc_info=True)
-
-    async def _import_all_time_peak_if_available(self) -> None:
-        """Import all_time_peak from daily_forecasts.json to astronomy cache @zara"""
-        try:
-            daily_forecasts_file = (
-                self.coordinator.data_manager.data_dir / "stats" / "daily_forecasts.json"
-            )
-
-            if not daily_forecasts_file.exists():
-                return
-
-            def _import_sync():
-                try:
-                    import json
-
-                    with open(daily_forecasts_file, "r") as f:
-                        forecasts = json.load(f)
-
-                    all_time_peak = forecasts.get("statistics", {}).get("all_time_peak", {})
-                    power_w = all_time_peak.get("power_w")
-                    peak_date = all_time_peak.get("date")
-                    peak_at = all_time_peak.get("at")
-
-                    if not power_w or not peak_date:
-                        return None
-
-                    power_kw = power_w / 1000.0
-
-                    if not self.astronomy_cache.cache_file.exists():
-                        return None
-
-                    with open(self.astronomy_cache.cache_file, "r") as f:
-                        cache = json.load(f)
-
-                    if "pv_system" not in cache:
-                        cache["pv_system"] = {}
-
-                    cache["pv_system"]["all_time_peak_power_kw"] = round(power_kw, 4)
-                    cache["pv_system"]["all_time_peak_date"] = peak_date
-                    cache["pv_system"]["all_time_peak_at"] = peak_at
-
-                    cache["last_updated"] = datetime.now().isoformat()
-
-                    temp_file = self.astronomy_cache.cache_file.with_suffix(".tmp")
-                    with open(temp_file, "w") as f:
-                        json.dump(cache, f, indent=2, sort_keys=False)
-
-                    temp_file.replace(self.astronomy_cache.cache_file)
-
-                    return power_kw
-
-                except Exception as e:
-                    _LOGGER.error(f"Error importing all_time_peak: {e}")
-                    return None
-
-            import asyncio
-
-            loop = asyncio.get_running_loop()
-            power_kw = await loop.run_in_executor(None, _import_sync)
-
-            if power_kw:
-                _LOGGER.info(
-                    f"✅ Imported all_time_peak from daily_forecasts.json: {power_kw:.3f} kW"
-                )
-
-        except Exception as e:
-            _LOGGER.error(f"Failed to import all_time_peak: {e}", exc_info=True)

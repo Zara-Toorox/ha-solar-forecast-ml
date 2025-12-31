@@ -1,20 +1,11 @@
-"""Configuration Flow for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 from __future__ import annotations
 
@@ -50,6 +41,7 @@ from .const import (
     CONF_PANEL_GROUP_POWER,
     CONF_PANEL_GROUP_TILT,
     CONF_PANEL_GROUPS,
+    CONF_PIRATE_WEATHER_API_KEY,
     CONF_POWER_ENTITY,
     CONF_PRESSURE_SENSOR,
     CONF_RAIN_SENSOR,
@@ -668,11 +660,15 @@ class SolarForecastMLOptionsFlow(OptionsFlow):
                 CONF_NOTIFY_SUCCESSFUL_LEARNING,
                 CONF_ML_ALGORITHM,
                 CONF_ENABLE_TINY_LSTM,
+                CONF_PIRATE_WEATHER_API_KEY,
             ]
             updated_options = {
                 **self.config_entry.options,
                 **{k: v for k, v in user_input.items() if k in valid_keys},
             }
+            # Remove empty API keys
+            if not updated_options.get(CONF_PIRATE_WEATHER_API_KEY):
+                updated_options.pop(CONF_PIRATE_WEATHER_API_KEY, None)
 
             return self.async_create_entry(title="", data=updated_options)
 
@@ -744,5 +740,14 @@ class SolarForecastMLOptionsFlow(OptionsFlow):
                     CONF_ENABLE_TINY_LSTM,
                     default=current_options.get(CONF_ENABLE_TINY_LSTM, DEFAULT_ENABLE_TINY_LSTM),
                 ): bool,
+                # Weather Expert API Keys
+                vol.Optional(
+                    CONF_PIRATE_WEATHER_API_KEY,
+                    description={"suggested_value": current_options.get(CONF_PIRATE_WEATHER_API_KEY, "")},
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.PASSWORD,
+                    )
+                ),
             }
         )

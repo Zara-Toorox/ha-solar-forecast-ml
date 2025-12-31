@@ -1,20 +1,11 @@
-"""Solar Forecast ML Integration - Main Entry Point V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import atexit
 import logging
@@ -45,7 +36,7 @@ _logging_initialized: bool = False
 async def setup_file_logging(hass: HomeAssistant) -> None:
     """Setup non-blocking file logging using QueueHandler @zara
 
-    CRITICAL FIX V12.2.0: Prevents duplicate handlers on reload.
+    CRITICAL FIX V12.4.0: Prevents duplicate handlers on reload.
     This function now checks if logging is already initialized and skips
     re-initialization to prevent log message duplication (2x, 3x, 6x entries).
     """
@@ -146,37 +137,9 @@ def _stop_queue_listener() -> None:
     _logging_initialized = False
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Solar Forecast ML integration legacy @zara"""
-
+    """Set up the Solar Forecast ML integration @zara"""
     hass.data.setdefault(DOMAIN, {})
     return True
-
-async def _cleanup_orphaned_devices(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Remove orphaned devices from old versions (Battery Management, Electricity Price) @zara
-
-    These devices were removed in V10.x but may still exist in the device registry
-    for users upgrading from older versions.
-    """
-    from homeassistant.helpers import device_registry as dr
-
-    dev_reg = dr.async_get(hass)
-
-    # Old device identifiers that no longer exist
-    orphaned_identifiers = [
-        (DOMAIN, f"{entry.entry_id}_battery"),
-        (DOMAIN, f"{entry.entry_id}_electricity"),
-    ]
-
-    devices_removed = 0
-    for identifier in orphaned_identifiers:
-        device = dev_reg.async_get_device(identifiers={identifier})
-        if device:
-            _LOGGER.info(f"Removing orphaned device: {device.name} ({identifier})")
-            dev_reg.async_remove_device(device.id)
-            devices_removed += 1
-
-    if devices_removed > 0:
-        _LOGGER.info(f"Cleaned up {devices_removed} orphaned device(s) from previous versions")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -187,9 +150,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .services.service_notification import create_notification_service
 
     await setup_file_logging(hass)
-
-    # Clean up orphaned devices from old versions (Battery Management, Electricity Price)
-    await _cleanup_orphaned_devices(hass, entry)
 
     # Register update listener for option changes (diagnostic mode, etc.)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
@@ -298,16 +258,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "persistent_notification",
             "create",
             {
-                "title": "✅ Solar Forecast ML 'Sarpeidon' installiert",
+                "title": "✅ Solar Forecast ML 'Sarpeidon' Installed",
                 "message": (
-                    "Die Installation von **Solar Forecast ML 'Sarpeidon'** war erfolgreich!\n\n"
-                    "**Nächste Schritte:**\n"
-                    "1. Führen Sie die Einrichtung durch (Konfiguration → Integrationen)\n"
-                    "2. Warten Sie **10 Minuten** nach der Konfiguration\n"
-                    "3. Starten Sie Home Assistant **neu**, damit alle Caches mit Ihren Daten aktualisiert werden\n\n"
-                    "**Hinweis:** Dies ist die erste stabile Production-Release. "
-                    "Alle Beta-Daten wurden durch eine saubere Template-Struktur ersetzt.\n\n"
-                    "Viel Erfolg mit Ihrer Solar-Prognose! ☀️"
+                    "Installation of **Solar Forecast ML 'Sarpeidon'** was successful!\n\n"
+                    "**Next Steps:**\n"
+                    "1. Complete the setup (Settings → Integrations)\n"
+                    "2. Wait **10 minutes** after configuration\n"
+                    "3. Restart Home Assistant to refresh all caches with your data\n\n"
+                    "**Note:** This is the first stable production release. "
+                    "All beta data has been replaced with a clean template structure.\n\n"
+                    "Good luck with your solar forecast!"
                 ),
                 "notification_id": "solar_forecast_ml_v10_installed",
             },
@@ -355,7 +315,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry @zara
 
-    CRITICAL FIX V12.2.0: Now properly cleans up logging handlers on unload
+    CRITICAL FIX V12.4.0: Now properly cleans up logging handlers on unload
     to prevent duplicate log entries after reload.
     """
     _LOGGER.info("Unloading Solar Forecast ML integration...")
@@ -371,7 +331,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not hass.data[DOMAIN]:
             _async_unregister_services(hass)
 
-            # CRITICAL FIX V12.2.0: Stop logging when last entry is unloaded
+            # CRITICAL FIX V12.4.0: Stop logging when last entry is unloaded
             # This prevents handler accumulation on reload
             _stop_queue_listener()
             _LOGGER.debug("File logging stopped (last config entry unloaded)")

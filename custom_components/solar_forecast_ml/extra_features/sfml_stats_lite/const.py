@@ -1,20 +1,12 @@
-"""Constants for SFML Stats integration. @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,15 +18,19 @@ VERSION: Final = "2.2.0"
 
 SOLAR_FORECAST_ML_BASE: Final = Path("solar_forecast_ml")
 SOLAR_FORECAST_ML_STATS: Final = SOLAR_FORECAST_ML_BASE / "stats"
-SOLAR_FORECAST_ML_ML: Final = SOLAR_FORECAST_ML_BASE / "ml"
+SOLAR_FORECAST_ML_AI: Final = SOLAR_FORECAST_ML_BASE / "ai"
+SOLAR_FORECAST_ML_DATA: Final = SOLAR_FORECAST_ML_BASE / "data"
+SOLAR_FORECAST_ML_PHYSICS: Final = SOLAR_FORECAST_ML_BASE / "physics"
 
+# Stats files
 SOLAR_DAILY_SUMMARIES: Final = "daily_summaries.json"
 SOLAR_HOURLY_PREDICTIONS: Final = "hourly_predictions.json"
 SOLAR_ASTRONOMY_CACHE: Final = "astronomy_cache.json"
+
+# AI files (in ai/ directory)
 SOLAR_LEARNED_WEIGHTS: Final = "learned_weights.json"
-SOLAR_MODEL_STATE: Final = "model_state.json"
-SOLAR_LEARNED_PATTERNS: Final = "learned_patterns.json"
-SOLAR_HOURLY_PROFILE: Final = "hourly_profile.json"
+SOLAR_SEASONAL: Final = "seasonal.json"
+SOLAR_DNI_TRACKER: Final = "dni_tracker.json"
 
 GRID_PRICE_MONITOR_BASE: Final = Path("grid_price_monitor")
 GRID_PRICE_MONITOR_DATA: Final = GRID_PRICE_MONITOR_BASE / "data"

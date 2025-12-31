@@ -1,20 +1,11 @@
-"""System Status Sensor for Solar Forecast ML V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from collections import deque
@@ -61,7 +52,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, self.coordinator.entry.entry_id)},
             "name": "Solar Forecast ML",
             "manufacturer": "Zara-Toorox",
-            "model": "Solar Forecast ML Integration",
+            "model": "Solar Forecast ML AI-Version",
         }
 
     @property
@@ -84,7 +75,7 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Return sensor attributes @zara"""
 
-        ml_predictor = self.coordinator.ml_predictor
+        ai_predictor = self.coordinator.ai_predictor
 
         ml_status = "unknown"
         ml_samples = 0
@@ -92,15 +83,15 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         ml_last_training = None
         ml_next_check = None
 
-        if ml_predictor:
+        if ai_predictor:
             ml_status = (
-                ml_predictor.model_state.value
-                if hasattr(ml_predictor, "model_state")
+                ai_predictor.model_state.value
+                if hasattr(ai_predictor, "model_state")
                 else "unknown"
             )
-            ml_samples = getattr(ml_predictor, "training_samples", 0)
-            ml_accuracy = getattr(ml_predictor, "current_accuracy", None)
-            ml_last_training = getattr(ml_predictor, "last_training_time", None)
+            ml_samples = getattr(ai_predictor, "training_samples", 0)
+            ml_accuracy = getattr(ai_predictor, "current_accuracy", None)
+            ml_last_training = getattr(ai_predictor, "last_training_time", None)
 
         last_event_time_str = None
         if self._last_event_time:
@@ -151,15 +142,10 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
 
     def _get_forecast_source(self) -> str:
         """Determine current forecast source @zara"""
-        if hasattr(self.coordinator, "forecast_orchestrator"):
-            orchestrator = self.coordinator.forecast_orchestrator
-            if hasattr(orchestrator, "ml_strategy") and orchestrator.ml_strategy:
-                if (
-                    hasattr(orchestrator.ml_strategy, "is_available")
-                    and orchestrator.ml_strategy.is_available()
-                ):
-                    return "ml"
-        return "weather"
+        if hasattr(self.coordinator, "ai_predictor") and self.coordinator.ai_predictor:
+            if self.coordinator.ai_predictor.is_ready():
+                return "tinylstm"
+        return "physics"
 
     def update_status(
         self,
@@ -214,9 +200,9 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         if self._last_event_status == "partial":
             return "warning"
 
-        ml_predictor = self.coordinator.ml_predictor
-        if ml_predictor and hasattr(ml_predictor, "model_state"):
-            ml_state = ml_predictor.model_state.value
+        ai_predictor = self.coordinator.ai_predictor
+        if ai_predictor and hasattr(ai_predictor, "model_state"):
+            ml_state = ai_predictor.model_state.value
             if ml_state in ["degraded", "error"]:
                 return "warning"
 
@@ -249,24 +235,24 @@ class SystemStatusSensor(CoordinatorEntity, SensorEntity):
         """Collect current system warnings @zara"""
         warnings = []
 
-        ml_predictor = self.coordinator.ml_predictor
-        if ml_predictor:
+        ai_predictor = self.coordinator.ai_predictor
+        if ai_predictor:
 
-            if hasattr(ml_predictor, "last_training_time") and ml_predictor.last_training_time:
+            if hasattr(ai_predictor, "last_training_time") and ai_predictor.last_training_time:
                 from datetime import timedelta
 
                 from ..core.core_helpers import SafeDateTimeUtil as dt_util
 
-                training_age = dt_util.now() - ml_predictor.last_training_time
+                training_age = dt_util.now() - ai_predictor.last_training_time
                 if training_age > timedelta(days=14):
                     warnings.append(f"Letztes ML Training vor {training_age.days} Tagen")
 
-            if hasattr(ml_predictor, "training_samples"):
+            if hasattr(ai_predictor, "training_samples"):
                 from ..const import MIN_TRAINING_DATA_POINTS
 
-                if ml_predictor.training_samples < MIN_TRAINING_DATA_POINTS:
+                if ai_predictor.training_samples < MIN_TRAINING_DATA_POINTS:
                     warnings.append(
-                        f"Nicht genug Samples für Training: {ml_predictor.training_samples}/{MIN_TRAINING_DATA_POINTS}"
+                        f"Nicht genug Samples für Training: {ai_predictor.training_samples}/{MIN_TRAINING_DATA_POINTS}"
                     )
 
         if (

@@ -31,28 +31,26 @@
 # ============================================================================
 
 # ============================================================================
-# ML SERVICES - Machine Learning Model Management
-# ⚠️ DEVELOPER ONLY - Diese Services können das ML-System beschädigen!
+# AI SERVICES - TinyLSTM Neural Network Model Management
+# ⚠️ DEVELOPER ONLY - Diese Services können das AI-System beschädigen!
 # ============================================================================
 
-force_retrain:
-  name: "🚀 Retrain ML Model"
+retrain_ai_model:
+  name: "🧠 Retrain TinyLSTM AI Model"
   description: >
     ╔══════════════════════════════════════════════════════════════════════════╗
     ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
     ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
-    ║ Unsachgemäße Nutzung kann zu Datenverlust und Systeminstabilität führen.║
     ╚══════════════════════════════════════════════════════════════════════════╝
 
-    🚀 ADAPTIVE TRAINING - Ridge Regression + TinyLSTM Neural Network
+    🧠 TinyLSTM NEURAL NETWORK TRAINING
 
-    Forces immediate retraining of the Machine Learning model with adaptive algorithm selection.
+    Forces immediate retraining of the TinyLSTM AI model with current data.
 
-    Training behavior:
-    - < 100 samples → Ridge Regression (fast, stable)
-    - ≥ 100 samples → TinyLSTM (accurate, temporal)
-    - Automatic fallback to Ridge if LSTM fails
-    - User can override via integration options
+    Training requirements:
+    - Minimum 50 training samples required
+    - Uses last 30 days of hourly_predictions.json data
+    - Multi-Output mode: One output per panel group
 
     Data sources:
     - hourly_predictions.json (main source with actual production)
@@ -60,19 +58,18 @@ force_retrain:
     - astronomy_cache.json (sun position, theoretical max, clear-sky radiation)
 
     Model storage:
-    - Weights: /ml/model_state.json (~100 KB for LSTM, ~10 KB for Ridge)
-    - Scaler: Embedded in model_state.json
-    - Algorithm used: Stored in model_state.json (ridge/tiny_lstm)
+    - Weights: /ai/learned_weights.json (TinyLSTM weights)
+    - Seasonal factors: /ai/seasonal.json
+    - DNI tracking: /ai/dni_tracker.json
 
     Use this service:
     - After collecting new production data (to improve accuracy)
     - After fixing solar_capacity configuration
-    - To test LSTM vs Ridge performance
     - If automatic training (06:00 daily) failed
   fields: {}
 
-reset_model:
-  name: "⚠️ Reset ML Model"
+reset_ai_model:
+  name: "⚠️ Reset TinyLSTM AI Model"
   description: >
     ╔══════════════════════════════════════════════════════════════════════════╗
     ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
@@ -80,32 +77,32 @@ reset_model:
     ║ ALLE gelernten Daten werden UNWIDERRUFLICH gelöscht!                    ║
     ╚══════════════════════════════════════════════════════════════════════════╝
 
-    ⚠️ DESTRUCTIVE ACTION - Deletes all learned model weights!
+    ⚠️ DESTRUCTIVE ACTION - Resets AI model to untrained state!
 
-    Resets the Machine Learning model to its initial untrained state.
+    Resets the TinyLSTM AI model to its initial untrained state.
 
     What this service does:
-    - Deletes /ml/model_state.json (all learned weights + scaler)
-    - Resets ML predictor to UNINITIALIZED state
+    - Reinitializes the TinyLSTM model
     - Clears accuracy metrics and training sample count
+    - Sets model state to UNTRAINED
     - Forces model to retrain from scratch on next training cycle
 
     Use this service:
     - After major configuration changes (solar_capacity, location)
     - If model produces consistently wrong predictions
-    - To start fresh ML training
-    - After corrupted model_state.json file
+    - To start fresh AI training
+    - After corrupted learned_weights.json file
 
     What happens after reset:
     - Model will use Rule-Based predictions until retrained
     - Next training (06:00 or manual) will rebuild from scratch
     - All historical prediction accuracy data is lost
-    - Requires ≥10 samples with actual production to retrain
+    - Requires ≥50 samples with actual production to retrain
 
     ⚠️ CAUTION: This action CANNOT be undone!
-    Consider backing up /ml/model_state.json before resetting.
+    Consider backing up /ai/learned_weights.json before resetting.
 
-    Alternative: Use force_retrain service to keep model but retrain with latest data.
+    Alternative: Use retrain_ai_model service to keep model but retrain with latest data.
   fields: {}
 
 # ============================================================================
@@ -125,23 +122,26 @@ run_all_day_end_tasks:
 
     🌙 EMERGENCY SERVICE - Manual execution of complete 23:30 day-end workflow!
 
-    Executes the COMPLETE 8-step sequence that runs automatically at 23:30 daily.
+    Executes the COMPLETE 10-step sequence that runs automatically at 23:30 daily.
 
-    Task sequence (8 steps - matches production/production_scheduled_tasks.py::end_of_day_workflow):
+    Task sequence (10 steps - matches production/production_scheduled_tasks.py::end_of_day_workflow):
     1. Finalize Day (read solar_yield_today before midnight reset)
     2. Create Daily Summary (shadow analysis, ML accuracy metrics)
     3. Move to History (archive today's predictions)
     4. Update Yesterday Deviation (yesterday vs forecast comparison)
     5. Calculate Statistics (MAE, RMSE, R² metrics)
-    6. Update RB Overall Correction (production-based factor)
-    7. Night Cleanup (remove duplicates, zero samples)
-    8. Pattern Learning (geometry corrections)
+    6. Weather Precision (compare forecast vs actual weather)
+    7. Update RB Overall Correction (production-based factor)
+    8. Night Cleanup (remove duplicates, zero samples)
+    9. AI Model Training (TinyLSTM Multi-Output training)
+    10. Panel Group Efficiency Learning (per-group efficiency factors)
 
     What this service does:
     - Saves today's final production data before midnight
     - Analyzes prediction accuracy (hourly + daily)
     - Detects shadow patterns and obstructions
-    - Learns panel geometry corrections (monthly)
+    - Trains AI model with new data (TinyLSTM)
+    - Learns panel group efficiency factors
     - Archives predictions to history
     - Cleans up data duplicates
     - Updates correction factors
@@ -150,16 +150,19 @@ run_all_day_end_tasks:
     - ⚠️ If automatic 23:30 task failed
     - Before midnight to manually save today's data
     - To trigger manually if automatic task failed
-    - To trigger geometry learning manually
+    - To trigger AI model training manually
 
-    Processing time: ~2-5 seconds (8 steps)
+    Processing time: ~3-10 seconds (10 steps)
 
     Files affected:
     - daily_summaries.json (new entry for today with shadow analysis)
     - hourly_predictions.json (today moved to history section)
-    - learned_patterns.json (geometry corrections updated)
+    - ai/seasonal.json (seasonal adjustments updated)
     - coordinator_state.json (yesterday deviation updated)
     - hourly_samples.json (cleaned, duplicates removed)
+    - ai/learned_weights.json (TinyLSTM model weights)
+    - ai/seasonal.json (seasonal adjustment factors)
+    - ai/dni_tracker.json (DNI tracking data)
 
     ⚠️ CAUTION: Run ONLY ONCE per day to avoid duplicate entries!
     This service calls: coordinator.scheduled_tasks.end_of_day_workflow()
@@ -177,9 +180,9 @@ test_morning_routine:
   name: "🧪 TEST: Analyze 6 AM Morning Predictions (Real Data)"
   description: >
     ╔══════════════════════════════════════════════════════════════════════════╗
-    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
-    ║ Dieser Service ist nur für Debugging-Zwecke gedacht.                    ║
-    ║ Keine Änderungen am System (read-only).                                 ║
+    ║ ⚠️ DEVELOPER ONLY                                                       ║
+    ║ This service is intended for debugging purposes only.                   ║
+    ║ No changes to the system (read-only).                                   ║
     ╚══════════════════════════════════════════════════════════════════════════╝
 
     ⚠️ ANALYSIS SERVICE - No backup needed (read-only!)
@@ -207,6 +210,85 @@ test_morning_routine:
     Data sources:
     - /stats/hourly_predictions.json (predictions created at 06:00)
     - /data/open_meteo_cache.json (weather forecast from Open-Meteo)
+  fields: {}
+
+test_retrospective_forecast:
+  name: "🔄 TEST: Retrospective Forecast (Current Code)"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Erstellt eine "retrospektive" Prognose mit dem AKTUELLEN Code.          ║
+    ║ Schreibt NUR in retrospective_forecast.json (beeinflusst keine Daten).  ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🔄 RETROSPECTIVE FORECAST - Test code changes without waiting!
+
+    This service creates a forecast for TODAY using the CURRENT code, as if
+    it were running at "1 hour before sunrise".
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🎯 WHY USE THIS SERVICE?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    The regular "test_morning_routine" service always creates predictions
+    starting from the CURRENT time. This makes it impossible to test code
+    changes that were made AFTER the morning forecast.
+
+    Example scenario:
+    - 07:00: Automatic morning forecast runs (old code)
+    - 14:00: You change a correction factor in the code
+    - Problem: Running test_morning_routine at 14:00 only predicts 14:00-sunset
+
+    With THIS service:
+    - 14:00: You change a correction factor
+    - 14:00: Run test_retrospective_forecast
+    - Result: See what the 07:00 forecast WOULD have been with your new code
+    - Compare: retrospective_forecast.json vs hourly_predictions.json
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📋 WHAT THIS SERVICE DOES:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    1. Determines today's sunrise time from astronomy cache
+    2. Sets simulation time to "sunrise - 1 hour" (e.g., 07:00 in winter)
+    3. Loads current weather forecast (weather_forecast_corrected.json)
+    4. Loads current astronomy data for today
+    5. Runs the FULL forecast pipeline with CURRENT code:
+       - Physics engine calculations
+       - Panel group calculations
+       - AI/ML predictions (if available)
+       - All correction factors and calibrations
+    6. Calculates hourly predictions for ALL production hours (e.g., 08:00-16:00)
+    7. Saves result to stats/retrospective_forecast.json
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📁 OUTPUT FILE:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /config/solar_forecast_ml/stats/retrospective_forecast.json
+
+    Contains:
+    - simulation_context: When/why this was created
+    - forecast_summary: Total kWh, best hour, method, confidence
+    - hourly_predictions: Detailed per-hour predictions with weather/astronomy
+    - weather_data_used: Which weather data was used
+    - astronomy_data_used: Sunrise, sunset, daylight hours
+    - correction_factor_used: Current correction factor value
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🔒 SAFETY:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - DOES NOT modify hourly_predictions.json
+    - DOES NOT affect actual forecasts or sensors
+    - ONLY writes to retrospective_forecast.json
+    - Safe to run multiple times (overwrites previous result)
+
+    Use cases:
+    - Test new correction factors before committing
+    - Debug physics engine calculations
+    - Compare AI vs Physics predictions
+    - Validate panel group calibrations
   fields: {}
 
 # ============================================================================
@@ -346,7 +428,9 @@ run_weather_correction:
     ⚠️ MANUAL TRIGGER - Rebuilds weather_forecast_corrected.json immediately!
 
     This service manually triggers the corrected weather forecast generation
-    which normally runs automatically at 02:00 daily.
+    which normally runs automatically at:
+    - 00:15 LOCAL: Before first morning forecast (00:25)
+    - sunrise-40min: Before final morning forecast (sunrise-30min)
 
     What this does:
     1. Loads raw weather forecast from open_meteo_cache.json
@@ -357,8 +441,8 @@ run_weather_correction:
 
     Use this service:
     - To test weather correction logic immediately
-    - If automatic 02:00 task failed
-    - When you can't wait until 02:00 for new forecast
+    - If automatic tasks failed
+    - After manually refreshing weather data
 
     Processing time: ~1 second
 
@@ -394,8 +478,8 @@ refresh_open_meteo_cache:
     - GHI = direct_radiation + diffuse_radiation
 
     Automatic schedule:
-    - 00:15 LOCAL: Daily update (with corrected forecast)
-    - 12:15 LOCAL: Mid-day refresh
+    - 00:10 LOCAL: Pre-midnight refresh (before 00:15 corrected forecast)
+    - sunrise-45min: Dynamic refresh (before final morning forecast)
 
     Use this service when:
     - After HA restart if cache is stale (>12 hours old)
@@ -471,166 +555,6 @@ refresh_multi_weather:
       example: true
       selector:
         boolean:
-
-bootstrap_physics_from_history:
-  name: "🔬 Bootstrap Physics-First Models from History"
-  description: >
-    ╔══════════════════════════════════════════════════════════════════════════╗
-    ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
-    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
-    ║ Kann existierende Modelle und gelernte Muster ÜBERSCHREIBEN!            ║
-    ║ Erstellen Sie VORHER ein Home Assistant Backup!                         ║
-    ╚══════════════════════════════════════════════════════════════════════════╝
-
-    🔬 PHYSICS-FIRST BOOTSTRAP - Train GeometryLearner and ResidualTrainer from HA History!
-
-    This service trains the Physics-First Architecture components using historical
-    production data from Home Assistant combined with historical weather from Open-Meteo.
-
-    ⚠️ REQUIREMENTS:
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    ✅ power_entity (required, already configured)
-    ✅ solar_yield_today (required, already configured)
-    ⭐ solar_radiation_sensor (optional, improves training)
-    ⭐ lux_sensor (optional, for clear-sky detection)
-    ⭐ temp_sensor (optional, for temperature correction)
-
-    What this service does (8 steps):
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    1. ✅ Validates required sensor configuration
-    2. 📊 Fetches production history from HA Recorder (up to 6 months)
-    3. 📈 Aggregates hourly production from cumulative yield
-    4. 🌤️ Fetches historical weather from Open-Meteo Archive API
-    5. 🌞 Builds astronomy cache retroactively (sun positions)
-    6. 📐 Builds training samples with production + weather + astronomy
-    7. 🔬 Trains GeometryLearner (learns panel tilt/azimuth from clear-sky data)
-    8. 🧠 Trains ResidualTrainer (learns ML corrections for Physics model)
-
-    GeometryLearner Output:
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    - Learned panel tilt (e.g., 32.5°) from production patterns
-    - Learned panel azimuth (e.g., 175°) from morning/afternoon production
-    - Confidence score based on clear-sky sample count
-    - Saved to: /config/solar_forecast_ml/learned_geometry.json
-
-    ResidualTrainer Output:
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    - ML model trained on residuals (actual - physics prediction)
-    - Captures local effects: shadows, obstructions, systematic errors
-    - Algorithm: Ridge (fast) or TinyLSTM (accurate, 100+ samples)
-    - Saved to: /config/solar_forecast_ml/ml/residual_model_state.json
-
-    After bootstrap:
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    ✅ Physics-First architecture fully trained
-    ✅ Panel geometry learned (no manual configuration needed!)
-    ✅ ML residual model ready for ensemble predictions
-    ✅ Forecasts immediately use Physics+ML combination
-
-    Use this service:
-    - After fresh installation with 1+ month of history
-    - After reinstallation to quickly restore trained models
-    - To retrain models with more historical data
-    - When panel geometry may have changed (e.g., reinstallation)
-
-    Processing time: 30-120 seconds (depends on days requested)
-
-  fields:
-    days:
-      name: "Days to fetch"
-      description: "Number of days to look back in history (1-365). Default: 180 days (6 months) for comprehensive training. GeometryLearner needs clear-sky days, so more history = better results."
-      required: false
-      default: 180
-      example: 180
-      selector:
-        number:
-          min: 7
-          max: 365
-          mode: slider
-          unit_of_measurement: "days"
-    cumulative_yield_sensor:
-      name: "Cumulative Yield Sensor (optional)"
-      description: >
-        Optional: A CUMULATIVE total yield sensor (kWh) that is NOT reset daily.
-        Use this if your solar_yield_today sensor doesn't have enough history.
-        The service will calculate hourly production from the differences.
-        Example: sensor.solar_total_yield or sensor.inverter_lifetime_production
-      required: false
-      example: "sensor.solar_total_yield"
-      selector:
-        entity:
-          domain: sensor
-
-bootstrap_from_history:
-  name: "🚀 Bootstrap Pattern Learning from History"
-  description: >
-    ╔══════════════════════════════════════════════════════════════════════════╗
-    ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
-    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
-    ║ Kann existierende gelernte Muster ÜBERSCHREIBEN!                        ║
-    ║ Erstellen Sie VORHER ein Home Assistant Backup!                         ║
-    ╚══════════════════════════════════════════════════════════════════════════╝
-
-    🚀 ADVANCED - Bootstrap pattern learning from Home Assistant history!
-
-    ⚠️ REQUIREMENTS:
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    ✅ Power sensor (required, already configured during setup)
-    ✅ Yield sensor (required, already configured during setup)
-    ⭐ Cumulative Yield sensor (optional, via service parameter)
-    ⭐ Other sensors are OPTIONAL (solar_radiation, temperature, etc.)
-
-    Optional sensors improve the quality of pattern learning but are NOT required!
-
-    What this service does:
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    1. ✅ Validates required sensors (power + yield)
-    2. 📊 Fetches sensor history from Home Assistant Recorder
-    3. 📊 Optionally uses cumulative yield sensor for longer history
-    4. 📝 Fills hourly_weather_actual.json
-    5. 🧠 Calculates geometry_factors from actual production
-    6. 📅 Learns seasonal_adjustments (monthly patterns)
-    7. ⚡ Builds efficiency_curves (radiation vs output)
-    8. 💾 Saves learned_patterns.json with real data
-
-    After bootstrap:
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    ✅ learned_patterns.json has real data (not defaults!)
-    ✅ hourly_weather_actual.json filled with historical data
-    ✅ ML training can start immediately (if 100+ samples)
-    ✅ Geometry corrections based on YOUR actual installation
-
-    Processing time: ~10-30 seconds (depends on days requested)
-
-    Result files:
-    - /config/solar_forecast_ml/stats/hourly_weather_actual.json
-    - /config/solar_forecast_ml/ml/learned_patterns.json
-
-  fields:
-    days:
-      name: "Days to fetch"
-      description: "Number of days to look back in history (1-180). Default: 30 days for comprehensive pattern learning."
-      required: false
-      default: 30
-      example: 30
-      selector:
-        number:
-          min: 1
-          max: 180
-          mode: slider
-          unit_of_measurement: "days"
-    cumulative_yield_sensor:
-      name: "Cumulative Yield Sensor (optional)"
-      description: >
-        Optional: A CUMULATIVE total yield sensor (kWh) that is NOT reset daily.
-        Use this if your solar_yield_today sensor doesn't have enough history.
-        The service will calculate hourly production from the differences.
-        Example: sensor.solar_total_yield or sensor.inverter_lifetime_production
-      required: false
-      example: "sensor.solar_total_yield"
-      selector:
-        entity:
-          domain: sensor
 
 send_daily_briefing:
   name: Send Daily Solar Briefing
@@ -735,24 +659,17 @@ borg_assimilation_reverse:
 
     Verfügbare Targets:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    📊 panel_groups
-       Setzt learned_panel_group_efficiency.json zurück:
-       - hourly_efficiency → {} (leer, neutral)
-       - learned_efficiency_factor → 1.0
-       - sample_count → 0
-       - confidence → 0
-       ➜ System lernt Panel-Effizienz komplett neu
-
-    🧠 ml_weights
-       Setzt learned_weights.json zurück:
-       - Alle ML-Gewichte → 0.0
-       - Training samples → 0
-       - Accuracy → 0%
+    🧠 ai_weights
+       Setzt AI-Dateien zurück:
+       - ai/learned_weights.json (TinyLSTM weights)
+       - ai/seasonal.json (seasonal factors)
+       - ai/dni_tracker.json (DNI tracking)
        ➜ ML-Modell startet Training von Grund auf neu
 
     📜 hourly_history
-       Entfernt alte Einträge aus hourly_predictions.json:
-       - Standardmäßig: Älter als 30 Tage
+       Entfernt alte Einträge:
+       - stats/hourly_predictions.json
+       - stats/hourly_weather_actual.json
        - Optional: before_date Parameter für gezieltes Löschen
        ➜ Entfernt "Garbage Data" aus der Vergangenheit
 
@@ -770,15 +687,14 @@ borg_assimilation_reverse:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     - System startet sofort mit neutralen Werten
     - Lernen beginnt automatisch beim nächsten Daten-Eingang
-    - Panel-Gruppen: Lernt um 23:30 täglich
     - ML-Modell: Training läuft um 06:00 täglich
 
     Beispiele:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # Nur Panel-Gruppen zurücksetzen (häufigster Anwendungsfall)
+    # Nur AI-Gewichte zurücksetzen
     service: solar_forecast_ml.borg_assimilation_reverse
     data:
-      target: panel_groups
+      target: ai_weights
 
     # Alles zurücksetzen + Garbage vor dem 15.12. entfernen
     service: solar_forecast_ml.borg_assimilation_reverse
@@ -791,19 +707,16 @@ borg_assimilation_reverse:
       name: "Reset-Ziel"
       description: >
         Was soll zurückgesetzt werden?
-        - panel_groups: Panel-Gruppen Effizienz-Daten
-        - ml_weights: ML-Modell Gewichte
+        - ai_weights: AI/ML-Modell Gewichte (learned_weights, seasonal, dni_tracker)
         - hourly_history: Stündliche Vorhersage-Historie
         - all: Alles oben genannte
       required: true
-      example: "panel_groups"
+      example: "ai_weights"
       selector:
         select:
           options:
-            - label: "📊 Panel-Gruppen Effizienz"
-              value: "panel_groups"
-            - label: "🧠 ML-Modell Gewichte"
-              value: "ml_weights"
+            - label: "🧠 AI-Modell Gewichte"
+              value: "ai_weights"
             - label: "📜 Stündliche Historie"
               value: "hourly_history"
             - label: "🔄 Alles"

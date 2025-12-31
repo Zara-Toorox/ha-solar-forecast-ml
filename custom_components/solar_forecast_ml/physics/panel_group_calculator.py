@@ -1,23 +1,11 @@
-"""Panel Group Calculator for Solar Forecast ML Integration V12.2.0 @zara
-
-This module handles calculations for multiple panel groups with different
-orientations (azimuth/tilt) and capacities.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 from __future__ import annotations
 
@@ -35,6 +23,7 @@ from .physics_engine import (
     PowerResult,
     SunPosition,
 )
+from .physics_calibrator import PhysicsCalibrator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -214,7 +203,7 @@ class PanelGroupCalculator:
             _skip_config_load: Internal flag - if True, skip sync config loading
                                (used by async_create factory method)
         """
-        # Load defaults from config if available (sync path for backwards compatibility)
+        # Load defaults from config if available
         if not _skip_config_load and (albedo is None or system_efficiency is None):
             config_defaults = _load_physics_defaults_from_config_sync(data_path)
         else:
@@ -226,6 +215,8 @@ class PanelGroupCalculator:
             else config_defaults["system_efficiency"]
         )
         self._groups: list[PanelGroup] = []
+        self._calibrator: Optional[PhysicsCalibrator] = None
+        self._calibration_enabled: bool = True  # Can be disabled for testing
 
         if panel_groups:
             self.set_panel_groups(panel_groups)
@@ -327,20 +318,55 @@ class PanelGroupCalculator:
         """Check if panel groups are configured. @zara"""
         return len(self._groups) > 0
 
+    def set_calibrator(self, calibrator: PhysicsCalibrator) -> None:
+        """Set the physics calibrator for self-learning corrections. @zara
+
+        Args:
+            calibrator: PhysicsCalibrator instance
+        """
+        self._calibrator = calibrator
+        _LOGGER.info("PhysicsCalibrator attached to PanelGroupCalculator")
+
+    def get_calibration_factor(
+        self,
+        group_name: str,
+        hour: Optional[int] = None,
+        cloud_cover: Optional[float] = None,
+        sun_elevation: Optional[float] = None,
+    ) -> float:
+        """Get calibration correction factor for a group. @zara
+
+        Args:
+            group_name: Name of the panel group
+            hour: Optional hour for hourly-specific factor
+            cloud_cover: Optional cloud cover (0-100) for weather-bucket-specific factor
+            sun_elevation: Optional sun elevation (degrees) for LOW_SUN bucket detection
+
+        Returns:
+            Correction factor (1.0 = no correction)
+        """
+        if not self._calibration_enabled or self._calibrator is None:
+            return 1.0
+        return self._calibrator.get_correction_factor(group_name, hour, cloud_cover, sun_elevation)
+
     def calculate_group_power(
         self,
         group: PanelGroup,
         irradiance: IrradianceData,
         sun: SunPosition,
         ambient_temp_c: float,
+        hour: Optional[int] = None,
+        cloud_cover: Optional[float] = None,
     ) -> PanelGroupResult:
-        """Calculate power output for a single panel group. @zara
+        """Calculate power output for a single panel group with calibration. @zara
 
         Args:
             group: The panel group to calculate for
             irradiance: Solar irradiance components (GHI, DNI, DHI)
             sun: Current sun position
             ambient_temp_c: Ambient temperature in Celsius
+            hour: Optional hour for hourly-specific calibration factor
+            cloud_cover: Optional cloud cover (0-100) for weather-bucket-specific factor
 
         Returns:
             PanelGroupResult with power output and details
@@ -362,9 +388,18 @@ class PanelGroupCalculator:
             irradiance, sun, ambient_temp_c, group.geometry
         )
 
+        # Apply calibration correction factor (with weather bucket + LOW_SUN support)
+        # Pass sun elevation from SunPosition for LOW_SUN bucket detection
+        raw_power = power_result.power_kwh
+        calibration_factor = self.get_calibration_factor(
+            group.name, hour, cloud_cover, sun.elevation_deg
+        )
+        calibrated_power = raw_power * calibration_factor
+
+
         return PanelGroupResult(
             group=group,
-            power_kwh=power_result.power_kwh,
+            power_kwh=calibrated_power,
             poa_result=poa_result,
         )
 
@@ -373,13 +408,17 @@ class PanelGroupCalculator:
         irradiance: IrradianceData,
         sun: SunPosition,
         ambient_temp_c: float,
+        hour: Optional[int] = None,
+        cloud_cover: Optional[float] = None,
     ) -> MultiGroupResult:
-        """Calculate total power output for all panel groups. @zara
+        """Calculate total power output for all panel groups with calibration. @zara
 
         Args:
             irradiance: Solar irradiance components (GHI, DNI, DHI)
             sun: Current sun position
             ambient_temp_c: Ambient temperature in Celsius
+            hour: Optional hour for hourly-specific calibration factors
+            cloud_cover: Optional cloud cover (0-100) for weather-bucket-specific factors
 
         Returns:
             MultiGroupResult with total power and per-group breakdown
@@ -395,7 +434,9 @@ class PanelGroupCalculator:
         total_power_kwh = 0.0
 
         for group in self._groups:
-            result = self.calculate_group_power(group, irradiance, sun, ambient_temp_c)
+            result = self.calculate_group_power(
+                group, irradiance, sun, ambient_temp_c, hour, cloud_cover
+            )
             group_results.append(result)
             total_power_kwh += result.power_kwh
 

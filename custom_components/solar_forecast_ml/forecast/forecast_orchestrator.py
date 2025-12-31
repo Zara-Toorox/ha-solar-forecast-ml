@@ -1,23 +1,15 @@
-"""Forecast Orchestrator for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import asyncio
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -26,10 +18,9 @@ from homeassistant.core import HomeAssistant
 from ..astronomy.astronomy_cache_manager import get_cache_manager
 from ..const import ML_MODEL_VERSION
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
-from ..ml.ml_predictor import MLPredictor
+from ..ai import AIPredictor
 from ..services.service_error_handler import ErrorHandlingService
 from .forecast_rule_based_strategy import RuleBasedForecastStrategy
-from .forecast_strategy import MLForecastStrategy
 from .forecast_strategy_base import ForecastResult
 from .forecast_weather_calculator import WeatherCalculator
 
@@ -56,10 +47,9 @@ class ForecastOrchestrator:
         self.weather_calculator = weather_calculator
         self.panel_groups = panel_groups or []
 
-        self.ml_strategy: Optional[MLForecastStrategy] = None
         self.rule_based_strategy: Optional[RuleBasedForecastStrategy] = None
 
-        self._ml_predictor: Optional[MLPredictor] = None
+        self._ai_predictor: Optional[AIPredictor] = None
         self._historical_cache: Dict = {}
 
         self.active_strategy_name: Optional[str] = None
@@ -115,16 +105,16 @@ class ForecastOrchestrator:
 
     def initialize_strategies(
         self,
-        ml_predictor: Optional[MLPredictor] = None,
+        ai_predictor: Optional[AIPredictor] = None,
         error_handler: Optional[ErrorHandlingService] = None,
     ) -> None:
-        """Initializes the available forecast strategy instances"""
+        """Initializes the forecast strategy with AI @zara"""
         _LOGGER.info("Initializing forecast strategies...")
 
-        self._ml_predictor = ml_predictor
+        self._ai_predictor = ai_predictor
 
-        if self._ml_predictor:
-            self._historical_cache = self._ml_predictor._historical_cache
+        if self._ai_predictor:
+            self._historical_cache = self._ai_predictor._historical_cache
 
         try:
             self.rule_based_strategy = RuleBasedForecastStrategy(
@@ -132,31 +122,20 @@ class ForecastOrchestrator:
                 solar_capacity=self.solar_capacity,
                 orchestrator=self,
                 panel_groups=self.panel_groups,
+                ai_predictor=ai_predictor,
             )
-            if self.panel_groups:
+            if ai_predictor and ai_predictor.is_ready():
+                _LOGGER.info("Forecast strategy initialized with local AI")
+            elif self.panel_groups:
                 _LOGGER.info(
-                    f"Rule-Based forecast strategy initialized with {len(self.panel_groups)} panel groups."
+                    f"Forecast strategy initialized with {len(self.panel_groups)} panel groups (physics)"
                 )
             else:
-                _LOGGER.info("Rule-Based forecast strategy (iterative) initialized.")
+                _LOGGER.info("Forecast strategy initialized (physics fallback)")
 
         except Exception as e:
-            _LOGGER.error(f"Failed to initialize RuleBasedForecastStrategy: {e}", exc_info=True)
+            _LOGGER.error(f"Failed to initialize forecast strategy: {e}", exc_info=True)
             self.rule_based_strategy = None
-
-        if ml_predictor:
-            try:
-                self.ml_strategy = MLForecastStrategy(
-                    ml_predictor=ml_predictor,
-                    error_handler=error_handler,
-                    hass=self.hass
-                )
-                _LOGGER.info("ML forecast strategy (iterative) initialized.")
-            except Exception as e:
-                _LOGGER.error(f"Failed to initialize MLForecastStrategy: {e}", exc_info=True)
-                self.ml_strategy = None
-        else:
-            _LOGGER.info("ML forecast strategy not available (ML Predictor instance missing).")
 
     async def orchestrate_forecast(
         self,
@@ -187,13 +166,12 @@ class ForecastOrchestrator:
         sensor_data: Dict[str, Any],
         correction_factor: float = 1.0,
     ) -> Dict[str, Any]:
-        """Creates daily solar forecast today tomorrow day after tomorrow through"""
-        _LOGGER.debug("Creating blended daily forecast (Iterative Pipeline)...")
+        """Creates daily solar forecast using AI with physics fallback @zara"""
+        _LOGGER.debug("Creating forecast (AI + Physics)...")
 
-        ml_result: Optional[ForecastResult] = None
-        rule_result: Optional[ForecastResult] = None
-        model_accuracy = 0.0
+        result: Optional[ForecastResult] = None
 
+        # Get lag features for prediction
         lag_features = {}
         try:
             now_local = dt_util.now()
@@ -208,357 +186,66 @@ class ForecastOrchestrator:
             _LOGGER.warning(f"Could not retrieve lag feature 'production_yesterday': {e}")
             lag_features["production_yesterday"] = 0.0
 
-        if self.ml_strategy and self.ml_strategy.is_available():
-            try:
-                _LOGGER.debug("Attempting forecast using ML (Iterative) strategy...")
-                ml_result = await self.ml_strategy.calculate_forecast(
-                    hourly_weather_forecast=hourly_weather_forecast,
-                    sensor_data=sensor_data,
-                    lag_features=lag_features,
-                    correction_factor=correction_factor,
-                )
-                if ml_result.model_accuracy is not None:
-                    model_accuracy = ml_result.model_accuracy
-                _LOGGER.debug(
-                    f"ML Strategy Success. Today={ml_result.forecast_today:.2f} kWh, "
-                    f"Tomorrow={ml_result.forecast_tomorrow:.2f} kWh, "
-                    f"Day After={ml_result.forecast_day_after_tomorrow:.2f} kWh. "
-                    f"Accuracy={model_accuracy:.3f}"
-                )
-
-            except Exception as ml_err:
-                _LOGGER.warning(
-                    f"ML (Iterative) forecast strategy failed: {ml_err}. ML result set to 0."
-                )
-                ml_result = None
-        else:
-            _LOGGER.debug("ML strategy not available or unhealthy.")
-
+        # Use single unified strategy (TinyLSTM + Physics)
         if self.rule_based_strategy and self.rule_based_strategy.is_available():
             try:
-                _LOGGER.debug("Attempting forecast using Rule-Based (Iterative) strategy...")
-                rule_result = await self.rule_based_strategy.calculate_forecast(
+                result = await self.rule_based_strategy.calculate_forecast(
                     hourly_weather_forecast=hourly_weather_forecast,
                     sensor_data=sensor_data,
                     correction_factor=correction_factor,
                     lag_features=lag_features,
                 )
-                _LOGGER.debug(
-                    f"Rule-Based Strategy Success. Today={rule_result.forecast_today:.2f} kWh, "
-                    f"Tomorrow={rule_result.forecast_tomorrow:.2f} kWh, "
-                    f"Day After={rule_result.forecast_day_after_tomorrow:.2f} kWh."
+
+                _LOGGER.info(
+                    f"Forecast complete: Today={result.forecast_today:.2f} kWh, "
+                    f"Tomorrow={result.forecast_tomorrow:.2f} kWh, "
+                    f"Day After={result.forecast_day_after_tomorrow:.2f} kWh, "
+                    f"Method={result.method}"
                 )
 
-            except Exception as rb_err:
-                _LOGGER.error(
-                    f"Rule-Based (Iterative) forecast strategy also failed: {rb_err}.",
-                    exc_info=True,
-                )
-                rule_result = None
+            except Exception as err:
+                _LOGGER.error(f"Forecast calculation failed: {err}", exc_info=True)
+                result = None
         else:
-            _LOGGER.error("Rule-Based strategy not available. Cannot calculate fallback.")
+            _LOGGER.error("Forecast strategy not available")
+            result = None
 
-        today_ml = ml_result.forecast_today if ml_result else 0.0
-        tomorrow_ml = ml_result.forecast_tomorrow if ml_result else 0.0
-        day_after_ml = ml_result.forecast_day_after_tomorrow if ml_result else 0.0
+        # Handle failure case - return empty forecast
+        if not result:
+            _LOGGER.critical("Emergency Fallback: Forecast failed. Returning zeros.")
+            return {
+                "today": 0.0,
+                "tomorrow": 0.0,
+                "day_after_tomorrow": 0.0,
+                "peak_time": "12:00",
+                "confidence": 0.0,
+                "method": "fallback_empty",
+                "model_accuracy": None,
+                "best_hour": None,
+                "best_hour_kwh": None,
+                "hourly": [],
+                "today_raw": None,
+                "safeguard_applied": False,
+            }
 
-        if rule_result:
-
-            today_rule = rule_result.forecast_today
-            tomorrow_rule = rule_result.forecast_tomorrow
-            day_after_rule = rule_result.forecast_day_after_tomorrow
-
-        else:
-            _LOGGER.critical(
-                "Emergency Fallback: ML and Rule-Based strategies failed. Returning 0.0"
-            )
-            today_rule = 0.0
-            tomorrow_rule = 0.0
-            day_after_rule = 0.0
-
-            if ml_result:
-                today_rule, tomorrow_rule, day_after_rule = today_ml, tomorrow_ml, day_after_ml
-
-        if not ml_result:
-            today_ml, tomorrow_ml, day_after_ml = today_rule, tomorrow_rule, day_after_rule
-            model_accuracy = 0.0
-            _LOGGER.debug("Blending: ML failed, using 100% Rule-Based result.")
-
-        if ml_result:
-            max_realistic_daily = self.solar_capacity * 6.0
-            if today_ml > max_realistic_daily:
-                _LOGGER.warning(
-                    f"ML prediction unrealistic: {today_ml:.2f} kWh exceeds theoretical maximum "
-                    f"{max_realistic_daily:.2f} kWh (solar_capacity={self.solar_capacity} kW * 6h). "
-                    f"Rejecting ML, using Rule-Based only."
-                )
-                today_ml = today_rule
-                tomorrow_ml = tomorrow_rule
-                day_after_ml = day_after_rule
-                model_accuracy = 0.0
-
-        accuracy_weight = max(0.0, min(1.0, model_accuracy))
-
-        ACCURACY_THRESHOLD = 0.75
-        MIN_ML_WEIGHT = 0.15
-        MIN_SAMPLES_FOR_CONFIDENT_ML = 50
-
-        training_sample_count = 0
-        if self._ml_predictor and hasattr(self._ml_predictor, "last_training_samples"):
-            training_sample_count = self._ml_predictor.last_training_samples
-
-        if training_sample_count < MIN_SAMPLES_FOR_CONFIDENT_ML and ml_result:
-
-            sample_ratio = training_sample_count / MIN_SAMPLES_FOR_CONFIDENT_ML
-
-            sample_damping = sample_ratio**0.5
-
-            original_weight = accuracy_weight
-            accuracy_weight = accuracy_weight * sample_damping
-
-            _LOGGER.info(
-                f"ADAPTIVE BLENDING: Only {training_sample_count} training samples "
-                f"(< {MIN_SAMPLES_FOR_CONFIDENT_ML} required). "
-                f"Reducing ML weight: {original_weight:.1%} → {accuracy_weight:.1%} "
-                f"(sample_damping={sample_damping:.3f})"
-            )
-
-        if accuracy_weight < ACCURACY_THRESHOLD and ml_result:
-
-            raw_weight = (accuracy_weight / ACCURACY_THRESHOLD) ** 2
-            accuracy_weight = MIN_ML_WEIGHT * raw_weight
-            _LOGGER.info(
-                f"ML accuracy ({model_accuracy:.1%}) below threshold ({ACCURACY_THRESHOLD:.0%}). "
-                f"Applying aggressive ML damping: {accuracy_weight:.1%} ML / {(1-accuracy_weight):.1%} Rule-Based "
-                f"(raw_weight={raw_weight:.3f})"
-            )
-
-        safeguard_diversity_applied = False
-        if ml_result and self._ml_predictor and training_sample_count > 0:
-            try:
-
-                feature_stds = {}
-                if (
-                    hasattr(self._ml_predictor, "current_weights")
-                    and self._ml_predictor.current_weights
-                ):
-                    if hasattr(self._ml_predictor.current_weights, "feature_stds"):
-                        feature_stds = self._ml_predictor.current_weights.feature_stds
-
-                cloud_std = feature_stds.get("weather_cloud_percent", 0.0)
-                MIN_CLOUD_VARIANCE = 10.0
-
-                if cloud_std < MIN_CLOUD_VARIANCE:
-                    original_weight = accuracy_weight
-                    accuracy_weight = min(accuracy_weight, 0.05)
-                    safeguard_diversity_applied = True
-
-                    _LOGGER.debug(
-                        f"Diversity safeguard: Low cloud variance ({cloud_std:.2f}%), "
-                        f"ML weight limited to {accuracy_weight:.1%}"
-                    )
-            except Exception as e:
-                _LOGGER.debug(f"Could not apply diversity check safeguard: {e}")
-
-        safeguard_sanity_applied = False
-        if ml_result and rule_result and accuracy_weight > 0:
-            try:
-
-                extreme_weather = False
-                weather_indicators = []
-
-                if hourly_weather_forecast:
-
-                    expected_hours = 24 if len(hourly_weather_forecast) >= 24 else len(hourly_weather_forecast)
-
-                    hours_to_check = min(3, expected_hours)
-                    for hour_data in hourly_weather_forecast[:hours_to_check]:
-                        if not isinstance(hour_data, dict):
-                            continue
-
-                        cloud = hour_data.get('cloud_cover', hour_data.get('clouds', 0))
-                        rain = hour_data.get('rain', hour_data.get('precipitation', 0))
-                        condition = str(hour_data.get('condition', '')).lower()
-
-                        try:
-                            cloud_val = float(cloud) if cloud is not None else 0
-                            rain_val = float(rain) if rain is not None else 0
-                        except (ValueError, TypeError):
-                            cloud_val = 0
-                            rain_val = 0
-
-                        if cloud_val > 90:
-                            weather_indicators.append(f"clouds={cloud_val}%")
-                        if rain_val > 1.0:
-                            weather_indicators.append(f"rain={rain_val}mm")
-                        if condition in ['rainy', 'pouring', 'snowy', 'hail', 'lightning-rainy']:
-                            weather_indicators.append(f"condition={condition}")
-
-                    extreme_weather = len(weather_indicators) > 0
-
-                rule_had_weather = len(hourly_weather_forecast) > 0
-
-                if not extreme_weather and rule_had_weather:
-
-                    if today_rule > 0:
-                        ratio = today_ml / today_rule
-                        MIN_RATIO = 0.50
-                        MAX_RATIO = 3.0
-
-                        if ratio < MIN_RATIO:
-                            original_weight = accuracy_weight
-                            accuracy_weight = accuracy_weight * 0.10
-                            safeguard_sanity_applied = True
-
-                            _LOGGER.debug(
-                                f"Sanity check: ML too low ({ratio:.1%}), weight reduced to {accuracy_weight:.1%}"
-                            )
-                        elif ratio > MAX_RATIO:
-                            original_weight = accuracy_weight
-                            accuracy_weight = accuracy_weight * 0.50
-                            safeguard_sanity_applied = True
-
-                            _LOGGER.debug(
-                                f"Sanity check: ML too high ({ratio:.1%}), weight reduced to {accuracy_weight:.1%}"
-                            )
-                elif extreme_weather:
-                    _LOGGER.debug(
-                        f"Sanity check skipped: Extreme weather [{', '.join(weather_indicators)}]"
-                    )
-                elif not rule_had_weather:
-                    _LOGGER.debug(
-                        "Sanity check skipped: Rule-Based lacks weather data"
-                    )
-            except Exception as e:
-                _LOGGER.debug(f"Could not apply sanity check safeguard: {e}")
-
-        if safeguard_diversity_applied or safeguard_sanity_applied:
-            safeguards = []
-            if safeguard_diversity_applied:
-                safeguards.append("Diversity")
-            if safeguard_sanity_applied:
-                safeguards.append("Sanity")
-            _LOGGER.info(
-                f"🛡️  SAFEGUARDS ACTIVE: {', '.join(safeguards)} | "
-                f"Final ML weight: {accuracy_weight:.1%} (protecting against poor predictions)"
-            )
-
-        rule_weight = 1.0 - accuracy_weight
-
-        final_today = (today_ml * accuracy_weight) + (today_rule * rule_weight)
-        final_tomorrow = (tomorrow_ml * accuracy_weight) + (tomorrow_rule * rule_weight)
-
-        final_day_after = day_after_rule
-
-        method_str = f"blended (ML: {accuracy_weight*100:.0f}% | Rule: {rule_weight*100:.0f}%)"
-        if accuracy_weight == 0.0:
-            method_str = "rule_based_iterative"
-        elif accuracy_weight == 1.0:
-            method_str = "ml_iterative"
-
-        conf_ml = ml_result.confidence_today if ml_result else 30.0
-        conf_rule = rule_result.confidence_today if rule_result else 30.0
-        final_confidence = (conf_ml * accuracy_weight) + (conf_rule * rule_weight)
-
-        _LOGGER.info(
-            f"Blending complete (Accuracy={accuracy_weight:.3f}): "
-            f"ML=({today_ml:.2f}, {tomorrow_ml:.2f}, {day_after_ml:.2f}), "
-            f"Rule=({today_rule:.2f}, {tomorrow_rule:.2f}, {day_after_rule:.2f}) -> "
-            f"Final=({final_today:.2f}, {final_tomorrow:.2f}, {final_day_after:.2f} [Rule-Only]) kWh"
-        )
-
-        _LOGGER.debug(
-            f"Final values before returning - today: {final_today}, tomorrow: {final_tomorrow}, day_after: {final_day_after}"
-        )
-
-        best_hour = None
-        best_hour_kwh = None
-        if ml_result and ml_result.best_hour_today is not None:
-            best_hour = ml_result.best_hour_today
-            best_hour_kwh = ml_result.best_hour_production_kwh
-            _LOGGER.debug(f"Using ML best hour: {best_hour}:00 with {best_hour_kwh:.3f} kWh")
-        elif rule_result and rule_result.best_hour_today is not None:
-            best_hour = rule_result.best_hour_today
-            best_hour_kwh = rule_result.best_hour_production_kwh
-            _LOGGER.debug(
-                f"Using Rule-based best hour: {best_hour}:00 with {best_hour_kwh:.3f} kWh"
-            )
-
-        hourly_values = []
-        if ml_result and ml_result.hourly_values and rule_result and rule_result.hourly_values:
-
-            _LOGGER.debug(
-                f"Blending hourly values: ML={len(ml_result.hourly_values)} hours, Rule={len(rule_result.hourly_values)} hours"
-            )
-
-            ml_hours_set = {(h.get("date"), h.get("hour")) for h in ml_result.hourly_values if h.get("date") and h.get("hour") is not None}
-            rule_hours_set = {(h.get("date"), h.get("hour")) for h in rule_result.hourly_values if h.get("date") and h.get("hour") is not None}
-
-            rule_by_date_hour = {(h["date"], h["hour"]): h for h in rule_result.hourly_values if h.get("date") and h.get("hour") is not None}
-
-            for ml_hour in ml_result.hourly_values:
-                if not ml_hour.get("date") or ml_hour.get("hour") is None:
-                    continue
-
-                hour = ml_hour["hour"]
-                date = ml_hour["date"]
-                rule_hour = rule_by_date_hour.get((date, hour))
-
-                if rule_hour:
-
-                    ml_kwh = ml_hour["production_kwh"]
-                    rule_kwh = rule_hour["production_kwh"]
-                    blended_kwh = (ml_kwh * accuracy_weight) + (rule_kwh * rule_weight)
-
-                    blended_entry = {
-                        "hour": hour,
-                        "datetime": ml_hour["datetime"],
-                        "production_kwh": round(blended_kwh, 3),
-                        "date": ml_hour["date"],
-                    }
-
-                    # Preserve panel_group_predictions from rule-based result (physics-based)
-                    if rule_hour.get("panel_group_predictions"):
-                        blended_entry["panel_group_predictions"] = rule_hour["panel_group_predictions"]
-
-                    hourly_values.append(blended_entry)
-                else:
-                    # Rule-based has no value for this hour - check if it's a production hour
-                    # If rule-based skipped this hour, it's likely outside production window
-                    # Only include ML value if it's within reasonable production hours
-                    if self.is_production_hour(datetime.fromisoformat(ml_hour["datetime"])):
-                        hourly_values.append(ml_hour)
-                    else:
-                        _LOGGER.debug(
-                            f"Skipping ML-only hour {hour} on {date} - outside production window"
-                        )
-
-            _LOGGER.debug(f"Blended {len(hourly_values)} hourly values")
-        elif ml_result and ml_result.hourly_values:
-
-            hourly_values = ml_result.hourly_values
-            _LOGGER.debug(f"Using ML hourly values: {len(hourly_values)} hours")
-        elif rule_result and rule_result.hourly_values:
-
-            hourly_values = rule_result.hourly_values
-            _LOGGER.debug(f"Using Rule-based hourly values: {len(hourly_values)} hours")
-
-        today_raw = rule_result.forecast_today_raw if rule_result else None
-        safeguard_applied = rule_result.safeguard_applied_today if rule_result else False
+        # Extract values from result
+        best_hour = result.best_hour_today
+        best_hour_kwh = result.best_hour_production_kwh
+        hourly_values = result.hourly_values or []
 
         return {
-            "today": round(final_today, 2),
-            "tomorrow": round(final_tomorrow, 2),
-            "day_after_tomorrow": round(final_day_after, 2),
+            "today": round(result.forecast_today, 2),
+            "tomorrow": round(result.forecast_tomorrow, 2),
+            "day_after_tomorrow": round(result.forecast_day_after_tomorrow, 2),
             "peak_time": "12:00",
-            "confidence": round(final_confidence, 1),
-            "method": method_str,
-            "model_accuracy": model_accuracy if self._ml_predictor else None,
+            "confidence": round(result.confidence_today, 1),
+            "method": result.method,
+            "model_accuracy": result.model_accuracy,
             "best_hour": best_hour,
             "best_hour_kwh": round(best_hour_kwh, 3) if best_hour_kwh is not None else None,
             "hourly": hourly_values,
-            "today_raw": round(today_raw, 2) if today_raw is not None else None,
-            "safeguard_applied": safeguard_applied,
+            "today_raw": round(result.forecast_today_raw, 2) if result.forecast_today_raw is not None else None,
+            "safeguard_applied": result.safeguard_applied_today,
         }
 
     def calculate_next_hour_prediction(
@@ -587,19 +274,19 @@ class ForecastOrchestrator:
                 )
                 return 0.0
 
-            ml_hourly_base_kwh: Optional[float] = self._get_ml_hourly_profile_base(
+            hourly_base_kwh: Optional[float] = self._get_hourly_profile_base(
                 forecast_today_kwh, target_hour
             )
 
-            if ml_hourly_base_kwh is not None:
-                base_kwh = ml_hourly_base_kwh
+            if hourly_base_kwh is not None:
+                base_kwh = hourly_base_kwh
                 _LOGGER.debug(
-                    f"Using ML profile base for hour {target_hour} (local): {base_kwh:.3f} kWh."
+                    f"Using profile base for hour {target_hour} (local): {base_kwh:.3f} kWh."
                 )
             else:
                 base_kwh = forecast_today_kwh / 10.0
                 _LOGGER.warning(
-                    f"ML hourly profile base unavailable for hour {target_hour}. "
+                    f"Hourly profile base unavailable for hour {target_hour}. "
                     f"Using simple fallback base: {base_kwh:.3f} kWh."
                 )
 
@@ -627,46 +314,37 @@ class ForecastOrchestrator:
             _LOGGER.error(f"Next hour prediction calculation failed: {e}", exc_info=True)
             return 0.0
 
-    def _get_ml_hourly_profile_base(
+    def _get_hourly_profile_base(
         self, forecast_today_kwh: float, target_hour: int
     ) -> Optional[float]:
-        """Calculates the base production for a specific hour using the ML hourly profile"""
-        if not self._ml_predictor or not self._ml_predictor.current_profile:
-            _LOGGER.debug("ML Predictor or its current_profile not available for hourly base.")
+        """Calculates the base production for a specific hour using solar profile @zara"""
+        # Use simple solar curve approximation based on hour
+        # Production hours typically 6-20 with peak around 12
+        if target_hour < 6 or target_hour > 20:
+            return 0.0
+
+        # Gaussian-like solar curve centered at 12:00
+        peak_hour = 12
+        spread = 4.0  # Standard deviation-like spread
+        hour_weight = math.exp(-((target_hour - peak_hour) ** 2) / (2 * spread ** 2))
+
+        # Normalize across production hours
+        total_weight = sum(
+            math.exp(-((h - peak_hour) ** 2) / (2 * spread ** 2))
+            for h in range(6, 21)
+        )
+
+        if total_weight <= 0:
             return None
 
-        profile = self._ml_predictor.current_profile
-        try:
-            hourly_averages = profile.hourly_averages
-            hour_key = str(target_hour)
-            hour_avg_value = hourly_averages.get(hour_key)
+        hour_fraction = hour_weight / total_weight
+        hourly_base_kwh = forecast_today_kwh * hour_fraction
 
-            if hour_avg_value is None or hour_avg_value <= 0:
-                _LOGGER.debug(f"No positive profile average found for hour {target_hour} (local).")
-                return 0.0
-
-            total_profile_sum = sum(
-                float(v) for v in hourly_averages.values() if v is not None and float(v) > 0
-            )
-
-            if total_profile_sum <= 0:
-                _LOGGER.warning(
-                    "Sum of hourly profile averages is zero. Cannot calculate hourly fraction."
-                )
-                return None
-
-            hour_fraction = hour_avg_value / total_profile_sum
-            ml_hourly_base_kwh = forecast_today_kwh * hour_fraction
-
-            _LOGGER.debug(
-                f"ML hourly base calculation: Hour={target_hour} (local), ProfileAvg={hour_avg_value:.3f}, "
-                f"ProfileTotal={total_profile_sum:.3f}, Fraction={hour_fraction:.4f} -> Base={ml_hourly_base_kwh:.3f} kWh"
-            )
-            return ml_hourly_base_kwh
-
-        except (AttributeError, KeyError, ValueError, TypeError) as e:
-            _LOGGER.warning(f"Error accessing or using ML hourly profile data: {e}")
-            return None
+        _LOGGER.debug(
+            f"Hourly base calculation: Hour={target_hour}, "
+            f"Fraction={hour_fraction:.4f} -> Base={hourly_base_kwh:.3f} kWh"
+        )
+        return hourly_base_kwh
 
     def _get_realtime_adjustment_factors(
         self,

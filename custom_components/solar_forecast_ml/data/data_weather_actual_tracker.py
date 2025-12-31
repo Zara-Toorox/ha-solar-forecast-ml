@@ -1,20 +1,11 @@
-"""Weather Actual Tracker V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from datetime import datetime, timedelta
@@ -23,6 +14,7 @@ from typing import Dict, Optional, Any
 import json
 
 from .data_frost_detection import FrostDetector
+from .data_schemas import get_schema
 from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,6 +35,10 @@ class WeatherActualTracker:
 
         # Track last frost notification hour to avoid spam
         self._last_frost_notification_hour: Optional[str] = None
+
+        # Snow tracking state (persisted to file, loaded on init)
+        self._last_snow_notification_key: Optional[str] = None
+        self._snow_tracking_initialized = False
 
         if config_entry:
             from ..const import (
@@ -121,6 +117,14 @@ class WeatherActualTracker:
         if astronomy_fields:
             weather_data["hours_after_sunrise"] = astronomy_fields.get("hours_after_sunrise")
             weather_data["hours_before_sunset"] = astronomy_fields.get("hours_before_sunset")
+
+        # Snow tracking - runs 24/7, even at night
+        snow_result = await self._check_snow_conditions(weather_data, date_str, hour)
+        if snow_result:
+            weather_data["snow_covered_panels"] = snow_result.get("snow_covered_panels", False)
+            weather_data["snow_coverage_source"] = snow_result.get("source", "unknown")
+            if snow_result.get("snow_event_detected"):
+                weather_data["snow_event_detected"] = True
 
         await self._save_hourly_data(date_str, hour, weather_data)
 
@@ -351,14 +355,9 @@ class WeatherActualTracker:
                     self._read_json_sync, self.actual_file
                 )
             else:
-                data = {
-                    "version": "1.0",
-                    "metadata": {
-                        "created_at": datetime.now().isoformat(),
-                        "last_updated": datetime.now().isoformat(),
-                    },
-                    "hourly_data": {},
-                }
+                # Use centralized schema from data_schemas.py (Single Source of Truth)
+                data = get_schema("hourly_weather_actual")
+                data["metadata"]["created_at"] = datetime.now().isoformat()
 
             data["metadata"]["last_updated"] = datetime.now().isoformat()
 
@@ -473,3 +472,330 @@ class WeatherActualTracker:
 
         except Exception as e:
             _LOGGER.error(f"Error sending frost notification: {e}")
+
+    # =========================================================================
+    # SNOW TRACKING METHODS
+    # =========================================================================
+
+    async def _check_snow_conditions(
+        self,
+        weather_data: Dict[str, Any],
+        date_str: str,
+        hour: int
+    ) -> Optional[Dict[str, Any]]:
+        """Check for snow conditions and panel coverage.
+
+        This method runs 24/7 (not just during production hours) to detect:
+        1. Active snowfall (temp < 2°C + precipitation > 0.5mm)
+        2. Persistent snow coverage (snow fell recently + temp still < 2°C)
+        3. Snow melt (temp > 2°C for 2h OR temp > 5°C for 30min)
+
+        @zara
+        """
+        try:
+            result = {
+                "snow_covered_panels": False,
+                "snow_event_detected": False,
+                "source": "none",
+            }
+
+            temp_c = weather_data.get("temperature_c")
+            precip_mm = weather_data.get("precipitation_mm", 0.0)
+
+            # Load current snow tracking state
+            snow_tracking = await self._load_snow_tracking()
+
+            # Step 1: Check for active snow event
+            if temp_c is not None and temp_c < 2.0 and precip_mm > 0.5:
+                # Active snowfall detected!
+                result["snow_event_detected"] = True
+                result["snow_covered_panels"] = True
+                result["source"] = "active_snowfall"
+
+                # Update tracking state
+                now = datetime.now()
+                snow_tracking["last_snow_event"] = now.isoformat()
+                snow_tracking["panels_covered_since"] = now.isoformat()
+                snow_tracking["estimated_depth_mm"] = snow_tracking.get("estimated_depth_mm", 0.0) + (precip_mm * 10)
+                snow_tracking["melt_started_at"] = None
+                snow_tracking["above_threshold_since"] = None
+
+                await self._save_snow_tracking(snow_tracking)
+                await self._send_snow_notification(
+                    snow_type="snowfall",
+                    temp_c=temp_c,
+                    precip_mm=precip_mm,
+                    date_str=date_str,
+                    hour=hour
+                )
+
+                _LOGGER.info(
+                    f"Snow event detected: {precip_mm:.1f}mm at {temp_c:.1f}°C - "
+                    f"Panels likely snow-covered"
+                )
+                return result
+
+            # Step 2: Check for persistent snow coverage
+            last_snow_event = snow_tracking.get("last_snow_event")
+            if last_snow_event:
+                try:
+                    last_snow_dt = datetime.fromisoformat(last_snow_event)
+                    hours_since_snow = (datetime.now() - last_snow_dt).total_seconds() / 3600
+
+                    # Snow likely still on panels if:
+                    # - Snow fell within last 12 hours AND
+                    # - Temperature is still below 2°C
+                    if hours_since_snow < 12 and temp_c is not None and temp_c < 2.0:
+                        result["snow_covered_panels"] = True
+                        result["source"] = "persistence_check"
+                        return result
+
+                except (ValueError, TypeError):
+                    pass
+
+            # Step 3: Check for snow melt
+            panels_covered_since = snow_tracking.get("panels_covered_since")
+            if panels_covered_since and temp_c is not None:
+                melt_detected = await self._check_snow_melt(
+                    temp_c=temp_c,
+                    snow_tracking=snow_tracking,
+                    date_str=date_str,
+                    hour=hour
+                )
+
+                if melt_detected:
+                    # Reset snow tracking
+                    snow_tracking["panels_covered_since"] = None
+                    snow_tracking["estimated_depth_mm"] = 0.0
+                    snow_tracking["melt_started_at"] = None
+                    snow_tracking["above_threshold_since"] = None
+                    await self._save_snow_tracking(snow_tracking)
+
+                    result["snow_covered_panels"] = False
+                    result["source"] = "melt_detected"
+
+                    await self._send_snow_notification(
+                        snow_type="melting",
+                        temp_c=temp_c,
+                        precip_mm=0,
+                        date_str=date_str,
+                        hour=hour
+                    )
+
+                    _LOGGER.info(f"Snow melt detected at {temp_c:.1f}°C - Panels clearing")
+                    return result
+
+            return result
+
+        except Exception as e:
+            _LOGGER.error(f"Error checking snow conditions: {e}")
+            return None
+
+    async def _check_snow_melt(
+        self,
+        temp_c: float,
+        snow_tracking: Dict[str, Any],
+        date_str: str,
+        hour: int
+    ) -> bool:
+        """Check if snow is melting based on temperature thresholds.
+
+        Melt conditions:
+        - Temp > 2°C for 2+ hours, OR
+        - Temp > 5°C for 30+ minutes (accelerated melt)
+
+        @zara
+        """
+        now = datetime.now()
+
+        # Threshold 1: Temp > 5°C = fast melt (30 min)
+        if temp_c > 5.0:
+            above_threshold = snow_tracking.get("above_threshold_since")
+            if above_threshold:
+                try:
+                    above_dt = datetime.fromisoformat(above_threshold)
+                    minutes_above = (now - above_dt).total_seconds() / 60
+                    if minutes_above >= 30:
+                        return True
+                except (ValueError, TypeError):
+                    pass
+            else:
+                snow_tracking["above_threshold_since"] = now.isoformat()
+                await self._save_snow_tracking(snow_tracking)
+            return False
+
+        # Threshold 2: Temp > 2°C = normal melt (2 hours)
+        if temp_c > 2.0:
+            melt_started = snow_tracking.get("melt_started_at")
+            if melt_started:
+                try:
+                    melt_dt = datetime.fromisoformat(melt_started)
+                    hours_melting = (now - melt_dt).total_seconds() / 3600
+                    if hours_melting >= 2:
+                        return True
+                except (ValueError, TypeError):
+                    pass
+            else:
+                snow_tracking["melt_started_at"] = now.isoformat()
+                await self._save_snow_tracking(snow_tracking)
+            return False
+
+        # Temp still < 2°C - reset melt timers
+        if snow_tracking.get("melt_started_at") or snow_tracking.get("above_threshold_since"):
+            snow_tracking["melt_started_at"] = None
+            snow_tracking["above_threshold_since"] = None
+            await self._save_snow_tracking(snow_tracking)
+
+        return False
+
+    async def _load_snow_tracking(self) -> Dict[str, Any]:
+        """Load snow tracking state from file @zara"""
+        try:
+            if not self.actual_file.exists():
+                return self._get_default_snow_tracking()
+
+            data = await self.hass.async_add_executor_job(
+                self._read_json_sync, self.actual_file
+            )
+
+            return data.get("snow_tracking", self._get_default_snow_tracking())
+
+        except Exception as e:
+            _LOGGER.debug(f"Error loading snow tracking: {e}")
+            return self._get_default_snow_tracking()
+
+    async def _save_snow_tracking(self, snow_tracking: Dict[str, Any]) -> None:
+        """Save snow tracking state to file @zara"""
+        try:
+            if self.actual_file.exists():
+                data = await self.hass.async_add_executor_job(
+                    self._read_json_sync, self.actual_file
+                )
+            else:
+                data = get_schema("hourly_weather_actual")
+                data["metadata"]["created_at"] = datetime.now().isoformat()
+
+            data["snow_tracking"] = snow_tracking
+
+            await self.hass.async_add_executor_job(
+                self._write_json_sync, self.actual_file, data
+            )
+
+        except Exception as e:
+            _LOGGER.error(f"Error saving snow tracking: {e}")
+
+    def _get_default_snow_tracking(self) -> Dict[str, Any]:
+        """Get default snow tracking structure @zara"""
+        return {
+            "last_snow_event": None,
+            "estimated_depth_mm": 0.0,
+            "panels_covered_since": None,
+            "melt_started_at": None,
+            "above_threshold_since": None,
+        }
+
+    async def _send_snow_notification(
+        self,
+        snow_type: str,
+        temp_c: float,
+        precip_mm: float,
+        date_str: str,
+        hour: int
+    ) -> None:
+        """Send notification for snow events @zara
+
+        Args:
+            snow_type: "snowfall" or "melting"
+            temp_c: Current temperature
+            precip_mm: Precipitation amount (for snowfall)
+            date_str: Date string
+            hour: Hour
+        """
+        try:
+            # Avoid duplicate notifications for same event type per day
+            notification_key = f"{date_str}_{snow_type}"
+            if self._last_snow_notification_key == notification_key:
+                return
+
+            notification_service = self.hass.data.get(DOMAIN, {}).get("notification_service")
+            if not notification_service:
+                _LOGGER.debug("Notification service not available for snow warning")
+                return
+
+            if snow_type == "snowfall":
+                await notification_service.show_snow_covered_warning(
+                    temperature_c=temp_c,
+                    precipitation_mm=precip_mm,
+                    hour=hour,
+                )
+            elif snow_type == "melting":
+                await notification_service.show_snow_melting_info(
+                    temperature_c=temp_c,
+                    hour=hour,
+                )
+
+            self._last_snow_notification_key = notification_key
+            _LOGGER.info(f"Snow {snow_type} notification sent for {date_str} {hour:02d}:00")
+
+        except Exception as e:
+            _LOGGER.error(f"Error sending snow notification: {e}")
+
+    async def detect_snow_from_production_anomaly(
+        self,
+        hour: int,
+        weather_forecast: Dict[str, Any],
+        actual_production: float,
+    ) -> bool:
+        """Detect snow when no rain sensor is available.
+
+        For users WITHOUT rain sensors, we can detect snow by comparing:
+        - API predicted precipitation > 0.5mm
+        - Temperature < 2°C
+        - Expected solar radiation > 100 W/m²
+        - Actual production = 0 or near 0
+        → Likely snow on panels
+
+        This is called from data_hourly_predictions.py during actual updates.
+
+        @zara
+        """
+        try:
+            temp = weather_forecast.get("temperature", 10)
+            precip = weather_forecast.get("precipitation_mm", 0)
+            radiation = weather_forecast.get("solar_radiation_wm2", 0)
+
+            if temp >= 2.0:
+                return False
+            if precip < 0.5:
+                return False
+            if radiation < 100:
+                return False  # Night or very cloudy - can't tell
+            if actual_production > 0.05:
+                return False  # Some production = no snow cover
+
+            _LOGGER.debug(
+                f"Snow detected from production anomaly: "
+                f"Temp={temp:.1f}°C, Precip={precip:.1f}mm, "
+                f"Radiation={radiation:.0f}W/m², Production={actual_production:.3f}kWh"
+            )
+            return True
+
+        except Exception as e:
+            _LOGGER.debug(f"Error in snow detection from production anomaly: {e}")
+            return False
+
+    async def get_snow_tracking_status(self) -> Dict[str, Any]:
+        """Get current snow tracking status for external use @zara"""
+        snow_tracking = await self._load_snow_tracking()
+
+        panels_covered = False
+        if snow_tracking.get("panels_covered_since"):
+            panels_covered = True
+
+        return {
+            "panels_covered": panels_covered,
+            "last_snow_event": snow_tracking.get("last_snow_event"),
+            "estimated_depth_mm": snow_tracking.get("estimated_depth_mm", 0.0),
+            "panels_covered_since": snow_tracking.get("panels_covered_since"),
+            "melt_in_progress": snow_tracking.get("melt_started_at") is not None,
+        }

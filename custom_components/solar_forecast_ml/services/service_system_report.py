@@ -1,22 +1,11 @@
-"""System Report Generator for Solar Forecast ML Integration V12.2.0 @zara
-
-Generates a monthly Markdown report with system insights.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 from __future__ import annotations
 
@@ -48,9 +37,9 @@ class SystemReportGenerator:
         self.report_file = self.docs_dir / "system_report.md"
 
         # Data file paths
-        self.geometry_file = data_dir / "physics" / "learned_geometry.json"
+        self.seasonal_file = data_dir / "ai" / "seasonal.json"
         self.forecasts_file = data_dir / "stats" / "daily_forecasts.json"
-        self.weights_file = data_dir / "ml" / "learned_weights.json"
+        self.weights_file = data_dir / "ai" / "learned_weights.json"
 
     async def generate_report(self) -> bool:
         """Generate the system report. @zara"""
@@ -58,12 +47,12 @@ class SystemReportGenerator:
             _LOGGER.info("Generating monthly system report...")
 
             # Load all data sources
-            geometry_data = await self._load_json(self.geometry_file)
+            seasonal_data = await self._load_json(self.seasonal_file)
             forecasts_data = await self._load_json(self.forecasts_file)
             weights_data = await self._load_json(self.weights_file)
 
             # Build report content
-            content = self._build_report(geometry_data, forecasts_data, weights_data)
+            content = self._build_report(seasonal_data, forecasts_data, weights_data)
 
             # Write report
             await self._write_report(content)

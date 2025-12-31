@@ -1,20 +1,11 @@
-"""Handler for hourly prediction data - ML optimized structure V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import asyncio
 import json
@@ -39,7 +30,7 @@ class HourlyPredictionsHandler:
         self.hourly_file = data_dir / "stats" / "hourly_predictions.json"
 
     def _normalize_weather_fields(self, weather_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        """Normalize weather field names to ML convention (short names) @zara"""
+        """Normalize weather field names to ML convention (short names)"""
         if not weather_data:
             return None
 
@@ -83,6 +74,11 @@ class HourlyPredictionsHandler:
                 weather_data.get("pressure") or
                 weather_data.get("pressure_hpa")
             ),
+
+            # DNI/DHI for physics engine POA calculation
+            "direct_radiation": weather_data.get("direct_radiation"),
+
+            "diffuse_radiation": weather_data.get("diffuse_radiation"),
 
             "source": weather_data.get("source", "unknown"),
         }
@@ -517,7 +513,7 @@ class HourlyPredictionsHandler:
             return False
 
     def get_prediction_by_id(self, prediction_id: str) -> Optional[Dict[str, Any]]:
-        """Get specific prediction by ID (e.g. '2025-11-10_12') @zara"""
+        """Get specific prediction by ID (e.g. '2025-11-10_12')"""
         try:
             asyncio.get_running_loop()
             _LOGGER.debug(
@@ -531,19 +527,19 @@ class HourlyPredictionsHandler:
         return next((p for p in data["predictions"] if p.get("id") == prediction_id), None)
 
     async def get_predictions_for_date(self, date: str) -> List[Dict[str, Any]]:
-        """Get all predictions for a specific date @zara"""
+        """Get all predictions for a specific date"""
         data = await self._read_json_async()
         return [p for p in data["predictions"] if p.get("target_date") == date]
 
     def get_next_hour_prediction(self) -> Optional[Dict[str, Any]]:
-        """Get prediction for next full hour @zara"""
+        """Get prediction for next full hour"""
         now = dt_util.now()
         next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         prediction_id = f"{next_hour.date().isoformat()}_{next_hour.hour}"
         return self.get_prediction_by_id(prediction_id)
 
     async def get_best_hour_today(self) -> Optional[Dict[str, Any]]:
-        """Get prediction with highest production for today @zara"""
+        """Get prediction with highest production for today"""
         today = dt_util.now().date().isoformat()
         today_predictions = await self.get_predictions_for_date(today)
 
@@ -553,12 +549,12 @@ class HourlyPredictionsHandler:
         return max(today_predictions, key=lambda x: x.get("prediction_kwh", 0))
 
     async def get_best_hour_string(self) -> Optional[str]:
-        """Get best hour as string (e.g. '11:00') from top-level field @zara"""
+        """Get best hour as string (e.g. '11:00') from top-level field"""
         data = await self._read_json_async()
         return data.get("best_hour_today")
 
     def _find_weather_for_hour(self, weather_forecast: List[Dict], hour: int) -> Dict:
-        """Find weather data for specific hour @zara"""
+        """Find weather data for specific hour"""
         for w in weather_forecast:
             if w.get("local_hour") == hour:
                 temp = w.get("temperature")
@@ -596,7 +592,7 @@ class HourlyPredictionsHandler:
         return {}
 
     async def _find_corrected_weather_for_hour(self, date: str, hour: int) -> Dict:
-        """Find corrected weather data for specific date and hour from weather_forecast_corrected.json @zara"""
+        """Find corrected weather data for specific date and hour from weather_forecast_corrected.json"""
         try:
             import json
             import asyncio
@@ -664,6 +660,9 @@ class HourlyPredictionsHandler:
                 "precipitation_mm": corrected.get("rain"),
                 "pressure_hpa": corrected.get("pressure"),
                 "solar_radiation_wm2": corrected.get("solar_radiation_wm2"),
+                # DNI/DHI for physics engine POA calculation
+                "direct_radiation": corrected.get("direct_radiation"),
+                "diffuse_radiation": corrected.get("diffuse_radiation"),
                 "uv_index": None,
                 "visibility_km": None,
                 "dew_point_c": round(dew_point, 1) if dew_point is not None else None,
@@ -674,7 +673,7 @@ class HourlyPredictionsHandler:
             return {}
 
     def _get_astronomy_for_hour(self, astro_data: Dict, hour: int) -> Dict:
-        """Get astronomy data for specific hour from astronomy_cache @zara"""
+        """Get astronomy data for specific hour from astronomy_cache"""
 
         hourly_astro = astro_data.get("hourly", {}).get(str(hour), {})
 
@@ -724,7 +723,7 @@ class HourlyPredictionsHandler:
         }
 
     def _init_sensor_data(self, sensor_config: Dict[str, bool]) -> Dict:
-        """Initialize sensor data structure based on config @zara"""
+        """Initialize sensor data structure based on config"""
         return {
             "temperature_c": None,
             "humidity_percent": None,
@@ -736,7 +735,7 @@ class HourlyPredictionsHandler:
         }
 
     def _get_season(self, month: int) -> str:
-        """Get season from month @zara"""
+        """Get season from month"""
         if month in [3, 4, 5]:
             return "spring"
         elif month in [6, 7, 8]:
@@ -747,7 +746,7 @@ class HourlyPredictionsHandler:
             return "winter"
 
     def _get_confidence_level(self, confidence: float) -> str:
-        """Convert confidence percentage to level @zara"""
+        """Convert confidence percentage to level"""
         if confidence >= 80:
             return "high"
         elif confidence >= 60:
@@ -756,7 +755,7 @@ class HourlyPredictionsHandler:
             return "low"
 
     def _check_sensor_completeness(self, sensor_data: Dict) -> bool:
-        """Check if all configured sensors have data @zara"""
+        """Check if all configured sensors have data"""
         non_null_count = sum(1 for v in sensor_data.values() if v is not None)
         return non_null_count >= 3
 
@@ -776,7 +775,7 @@ class HourlyPredictionsHandler:
         - sudden_storm: Large pressure drop indicating storm
         - unexpected_snow: Temperature < 2°C with precipitation
 
-        @zara
+       
         """
         if not weather_actual and not sensor_data:
             return None
@@ -845,6 +844,15 @@ class HourlyPredictionsHandler:
             return {
                 "type": "unexpected_clouds",
                 "reason": f"Radiation {actual_radiation:.0f} W/m² vs forecast {forecast_radiation:.0f} W/m² ({actual_radiation/forecast_radiation*100:.0f}%)",
+            }
+
+        # Detection 4: Snow-covered panels (persistent snow from earlier)
+        # Check if panels are marked as snow-covered from weather_actual_tracker
+        if weather_actual and weather_actual.get("snow_covered_panels"):
+            source = weather_actual.get("snow_coverage_source", "unknown")
+            return {
+                "type": "snow_covered_panels",
+                "reason": f"Panels snow-covered (source: {source})",
             }
 
         return None
@@ -935,7 +943,7 @@ class HourlyPredictionsHandler:
             }
 
     def _mark_peak_hour_and_get_best(self, predictions: List[Dict], date: str) -> Optional[str]:
-        """Mark the hour with highest prediction as peak and return best hour string @zara"""
+        """Mark the hour with highest prediction as peak and return best hour string"""
         date_predictions = [p for p in predictions if p.get("target_date") == date]
         if date_predictions:
             peak = max(date_predictions, key=lambda x: x.get("prediction_kwh", 0))
@@ -946,7 +954,7 @@ class HourlyPredictionsHandler:
         return None
 
     def _read_json(self) -> Dict:
-        """Read JSON file (blocking - use in sync context only) @zara"""
+        """Read JSON file (blocking - use in sync context only)"""
         try:
             with open(self.hourly_file, "r") as f:
                 return json.load(f)
@@ -956,7 +964,7 @@ class HourlyPredictionsHandler:
                 return json.load(f)
 
     async def _read_json_async(self) -> Dict:
-        """Read JSON file (non-blocking - use in async context) @zara"""
+        """Read JSON file (non-blocking - use in async context)"""
 
         def _do_read():
             try:
@@ -971,13 +979,13 @@ class HourlyPredictionsHandler:
         return await loop.run_in_executor(None, _do_read)
 
     def _write_json(self, data: Dict):
-        """Blocking I/O not allowed - use _write_json_atomic instead. @zara"""
+        """Blocking I/O not allowed - use _write_json_atomic instead."""
         raise RuntimeError(
             "_write_json() removed - use _write_json_atomic() or call from executor."
         )
 
     async def _write_json_atomic(self, data: Dict):
-        """Write JSON atomically using DataManager's thread-safe method @zara"""
+        """Write JSON atomically using DataManager's thread-safe method"""
         if self.data_manager:
             await self.data_manager._atomic_write_json(self.hourly_file, data)
         else:
@@ -1000,7 +1008,7 @@ class HourlyPredictionsHandler:
         weather_actual: Optional[Dict] = None,
         weather_forecast: Optional[Dict] = None,
     ) -> None:
-        """Send a weather alert notification via Home Assistant @zara"""
+        """Send a weather alert notification via Home Assistant"""
         try:
             # Access notification service via data_manager -> hass
             if not self.data_manager or not hasattr(self.data_manager, 'hass'):
@@ -1029,7 +1037,7 @@ class HourlyPredictionsHandler:
             _LOGGER.error(f"Error sending weather alert notification: {e}")
 
     def _ensure_file_exists(self):
-        """Ensure the hourly predictions file exists with initial structure @zara"""
+        """Ensure the hourly predictions file exists with initial structure"""
         if not self.hourly_file.parent.exists():
             self.hourly_file.parent.mkdir(parents=True, exist_ok=True)
 

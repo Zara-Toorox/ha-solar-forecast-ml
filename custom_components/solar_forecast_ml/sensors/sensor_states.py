@@ -1,20 +1,11 @@
-"""Sensor State Management V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import logging
 from typing import Any, Dict, Optional
@@ -38,7 +29,7 @@ from ..const import (
     CONF_WIND_SENSOR,
     DOMAIN,
     INTEGRATION_MODEL,
-    ML_VERSION,
+    AI_VERSION,
     SOFTWARE_VERSION,
 )
 
@@ -75,7 +66,7 @@ class BaseEntityStateSensor(SensorEntity):
             name="Solar Forecast ML",
             manufacturer="Zara-Toorox",
             model=INTEGRATION_MODEL,
-            sw_version=f"SW {SOFTWARE_VERSION} | ML {ML_VERSION}",
+            sw_version=f"SW {SOFTWARE_VERSION} | AI {AI_VERSION}",
         )
 
     @property
@@ -183,7 +174,7 @@ class ExternalSensorsStatusSensor(SensorEntity):
             name="Solar Forecast ML",
             manufacturer="Zara-Toorox",
             model=INTEGRATION_MODEL,
-            sw_version=f"SW {SOFTWARE_VERSION} | ML {ML_VERSION}",
+            sw_version=f"SW {SOFTWARE_VERSION} | AI {AI_VERSION}",
         )
 
         self._sensor_config = {

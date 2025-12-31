@@ -1,20 +1,11 @@
-"""Data Validation Module for Solar Forecast ML Integration V12.2.0 @zara
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
 import json
 import logging
@@ -23,10 +14,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..const import DATA_VERSION, MIN_TRAINING_DATA_POINTS
+from .data_schemas import get_schema
 
 _LOGGER = logging.getLogger(__name__)
 
-# wttr.in cache settings (must match data_multi_weather_client.py)
+# wttr.in cache settings
 WTTR_CACHE_MAX_AGE = 6 * 3600  # 6 hours
 
 class DataValidator:
@@ -471,59 +463,8 @@ class DataValidator:
 
     @staticmethod
     def _create_default_learning_config() -> Dict[str, Any]:
-        """Create default learning_config.json structure with neutral values @zara"""
-        return {
-            "version": "1.0",
-            "description": "Konfiguration für das Lernverhalten des Solar Forecast ML Systems. "
-                           "Diese Werte werden durch das Lernsystem automatisch angepasst.",
-            "learning_parameters": {
-                "baseline_prediction_kwh": 0.05,
-                "shadow_detection_efficiency": 0.2,
-                "shadow_hour_threshold": 0.7,
-                "smoothing": {
-                    "aggressive": {
-                        "deviation_threshold": 1.0,
-                        "old_weight": 0.3,
-                        "new_weight": 0.7,
-                        "description": "Bei >100% Abweichung"
-                    },
-                    "fast": {
-                        "deviation_threshold": 0.5,
-                        "old_weight": 0.5,
-                        "new_weight": 0.5,
-                        "description": "Bei >50% Abweichung"
-                    },
-                    "normal": {
-                        "old_weight": 0.8,
-                        "new_weight": 0.2,
-                        "description": "Standard-Glättung"
-                    }
-                },
-                "efficiency_clamps": {
-                    "min_efficiency": 0.1,
-                    "max_efficiency": 5.0,
-                    "conservative_min": 0.3,
-                    "conservative_max": 3.0
-                }
-            },
-            "weather_adjustment": {
-                "cloud_cover_factor": 0.5,
-                "description": "Faktor für Wolkenbedeckungs-Korrektur"
-            },
-            "elevation_adjustment": {
-                "low_elevation_threshold_deg": 10.0,
-                "low_elevation_factor": 0.15,
-                "high_elevation_factor": 0.08,
-                "description": "Anpassung basierend auf Sonnenhöhe"
-            },
-            "physics_defaults": {
-                "albedo": 0.2,
-                "system_efficiency": 0.90,
-                "description": "Standard-Physikparameter"
-            },
-            "metadata": {
-                "created_at": datetime.now().isoformat(),
-                "last_updated": None,
-                "auto_tuned": False
-            }
-        }
+        """Create default learning_config.json structure @zara
+
+        Uses centralized schema from data_schemas.py (Single Source of Truth).
+        """
+        return get_schema("learning_config")
