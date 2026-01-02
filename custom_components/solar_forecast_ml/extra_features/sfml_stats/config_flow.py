@@ -1,12 +1,20 @@
-# ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
-# * This program is protected by a Proprietary Non-Commercial License.
-# 1. Personal and Educational use only.
-# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
-# 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
-# ******************************************************************************
+"""Config flow for SFML Stats integration. @zara
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 from __future__ import annotations
 
 import logging
@@ -468,6 +476,54 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         """Initialize options flow. @zara"""
         self._config_entry = config_entry
 
+    def _process_sensor_input(
+        self,
+        user_input: dict[str, Any],
+        sensor_keys: list[str],
+    ) -> dict[str, Any]:
+        """Process sensor input and update config entry data. @zara
+
+        Helper method to reduce code duplication in sensor configuration steps.
+        Removes keys with empty values and updates keys with new values.
+
+        Args:
+            user_input: User input from form.
+            sensor_keys: List of configuration keys to process.
+
+        Returns:
+            Updated configuration data.
+        """
+        new_data = {**self._config_entry.data}
+        for key in sensor_keys:
+            value = user_input.get(key)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                new_data.pop(key, None)
+            else:
+                new_data[key] = value
+        return new_data
+
+    def _build_sensor_schema(
+        self,
+        sensor_keys: list[str],
+    ) -> vol.Schema:
+        """Build schema for sensor configuration form. @zara
+
+        Helper method to build consistent sensor configuration schemas.
+
+        Args:
+            sensor_keys: List of configuration keys for the schema.
+
+        Returns:
+            Voluptuous schema for the form.
+        """
+        current = self._config_entry.data
+        schema_dict = {}
+        for key in sensor_keys:
+            schema_dict[vol.Optional(key, default=current.get(key, ""))] = (
+                get_entity_selector_optional()
+            )
+        return vol.Schema(schema_dict)
+
     async def async_step_init(
         self,
         user_input: dict[str, Any] | None = None,
@@ -530,31 +586,15 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         ]
 
         if user_input is not None:
-            # Start with current data
-            new_data = {**self._config_entry.data}
-            # Process each key - remove if empty, update if has value
-            for key in energy_flow_keys:
-                value = user_input.get(key)
-                if value is None or (isinstance(value, str) and not value.strip()):
-                    # Remove the key if value is empty or None
-                    new_data.pop(key, None)
-                else:
-                    # Update with new value
-                    new_data[key] = value
+            new_data = self._process_sensor_input(user_input, energy_flow_keys)
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
             return self.async_create_entry(title="", data={})
 
-        current = self._config_entry.data
-        schema_dict = {}
-        for key in energy_flow_keys:
-            # Use text selector to allow clearing values
-            schema_dict[vol.Optional(key, default=current.get(key, ""))] = get_entity_selector_optional()
-
         return self.async_show_form(
             step_id="energy_flow",
-            data_schema=vol.Schema(schema_dict),
+            data_schema=self._build_sensor_schema(energy_flow_keys),
         )
 
     async def async_step_battery(
@@ -569,31 +609,15 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         ]
 
         if user_input is not None:
-            # Start with current data
-            new_data = {**self._config_entry.data}
-            # Process each key - remove if empty, update if has value
-            for key in battery_keys:
-                value = user_input.get(key)
-                if value is None or (isinstance(value, str) and not value.strip()):
-                    # Remove the key if value is empty or None
-                    new_data.pop(key, None)
-                else:
-                    # Update with new value
-                    new_data[key] = value
+            new_data = self._process_sensor_input(user_input, battery_keys)
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
             return self.async_create_entry(title="", data={})
 
-        current = self._config_entry.data
-        schema_dict = {}
-        for key in battery_keys:
-            # Use text selector to allow clearing values
-            schema_dict[vol.Optional(key, default=current.get(key, ""))] = get_entity_selector_optional()
-
         return self.async_show_form(
             step_id="battery",
-            data_schema=vol.Schema(schema_dict),
+            data_schema=self._build_sensor_schema(battery_keys),
         )
 
     async def async_step_statistics(
@@ -609,31 +633,15 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         ]
 
         if user_input is not None:
-            # Start with current data
-            new_data = {**self._config_entry.data}
-            # Process each key - remove if empty, update if has value
-            for key in statistics_keys:
-                value = user_input.get(key)
-                if value is None or (isinstance(value, str) and not value.strip()):
-                    # Remove the key if value is empty or None
-                    new_data.pop(key, None)
-                else:
-                    # Update with new value
-                    new_data[key] = value
+            new_data = self._process_sensor_input(user_input, statistics_keys)
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
             return self.async_create_entry(title="", data={})
 
-        current = self._config_entry.data
-        schema_dict = {}
-        for key in statistics_keys:
-            # Use text selector to allow clearing values
-            schema_dict[vol.Optional(key, default=current.get(key, ""))] = get_entity_selector_optional()
-
         return self.async_show_form(
             step_id="statistics",
-            data_schema=vol.Schema(schema_dict),
+            data_schema=self._build_sensor_schema(statistics_keys),
         )
 
     async def async_step_panels(
@@ -649,49 +657,37 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         ]
 
         if user_input is not None:
-            # Start with current data
-            new_data = {**self._config_entry.data}
-            # Process each key - remove if empty, update if has value
-            for key in panel_keys:
-                value = user_input.get(key)
-                if value is None or (isinstance(value, str) and not value.strip()):
-                    # Remove the key if value is empty or None
-                    new_data.pop(key, None)
-                else:
-                    # Update with new value
-                    new_data[key] = value
+            new_data = self._process_sensor_input(user_input, panel_keys)
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
             return self.async_create_entry(title="", data={})
 
-        current = self._config_entry.data
-        schema_dict = {}
-
-        # Panel 1
-        schema_dict[vol.Optional(CONF_PANEL1_NAME, default=current.get(CONF_PANEL1_NAME, DEFAULT_PANEL1_NAME))] = str
-        schema_dict[vol.Optional(CONF_SENSOR_PANEL1_POWER, default=current.get(CONF_SENSOR_PANEL1_POWER, ""))] = get_entity_selector_optional()
-        schema_dict[vol.Optional(CONF_SENSOR_PANEL1_MAX_TODAY, default=current.get(CONF_SENSOR_PANEL1_MAX_TODAY, ""))] = get_entity_selector_optional()
-
-        # Panel 2
-        schema_dict[vol.Optional(CONF_PANEL2_NAME, default=current.get(CONF_PANEL2_NAME, DEFAULT_PANEL2_NAME))] = str
-        schema_dict[vol.Optional(CONF_SENSOR_PANEL2_POWER, default=current.get(CONF_SENSOR_PANEL2_POWER, ""))] = get_entity_selector_optional()
-        schema_dict[vol.Optional(CONF_SENSOR_PANEL2_MAX_TODAY, default=current.get(CONF_SENSOR_PANEL2_MAX_TODAY, ""))] = get_entity_selector_optional()
-
-        # Panel 3
-        schema_dict[vol.Optional(CONF_PANEL3_NAME, default=current.get(CONF_PANEL3_NAME, DEFAULT_PANEL3_NAME))] = str
-        schema_dict[vol.Optional(CONF_SENSOR_PANEL3_POWER, default=current.get(CONF_SENSOR_PANEL3_POWER, ""))] = get_entity_selector_optional()
-        schema_dict[vol.Optional(CONF_SENSOR_PANEL3_MAX_TODAY, default=current.get(CONF_SENSOR_PANEL3_MAX_TODAY, ""))] = get_entity_selector_optional()
-
-        # Panel 4
-        schema_dict[vol.Optional(CONF_PANEL4_NAME, default=current.get(CONF_PANEL4_NAME, DEFAULT_PANEL4_NAME))] = str
-        schema_dict[vol.Optional(CONF_SENSOR_PANEL4_POWER, default=current.get(CONF_SENSOR_PANEL4_POWER, ""))] = get_entity_selector_optional()
-        schema_dict[vol.Optional(CONF_SENSOR_PANEL4_MAX_TODAY, default=current.get(CONF_SENSOR_PANEL4_MAX_TODAY, ""))] = get_entity_selector_optional()
-
         return self.async_show_form(
             step_id="panels",
-            data_schema=vol.Schema(schema_dict),
+            data_schema=self._build_panel_schema(),
         )
+
+    def _build_panel_schema(self) -> vol.Schema:
+        """Build schema for panel configuration form. @zara
+
+        Panels have a special schema with name fields (str) and sensor fields.
+        """
+        current = self._config_entry.data
+        panel_configs = [
+            (CONF_PANEL1_NAME, DEFAULT_PANEL1_NAME, CONF_SENSOR_PANEL1_POWER, CONF_SENSOR_PANEL1_MAX_TODAY),
+            (CONF_PANEL2_NAME, DEFAULT_PANEL2_NAME, CONF_SENSOR_PANEL2_POWER, CONF_SENSOR_PANEL2_MAX_TODAY),
+            (CONF_PANEL3_NAME, DEFAULT_PANEL3_NAME, CONF_SENSOR_PANEL3_POWER, CONF_SENSOR_PANEL3_MAX_TODAY),
+            (CONF_PANEL4_NAME, DEFAULT_PANEL4_NAME, CONF_SENSOR_PANEL4_POWER, CONF_SENSOR_PANEL4_MAX_TODAY),
+        ]
+
+        schema_dict = {}
+        for name_key, default_name, power_key, max_key in panel_configs:
+            schema_dict[vol.Optional(name_key, default=current.get(name_key, default_name))] = str
+            schema_dict[vol.Optional(power_key, default=current.get(power_key, ""))] = get_entity_selector_optional()
+            schema_dict[vol.Optional(max_key, default=current.get(max_key, ""))] = get_entity_selector_optional()
+
+        return vol.Schema(schema_dict)
 
     async def async_step_billing(
         self,

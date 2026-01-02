@@ -1,11 +1,3 @@
-# ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
-# * This program is protected by a Proprietary Non-Commercial License.
-# 1. Personal and Educational use only.
-# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
-# 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
-# ******************************************************************************
 """Hourly billing aggregator for SFML Stats."""
 from __future__ import annotations
 
@@ -452,6 +444,7 @@ class HourlyBillingAggregator:
         config: dict[str, Any],
     ) -> None:
         """Recalculate totals for the billing period."""
+        import calendar
         from datetime import date
 
         billing_start_day = config.get(CONF_BILLING_START_DAY, 1)
@@ -464,12 +457,18 @@ class HourlyBillingAggregator:
 
         today = date.today()
         current_year = today.year
+
+        # Korrigiere ungültige Tage (z.B. 31. Februar -> 28. Februar)
+        max_day = calendar.monthrange(current_year, billing_start_month)[1]
+        billing_start_day = min(billing_start_day, max_day)
+
         billing_start = date(current_year, billing_start_month, billing_start_day)
 
         if billing_start > today:
-            billing_start = date(
-                current_year - 1, billing_start_month, billing_start_day
-            )
+            # Prüfe auch das vorherige Jahr auf gültige Tage
+            max_day_prev = calendar.monthrange(current_year - 1, billing_start_month)[1]
+            billing_start_day = min(billing_start_day, max_day_prev)
+            billing_start = date(current_year - 1, billing_start_month, billing_start_day)
 
         billing_start_str = billing_start.isoformat()
 
@@ -523,23 +522,36 @@ class HourlyBillingAggregator:
             if isinstance(totals[key], float):
                 totals[key] = round(totals[key], 4)
 
+        # Self-consumption: Solar-Produktion minus Export (mindestens 0)
+        # = Anteil der Solarproduktion, der selbst genutzt wurde
         totals["self_consumption_kwh"] = round(
-            totals["solar_yield_kwh"] - totals["grid_export_kwh"], 4
+            max(0, totals["solar_yield_kwh"] - totals["grid_export_kwh"]), 4
         )
 
-        total_consumption = (
-            totals["grid_import_kwh"] + totals["self_consumption_kwh"]
+        # Eigenverbrauch für Autarkie: Was aus eigenen Quellen ins Haus ging
+        # = Solar→Haus + Batterie→Haus (konsistent mit power_sources_collector)
+        own_production_to_house = (
+            totals["solar_to_house_kwh"] + totals["battery_to_house_kwh"]
         )
+
+        # Autarkie: Eigenproduktion zum Haus / Gesamtverbrauch
+        # Bevorzuge home_consumption_kwh wenn verfügbar
+        total_consumption = totals["home_consumption_kwh"]
+        if total_consumption <= 0:
+            # Fallback: Gesamtverbrauch = Netzbezug + Eigenproduktion
+            total_consumption = totals["grid_import_kwh"] + own_production_to_house
+
         if total_consumption > 0:
             totals["autarkie_percent"] = round(
-                (totals["self_consumption_kwh"] / total_consumption) * 100, 1
+                min(100, (own_production_to_house / total_consumption) * 100), 1
             )
         else:
             totals["autarkie_percent"] = 0
 
+        # Ersparnis basiert auf Eigenproduktion (was nicht vom Netz bezogen wurde)
         if totals["avg_price_ct"] > 0:
             totals["savings_eur"] = round(
-                (totals["self_consumption_kwh"] * totals["avg_price_ct"]) / 100, 2
+                (own_production_to_house * totals["avg_price_ct"]) / 100, 2
             )
         else:
             totals["savings_eur"] = 0

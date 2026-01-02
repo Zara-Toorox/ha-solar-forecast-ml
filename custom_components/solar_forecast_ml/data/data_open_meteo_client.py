@@ -258,6 +258,21 @@ class OpenMeteoClient:
             )
             return self._cache.get("hourly_forecast")
 
+        # Last resort: Try to load from file cache (e.g., after HA restart when in-memory is empty)
+        if self._cache_file and self._cache_file.exists():
+            try:
+                await self._load_file_cache()
+                cached = self._cache.get("hourly_forecast", [])
+                if cached:
+                    cache_info = self._get_cache_source_info()
+                    _LOGGER.info(
+                        f"Open-Meteo API unavailable, restored from file cache "
+                        f"({len(cached)} hours, age: {cache_info.get('age_hours', 0):.1f}h)"
+                    )
+                    return cached
+            except Exception as e:
+                _LOGGER.warning(f"Could not restore Open-Meteo file cache: {e}")
+
         _LOGGER.warning(
             f"Open-Meteo: No cache available and API failed "
             f"({self._consecutive_failures} consecutive failures)."

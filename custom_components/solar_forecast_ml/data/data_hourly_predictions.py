@@ -642,12 +642,6 @@ class HourlyPredictionsHandler:
                 except:
                     dew_point = None
 
-            _LOGGER.debug(
-                f"Using CORRECTED weather for {date} {hour:02d}:00 "
-                f"(temp: {temp}°C, lux: {corrected.get('lux')}, clouds: {corrected.get('clouds')}%, "
-                f"humidity: {humidity}%, wind: {corrected.get('wind')} m/s)"
-            )
-
             return {
                 "source": "met.no (corrected)",
                 "temperature_c": temp,

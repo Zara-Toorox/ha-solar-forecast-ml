@@ -1524,9 +1524,155 @@
             transform: scale(1.1);
             filter: drop-shadow(0 0 25px currentColor) !important;
         }
+
+        /* ============================================================
+           Toast Notification System
+           ============================================================ */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px;
+            border-radius: var(--radius-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            color: var(--text-light);
+            font-size: 0.9rem;
+            pointer-events: auto;
+            animation: toastSlideIn 0.3s ease-out;
+            max-width: 400px;
+        }
+
+        .toast.toast-success {
+            border-color: var(--neon-green);
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), var(--bg-card));
+        }
+
+        .toast.toast-error {
+            border-color: var(--neon-pink);
+            background: linear-gradient(135deg, rgba(255, 0, 128, 0.1), var(--bg-card));
+        }
+
+        .toast.toast-warning {
+            border-color: var(--neon-orange);
+            background: linear-gradient(135deg, rgba(255, 140, 0, 0.1), var(--bg-card));
+        }
+
+        .toast.toast-info {
+            border-color: var(--neon-cyan);
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.1), var(--bg-card));
+        }
+
+        .toast-icon {
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .toast-message {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            font-size: 1.1rem;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .toast-close:hover {
+            opacity: 1;
+        }
+
+        .toast.toast-exit {
+            animation: toastSlideOut 0.3s ease-in forwards;
+        }
+
+        @keyframes toastSlideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes toastSlideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        /* Loading Spinner */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 26, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            border-radius: inherit;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-subtle);
+            border-top-color: var(--neon-cyan);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .card-loading {
+            position: relative;
+            min-height: 100px;
+        }
     </style>
 </head>
 <body>
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
     <div id="app">
         <header class="header">
             <h1>Solar Forecast AI Dashboard V2.2.2 by Zara</h1>
@@ -3514,6 +3660,230 @@
     <script>
         const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } = Vue;
 
+        // ============================================================
+        // Toast Notification System
+        // ============================================================
+        const Toast = {
+            container: null,
+
+            init() {
+                this.container = document.getElementById('toast-container');
+            },
+
+            show(message, type = 'info', title = null, duration = 5000) {
+                if (!this.container) this.init();
+
+                const icons = {
+                    success: '✓',
+                    error: '✕',
+                    warning: '⚠',
+                    info: 'ℹ'
+                };
+
+                const titles = {
+                    success: 'Erfolg',
+                    error: 'Fehler',
+                    warning: 'Warnung',
+                    info: 'Info'
+                };
+
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${type}`;
+                toast.innerHTML = `
+                    <span class="toast-icon">${icons[type] || icons.info}</span>
+                    <div class="toast-content">
+                        <div class="toast-title">${title || titles[type]}</div>
+                        <div class="toast-message">${message}</div>
+                    </div>
+                    <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+                `;
+
+                this.container.appendChild(toast);
+
+                // Auto-remove after duration
+                if (duration > 0) {
+                    setTimeout(() => {
+                        toast.classList.add('toast-exit');
+                        setTimeout(() => toast.remove(), 300);
+                    }, duration);
+                }
+
+                return toast;
+            },
+
+            success(message, title = null) {
+                return this.show(message, 'success', title, 4000);
+            },
+
+            error(message, title = null) {
+                return this.show(message, 'error', title, 8000);
+            },
+
+            warning(message, title = null) {
+                return this.show(message, 'warning', title, 6000);
+            },
+
+            info(message, title = null) {
+                return this.show(message, 'info', title, 5000);
+            }
+        };
+
+        // ============================================================
+        // API Client with Caching
+        // ============================================================
+        const SFMLApi = {
+            cache: new Map(),
+            cacheTTL: 30000, // 30 seconds default TTL
+            pendingRequests: new Map(), // Prevent duplicate concurrent requests
+
+            async fetch(endpoint, options = {}) {
+                const {
+                    useCache = true,
+                    cacheTTL = this.cacheTTL,
+                    showError = true,
+                    method = 'GET',
+                    body = null
+                } = options;
+
+                const url = endpoint.startsWith('/') ? endpoint : `/api/sfml_stats/${endpoint}`;
+                const cacheKey = `${method}:${url}`;
+
+                // Check cache for GET requests
+                if (method === 'GET' && useCache) {
+                    const cached = this.cache.get(cacheKey);
+                    if (cached && Date.now() - cached.time < cacheTTL) {
+                        return cached.data;
+                    }
+                }
+
+                // Prevent duplicate concurrent requests
+                if (method === 'GET' && this.pendingRequests.has(cacheKey)) {
+                    return this.pendingRequests.get(cacheKey);
+                }
+
+                const fetchPromise = (async () => {
+                    try {
+                        const fetchOptions = { method };
+                        if (body) {
+                            fetchOptions.body = JSON.stringify(body);
+                            fetchOptions.headers = { 'Content-Type': 'application/json' };
+                        }
+
+                        const response = await fetch(url, fetchOptions);
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+
+                        const contentType = response.headers.get('content-type');
+                        let data;
+
+                        if (contentType && contentType.includes('application/json')) {
+                            data = await response.json();
+                        } else {
+                            // Handle blob responses (for file downloads)
+                            data = await response.blob();
+                        }
+
+                        // Cache successful GET responses
+                        if (method === 'GET' && useCache) {
+                            this.cache.set(cacheKey, { data, time: Date.now() });
+                        }
+
+                        return data;
+                    } catch (error) {
+                        console.error(`API Error [${url}]:`, error);
+                        if (showError) {
+                            Toast.error(error.message, 'API-Fehler');
+                        }
+                        throw error;
+                    } finally {
+                        this.pendingRequests.delete(cacheKey);
+                    }
+                })();
+
+                if (method === 'GET') {
+                    this.pendingRequests.set(cacheKey, fetchPromise);
+                }
+
+                return fetchPromise;
+            },
+
+            // Convenience methods
+            async get(endpoint, options = {}) {
+                return this.fetch(endpoint, { ...options, method: 'GET' });
+            },
+
+            async post(endpoint, body, options = {}) {
+                return this.fetch(endpoint, { ...options, method: 'POST', body });
+            },
+
+            // Clear cache
+            clearCache(endpoint = null) {
+                if (endpoint) {
+                    const url = endpoint.startsWith('/') ? endpoint : `/api/sfml_stats/${endpoint}`;
+                    this.cache.delete(`GET:${url}`);
+                } else {
+                    this.cache.clear();
+                }
+            },
+
+            // Download helper for exports
+            async download(endpoint, filename) {
+                try {
+                    Toast.info('Export wird vorbereitet...', 'Download');
+
+                    const response = await fetch(
+                        endpoint.startsWith('/') ? endpoint : `/api/sfml_stats/${endpoint}`
+                    );
+
+                    if (!response.ok) {
+                        throw new Error(`Export fehlgeschlagen: ${response.statusText}`);
+                    }
+
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    Toast.success(`${filename} wurde heruntergeladen`, 'Export erfolgreich');
+                    return true;
+                } catch (error) {
+                    console.error('Download error:', error);
+                    Toast.error(error.message, 'Export fehlgeschlagen');
+                    throw error;
+                }
+            }
+        };
+
+        // ============================================================
+        // Loading State Helper
+        // ============================================================
+        function createLoadingState() {
+            const isLoading = ref(false);
+            const error = ref(null);
+
+            async function withLoading(asyncFn) {
+                isLoading.value = true;
+                error.value = null;
+                try {
+                    return await asyncFn();
+                } catch (e) {
+                    error.value = e.message;
+                    throw e;
+                } finally {
+                    isLoading.value = false;
+                }
+            }
+
+            return { isLoading, error, withLoading };
+        }
+
         createApp({
             setup() {
                 const lastUpdate = ref('—');
@@ -3931,16 +4301,14 @@
                 async function exportSolarAnalytics() {
                     try {
                         solarModal.exporting = true;
-                        console.log('Exporting solar analytics...', solarModal.activeTab);
+                        Toast.info('Export wird vorbereitet...', 'Solar Analytics');
 
-                        // Prepare export data
                         const exportData = {
                             period: solarModal.activeTab,
                             stats: solarModal.stats,
                             data: solarModal.historicalData
                         };
 
-                        // Call backend API (POST to dedicated export endpoint)
                         const response = await fetch('/api/sfml_stats/export_solar_analytics', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -3951,10 +4319,7 @@
                             throw new Error(`Export failed: ${response.statusText}`);
                         }
 
-                        // Get the blob (PNG image)
                         const blob = await response.blob();
-
-                        // Create download link
                         const url = window.URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
@@ -3964,10 +4329,10 @@
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
 
-                        console.log('Export successful!');
+                        Toast.success('Chart wurde exportiert', 'Solar Analytics');
                     } catch (error) {
                         console.error('Export error:', error);
-                        alert('Export fehlgeschlagen: ' + error.message);
+                        Toast.error(error.message, 'Export fehlgeschlagen');
                     } finally {
                         solarModal.exporting = false;
                     }
@@ -4000,6 +4365,7 @@
                 async function exportBatteryAnalytics() {
                     try {
                         batteryModal.exporting = true;
+                        Toast.info('Export wird vorbereitet...', 'Batterie Analytics');
                         const exportData = {
                             period: batteryModal.activeTab,
                             stats: batteryModal.stats,
@@ -4020,9 +4386,10 @@
                         a.click();
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
+                        Toast.success('Chart wurde exportiert', 'Batterie Analytics');
                     } catch (error) {
                         console.error('Battery export error:', error);
-                        alert('Export fehlgeschlagen: ' + error.message);
+                        Toast.error(error.message, 'Export fehlgeschlagen');
                     } finally {
                         batteryModal.exporting = false;
                     }
@@ -4218,6 +4585,7 @@
                 async function exportHouseAnalytics() {
                     try {
                         houseModal.exporting = true;
+                        Toast.info('Export wird vorbereitet...', 'Haus Analytics');
                         const exportData = {
                             period: houseModal.activeTab,
                             stats: houseModal.stats,
@@ -4238,9 +4606,10 @@
                         a.click();
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
+                        Toast.success('Chart wurde exportiert', 'Haus Analytics');
                     } catch (error) {
                         console.error('House export error:', error);
-                        alert('Export fehlgeschlagen: ' + error.message);
+                        Toast.error(error.message, 'Export fehlgeschlagen');
                     } finally {
                         houseModal.exporting = false;
                     }
@@ -4443,6 +4812,7 @@
                 async function exportGridAnalytics() {
                     try {
                         gridModal.exporting = true;
+                        Toast.info('Export wird vorbereitet...', 'Netz Analytics');
                         const exportData = {
                             period: gridModal.activeTab,
                             stats: gridModal.stats,
@@ -4463,9 +4833,10 @@
                         a.click();
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
+                        Toast.success('Chart wurde exportiert', 'Netz Analytics');
                     } catch (error) {
                         console.error('Grid export error:', error);
-                        alert('Export fehlgeschlagen: ' + error.message);
+                        Toast.error(error.message, 'Export fehlgeschlagen');
                     } finally {
                         gridModal.exporting = false;
                     }
@@ -4947,6 +5318,7 @@
                 async function exportPowerSourcesAnalytics() {
                     try {
                         powerSourcesModal.exporting = true;
+                        Toast.info('Export wird vorbereitet...', 'Energiequellen');
 
                         const exportData = {
                             period: powerSourcesModal.activeTab,
@@ -4971,9 +5343,10 @@
                         a.click();
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
+                        Toast.success('Chart wurde exportiert', 'Energiequellen');
                     } catch (error) {
                         console.error('Power sources export error:', error);
-                        alert('Export fehlgeschlagen: ' + error.message);
+                        Toast.error(error.message, 'Export fehlgeschlagen');
                     } finally {
                         powerSourcesModal.exporting = false;
                     }
@@ -5219,6 +5592,7 @@
                 async function exportWeatherAnalytics() {
                     try {
                         weatherModal.exporting = true;
+                        Toast.info('Export wird vorbereitet...', 'Wetter Analytics');
 
                         // For comparison tab, default to week for export
                         const period = weatherModal.activeTab === 'comparison' ? 'week' : weatherModal.activeTab;
@@ -5243,9 +5617,10 @@
                         a.click();
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
+                        Toast.success('Chart wurde exportiert', 'Wetter Analytics');
                     } catch (error) {
                         console.error('Weather export error:', error);
-                        alert('Export fehlgeschlagen: ' + error.message);
+                        Toast.error(error.message, 'Export fehlgeschlagen');
                     } finally {
                         weatherModal.exporting = false;
                     }

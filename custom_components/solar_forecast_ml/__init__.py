@@ -242,7 +242,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Failed to setup Solar Forecast coordinator")
         return False
 
-    await coordinator.async_config_entry_first_refresh()
+    # First refresh with timeout to prevent blocking HA startup if network/APIs unavailable
+    import asyncio
+    try:
+        async with asyncio.timeout(60):
+            await coordinator.async_config_entry_first_refresh()
+    except asyncio.TimeoutError:
+        _LOGGER.warning(
+            "First data refresh timed out after 60s - continuing with cached/default data. "
+            "This may happen if network or weather APIs are temporarily unavailable."
+        )
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
@@ -291,10 +300,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
                 missing_packages = dependency_handler.get_missing_packages()
 
+            # Check if attention mechanism is enabled
+            use_attention = False
+            if coordinator.ai_predictor:
+                use_attention = getattr(coordinator.ai_predictor, "use_attention", False)
+
             await notification_service.show_startup_success(
                 ml_mode=dependencies_ok,
                 installed_packages=installed_packages,
                 missing_packages=missing_packages,
+                use_attention=use_attention,
             )
             _LOGGER.debug("Startup notification triggered")
         except Exception as e:

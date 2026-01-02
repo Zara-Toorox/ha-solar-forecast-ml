@@ -21,16 +21,27 @@ _LOGGER = logging.getLogger(__name__)
 
 # Default parameter grid - conservative for Home Assistant
 DEFAULT_PARAM_GRID = [
-    {"hidden_size": 24, "batch_size": 16, "learning_rate": 0.005},
-    {"hidden_size": 32, "batch_size": 16, "learning_rate": 0.005},  # Current default
-    {"hidden_size": 32, "batch_size": 8, "learning_rate": 0.005},
-    {"hidden_size": 48, "batch_size": 16, "learning_rate": 0.005},
+    {"hidden_size": 24, "batch_size": 16, "learning_rate": 0.005, "use_attention": False},
+    {"hidden_size": 32, "batch_size": 16, "learning_rate": 0.005, "use_attention": False},  # Current default
+    {"hidden_size": 32, "batch_size": 8, "learning_rate": 0.005, "use_attention": False},
+    {"hidden_size": 48, "batch_size": 16, "learning_rate": 0.005, "use_attention": False},
+]
+
+# Extended grid with attention mechanism
+ATTENTION_PARAM_GRID = [
+    # Without attention (baseline)
+    {"hidden_size": 24, "batch_size": 16, "learning_rate": 0.005, "use_attention": False},
+    {"hidden_size": 32, "batch_size": 16, "learning_rate": 0.005, "use_attention": False},
+    # With attention (requires slightly lower LR for stability)
+    {"hidden_size": 24, "batch_size": 16, "learning_rate": 0.003, "use_attention": True},
+    {"hidden_size": 32, "batch_size": 16, "learning_rate": 0.003, "use_attention": True},
+    {"hidden_size": 32, "batch_size": 8, "learning_rate": 0.002, "use_attention": True},
 ]
 
 # Minimal grid for constrained systems (if user forces it)
 MINIMAL_PARAM_GRID = [
-    {"hidden_size": 24, "batch_size": 16, "learning_rate": 0.005},
-    {"hidden_size": 32, "batch_size": 16, "learning_rate": 0.005},
+    {"hidden_size": 24, "batch_size": 16, "learning_rate": 0.005, "use_attention": False},
+    {"hidden_size": 32, "batch_size": 16, "learning_rate": 0.005, "use_attention": False},
 ]
 
 # Reduced epochs for grid search (faster iteration)
@@ -336,11 +347,14 @@ class GridSearchOptimizer:
         for i, params in enumerate(self.param_grid):
             combo_start = datetime.now()
 
+            use_attention = params.get("use_attention", False)
+            attn_str = ", attention=ON" if use_attention else ""
+
             _LOGGER.info(
                 f"Grid-Search [{i+1}/{len(self.param_grid)}]: "
                 f"hidden={params.get('hidden_size', 32)}, "
                 f"batch={params.get('batch_size', 16)}, "
-                f"lr={params.get('learning_rate', 0.005)}"
+                f"lr={params.get('learning_rate', 0.005)}{attn_str}"
             )
 
             try:
@@ -351,6 +365,7 @@ class GridSearchOptimizer:
                     sequence_length=sequence_length,
                     num_outputs=num_outputs,
                     learning_rate=params.get("learning_rate", 0.005),
+                    use_attention=use_attention,
                 )
 
                 # Train
@@ -413,10 +428,11 @@ class GridSearchOptimizer:
         # Save results
         await self._save_results(result)
 
+        best_attn_str = ", attention=ON" if best_params.get("use_attention", False) else ""
         _LOGGER.info(
             f"Grid-Search complete: best R²={best_accuracy:.4f} with "
             f"hidden={best_params.get('hidden_size')}, "
-            f"batch={best_params.get('batch_size')} "
+            f"batch={best_params.get('batch_size')}{best_attn_str} "
             f"in {total_duration:.1f}s total"
         )
 

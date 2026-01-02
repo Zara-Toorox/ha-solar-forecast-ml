@@ -145,6 +145,7 @@ class NotificationService:
         ml_mode: bool = True,
         installed_packages: Optional[List[str]] = None,
         missing_packages: Optional[List[str]] = None,
+        use_attention: bool = False,
     ) -> bool:
         """Show startup notification with integration status"""
         if not self._should_notify(CONF_NOTIFY_STARTUP):
@@ -163,28 +164,42 @@ class NotificationService:
                 missing_list = f"\n\n**Missing Packages:**\n{missing_items}"
 
             if ml_mode:
-                message = f"""**Solar Forecast KI Started Successfully!** ⭐
+                # Build AI Architecture section
+                ai_architecture = """**AI Architecture:**
+• AI-Neural Network mit 24h temporalen Sequenzen
+• Physics-basiertes Bestrahlungsmodell (pro Panel-Gruppe)
+• Konfidenz-gewichtetes Hybrid-Blending
+• Echtzeit-Wetterkorrektur"""
 
-**Mode:** Machine Learning (Full Feature Set)
+                # Add attention info if enabled
+                if use_attention:
+                    ai_architecture += "\n• Advanced Attention AI (aktiv)"
+
+                message = f"""**Solar Forecast Hybrid AI Started Successfully!** ⭐
+
+**Mode:** Hybrid AI (Physics + Machine Learning)
 
 **Version:** "Sarpeidon" - Named after the planet from Star Trek where the Guardian of Forever resides
 
 **Author:** Zara-Toorox
 
+{ai_architecture}
+
 **Active Features:**
-• ML-based solar production forecasting (14 features, weather-corrected)
-• Historical data analysis & learning
-• Weather integration for accuracy
-• Peak production time detection
-• Autarky & self-sufficiency tracking
-• Daily Solar Briefing notifications{installed_list}
+• Hybrid-Vorhersage mit automatischer Konfidenz-Gewichtung
+• Multi-Output Forecasting (pro Panel-Gruppe)
+• Historische Datenanalyse & selbstlernendes Training
+• Wetterintegration für höhere Genauigkeit
+• Peak-Produktionszeit-Erkennung
+• Autarkie & Eigenverbrauch-Tracking
+• Daily Solar Briefing Benachrichtigungen{installed_list}
 
 **System Status:** All systems operational ✓
 
 *"The future is not set in stone, but with data and logic, we can illuminate the path ahead."* — Inspired by Star Trek
 
 **Personal Note from Zara:**
-Thank you for using Solar Forecast ML! May your panels generate efficiently. Live long and prosper! 🖖"""
+Thank you for using Solar Forecast Hybrid AI! May your panels generate efficiently. Live long and prosper! 🖖"""
             else:
                 message = f"""**Solar Forecast ML Started in Fallback Mode** ⚠️
 
@@ -208,7 +223,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
 
             await self._safe_create_notification(
                 message=message,
-                title="🌤️ Solar Forecast ML Started",
+                title="🌤️ Solar Forecast Hybrid AI Started",
                 notification_id=NOTIFICATION_ID_STARTUP,
             )
 

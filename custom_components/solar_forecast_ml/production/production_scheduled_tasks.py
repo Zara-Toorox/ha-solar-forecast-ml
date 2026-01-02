@@ -889,9 +889,14 @@ class ScheduledTasksManager:
             result = await predictor.train_model()
 
             if result.success:
+                # Build attention info string
+                attn_str = ", attention=ON" if result.has_attention else ""
+                rmse_str = f", RMSE={result.rmse:.3f}kWh" if result.rmse else ""
+
                 _LOGGER.info(
-                    f"AI model trained: accuracy={result.accuracy:.3f}, "
-                    f"samples={result.samples_used}, features={result.feature_count}"
+                    f"AI model trained: R²={result.accuracy:.3f}{rmse_str}, "
+                    f"samples={result.samples_used}, features={result.feature_count}, "
+                    f"outputs={result.num_outputs}{attn_str}"
                 )
                 if self.coordinator:
                     self.coordinator.on_ai_training_complete(

@@ -18,67 +18,67 @@
         }
       },
       "energy_flow": {
-        "title": "Energiefluss-Sensoren",
-        "description": "Wähle die Sensoren für das Energiefluss-Diagramm.\n\nAlle Felder sind optional! Du musst nur die Sensoren auswählen, die du hast.\n\n⚡ WICHTIG: Alle Sensoren müssen die aktuelle Leistung in WATT (W) liefern, NICHT kWh!",
+        "title": "Energiefluss-Sensoren (Live-Leistung)",
+        "description": "Diese Sensoren zeigen die AKTUELLE Leistung in Watt (W) für das Live-Energiefluss-Diagramm.\n\nAlle Felder sind optional - konfiguriere nur was dein System hat.\n\n⚡ WICHTIG: Hier NUR Watt-Sensoren (momentane Leistung), KEINE kWh-Sensoren (Energiemenge)!\n\n💡 TIPP: Bei Hybrid-Wechselrichtern (Fronius, Huawei, SMA) findest du diese Sensoren meist unter 'Power' oder 'Leistung'.",
         "data": {
-          "sensor_solar_power": "Solar Leistung (W)",
-          "sensor_solar_to_house": "Solar zu Haus (W)",
-          "sensor_solar_to_battery": "Solar zu Akku (W)",
-          "sensor_grid_to_house": "Netz zu Haus (W)",
-          "sensor_grid_to_battery": "Netz zu Akku (W)",
-          "sensor_house_to_grid": "Einspeisung (W)",
-          "sensor_smartmeter_import": "Smartmeter Netzbezug (W)",
-          "sensor_smartmeter_export": "Smartmeter Einspeisung (W)"
+          "sensor_solar_power": "☀️ PV-Gesamtleistung (W)",
+          "sensor_solar_to_house": "☀️→🏠 Solar direkt ins Haus (W)",
+          "sensor_solar_to_battery": "☀️→🔋 Solar in Batterie (W)",
+          "sensor_grid_to_house": "🔌→🏠 Netzbezug ins Haus (W)",
+          "sensor_grid_to_battery": "🔌→🔋 Netzbezug in Batterie (W)",
+          "sensor_house_to_grid": "🏠→🔌 Einspeisung ins Netz (W)",
+          "sensor_smartmeter_import": "📊 Smartmeter Bezug (W)",
+          "sensor_smartmeter_export": "📊 Smartmeter Einspeisung (W)"
         },
         "data_description": {
-          "sensor_solar_power": "Aktuelle PV-Leistung in Watt (z.B. 3500 W). Kommt direkt vom Wechselrichter. Typischer Bereich: 0-15000 W.",
-          "sensor_solar_to_house": "Leistung die direkt von PV ins Haus fließt in Watt. Ohne Akku/Netz-Anteil. Typischer Bereich: 0-10000 W.",
-          "sensor_solar_to_battery": "Leistung die von PV in die Batterie lädt in Watt. Typischer Bereich: 0-5000 W.",
-          "sensor_grid_to_house": "Netzbezug für direkten Hausverbrauch in Watt (ohne Akkuladung). Typischer Bereich: 0-20000 W.",
-          "sensor_grid_to_battery": "Netzbezug für Akkuladung in Watt. Typischer Bereich: 0-5000 W.",
-          "sensor_house_to_grid": "Einspeisung ins Netz in Watt. Typischer Bereich: 0-15000 W.",
-          "sensor_smartmeter_import": "Aktuelle Bezugsleistung vom Smartmeter in Watt. Wird für stündliche Abrechnung verwendet.",
-          "sensor_smartmeter_export": "Aktuelle Einspeiseleistung vom Smartmeter in Watt. Wird für stündliche Abrechnung verwendet."
+          "sensor_solar_power": "GESAMT-Leistung aller PV-Module in Watt. Was der Wechselrichter gerade produziert. Beispiel: 'sensor.inverter_pv_power' zeigt 4500 W. NICHT die Aufteilung wohin der Strom fließt!",
+          "sensor_solar_to_house": "Anteil der Solarleistung der DIREKT ins Haus fließt (ohne Batterie, ohne Netz). Nur nötig wenn dein WR diesen Wert separat ausgibt. Beispiel: Fronius 'Power Real AC' oder Huawei 'Active Power'. Falls nicht vorhanden: wird automatisch berechnet.",
+          "sensor_solar_to_battery": "Solarleistung die gerade in die Batterie lädt. NUR positive Werte! Beispiel: 'sensor.battery_charge_power' zeigt 2000 W beim Laden. Zeigt 0 wenn Batterie entlädt.",
+          "sensor_grid_to_house": "Leistung die vom Stromnetz bezogen wird für direkten Verbrauch (OHNE Akkuladung). Falls dein System nur Gesamt-Netzbezug hat: nutze stattdessen 'Smartmeter Bezug'. Beispiel: 1500 W.",
+          "sensor_grid_to_battery": "Leistung die vom Netz in die Batterie lädt (z.B. bei günstigen Strompreisen). Die meisten Systeme laden nur von Solar - dann leer lassen. Beispiel: 0-5000 W.",
+          "sensor_house_to_grid": "Überschuss-Einspeisung ins Netz in Watt. Was gerade verkauft/eingespeist wird. Beispiel: 'sensor.grid_export_power' zeigt 3000 W. NICHT kWh-Zähler!",
+          "sensor_smartmeter_import": "Aktuelle Bezugsleistung vom Smartmeter/Stromzähler. Gesamter Netzbezug inkl. Akkuladung. Alternativ zu 'Netz zu Haus' wenn keine Aufteilung verfügbar. Wird für stündliche Preisberechnung verwendet. Beispiel: 'sensor.smartmeter_power_import' = 800 W.",
+          "sensor_smartmeter_export": "Aktuelle Einspeiseleistung vom Smartmeter. Wie 'Einspeisung ins Netz', aber direkt vom Zähler. Beispiel: 'sensor.smartmeter_power_export' = 2500 W."
         }
       },
       "battery": {
-        "title": "Batterie & Verbrauch",
-        "description": "Sensoren für Batterie-Status und Hausverbrauch.\n\nAlle Felder sind optional!\n\n🔋 SOC = Prozent (0-100%), Leistung = Watt (W)",
+        "title": "Batterie & Hausverbrauch (Live)",
+        "description": "Sensoren für Batterie-Status und Hausverbrauch.\n\nAlle Felder sind optional - ohne Batterie diesen Schritt überspringen.\n\n🔋 WICHTIG: SOC muss 0-100 sein (nicht 0-1)!\n\n⚠️ ACHTUNG bei Batterie-Leistung: Prüfe ob dein System positive oder negative Werte für Entladung verwendet!",
         "data": {
-          "sensor_battery_soc": "Akkustand SOC (%)",
-          "sensor_battery_power": "Akku Lade-/Entladeleistung (W)",
-          "sensor_battery_to_house": "Akku → Haus (W)",
-          "sensor_battery_to_grid": "Akku → Netz (W)",
-          "sensor_home_consumption": "Hausverbrauch gesamt (W)"
+          "sensor_battery_soc": "🔋 Ladestand/SOC (%)",
+          "sensor_battery_power": "🔋 Batterie-Leistung (+/- W)",
+          "sensor_battery_to_house": "🔋→🏠 Entladung ins Haus (W)",
+          "sensor_battery_to_grid": "🔋→🔌 Entladung ins Netz (W)",
+          "sensor_home_consumption": "🏠 Hausverbrauch gesamt (W)"
         },
         "data_description": {
-          "sensor_battery_soc": "State of Charge in Prozent. Erwarteter Bereich: 0-100 (NICHT 0-1!). Zeigt den Ladestand des Akkus.",
-          "sensor_battery_power": "Aktuelle Lade- oder Entladeleistung in Watt. Positiv = Laden, Negativ = Entladen (oder umgekehrt je nach System). Bereich: -10000 bis +10000 W.",
-          "sensor_battery_to_house": "Entladeleistung die ins Haus fließt in Watt. NUR positive Werte! Typischer Bereich: 0-10000 W.",
-          "sensor_battery_to_grid": "Einspeisung aus dem Akku ins Netz in Watt. NUR positive Werte! Typischer Bereich: 0-10000 W.",
-          "sensor_home_consumption": "Gesamter aktueller Hausverbrauch in Watt. Typischer Bereich: 200-20000 W. Beispiel: 1500 W."
+          "sensor_battery_soc": "Aktueller Ladestand (State of Charge) in PROZENT. MUSS zwischen 0 und 100 liegen! Falls dein Sensor 0.0-1.0 zeigt: erstelle einen Template-Sensor der mit 100 multipliziert. Beispiel: 'sensor.battery_soc' = 75 bedeutet 75% geladen.",
+          "sensor_battery_power": "Kombinierte Lade-/Entladeleistung. ⚠️ ACHTUNG: Die Vorzeichen-Konvention ist NICHT standardisiert! Fronius/SMA: positiv=laden, negativ=entladen. Huawei/andere: kann umgekehrt sein. Prüfe in den Entwicklertools! Beispiel: +2000W = Laden, -1500W = Entladen (oder umgekehrt).",
+          "sensor_battery_to_house": "Entladeleistung die ins Haus fließt. IMMER POSITIVE Werte (0 wenn nicht entladen wird). Nutze diesen Sensor STATT 'Batterie-Leistung' wenn dein System separate Sensoren hat. Beispiel: 'sensor.battery_discharge_power' = 1500 W.",
+          "sensor_battery_to_grid": "Batterie-Einspeisung ins Netz (z.B. bei Stromhandel/Arbitrage). Die meisten Systeme speisen nicht aus Batterie ein - dann leer lassen. NUR positive Werte!",
+          "sensor_home_consumption": "GESAMTER aktueller Stromverbrauch des Hauses in Watt. Summe aller Verbraucher. Wichtig für Autarkie-Berechnung! Beispiel: 'sensor.house_power_consumption' = 1850 W. Falls nicht vorhanden: wird aus Solar + Netz - Export berechnet."
         }
       },
       "statistics": {
-        "title": "Statistik-Sensoren & Wetter (optional)",
-        "description": "Sensoren für Tages- und Jahresstatistiken.\n\nAlle Felder sind optional!\n\n📊 WICHTIG: Hier werden Energiemengen in kWh erwartet, NICHT Watt!",
+        "title": "Tagesstatistik-Sensoren (kWh)",
+        "description": "Sensoren für Tages-Energiemengen und Preise.\n\nAlle Felder sind optional!\n\n📊 UNTERSCHIED ZU ENERGIEFLUSS:\n• Energiefluss = Watt (momentane Leistung, z.B. 3500 W)\n• Statistik = kWh (Energiemenge über Zeit, z.B. 15.3 kWh/Tag)\n\n⚠️ Diese Sensoren müssen sich um Mitternacht auf 0 zurücksetzen!",
         "data": {
-          "sensor_solar_yield_daily": "Tagesertrag Solar (kWh)",
-          "sensor_grid_import_daily": "Netzbezug heute (kWh)",
-          "sensor_grid_import_yearly": "Netzbezug Jahr (kWh)",
-          "sensor_battery_charge_solar_daily": "Akkuladung Sonne heute (kWh)",
-          "sensor_battery_charge_grid_daily": "Akkuladung Netz heute (kWh)",
-          "sensor_price_total": "Aktueller Preis Brutto (ct/kWh)",
-          "weather_entity": "Wetter-Entity (HA)"
+          "sensor_solar_yield_daily": "☀️ Solarertrag heute (kWh)",
+          "sensor_grid_import_daily": "🔌 Netzbezug heute (kWh)",
+          "sensor_grid_import_yearly": "📅 Netzbezug Jahr (kWh)",
+          "sensor_battery_charge_solar_daily": "☀️→🔋 Solar-Ladung heute (kWh)",
+          "sensor_battery_charge_grid_daily": "🔌→🔋 Netz-Ladung heute (kWh)",
+          "sensor_price_total": "💰 Strompreis aktuell (ct/kWh)",
+          "weather_entity": "🌤️ Wetter-Entity"
         },
         "data_description": {
-          "sensor_solar_yield_daily": "Gesamte PV-Produktion heute in kWh. Erwarteter Bereich: 0-100 kWh. Setzt sich um Mitternacht auf 0 zurück. Beispiel: 15.3 kWh.",
-          "sensor_grid_import_daily": "Gesamter Netzbezug heute in kWh. Erwarteter Bereich: 0-100 kWh. Setzt sich um Mitternacht auf 0 zurück.",
-          "sensor_grid_import_yearly": "Gesamter Netzbezug dieses Jahr in kWh (Zählerstand). Erwarteter Bereich: 0-50000 kWh.",
-          "sensor_battery_charge_solar_daily": "Energie die heute vom PV in den Akku geladen wurde in kWh. Erwarteter Bereich: 0-50 kWh.",
-          "sensor_battery_charge_grid_daily": "Energie die heute vom Netz in den Akku geladen wurde in kWh. Erwarteter Bereich: 0-50 kWh.",
-          "sensor_price_total": "Aktueller Strompreis Brutto inkl. aller Abgaben in Cent pro kWh. Erwarteter Bereich: 15-80 ct/kWh. Beispiel: 35.5 ct/kWh.",
-          "weather_entity": "Home Assistant Wetter-Integration (z.B. weather.home). Zeigt Temperatur, Luftfeuchtigkeit, Wind neben Solar-Forecast. Wetterdaten werden aus Solar Forecast ML geladen."
+          "sensor_solar_yield_daily": "Gesamte PV-Produktion HEUTE in kWh. Startet jeden Tag bei 0 und zählt hoch. NICHT der Gesamtzähler seit Installation! Beispiel: 'sensor.inverter_daily_yield' zeigt um 15 Uhr bereits 12.5 kWh. Typisch: 0-50 kWh je nach Anlagengröße.",
+          "sensor_grid_import_daily": "Gesamter Netzbezug HEUTE in kWh. Wie viel Strom wurde heute vom Netz bezogen? Startet täglich bei 0. Beispiel: 'sensor.grid_import_daily' = 8.2 kWh. NICHT der Smartmeter-Zählerstand!",
+          "sensor_grid_import_yearly": "Netzbezug im laufenden Kalenderjahr in kWh. Für Jahresstatistiken. Startet am 1. Januar bei 0. Falls nicht verfügbar: wird aus täglichen Werten aufsummiert.",
+          "sensor_battery_charge_solar_daily": "Energie die HEUTE vom Solar in die Batterie geladen wurde. Wichtig für Eigenverbrauchs-Berechnung. Startet täglich bei 0. Beispiel: 5.3 kWh. Falls nicht vorhanden: leer lassen.",
+          "sensor_battery_charge_grid_daily": "Energie die HEUTE vom Netz in die Batterie geladen wurde (z.B. bei günstigem Nachtstrom). Die meisten Systeme laden nur von Solar - dann leer lassen.",
+          "sensor_price_total": "AKTUELLER Strompreis in Cent pro kWh INKL. aller Steuern und Abgaben (Brutto). Bei dynamischen Tarifen: ändert sich stündlich. Bei Fixpreis: konstant. Beispiel: 32.5 ct/kWh. Wird für Kostenberechnung verwendet.",
+          "weather_entity": "Home Assistant Wetter-Integration für Temperatur/Wind-Anzeige. Beispiel: 'weather.home' oder 'weather.openweathermap'. Wetterdaten für Solar-Prognose kommen aus Solar Forecast ML."
         }
       },
       "panels": {
@@ -106,27 +106,27 @@
         }
       },
       "billing": {
-        "title": "Stromrechnung & Abrechnungszeitraum",
-        "description": "Konfiguriere deinen Abrechnungszeitraum für die Jahresbilanz.\n\n📅 Startdatum = Wann beginnt dein Abrechnungsjahr beim Stromanbieter?\n\n💡 Die kWh-Sensoren müssen 'total_increasing' (Zählerstände) sein!",
+        "title": "Jahresabrechnung & Zählerstände",
+        "description": "Berechnet deine Stromkosten und Ersparnis über den Abrechnungszeitraum.\n\n📅 ABRECHNUNGSZEITRAUM: Wann beginnt dein Stromjahr? (steht auf deiner Jahresabrechnung)\n\n⚠️ WICHTIG - ZÄHLERSTAND-SENSOREN:\nHier werden ABSOLUTE Zählerstände benötigt (steigen immer weiter), NICHT Tageswerte!\nDie Integration berechnet automatisch die Differenz seit Abrechnungsbeginn.\n\n💡 Erkennungsmerkmal: Ein Zählerstand zeigt z.B. '12345.67 kWh' und steigt nie auf 0 zurück.",
         "data": {
-          "billing_start_day": "Abrechnungstag (1-28)",
-          "billing_start_month": "Abrechnungsmonat",
-          "billing_price_mode": "Preismodus",
-          "billing_fixed_price": "Fixpreis Bezug (ct/kWh)",
-          "feed_in_tariff": "Einspeisevergütung (ct/kWh)",
-          "sensor_smartmeter_import_kwh": "Netzbezug Zähler (kWh total)",
-          "sensor_smartmeter_export_kwh": "Einspeisung Zähler (kWh total)",
-          "sensor_solar_yield_total_kwh": "Solarertrag Zähler (kWh total)"
+          "billing_start_day": "📅 Abrechnungs-Starttag (1-28)",
+          "billing_start_month": "📅 Abrechnungs-Startmonat",
+          "billing_price_mode": "💰 Preisberechnung",
+          "billing_fixed_price": "💰 Fixpreis Bezug (ct/kWh)",
+          "feed_in_tariff": "💸 Einspeisevergütung (ct/kWh)",
+          "sensor_smartmeter_import_kwh": "📊 Zählerstand Bezug (kWh)",
+          "sensor_smartmeter_export_kwh": "📊 Zählerstand Einspeisung (kWh)",
+          "sensor_solar_yield_total_kwh": "📊 Zählerstand Solarertrag (kWh)"
         },
         "data_description": {
-          "billing_start_day": "Tag im Monat an dem dein Abrechnungsjahr beginnt. Beispiel: 15 = der 15. des Monats.",
-          "billing_start_month": "Monat in dem dein Abrechnungsjahr beginnt. Beispiel: Januar = Abrechnungsjahr startet am gewählten Tag im Januar.",
-          "billing_price_mode": "Dynamisch = stündliche Börsenpreise aus Grid Price Monitor Integration. Fixpreis = dein fester Tarifpreis.",
-          "billing_fixed_price": "Dein Stromtarif-Preis für BEZUG in Cent pro kWh. Nur relevant bei Fixpreis-Modus. Beispiel: 35.0 für 35 ct/kWh.",
-          "feed_in_tariff": "Deine Einspeisevergütung in Cent pro kWh. Was du für eingespeisten Strom vom Netzbetreiber erhältst. Beispiel: 8.1 für 8,1 ct/kWh nach EEG.",
-          "sensor_smartmeter_import_kwh": "Absoluter Zählerstand für Netzbezug in kWh. MUSS 'total_increasing' sein (steigt immer). Beispiel: sensor.power_meter_total_consumption mit Wert wie 12345.67 kWh.",
-          "sensor_smartmeter_export_kwh": "Absoluter Zählerstand für Einspeisung in kWh. MUSS 'total_increasing' sein. Beispiel: sensor.power_meter_total_export mit Wert wie 5432.10 kWh.",
-          "sensor_solar_yield_total_kwh": "Absoluter Gesamtertrag der PV-Anlage in kWh. MUSS 'total_increasing' sein. Beispiel: sensor.inverter_total_yield mit Wert wie 15000.00 kWh."
+          "billing_start_day": "TAG an dem dein Abrechnungsjahr beim Stromanbieter beginnt. Schau auf deine Stromrechnung! Beispiel: Wenn dort 'Abrechnungszeitraum: 15.03.2024 - 14.03.2025' steht → hier '15' eintragen.",
+          "billing_start_month": "MONAT in dem dein Abrechnungsjahr beginnt. Beispiel: Bei 'Abrechnungszeitraum: 15.03.2024 - 14.03.2025' → hier 'März' wählen. Die Jahresbilanz läuft dann immer vom 15.03. bis 14.03.",
+          "billing_price_mode": "WIE sollen Kosten berechnet werden?\n• DYNAMISCH: Nutzt stündliche Börsenpreise (benötigt Grid Price Monitor Integration). Ideal für Tibber, aWATTar, etc.\n• FIXPREIS: Nutzt deinen festen Tarifpreis (unten eintragen). Für klassische Stromtarife.",
+          "billing_fixed_price": "Dein BEZUGS-Preis in Cent pro kWh (Brutto). NUR bei Fixpreis-Modus relevant! Was du pro kWh an deinen Stromanbieter zahlst. Beispiel: 35.0 für 35 ct/kWh. Steht auf deiner Stromrechnung als 'Arbeitspreis'.",
+          "feed_in_tariff": "Was du für EINGESPEISTEN Strom vom Netzbetreiber erhältst. EEG-Vergütung je nach Inbetriebnahme: ~8.1 ct/kWh (2023), ~7.5 ct/kWh (2024). Schau in deinen Einspeisevertrag! Beispiel: 8.1 für 8,1 Cent pro eingespeister kWh.",
+          "sensor_smartmeter_import_kwh": "ZÄHLERSTAND für Netzbezug vom Smartmeter. Dieser Wert steigt IMMER (wird nie 0). Zeigt wie viel Strom du INSGESAMT je vom Netz bezogen hast. Beispiel: 'sensor.smartmeter_total_import' zeigt 12345.67 kWh. NICHT verwechseln mit Tageswerten! State-Class muss 'total_increasing' sein.",
+          "sensor_smartmeter_export_kwh": "ZÄHLERSTAND für Einspeisung vom Smartmeter. Dieser Wert steigt IMMER. Zeigt wie viel Strom du INSGESAMT je eingespeist hast. Beispiel: 'sensor.smartmeter_total_export' zeigt 5432.10 kWh. State-Class muss 'total_increasing' sein.",
+          "sensor_solar_yield_total_kwh": "ZÄHLERSTAND vom Wechselrichter für Gesamtertrag. Zeigt wie viel Strom deine PV-Anlage INSGESAMT je produziert hat (seit Installation). Beispiel: 'sensor.inverter_total_yield' zeigt 15000.00 kWh. State-Class muss 'total_increasing' sein."
         }
       },
       "panel_group_names": {
@@ -182,67 +182,67 @@
         }
       },
       "energy_flow": {
-        "title": "Energiefluss-Sensoren",
-        "description": "⚡ Alle Sensoren müssen WATT (W) liefern, NICHT kWh!",
+        "title": "Energiefluss-Sensoren (Live-Leistung)",
+        "description": "⚡ Hier NUR Watt-Sensoren (momentane Leistung), KEINE kWh!\n\n💡 Bei Hybrid-WR: Sensoren meist unter 'Power' oder 'Leistung'.",
         "data": {
-          "sensor_solar_power": "Solar Leistung (W)",
-          "sensor_solar_to_house": "Solar zu Haus (W)",
-          "sensor_solar_to_battery": "Solar zu Akku (W)",
-          "sensor_grid_to_house": "Netz zu Haus (W)",
-          "sensor_grid_to_battery": "Netz zu Akku (W)",
-          "sensor_house_to_grid": "Einspeisung (W)",
-          "sensor_smartmeter_import": "Smartmeter Netzbezug (W)",
-          "sensor_smartmeter_export": "Smartmeter Einspeisung (W)"
+          "sensor_solar_power": "☀️ PV-Gesamtleistung (W)",
+          "sensor_solar_to_house": "☀️→🏠 Solar direkt ins Haus (W)",
+          "sensor_solar_to_battery": "☀️→🔋 Solar in Batterie (W)",
+          "sensor_grid_to_house": "🔌→🏠 Netzbezug ins Haus (W)",
+          "sensor_grid_to_battery": "🔌→🔋 Netzbezug in Batterie (W)",
+          "sensor_house_to_grid": "🏠→🔌 Einspeisung ins Netz (W)",
+          "sensor_smartmeter_import": "📊 Smartmeter Bezug (W)",
+          "sensor_smartmeter_export": "📊 Smartmeter Einspeisung (W)"
         },
         "data_description": {
-          "sensor_solar_power": "Aktuelle PV-Leistung in Watt (z.B. 3500 W). Typischer Bereich: 0-15000 W.",
-          "sensor_solar_to_house": "Leistung die direkt von PV ins Haus fließt in Watt. Typischer Bereich: 0-10000 W.",
-          "sensor_solar_to_battery": "Leistung die von PV in die Batterie lädt in Watt. Typischer Bereich: 0-5000 W.",
-          "sensor_grid_to_house": "Netzbezug für direkten Hausverbrauch in Watt. Typischer Bereich: 0-20000 W.",
-          "sensor_grid_to_battery": "Netzbezug für Akkuladung in Watt. Typischer Bereich: 0-5000 W.",
-          "sensor_house_to_grid": "Einspeisung ins Netz in Watt. Typischer Bereich: 0-15000 W.",
-          "sensor_smartmeter_import": "Aktuelle Bezugsleistung vom Smartmeter in Watt.",
-          "sensor_smartmeter_export": "Aktuelle Einspeiseleistung vom Smartmeter in Watt."
+          "sensor_solar_power": "GESAMT-Leistung aller PV-Module in Watt. Beispiel: 'sensor.inverter_pv_power' = 4500 W.",
+          "sensor_solar_to_house": "Solarleistung die DIREKT ins Haus fließt. Falls nicht vorhanden: wird berechnet.",
+          "sensor_solar_to_battery": "Solarleistung die in Batterie lädt. NUR positive Werte! 0 wenn entladen wird.",
+          "sensor_grid_to_house": "Netzbezug für Hausverbrauch (OHNE Akkuladung). Alternativ: Smartmeter Bezug.",
+          "sensor_grid_to_battery": "Netzbezug für Akkuladung (bei günstigen Preisen). Meist leer lassen.",
+          "sensor_house_to_grid": "Einspeisung ins Netz in Watt. NICHT kWh-Zähler!",
+          "sensor_smartmeter_import": "Bezugsleistung vom Smartmeter. Für stündliche Preisberechnung.",
+          "sensor_smartmeter_export": "Einspeiseleistung vom Smartmeter."
         }
       },
       "battery": {
-        "title": "Batterie & Verbrauch",
-        "description": "🔋 SOC = Prozent (0-100%), Leistung = Watt (W)",
+        "title": "Batterie & Hausverbrauch (Live)",
+        "description": "🔋 SOC muss 0-100 sein (nicht 0-1)!\n\n⚠️ Bei Batterie-Leistung: Prüfe Vorzeichen-Konvention deines Systems!",
         "data": {
-          "sensor_battery_soc": "Akkustand SOC (%)",
-          "sensor_battery_power": "Akku Lade-/Entladeleistung (W)",
-          "sensor_battery_to_house": "Akku → Haus (W)",
-          "sensor_battery_to_grid": "Akku → Netz (W)",
-          "sensor_home_consumption": "Hausverbrauch gesamt (W)"
+          "sensor_battery_soc": "🔋 Ladestand/SOC (%)",
+          "sensor_battery_power": "🔋 Batterie-Leistung (+/- W)",
+          "sensor_battery_to_house": "🔋→🏠 Entladung ins Haus (W)",
+          "sensor_battery_to_grid": "🔋→🔌 Entladung ins Netz (W)",
+          "sensor_home_consumption": "🏠 Hausverbrauch gesamt (W)"
         },
         "data_description": {
-          "sensor_battery_soc": "Ladestand des Akkus in Prozent. Bereich: 0-100 (NICHT 0-1!).",
-          "sensor_battery_power": "Aktuelle Lade-/Entladeleistung in Watt. Bereich: -10000 bis +10000 W.",
-          "sensor_battery_to_house": "Entladeleistung ins Haus in Watt. NUR positive Werte!",
-          "sensor_battery_to_grid": "Einspeisung aus Akku ins Netz in Watt. NUR positive Werte!",
-          "sensor_home_consumption": "Gesamter Hausverbrauch in Watt. Typischer Bereich: 200-20000 W."
+          "sensor_battery_soc": "Ladestand in PROZENT (0-100). Falls Sensor 0.0-1.0 zeigt: Template mit *100 erstellen.",
+          "sensor_battery_power": "Lade-/Entladeleistung. ⚠️ Vorzeichen nicht standardisiert! Prüfe in Entwicklertools.",
+          "sensor_battery_to_house": "Entladeleistung ins Haus. IMMER positive Werte. Alternative zu 'Batterie-Leistung'.",
+          "sensor_battery_to_grid": "Batterie-Einspeisung (Arbitrage). Meist leer lassen.",
+          "sensor_home_consumption": "GESAMTER Hausverbrauch in Watt. Wichtig für Autarkie!"
         }
       },
       "statistics": {
-        "title": "Statistik-Sensoren & Wetter",
-        "description": "📊 WICHTIG: Hier werden Energiemengen in kWh erwartet!",
+        "title": "Tagesstatistik-Sensoren (kWh)",
+        "description": "📊 Hier kWh-Sensoren (Energiemenge), NICHT Watt!\n\n⚠️ Diese Sensoren müssen sich um Mitternacht auf 0 zurücksetzen!",
         "data": {
-          "sensor_solar_yield_daily": "Tagesertrag Solar (kWh)",
-          "sensor_grid_import_daily": "Netzbezug heute (kWh)",
-          "sensor_grid_import_yearly": "Netzbezug Jahr (kWh)",
-          "sensor_battery_charge_solar_daily": "Akkuladung Sonne heute (kWh)",
-          "sensor_battery_charge_grid_daily": "Akkuladung Netz heute (kWh)",
-          "sensor_price_total": "Aktueller Preis Brutto (ct/kWh)",
-          "weather_entity": "Wetter-Entity (HA)"
+          "sensor_solar_yield_daily": "☀️ Solarertrag heute (kWh)",
+          "sensor_grid_import_daily": "🔌 Netzbezug heute (kWh)",
+          "sensor_grid_import_yearly": "📅 Netzbezug Jahr (kWh)",
+          "sensor_battery_charge_solar_daily": "☀️→🔋 Solar-Ladung heute (kWh)",
+          "sensor_battery_charge_grid_daily": "🔌→🔋 Netz-Ladung heute (kWh)",
+          "sensor_price_total": "💰 Strompreis aktuell (ct/kWh)",
+          "weather_entity": "🌤️ Wetter-Entity"
         },
         "data_description": {
-          "sensor_solar_yield_daily": "Gesamte PV-Produktion heute in kWh. Bereich: 0-100 kWh.",
-          "sensor_grid_import_daily": "Gesamter Netzbezug heute in kWh. Bereich: 0-100 kWh.",
-          "sensor_grid_import_yearly": "Gesamter Netzbezug dieses Jahr in kWh. Bereich: 0-50000 kWh.",
-          "sensor_battery_charge_solar_daily": "Energie die heute vom PV in den Akku geladen wurde in kWh.",
-          "sensor_battery_charge_grid_daily": "Energie die heute vom Netz in den Akku geladen wurde in kWh.",
-          "sensor_price_total": "Aktueller Strompreis Brutto in ct/kWh. Bereich: 15-80 ct/kWh.",
-          "weather_entity": "Home Assistant Wetter-Integration. Wetterdaten werden aus Solar Forecast ML geladen."
+          "sensor_solar_yield_daily": "PV-Produktion HEUTE in kWh. Startet täglich bei 0. NICHT Gesamtzähler!",
+          "sensor_grid_import_daily": "Netzbezug HEUTE in kWh. Startet täglich bei 0.",
+          "sensor_grid_import_yearly": "Netzbezug im Kalenderjahr. Falls nicht vorhanden: wird aufsummiert.",
+          "sensor_battery_charge_solar_daily": "Solar-Ladung HEUTE in kWh. Startet täglich bei 0.",
+          "sensor_battery_charge_grid_daily": "Netz-Ladung HEUTE in kWh. Meist leer lassen.",
+          "sensor_price_total": "Strompreis in ct/kWh inkl. Steuern. Bei dynamisch: ändert sich stündlich.",
+          "weather_entity": "HA Wetter-Integration. Beispiel: 'weather.home'."
         }
       },
       "panels": {
@@ -270,27 +270,27 @@
         }
       },
       "billing": {
-        "title": "Stromrechnung & Abrechnungszeitraum",
-        "description": "Konfiguriere deinen Abrechnungszeitraum für die Jahresbilanz.\n\nDie kWh-Sensoren müssen 'total_increasing' sein - die Differenz zum Startwert wird berechnet.",
+        "title": "Jahresabrechnung & Zählerstände",
+        "description": "⚠️ Hier ABSOLUTE Zählerstände (steigen immer), NICHT Tageswerte!\n\nDie Integration berechnet die Differenz seit Abrechnungsbeginn.",
         "data": {
-          "billing_start_day": "Abrechnungstag",
-          "billing_start_month": "Abrechnungsmonat",
-          "billing_price_mode": "Preismodus",
-          "billing_fixed_price": "Fixpreis Bezug (ct/kWh)",
-          "feed_in_tariff": "Einspeisevergütung (ct/kWh)",
-          "sensor_smartmeter_import_kwh": "Netzbezug Zähler (kWh total)",
-          "sensor_smartmeter_export_kwh": "Einspeisung Zähler (kWh total)",
-          "sensor_solar_yield_total_kwh": "Solarertrag Zähler (kWh total)"
+          "billing_start_day": "📅 Abrechnungs-Starttag (1-28)",
+          "billing_start_month": "📅 Abrechnungs-Startmonat",
+          "billing_price_mode": "💰 Preisberechnung",
+          "billing_fixed_price": "💰 Fixpreis Bezug (ct/kWh)",
+          "feed_in_tariff": "💸 Einspeisevergütung (ct/kWh)",
+          "sensor_smartmeter_import_kwh": "📊 Zählerstand Bezug (kWh)",
+          "sensor_smartmeter_export_kwh": "📊 Zählerstand Einspeisung (kWh)",
+          "sensor_solar_yield_total_kwh": "📊 Zählerstand Solarertrag (kWh)"
         },
         "data_description": {
-          "billing_start_day": "Tag im Monat an dem dein Abrechnungszeitraum beginnt (1-28).",
-          "billing_start_month": "Monat in dem dein Abrechnungszeitraum beginnt.",
-          "billing_price_mode": "Dynamisch = tatsächliche Stundenpreise. Fixpreis = dein Tarifpreis.",
-          "billing_fixed_price": "Dein Stromtarif-Preis für BEZUG in Cent pro kWh.",
-          "feed_in_tariff": "Deine Einspeisevergütung in Cent pro kWh. Was du für eingespeisten Strom erhältst (z.B. 8.1 ct nach EEG).",
-          "sensor_smartmeter_import_kwh": "Zählerstand Netzbezug in kWh (total_increasing). Startwert wird aus Recorder geholt.",
-          "sensor_smartmeter_export_kwh": "Zählerstand Einspeisung in kWh (total_increasing). Startwert wird aus Recorder geholt.",
-          "sensor_solar_yield_total_kwh": "Gesamter Solarertrag in kWh (total_increasing). Startwert wird aus Recorder geholt."
+          "billing_start_day": "TAG deines Abrechnungsstarts. Schau auf deine Stromrechnung!",
+          "billing_start_month": "MONAT deines Abrechnungsstarts.",
+          "billing_price_mode": "DYNAMISCH = stündliche Börsenpreise. FIXPREIS = fester Tarif.",
+          "billing_fixed_price": "Dein Bezugspreis in ct/kWh. Nur bei Fixpreis-Modus.",
+          "feed_in_tariff": "EEG-Vergütung in ct/kWh. Beispiel: 8.1 für 8,1 ct.",
+          "sensor_smartmeter_import_kwh": "ZÄHLERSTAND Bezug (total_increasing). Zeigt z.B. 12345 kWh, wird NIE 0!",
+          "sensor_smartmeter_export_kwh": "ZÄHLERSTAND Einspeisung (total_increasing). Wird NIE 0!",
+          "sensor_solar_yield_total_kwh": "ZÄHLERSTAND Solarertrag (total_increasing). Gesamtertrag seit Installation."
         }
       },
       "panel_group_names": {

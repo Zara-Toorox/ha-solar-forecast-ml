@@ -67,6 +67,42 @@ GRID_SEARCH_RESULTS_SCHEMA = {
     "timestamp": None,
 }
 
+# Note: learned_weights.json structure is dynamic based on LSTM architecture.
+# This schema represents the metadata fields - actual weight arrays are variable.
+LEARNED_WEIGHTS_SCHEMA = {
+    "version": "2.0",
+    # LSTM gate weights (required) - arrays, actual sizes depend on architecture
+    "Wf": [],  # Forget gate weights
+    "Wi": [],  # Input gate weights
+    "Wc": [],  # Cell gate weights
+    "Wo": [],  # Output gate weights
+    "bf": [],  # Forget gate bias
+    "bi": [],  # Input gate bias
+    "bc": [],  # Cell gate bias
+    "bo": [],  # Output gate bias
+    # Output layer weights (required)
+    "Wy": [],  # Output weights
+    "by": [],  # Output bias
+    # Architecture info (required)
+    "input_size": 17,
+    "hidden_size": 32,
+    "sequence_length": 24,
+    "num_outputs": 1,
+    # Training info (optional)
+    "training_samples": 0,
+    "accuracy": None,
+    "rmse": None,
+    "last_trained": None,
+    # Attention mechanism (optional - only present when use_attention=True)
+    "has_attention": False,
+    # When has_attention=True, these fields are present:
+    # "W_query": [],   # Query weights (hidden_size x hidden_size)
+    # "W_key": [],     # Key weights (hidden_size x hidden_size)
+    # "W_value": [],   # Value weights (hidden_size x hidden_size)
+    # "W_attn_out": [],  # Attention output projection (hidden_size x hidden_size*2)
+    # "b_attn_out": [],  # Attention output bias (hidden_size x 1)
+}
+
 SEASONAL_SCHEMA = {
     "version": "1.0",
     "factors": {
@@ -640,6 +676,7 @@ SCHEMAS: Dict[str, Dict[str, Any]] = {
     # AI
     "dni_tracker": DNI_TRACKER_SCHEMA,
     "grid_search_results": GRID_SEARCH_RESULTS_SCHEMA,
+    "learned_weights": LEARNED_WEIGHTS_SCHEMA,
     "seasonal": SEASONAL_SCHEMA,
     # Data
     "bright_sky_cache": BRIGHT_SKY_CACHE_SCHEMA,

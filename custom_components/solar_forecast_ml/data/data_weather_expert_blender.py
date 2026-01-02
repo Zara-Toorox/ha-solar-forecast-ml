@@ -120,15 +120,26 @@ DEFAULT_EXPERT_WEIGHTS: Dict[str, Dict[str, float]] = {
 
 # V12.4: Transmission coefficients for cloud-to-transmission conversion
 # Used when source doesn't provide layer data (only total cloud %)
-# These are conservative estimates based on typical cloud optical depths
+#
+# FIX #4: Adjusted cloud transmission coefficients for more realistic reduction.
+# Previous values were too optimistic (e.g., 50% FAIR clouds = only 15% reduction).
+#
+# New values based on empirical solar radiation studies:
+# - tau represents the fraction of radiation that passes through at 100% cloud cover
+# - Formula: transmission = 100 * (1 - cloud_fraction * (1 - tau))
+#
+# Example with 50% clouds:
+#   FAIR (old tau=0.70): transmission = 100*(1-0.5*0.30) = 85% → only 15% reduction
+#   FAIR (new tau=0.50): transmission = 100*(1-0.5*0.50) = 75% → 25% reduction (realistic)
+#
 TRANSMISSION_TAU_BY_CLOUD_TYPE: Dict[str, float] = {
     CloudType.CLEAR.value: 1.00,      # No blocking
-    CloudType.CIRRUS.value: 0.90,     # High thin clouds - minimal blocking
-    CloudType.FAIR.value: 0.70,       # Some blocking
-    CloudType.MIXED.value: 0.55,      # Moderate blocking
-    CloudType.STRATUS.value: 0.35,    # Low thick clouds - significant blocking
-    CloudType.OVERCAST.value: 0.20,   # Heavy blocking
-    CloudType.SNOW.value: 0.05,       # Snow on panels - near total blocking
+    CloudType.CIRRUS.value: 0.80,     # High thin clouds - slight blocking (was 0.90)
+    CloudType.FAIR.value: 0.50,       # Partial clouds - moderate blocking (was 0.70)
+    CloudType.MIXED.value: 0.35,      # Mixed clouds - significant blocking (was 0.55)
+    CloudType.STRATUS.value: 0.20,    # Low thick clouds - heavy blocking (was 0.35)
+    CloudType.OVERCAST.value: 0.10,   # Dense overcast - very heavy blocking (was 0.20)
+    CloudType.SNOW.value: 0.02,       # Snow on panels - near total blocking (was 0.05)
 }
 
 
@@ -141,6 +152,8 @@ def cloud_to_transmission(
     V12.4: Used for sources that don't provide layer data.
     Uses cloud-type-specific transmission coefficients.
 
+    FIX #4: Adjusted tau values for more realistic cloud impact.
+
     Args:
         cloud_percent: Cloud cover (0-100%)
         cloud_type: Type of clouds for coefficient lookup
@@ -148,11 +161,12 @@ def cloud_to_transmission(
     Returns:
         Solar transmission as percentage (0-100%)
 
-    Example:
-        50% Cirrus → 95% transmission (high clouds don't block much)
-        50% Stratus → 67.5% transmission (low clouds block more)
+    Example (with FIX #4 values):
+        50% Cirrus → 90% transmission (high clouds block 10%)
+        50% FAIR   → 75% transmission (partial clouds block 25%)
+        50% Stratus → 60% transmission (low clouds block 40%)
     """
-    tau = TRANSMISSION_TAU_BY_CLOUD_TYPE.get(cloud_type.value, 0.55)
+    tau = TRANSMISSION_TAU_BY_CLOUD_TYPE.get(cloud_type.value, 0.35)  # Default to MIXED
     # Formula: transmission = 100 * (1 - cloud_fraction * (1 - tau))
     transmission = 100.0 * (1.0 - (cloud_percent / 100.0) * (1.0 - tau))
     return round(max(0.0, min(100.0, transmission)), 1)
@@ -552,7 +566,7 @@ class BrightSkyExpert(WeatherExpert):
         return age < self.MEMORY_CACHE_HOURS * 3600
 
     async def _load_file_cache(self) -> bool:
-        """Load cache from file."""
+        """Load cache from file and restore memory cache if recent."""
         if not self.cache_file:
             self._file_cache_loaded = True
             return False
@@ -569,6 +583,36 @@ class BrightSkyExpert(WeatherExpert):
             data = await asyncio.to_thread(_read)
             self._file_cache = data.get("forecast", {})
             self._file_cache_loaded = True
+
+            # Restore memory cache timestamp from file metadata
+            # This allows skipping API calls if file cache is still fresh
+            metadata = data.get("metadata", {})
+            last_updated_str = metadata.get("last_updated")
+            if last_updated_str:
+                try:
+                    last_updated = datetime.fromisoformat(last_updated_str)
+                    cache_age_hours = (datetime.now() - last_updated).total_seconds() / 3600
+
+                    # If file cache is less than MEMORY_CACHE_HOURS old,
+                    # populate memory cache from file cache for today/tomorrow
+                    if cache_age_hours < self.MEMORY_CACHE_HOURS:
+                        today = datetime.now().strftime("%Y-%m-%d")
+                        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+                        for date_str in [today, tomorrow]:
+                            if date_str in self._file_cache:
+                                if date_str not in self._memory_cache:
+                                    self._memory_cache[date_str] = {}
+                                for hour_str, cloud in self._file_cache[date_str].items():
+                                    self._memory_cache[date_str][int(hour_str)] = float(cloud)
+
+                        self._memory_cache_time = last_updated
+                        _LOGGER.debug(
+                            f"Bright Sky: Restored memory cache from file "
+                            f"(age: {cache_age_hours:.1f}h, valid for {self.MEMORY_CACHE_HOURS - cache_age_hours:.1f}h more)"
+                        )
+                except (ValueError, TypeError) as e:
+                    _LOGGER.debug(f"Bright Sky: Could not parse last_updated: {e}")
 
             _LOGGER.debug(f"Bright Sky: Loaded {len(self._file_cache)} days from file cache")
             return True
@@ -630,7 +674,20 @@ class BrightSkyExpert(WeatherExpert):
             _LOGGER.warning(f"Bright Sky: Error saving file cache: {e}")
             return False
 
-    async def _fetch_forecast(self) -> bool:
+    async def _fetch_forecast(self, force: bool = False) -> bool:
+        """Fetch forecast from Bright Sky API.
+
+        Args:
+            force: If True, bypass cache check and force API call.
+
+        Returns:
+            True if fetch was successful or cache is still valid.
+        """
+        # Skip API call if memory cache is still valid (unless forced)
+        if not force and self._is_memory_cache_valid():
+            _LOGGER.debug("Bright Sky: Using valid memory cache, skipping API call")
+            return True
+
         try:
             today = datetime.now().strftime("%Y-%m-%d")
             end_date = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d")
@@ -789,7 +846,7 @@ class PirateWeatherExpert(WeatherExpert):
         return age < self.MEMORY_CACHE_HOURS * 3600
 
     async def _load_file_cache(self) -> bool:
-        """Load cache from file."""
+        """Load cache from file and restore memory cache if recent."""
         if not self.cache_file:
             self._file_cache_loaded = True
             return False
@@ -806,6 +863,36 @@ class PirateWeatherExpert(WeatherExpert):
             data = await asyncio.to_thread(_read)
             self._file_cache = data.get("forecast", {})
             self._file_cache_loaded = True
+
+            # Restore memory cache timestamp from file metadata
+            # This allows skipping API calls if file cache is still fresh
+            metadata = data.get("metadata", {})
+            last_updated_str = metadata.get("last_updated")
+            if last_updated_str:
+                try:
+                    last_updated = datetime.fromisoformat(last_updated_str)
+                    cache_age_hours = (datetime.now() - last_updated).total_seconds() / 3600
+
+                    # If file cache is less than MEMORY_CACHE_HOURS old,
+                    # populate memory cache from file cache for today/tomorrow
+                    if cache_age_hours < self.MEMORY_CACHE_HOURS:
+                        today = datetime.now().strftime("%Y-%m-%d")
+                        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+                        for date_str in [today, tomorrow]:
+                            if date_str in self._file_cache:
+                                if date_str not in self._memory_cache:
+                                    self._memory_cache[date_str] = {}
+                                for hour_str, cloud in self._file_cache[date_str].items():
+                                    self._memory_cache[date_str][int(hour_str)] = float(cloud)
+
+                        self._memory_cache_time = last_updated
+                        _LOGGER.debug(
+                            f"Pirate Weather: Restored memory cache from file "
+                            f"(age: {cache_age_hours:.1f}h, valid for {self.MEMORY_CACHE_HOURS - cache_age_hours:.1f}h more)"
+                        )
+                except (ValueError, TypeError) as e:
+                    _LOGGER.debug(f"Pirate Weather: Could not parse last_updated: {e}")
 
             _LOGGER.debug(f"Pirate Weather: Loaded {len(self._file_cache)} days from file cache")
             return True
@@ -867,9 +954,22 @@ class PirateWeatherExpert(WeatherExpert):
             _LOGGER.warning(f"Pirate Weather: Error saving file cache: {e}")
             return False
 
-    async def _fetch_forecast(self) -> bool:
+    async def _fetch_forecast(self, force: bool = False) -> bool:
+        """Fetch forecast from Pirate Weather API.
+
+        Args:
+            force: If True, bypass cache check and force API call.
+
+        Returns:
+            True if fetch was successful or cache is still valid.
+        """
         if not self._enabled or not self.api_key:
             return False
+
+        # Skip API call if memory cache is still valid (unless forced)
+        if not force and self._is_memory_cache_valid():
+            _LOGGER.debug("Pirate Weather: Using valid memory cache, skipping API call")
+            return True
 
         try:
             url = (
@@ -1098,18 +1198,34 @@ class WeatherExpertBlender(DataManagerIO):
         return True
 
     async def async_init(self) -> bool:
-        """Initialize the blender and load weights."""
+        """Initialize the blender and load weights.
+
+        Loads file caches first, then only fetches from API if cache is stale.
+        This prevents unnecessary API calls on every HA restart.
+        """
         await self._load_weights()
 
-        # Pre-fetch data from API-based experts
+        # Load file caches first to populate memory cache timestamps
         try:
-            await self._bright_sky_expert._fetch_forecast()
+            await self._bright_sky_expert._load_file_cache()
+        except Exception as e:
+            _LOGGER.debug(f"Bright Sky file cache load failed: {e}")
+
+        if self._pirate_weather_expert._enabled:
+            try:
+                await self._pirate_weather_expert._load_file_cache()
+            except Exception as e:
+                _LOGGER.debug(f"Pirate Weather file cache load failed: {e}")
+
+        # Now fetch from API only if memory cache is stale (3h threshold)
+        try:
+            await self._bright_sky_expert._fetch_forecast()  # Will skip if cache valid
         except Exception as e:
             _LOGGER.debug(f"Bright Sky initial fetch failed: {e}")
 
         if self._pirate_weather_expert._enabled:
             try:
-                await self._pirate_weather_expert._fetch_forecast()
+                await self._pirate_weather_expert._fetch_forecast()  # Will skip if cache valid
             except Exception as e:
                 _LOGGER.debug(f"Pirate Weather initial fetch failed: {e}")
 

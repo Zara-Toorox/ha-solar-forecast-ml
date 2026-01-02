@@ -40,7 +40,8 @@ class TinyLSTM:
         sequence_length: int = 24,
         num_outputs: int = 1,
         learning_rate: float = 0.005,
-        dropout: float = 0.2
+        dropout: float = 0.2,
+        use_attention: bool = False
     ):
         """Initialize Multi-Output LSTM with given parameters @zara
 
@@ -51,6 +52,7 @@ class TinyLSTM:
             num_outputs: Number of output predictions (1 per panel group)
             learning_rate: Adam optimizer learning rate
             dropout: Dropout rate for regularization
+            use_attention: Enable scaled dot-product attention mechanism
         """
         np = _ensure_numpy()
 
@@ -60,6 +62,7 @@ class TinyLSTM:
         self.num_outputs = num_outputs
         self.learning_rate = learning_rate
         self.dropout = dropout
+        self.use_attention = use_attention
 
         limit = np.sqrt(6 / (input_size + hidden_size))
         concat_size = input_size + hidden_size
@@ -80,6 +83,21 @@ class TinyLSTM:
         limit_out = np.sqrt(6 / (hidden_size + num_outputs))
         self.Wy = np.random.uniform(-limit_out, limit_out, (num_outputs, hidden_size))
         self.by = np.zeros((num_outputs, 1))
+
+        # Attention mechanism weights (only initialized if use_attention=True)
+        if self.use_attention:
+            # Scaled Dot-Product Attention weights
+            limit_attn = np.sqrt(6 / (hidden_size + hidden_size))
+            # W_query: (hidden_size, hidden_size) - transforms last hidden state to query
+            self.W_query = np.random.uniform(-limit_attn, limit_attn, (hidden_size, hidden_size))
+            # W_key: (hidden_size, hidden_size) - transforms all hidden states to keys
+            self.W_key = np.random.uniform(-limit_attn, limit_attn, (hidden_size, hidden_size))
+            # W_value: (hidden_size, hidden_size) - transforms all hidden states to values
+            self.W_value = np.random.uniform(-limit_attn, limit_attn, (hidden_size, hidden_size))
+            # W_attn_out: (hidden_size, hidden_size*2) - projects [h; context] back to hidden_size
+            self.W_attn_out = np.random.uniform(-limit_attn, limit_attn, (hidden_size, hidden_size * 2))
+            # b_attn_out: (hidden_size, 1) - bias for attention output
+            self.b_attn_out = np.zeros((hidden_size, 1))
 
         # Adam optimizer parameters
         self.beta1 = 0.9
@@ -102,9 +120,23 @@ class TinyLSTM:
             'Wy': np.zeros_like(self.Wy), 'by': np.zeros_like(self.by)
         }
 
+        # Add attention weight optimizer states if attention is enabled
+        if self.use_attention:
+            self.m['W_query'] = np.zeros_like(self.W_query)
+            self.m['W_key'] = np.zeros_like(self.W_key)
+            self.m['W_value'] = np.zeros_like(self.W_value)
+            self.m['W_attn_out'] = np.zeros_like(self.W_attn_out)
+            self.m['b_attn_out'] = np.zeros_like(self.b_attn_out)
+
+            self.v['W_query'] = np.zeros_like(self.W_query)
+            self.v['W_key'] = np.zeros_like(self.W_key)
+            self.v['W_value'] = np.zeros_like(self.W_value)
+            self.v['W_attn_out'] = np.zeros_like(self.W_attn_out)
+            self.v['b_attn_out'] = np.zeros_like(self.b_attn_out)
+
         _LOGGER.info(
             f"TinyLSTM initialized: input={input_size}, hidden={hidden_size}, "
-            f"seq={sequence_length}, outputs={num_outputs}"
+            f"seq={sequence_length}, outputs={num_outputs}, attention={use_attention}"
         )
 
     def _sigmoid(self, x: Any) -> Any:
@@ -118,6 +150,80 @@ class TinyLSTM:
         np = _ensure_numpy()
         x_clipped = np.clip(x, -500, 500)
         return np.tanh(x_clipped)
+
+    def _compute_attention(
+        self,
+        query: Any,
+        hidden_states: List[Any]
+    ) -> Tuple[Any, Any, Dict[str, Any]]:
+        """Scaled Dot-Product Attention @zara
+
+        Args:
+            query: Last hidden state (hidden_size, 1)
+            hidden_states: List of seq_len hidden states, each (hidden_size, 1)
+
+        Returns:
+            context: Weighted context vector (hidden_size, 1)
+            attn_weights: Attention weights (seq_len,) for interpretability
+            cache: For backpropagation
+        """
+        np = _ensure_numpy()
+
+        seq_len = len(hidden_states)
+
+        # Stack hidden states: (hidden_size, seq_len)
+        H = np.hstack(hidden_states)  # (hidden_size, seq_len)
+
+        # Compute Query: Q = W_query @ query  -> (hidden_size, 1)
+        Q = np.dot(self.W_query, query)  # (hidden_size, 1)
+
+        # Compute Keys: K = W_key @ H  -> (hidden_size, seq_len)
+        K = np.dot(self.W_key, H)  # (hidden_size, seq_len)
+
+        # Compute Values: V = W_value @ H  -> (hidden_size, seq_len)
+        V = np.dot(self.W_value, H)  # (hidden_size, seq_len)
+
+        # Scaled dot-product attention scores: scores = Q^T @ K / sqrt(d_k)
+        # Q^T: (1, hidden_size), K: (hidden_size, seq_len) -> scores: (1, seq_len)
+        d_k = self.hidden_size
+        scores = np.dot(Q.T, K) / np.sqrt(d_k)  # (1, seq_len)
+
+        # Numerical stability: subtract max before exp
+        scores_max = np.max(scores, axis=1, keepdims=True)
+        scores_shifted = scores - scores_max  # (1, seq_len)
+
+        # Softmax to get attention weights
+        exp_scores = np.exp(np.clip(scores_shifted, -500, 500))  # (1, seq_len)
+        attn_weights = exp_scores / (np.sum(exp_scores, axis=1, keepdims=True) + 1e-10)  # (1, seq_len)
+
+        # Compute context: context = V @ attn_weights^T -> (hidden_size, 1)
+        context = np.dot(V, attn_weights.T)  # (hidden_size, 1)
+
+        # Combine context with query (last hidden state) and project
+        # concat: [query; context] -> (2*hidden_size, 1)
+        concat_hc = np.vstack([query, context])  # (2*hidden_size, 1)
+
+        # Project back to hidden_size: h_attn = W_attn_out @ concat + b_attn_out
+        h_attn = np.dot(self.W_attn_out, concat_hc) + self.b_attn_out  # (hidden_size, 1)
+
+        # Cache for backward pass
+        cache = {
+            'query': query,
+            'H': H,
+            'Q': Q,
+            'K': K,
+            'V': V,
+            'scores': scores,
+            'scores_shifted': scores_shifted,
+            'attn_weights': attn_weights,
+            'context': context,
+            'concat_hc': concat_hc,
+            'h_attn': h_attn,
+            'seq_len': seq_len
+        }
+
+        # Return attention weights as 1D for interpretability
+        return h_attn, attn_weights.flatten(), cache
 
     def _lstm_cell_forward(
         self,
@@ -158,6 +264,7 @@ class TinyLSTM:
         h = np.zeros((self.hidden_size, 1))
         c = np.zeros((self.hidden_size, 1))
         caches = []
+        hidden_states = []  # Store all hidden states for attention
 
         for t in range(X.shape[0]):
             xt = X[t:t+1].T
@@ -172,10 +279,31 @@ class TinyLSTM:
             if training:
                 caches.append(cache)
 
-        y_pred = np.dot(self.Wy, h) + self.by
+            # Store hidden state (copy to avoid reference issues)
+            hidden_states.append(h.copy())
+
+        # Apply attention if enabled
+        attn_cache = None
+        attn_weights = None
+        if self.use_attention and len(hidden_states) > 0:
+            # Use final hidden state as query, all states as keys/values
+            h_attn, attn_weights, attn_cache = self._compute_attention(h, hidden_states)
+            # Use attention-enhanced hidden state for output
+            h_for_output = h_attn
+        else:
+            h_for_output = h
+
+        y_pred = np.dot(self.Wy, h_for_output) + self.by
 
         if training:
-            return y_pred, {'caches': caches, 'final_h': h}
+            return y_pred, {
+                'caches': caches,
+                'final_h': h,
+                'hidden_states': hidden_states,
+                'attn_cache': attn_cache,
+                'attn_weights': attn_weights,
+                'h_for_output': h_for_output
+            }
         return y_pred, None
 
     def _lstm_cell_backward(
@@ -221,15 +349,100 @@ class TinyLSTM:
 
         return dh_prev, dc_prev, grads
 
+    def _attention_backward(
+        self,
+        dh_attn: Any,
+        attn_cache: Dict[str, Any]
+    ) -> Tuple[Any, Dict[str, Any]]:
+        """Backward pass through attention mechanism @zara
+
+        Args:
+            dh_attn: Gradient w.r.t. attention output (hidden_size, 1)
+            attn_cache: Cache from forward attention pass
+
+        Returns:
+            dh_final: Gradient w.r.t. final hidden state (for LSTM backprop)
+            grads: Dictionary of attention weight gradients
+        """
+        np = _ensure_numpy()
+
+        # Retrieve cached values
+        query = attn_cache['query']  # (hidden_size, 1)
+        H = attn_cache['H']  # (hidden_size, seq_len)
+        Q = attn_cache['Q']  # (hidden_size, 1)
+        K = attn_cache['K']  # (hidden_size, seq_len)
+        V = attn_cache['V']  # (hidden_size, seq_len)
+        attn_weights = attn_cache['attn_weights']  # (1, seq_len)
+        context = attn_cache['context']  # (hidden_size, 1)
+        concat_hc = attn_cache['concat_hc']  # (2*hidden_size, 1)
+        seq_len = attn_cache['seq_len']
+
+        grads = {}
+
+        # 1. Backprop through output projection: h_attn = W_attn_out @ concat_hc + b_attn_out
+        # dh_attn: (hidden_size, 1)
+        grads['W_attn_out'] = np.dot(dh_attn, concat_hc.T)  # (hidden_size, 2*hidden_size)
+        grads['b_attn_out'] = dh_attn.copy()  # (hidden_size, 1)
+
+        d_concat_hc = np.dot(self.W_attn_out.T, dh_attn)  # (2*hidden_size, 1)
+
+        # Split d_concat_hc into d_query and d_context
+        d_query_from_concat = d_concat_hc[:self.hidden_size, :]  # (hidden_size, 1)
+        d_context = d_concat_hc[self.hidden_size:, :]  # (hidden_size, 1)
+
+        # 2. Backprop through context = V @ attn_weights^T
+        # d_context: (hidden_size, 1), attn_weights: (1, seq_len), V: (hidden_size, seq_len)
+        d_V = np.dot(d_context, attn_weights)  # (hidden_size, seq_len)
+        d_attn_weights = np.dot(V.T, d_context).T  # (1, seq_len)
+
+        # 3. Backprop through softmax
+        # attn_weights: (1, seq_len), d_attn_weights: (1, seq_len)
+        # Softmax backward: d_scores = attn_weights * (d_attn_weights - sum(attn_weights * d_attn_weights))
+        sum_term = np.sum(attn_weights * d_attn_weights, axis=1, keepdims=True)
+        d_scores = attn_weights * (d_attn_weights - sum_term)  # (1, seq_len)
+
+        # 4. Backprop through scaling: scores = Q^T @ K / sqrt(d_k)
+        d_k = self.hidden_size
+        d_scores_unscaled = d_scores / np.sqrt(d_k)  # (1, seq_len)
+
+        # scores = Q^T @ K -> d_Q = K @ d_scores^T, d_K = Q @ d_scores
+        d_Q = np.dot(K, d_scores_unscaled.T)  # (hidden_size, 1)
+        d_K = np.dot(Q, d_scores_unscaled)  # (hidden_size, seq_len)
+
+        # 5. Backprop through Q = W_query @ query
+        grads['W_query'] = np.dot(d_Q, query.T)  # (hidden_size, hidden_size)
+        d_query_from_Q = np.dot(self.W_query.T, d_Q)  # (hidden_size, 1)
+
+        # 6. Backprop through K = W_key @ H
+        grads['W_key'] = np.dot(d_K, H.T)  # (hidden_size, hidden_size)
+        d_H_from_K = np.dot(self.W_key.T, d_K)  # (hidden_size, seq_len)
+
+        # 7. Backprop through V = W_value @ H
+        grads['W_value'] = np.dot(d_V, H.T)  # (hidden_size, hidden_size)
+        d_H_from_V = np.dot(self.W_value.T, d_V)  # (hidden_size, seq_len)
+
+        # 8. Total gradient on H (all hidden states)
+        d_H = d_H_from_K + d_H_from_V  # (hidden_size, seq_len)
+
+        # 9. Total gradient on query (final hidden state)
+        # query receives gradients from: concat (d_query_from_concat), Q projection (d_query_from_Q)
+        # and as the last column of H (d_H[:, -1])
+        d_query_total = d_query_from_concat + d_query_from_Q + d_H[:, -1:].reshape(-1, 1)
+
+        return d_query_total, grads
+
     def backward(self, dy: Any, cache: Dict[str, Any]) -> Dict[str, Any]:
         """Backward pass through sequence (BPTT) @zara"""
         np = _ensure_numpy()
 
         caches = cache['caches']
         final_h = cache['final_h']
+        h_for_output = cache.get('h_for_output', final_h)
+        attn_cache = cache.get('attn_cache', None)
 
-        dh = np.dot(self.Wy.T, dy)
-        grads_Wy = np.dot(dy, final_h.T)
+        # Gradient from output layer
+        dh_out = np.dot(self.Wy.T, dy)
+        grads_Wy = np.dot(dy, h_for_output.T)
         grads_by = dy
 
         grads_accum = {
@@ -238,6 +451,18 @@ class TinyLSTM:
             'bf': np.zeros_like(self.bf), 'bi': np.zeros_like(self.bi),
             'bc': np.zeros_like(self.bc), 'bo': np.zeros_like(self.bo)
         }
+
+        # If attention was used, backprop through attention first
+        if self.use_attention and attn_cache is not None:
+            # Backprop through attention mechanism
+            dh_final, attn_grads = self._attention_backward(dh_out, attn_cache)
+            dh = dh_final
+
+            # Add attention gradients to accumulator
+            for key in attn_grads:
+                grads_accum[key] = attn_grads[key]
+        else:
+            dh = dh_out
 
         dc = np.zeros((self.hidden_size, 1))
 
@@ -249,7 +474,7 @@ class TinyLSTM:
 
             dh_prev, dc_prev, grads = self._lstm_cell_backward(dh, dc, cache_t)
 
-            for key in grads_accum:
+            for key in ['Wf', 'Wi', 'Wc', 'Wo', 'bf', 'bi', 'bc', 'bo']:
                 grads_accum[key] += grads[key]
 
             dh = dh_prev
@@ -333,6 +558,15 @@ class TinyLSTM:
         n_val = int(n_samples * validation_split)
         n_train = n_samples - n_val
 
+        # Ensure at least 1 validation sample for meaningful early stopping
+        if n_val < 1 and n_samples >= 2:
+            n_val = 1
+            n_train = n_samples - 1
+        elif n_samples < 2:
+            # Not enough samples for validation - use all for training
+            n_val = 0
+            n_train = n_samples
+
         indices = np.random.permutation(n_samples)
         train_idx = indices[:n_train]
         val_idx = indices[n_train:]
@@ -344,6 +578,7 @@ class TinyLSTM:
 
         best_val_loss = float('inf')
         patience_counter = 0
+        use_early_stopping = len(X_val) > 0  # Only use early stopping if we have validation data
         history = {'train_loss': [], 'val_loss': []}
 
         for epoch in range(1, epochs + 1):
@@ -374,21 +609,26 @@ class TinyLSTM:
                         for key in batch_grads:
                             batch_grads[key] += grads[key]
 
+                if batch_grads is None:
+                    # All samples in batch failed - skip weight update
+                    continue
+
                 for key in batch_grads:
                     batch_grads[key] /= len(batch_indices)
 
                 self._update_weights_adam(batch_grads, epoch)
                 epoch_loss += batch_loss
 
-            train_loss = epoch_loss / n_train
+            train_loss = epoch_loss / n_train if n_train > 0 else 0.0
 
             val_loss = 0.0
-            for i in range(len(X_val)):
-                X = np.array(X_val[i])
-                y_true = _to_target_array(y_val[i])
-                y_pred, _ = self.forward(X, training=False)
-                val_loss += ((y_pred - y_true) ** 2).mean()
-            val_loss /= len(X_val) if len(X_val) > 0 else 1
+            if use_early_stopping:
+                for i in range(len(X_val)):
+                    X = np.array(X_val[i])
+                    y_true = _to_target_array(y_val[i])
+                    y_pred, _ = self.forward(X, training=False)
+                    val_loss += ((y_pred - y_true) ** 2).mean()
+                val_loss /= len(X_val)
 
             history['train_loss'].append(float(train_loss))
             history['val_loss'].append(float(val_loss))
@@ -396,15 +636,16 @@ class TinyLSTM:
             if epoch % 10 == 0:
                 _LOGGER.info(f"Epoch {epoch}: train={train_loss:.4f}, val={val_loss:.4f}")
 
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                patience_counter = 0
-            else:
-                patience_counter += 1
+            if use_early_stopping:
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
 
-            if patience_counter >= early_stopping_patience:
-                _LOGGER.info(f"Early stopping at epoch {epoch}")
-                break
+                if patience_counter >= early_stopping_patience:
+                    _LOGGER.info(f"Early stopping at epoch {epoch}")
+                    break
 
             if checkpoint_callback and epoch % 10 == 0:
                 await checkpoint_callback(epoch, self.get_weights())
@@ -495,7 +736,7 @@ class TinyLSTM:
 
     def get_weights(self) -> Dict[str, Any]:
         """Export weights for persistence @zara"""
-        return {
+        weights = {
             'Wf': self.Wf.tolist(), 'Wi': self.Wi.tolist(),
             'Wc': self.Wc.tolist(), 'Wo': self.Wo.tolist(),
             'bf': self.bf.tolist(), 'bi': self.bi.tolist(),
@@ -505,7 +746,18 @@ class TinyLSTM:
             'hidden_size': self.hidden_size,
             'sequence_length': self.sequence_length,
             'num_outputs': self.num_outputs,
+            'has_attention': self.use_attention,
         }
+
+        # Add attention weights if attention is enabled
+        if self.use_attention:
+            weights['W_query'] = self.W_query.tolist()
+            weights['W_key'] = self.W_key.tolist()
+            weights['W_value'] = self.W_value.tolist()
+            weights['W_attn_out'] = self.W_attn_out.tolist()
+            weights['b_attn_out'] = self.b_attn_out.tolist()
+
+        return weights
 
     def set_weights(self, weights: Dict[str, Any]):
         """Load weights from persistence @zara"""
@@ -527,7 +779,41 @@ class TinyLSTM:
         self.sequence_length = weights.get('sequence_length', self.sequence_length)
         self.num_outputs = weights.get('num_outputs', self.Wy.shape[0])
 
-        _LOGGER.info(f"Weights loaded: {self.num_outputs} outputs")
+        # Handle attention weights - check if saved weights have attention
+        has_saved_attention = weights.get('has_attention', False)
+
+        if has_saved_attention and self.use_attention:
+            # Load attention weights from saved model
+            self.W_query = np.array(weights['W_query'])
+            self.W_key = np.array(weights['W_key'])
+            self.W_value = np.array(weights['W_value'])
+            self.W_attn_out = np.array(weights['W_attn_out'])
+            self.b_attn_out = np.array(weights['b_attn_out'])
+
+            # Reinitialize Adam states for attention weights
+            self.m['W_query'] = np.zeros_like(self.W_query)
+            self.m['W_key'] = np.zeros_like(self.W_key)
+            self.m['W_value'] = np.zeros_like(self.W_value)
+            self.m['W_attn_out'] = np.zeros_like(self.W_attn_out)
+            self.m['b_attn_out'] = np.zeros_like(self.b_attn_out)
+
+            self.v['W_query'] = np.zeros_like(self.W_query)
+            self.v['W_key'] = np.zeros_like(self.W_key)
+            self.v['W_value'] = np.zeros_like(self.W_value)
+            self.v['W_attn_out'] = np.zeros_like(self.W_attn_out)
+            self.v['b_attn_out'] = np.zeros_like(self.b_attn_out)
+
+            _LOGGER.info(f"Weights loaded: {self.num_outputs} outputs, attention=True")
+        elif self.use_attention and not has_saved_attention:
+            # Current model uses attention but loaded weights don't have it
+            # Keep the randomly initialized attention weights
+            _LOGGER.warning(
+                f"Loaded legacy weights without attention. "
+                f"Attention weights remain randomly initialized."
+            )
+            _LOGGER.info(f"Weights loaded: {self.num_outputs} outputs, attention=True (new)")
+        else:
+            _LOGGER.info(f"Weights loaded: {self.num_outputs} outputs")
 
     def get_model_size_kb(self) -> float:
         """Calculate model size in KB @zara"""
@@ -536,4 +822,251 @@ class TinyLSTM:
             self.bf.size + self.bi.size + self.bc.size + self.bo.size +
             self.Wy.size + self.by.size
         )
+
+        # Add attention parameters if attention is enabled
+        if self.use_attention:
+            total_params += (
+                self.W_query.size + self.W_key.size + self.W_value.size +
+                self.W_attn_out.size + self.b_attn_out.size
+            )
+
         return (total_params * 8) / 1024
+
+
+# Test code for attention mechanism
+if __name__ == "__main__":
+    import sys
+
+    np = _ensure_numpy()
+    np.random.seed(42)
+
+    print("=" * 60)
+    print("TinyLSTM Attention Mechanism Tests")
+    print("=" * 60)
+
+    all_passed = True
+
+    # Test 1: LSTM without attention (backward compatibility)
+    print("\n[Test 1] LSTM without attention (backward compatibility)")
+    try:
+        lstm_no_attn = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=False
+        )
+        X_test = np.random.randn(24, 20)
+        y_pred, _ = lstm_no_attn.forward(X_test, training=False)
+        assert y_pred.shape == (1, 1), f"Expected (1, 1), got {y_pred.shape}"
+        assert not np.isnan(y_pred).any(), "Output contains NaN"
+        print(f"  PASSED - Output shape: {y_pred.shape}, value: {y_pred[0, 0]:.4f}")
+    except Exception as e:
+        print(f"  FAILED - {e}")
+        all_passed = False
+
+    # Test 2: LSTM with attention (forward pass)
+    print("\n[Test 2] LSTM with attention (forward pass)")
+    try:
+        lstm_attn = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=True
+        )
+        X_test = np.random.randn(24, 20)
+        y_pred, cache = lstm_attn.forward(X_test, training=True)
+        assert y_pred.shape == (1, 1), f"Expected (1, 1), got {y_pred.shape}"
+        assert not np.isnan(y_pred).any(), "Output contains NaN"
+        assert cache['attn_weights'] is not None, "Attention weights not in cache"
+        assert cache['attn_cache'] is not None, "Attention cache is None"
+        print(f"  PASSED - Output shape: {y_pred.shape}, value: {y_pred[0, 0]:.4f}")
+    except Exception as e:
+        print(f"  FAILED - {e}")
+        all_passed = False
+
+    # Test 3: Attention weights sum to 1
+    print("\n[Test 3] Attention weights sum to 1")
+    try:
+        lstm_attn = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=True
+        )
+        X_test = np.random.randn(24, 20)
+        y_pred, cache = lstm_attn.forward(X_test, training=True)
+        attn_weights = cache['attn_weights']
+        attn_sum = np.sum(attn_weights)
+        assert attn_weights.shape == (24,), f"Expected (24,), got {attn_weights.shape}"
+        assert np.abs(attn_sum - 1.0) < 1e-6, f"Attention sum is {attn_sum}, expected 1.0"
+        assert np.all(attn_weights >= 0), "Attention weights contain negative values"
+        print(f"  PASSED - Shape: {attn_weights.shape}, Sum: {attn_sum:.6f}")
+        print(f"  Attention distribution (first 5): {attn_weights[:5]}")
+    except Exception as e:
+        print(f"  FAILED - {e}")
+        all_passed = False
+
+    # Test 4: Backward pass produces no NaN values
+    print("\n[Test 4] Backward pass produces no NaN values")
+    try:
+        lstm_attn = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=True
+        )
+        X_test = np.random.randn(24, 20)
+        y_target = np.array([[0.5]])
+
+        y_pred, cache = lstm_attn.forward(X_test, training=True)
+        dy = 2 * (y_pred - y_target)
+        grads = lstm_attn.backward(dy, cache)
+
+        has_nan = False
+        for key, grad in grads.items():
+            if np.isnan(grad).any():
+                print(f"  NaN found in gradient: {key}")
+                has_nan = True
+
+        assert not has_nan, "Gradients contain NaN values"
+
+        # Check attention gradients are present
+        assert 'W_query' in grads, "W_query gradient missing"
+        assert 'W_key' in grads, "W_key gradient missing"
+        assert 'W_value' in grads, "W_value gradient missing"
+        assert 'W_attn_out' in grads, "W_attn_out gradient missing"
+        assert 'b_attn_out' in grads, "b_attn_out gradient missing"
+
+        print(f"  PASSED - All {len(grads)} gradients computed without NaN")
+        print(f"  Gradient keys: {list(grads.keys())}")
+    except Exception as e:
+        print(f"  FAILED - {e}")
+        all_passed = False
+
+    # Test 5: Weights can be saved and loaded
+    print("\n[Test 5] Weights can be saved and loaded")
+    try:
+        # Create model with attention
+        lstm_orig = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=True
+        )
+
+        # Get original prediction
+        X_test = np.random.randn(24, 20)
+        y_orig, _ = lstm_orig.forward(X_test, training=False)
+
+        # Save weights
+        weights = lstm_orig.get_weights()
+        assert weights['has_attention'] is True, "has_attention flag not set"
+        assert 'W_query' in weights, "W_query not in saved weights"
+
+        # Create new model and load weights
+        lstm_loaded = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=True
+        )
+        lstm_loaded.set_weights(weights)
+
+        # Compare predictions
+        y_loaded, _ = lstm_loaded.forward(X_test, training=False)
+        diff = np.abs(y_orig - y_loaded).max()
+        assert diff < 1e-10, f"Predictions differ by {diff}"
+
+        print(f"  PASSED - Weights saved/loaded, prediction diff: {diff:.2e}")
+    except Exception as e:
+        print(f"  FAILED - {e}")
+        all_passed = False
+
+    # Test 6: Legacy weights (without attention) load gracefully
+    print("\n[Test 6] Legacy weights (without attention) load gracefully")
+    try:
+        # Create model without attention
+        lstm_legacy = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=False
+        )
+        legacy_weights = lstm_legacy.get_weights()
+        assert legacy_weights.get('has_attention') is False, "has_attention should be False"
+
+        # Create model WITH attention and load legacy weights
+        lstm_new = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=True
+        )
+        lstm_new.set_weights(legacy_weights)
+
+        # Should still work (attention weights randomly initialized)
+        X_test = np.random.randn(24, 20)
+        y_pred, _ = lstm_new.forward(X_test, training=False)
+        assert not np.isnan(y_pred).any(), "Output contains NaN"
+
+        print(f"  PASSED - Legacy weights loaded, model still works")
+    except Exception as e:
+        print(f"  FAILED - {e}")
+        all_passed = False
+
+    # Test 7: Model size calculation includes attention
+    print("\n[Test 7] Model size calculation includes attention")
+    try:
+        lstm_no_attn = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=False
+        )
+        lstm_with_attn = TinyLSTM(
+            input_size=20,
+            hidden_size=32,
+            sequence_length=24,
+            num_outputs=1,
+            use_attention=True
+        )
+
+        size_no_attn = lstm_no_attn.get_model_size_kb()
+        size_with_attn = lstm_with_attn.get_model_size_kb()
+
+        assert size_with_attn > size_no_attn, "Model with attention should be larger"
+
+        # Calculate expected additional params:
+        # W_query: 32x32 = 1024
+        # W_key: 32x32 = 1024
+        # W_value: 32x32 = 1024
+        # W_attn_out: 32x64 = 2048
+        # b_attn_out: 32 = 32
+        # Total: 5152 params * 8 bytes / 1024 = ~40.25 KB additional
+        expected_diff = (5152 * 8) / 1024
+        actual_diff = size_with_attn - size_no_attn
+        assert np.abs(actual_diff - expected_diff) < 0.1, f"Size diff mismatch"
+
+        print(f"  PASSED - No attention: {size_no_attn:.2f} KB, With attention: {size_with_attn:.2f} KB")
+        print(f"  Attention adds {actual_diff:.2f} KB (expected ~{expected_diff:.2f} KB)")
+    except Exception as e:
+        print(f"  FAILED - {e}")
+        all_passed = False
+
+    # Summary
+    print("\n" + "=" * 60)
+    if all_passed:
+        print("ALL TESTS PASSED!")
+        sys.exit(0)
+    else:
+        print("SOME TESTS FAILED!")
+        sys.exit(1)

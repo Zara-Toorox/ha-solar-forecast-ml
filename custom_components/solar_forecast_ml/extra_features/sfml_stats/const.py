@@ -1,12 +1,20 @@
-# ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
-# * This program is protected by a Proprietary Non-Commercial License.
-# 1. Personal and Educational use only.
-# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
-# 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
-# ******************************************************************************
+"""Constants for SFML Stats integration. @zara
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,7 +22,7 @@ from typing import Final
 
 DOMAIN: Final = "sfml_stats"
 NAME: Final = "SFML Stats"
-VERSION: Final = "2.2.2"
+VERSION: Final = "2.8.0"
 
 SOLAR_FORECAST_ML_BASE: Final = Path("solar_forecast_ml")
 SOLAR_FORECAST_ML_STATS: Final = SOLAR_FORECAST_ML_BASE / "stats"
@@ -208,3 +216,33 @@ PANEL_SENSORS: Final = [
     CONF_SENSOR_PANEL4_POWER,
     CONF_SENSOR_PANEL4_MAX_TODAY,
 ]
+
+# =============================================================================
+# Performance & Caching Constants
+# =============================================================================
+
+# Billing Calculator
+RIEMANN_MAX_GAP_HOURS: Final = 4.0
+BILLING_CACHE_TTL_SECONDS: Final = 60
+LOG_BUFFER_MAX_SIZE: Final = 1000
+
+# Power Sources Collector
+POWER_COLLECTION_INTERVAL_SECONDS: Final = 300
+POWER_DATA_RETENTION_DAYS: Final = 7
+
+# API Caching
+API_CACHE_TTL_SECONDS: Final = 30
+MAX_HISTORY_HOURS: Final = 168  # 7 days
+
+# Weather
+WEATHER_HISTORY_DAYS: Final = 365
+SUN_HOURS_RADIATION_THRESHOLD: Final = 100  # W/m²
+
+# File Operations
+FILE_RETRY_COUNT: Final = 3
+FILE_RETRY_DELAY_SECONDS: Final = 0.1
+
+# Scheduled Jobs
+DAILY_AGGREGATION_HOUR: Final = 23
+DAILY_AGGREGATION_MINUTE: Final = 55
+DAILY_AGGREGATION_SECOND: Final = 0

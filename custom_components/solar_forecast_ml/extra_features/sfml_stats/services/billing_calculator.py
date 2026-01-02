@@ -1,15 +1,25 @@
-# ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
-# * This program is protected by a Proprietary Non-Commercial License.
-# 1. Personal and Educational use only.
-# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
-# 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
-# ******************************************************************************
+"""Billing calculator for energy balance using Recorder data. @zara
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 from __future__ import annotations
 
 import logging
+import threading
+from collections import deque
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -35,12 +45,41 @@ from ..const import (
     CONF_SENSOR_HOME_CONSUMPTION,
     CONF_SENSOR_SMARTMETER_IMPORT,
     CONF_SENSOR_SMARTMETER_EXPORT,
+    LOG_BUFFER_MAX_SIZE,
+    RIEMANN_MAX_GAP_HOURS,
+    BILLING_CACHE_TTL_SECONDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-_LOG_FILE: Path | None = None
-_LOG_BUFFER: list[str] = []
+
+class _ThreadSafeLogBuffer:
+    """Thread-safe log buffer with maximum size limit. @zara"""
+
+    def __init__(self, max_size: int = LOG_BUFFER_MAX_SIZE) -> None:
+        """Initialize the buffer. @zara"""
+        self._lock = threading.Lock()
+        self._buffer: deque[str] = deque(maxlen=max_size)
+
+    def append(self, msg: str) -> None:
+        """Append a message to the buffer. @zara"""
+        with self._lock:
+            self._buffer.append(msg)
+
+    def flush(self) -> list[str]:
+        """Get all messages and clear the buffer. @zara"""
+        with self._lock:
+            items = list(self._buffer)
+            self._buffer.clear()
+            return items
+
+    def __len__(self) -> int:
+        """Return buffer length. @zara"""
+        with self._lock:
+            return len(self._buffer)
+
+
+_LOG_BUFFER = _ThreadSafeLogBuffer()
 
 
 def _log(msg: str, *args, level: str = "info") -> None:
@@ -73,7 +112,7 @@ class BillingCalculator:
         self._log_file = config_path / "sfml_stats" / "logs" / "billing_calculator.log"
         self._billing_cache: dict[str, Any] | None = None
         self._cache_timestamp: datetime | None = None
-        self._cache_ttl_seconds = 60
+        self._cache_ttl_seconds = BILLING_CACHE_TTL_SECONDS
 
     def update_config(self, new_config: dict[str, Any]) -> None:
         """Update cached configuration and invalidate billing cache. @zara"""
@@ -121,12 +160,21 @@ class BillingCalculator:
         if isinstance(billing_start_month, str):
             billing_start_month = int(billing_start_month)
 
+        # Validiere Tag (max 28 für Februar, sonst je nach Monat)
+        import calendar
         today = date.today()
         current_year = today.year
+
+        # Korrigiere ungültige Tage (z.B. 31. Februar -> 28. Februar)
+        max_day = calendar.monthrange(current_year, billing_start_month)[1]
+        billing_start_day = min(billing_start_day, max_day)
 
         billing_start = date(current_year, billing_start_month, billing_start_day)
 
         if billing_start > today:
+            # Prüfe auch das vorherige Jahr auf gültige Tage
+            max_day_prev = calendar.monthrange(current_year - 1, billing_start_month)[1]
+            billing_start_day = min(billing_start_day, max_day_prev)
             billing_start = date(current_year - 1, billing_start_month, billing_start_day)
 
         return billing_start
@@ -176,7 +224,7 @@ class BillingCalculator:
             prev_time = None
             prev_value = None
 
-            max_gap_hours = 4.0
+            max_gap_hours = RIEMANN_MAX_GAP_HOURS
 
             for state in entity_states:
                 try:
@@ -204,18 +252,16 @@ class BillingCalculator:
                 except (ValueError, TypeError):
                     continue
 
+            # Letztes Intervall bis zur aktuellen Zeit
             if prev_time is not None and prev_value is not None:
                 delta_hours = (end_time - prev_time).total_seconds() / 3600.0
-                if delta_hours > 0 and delta_hours <= max_gap_hours:
+                if delta_hours > 0:
                     kwh = (prev_value / 1000.0) * delta_hours
                     total_kwh += max(0, kwh)
                     sample_count += 1
-                elif delta_hours > max_gap_hours:
-                    kwh = (prev_value / 1000.0) * delta_hours
-                    total_kwh += max(0, kwh)
-                    sample_count += 1
-                    _log("Final interval large (%.1fh) for %s - sensor may be stale",
-                         delta_hours, entity_id)
+                    if delta_hours > max_gap_hours:
+                        _log("Final interval large (%.1fh) for %s - sensor may be stale",
+                             delta_hours, entity_id)
 
             return total_kwh, sample_count
 
@@ -225,14 +271,13 @@ class BillingCalculator:
 
     async def _flush_logs(self) -> None:
         """Write buffered logs to file. @zara"""
-        global _LOG_BUFFER
-        if _LOG_BUFFER:
+        log_lines = _LOG_BUFFER.flush()
+        if log_lines:
             try:
                 self._log_file.parent.mkdir(parents=True, exist_ok=True)
                 async with aiofiles.open(self._log_file, "a", encoding="utf-8") as f:
-                    for line in _LOG_BUFFER:
+                    for line in log_lines:
                         await f.write(line + "\n")
-                _LOG_BUFFER.clear()
             except Exception:
                 pass
 
@@ -381,9 +426,19 @@ class BillingCalculator:
              wr_to_house, home_consumption, autarkie)
 
         days_elapsed = (today - billing_start).days + 1
-        billing_end_theoretical = date(
-            billing_start.year + 1, billing_start.month, billing_start.day
-        ) - timedelta(days=1)
+
+        # Berechne theoretisches Abrechnungsende (1 Jahr nach Start - 1 Tag)
+        # Behandle Schaltjahr-Fehler (z.B. Start am 29. Februar)
+        try:
+            billing_end_theoretical = date(
+                billing_start.year + 1, billing_start.month, billing_start.day
+            ) - timedelta(days=1)
+        except ValueError:
+            # Fallback für ungültige Daten (z.B. 29. Feb -> 28. Feb)
+            billing_end_theoretical = date(
+                billing_start.year + 1, billing_start.month, 28
+            ) - timedelta(days=1)
+
         days_total = (billing_end_theoretical - billing_start).days + 1
 
         result = {

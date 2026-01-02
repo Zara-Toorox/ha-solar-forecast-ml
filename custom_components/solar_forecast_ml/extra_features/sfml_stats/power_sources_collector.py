@@ -1,12 +1,14 @@
-# ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
-# * This program is protected by a Proprietary Non-Commercial License.
-# 1. Personal and Educational use only.
-# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
-# 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
-# ******************************************************************************
+"""Power Sources Data Collector for SFML Stats. @zara
 
+Collects power flow data every few minutes for the Power Sources chart.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 from __future__ import annotations
 
 import asyncio
@@ -291,9 +293,13 @@ class PowerSourcesCollector:
             self_produced = today["solar_to_house_kwh"] + today["battery_to_house_kwh"]
             today["autarky_percent"] = min(100, (self_produced / today["consumption_kwh"]) * 100)
 
-        total_produced = today["solar_total_kwh"]
+        # Self-consumption: Anteil der Solarproduktion, der selbst verbraucht wurde
+        # Verwende solar_yield_sensor_kwh wenn verfügbar (genauer), sonst solar_total_kwh
+        total_produced = today.get("solar_yield_sensor_kwh") or today["solar_total_kwh"]
         if total_produced > 0:
-            today["self_consumption_percent"] = min(100, (today["consumption_kwh"] / total_produced) * 100)
+            # Eigenverbrauch = (Solar->Haus + Solar->Batterie) / Solar-Gesamtproduktion
+            solar_self_consumed = today["solar_to_house_kwh"] + today["solar_to_battery_kwh"]
+            today["self_consumption_percent"] = min(100, (solar_self_consumed / total_produced) * 100)
 
         # Track battery SOC statistics
         if data_point.get("battery_soc") is not None:

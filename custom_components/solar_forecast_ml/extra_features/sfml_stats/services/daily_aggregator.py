@@ -1,12 +1,20 @@
-# ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
-# * This program is protected by a Proprietary Non-Commercial License.
-# 1. Personal and Educational use only.
-# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
-# 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
-# ******************************************************************************
+"""Daily energy aggregator for SFML Stats. @zara
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 from __future__ import annotations
 
 import json
@@ -111,22 +119,29 @@ class DailyEnergyAggregator:
 
         _LOGGER.info("Starting daily energy aggregation for %s", today_str)
 
+        # Hilfsfunktion: Energie-Werte können nie negativ sein
+        def energy_value(val: float | None) -> float | None:
+            if val is None:
+                return None
+            return max(0, val)
+
         daily_data = {
-            "solar_yield_kwh": self._get_sensor_value(
+            "solar_yield_kwh": energy_value(self._get_sensor_value(
                 config.get(CONF_SENSOR_SOLAR_YIELD_DAILY)
-            ),
-            "grid_import_kwh": self._get_sensor_value(
+            )),
+            "grid_import_kwh": energy_value(self._get_sensor_value(
                 config.get(CONF_SENSOR_GRID_IMPORT_DAILY)
-            ),
-            "battery_charge_solar_kwh": self._get_sensor_value(
+            )),
+            "battery_charge_solar_kwh": energy_value(self._get_sensor_value(
                 config.get(CONF_SENSOR_BATTERY_CHARGE_SOLAR_DAILY)
-            ),
-            "battery_charge_grid_kwh": self._get_sensor_value(
+            )),
+            "battery_charge_grid_kwh": energy_value(self._get_sensor_value(
                 config.get(CONF_SENSOR_BATTERY_CHARGE_GRID_DAILY)
-            ),
-            "grid_export_kwh": self._get_sensor_value(
+            )),
+            "grid_export_kwh": energy_value(self._get_sensor_value(
                 config.get(CONF_SENSOR_HOUSE_TO_GRID)
-            ),
+            )),
+            # Preis kann negativ sein (negative Strompreise)
             "price_ct_kwh": self._get_sensor_value(
                 config.get(CONF_SENSOR_PRICE_TOTAL)
             ),

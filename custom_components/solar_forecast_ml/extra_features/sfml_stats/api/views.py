@@ -1,12 +1,20 @@
-# ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
-# * This program is protected by a Proprietary Non-Commercial License.
-# 1. Personal and Educational use only.
-# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
-# 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
-# ******************************************************************************
+"""REST API views for SFML Stats Dashboard. @zara
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2025 Zara-Toorox
+"""
 from __future__ import annotations
 
 import json
@@ -21,6 +29,7 @@ from homeassistant.core import HomeAssistant
 
 from ..const import (
     DOMAIN,
+    VERSION,
     CONF_SENSOR_SOLAR_POWER,
     CONF_SENSOR_SOLAR_TO_HOUSE,
     CONF_SENSOR_SOLAR_TO_BATTERY,
@@ -58,12 +67,61 @@ from ..const import (
     DEFAULT_FEED_IN_TARIFF,
     CONF_PANEL_GROUP_NAMES,
 )
+from ..utils import get_json_cache, read_json_safe
 
 if TYPE_CHECKING:
     from aiohttp.web import Request, Response
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class APIContext:
+    """Singleton context for API views. @zara
+
+    Replaces global variables with a proper singleton pattern.
+    Provides access to Home Assistant instance and paths.
+    """
+
+    _instance: "APIContext | None" = None
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the context. @zara"""
+        self.hass = hass
+        self.config_path = Path(hass.config.path())
+        self.solar_path = self.config_path / "solar_forecast_ml"
+        self.grid_path = self.config_path / "grid_price_monitor"
+
+    @classmethod
+    def get(cls) -> "APIContext":
+        """Get the singleton instance. @zara
+
+        Raises:
+            RuntimeError: If context has not been initialized.
+        """
+        if cls._instance is None:
+            raise RuntimeError("APIContext not initialized - call initialize() first")
+        return cls._instance
+
+    @classmethod
+    def initialize(cls, hass: HomeAssistant) -> "APIContext":
+        """Initialize the singleton instance. @zara
+
+        Args:
+            hass: Home Assistant instance.
+
+        Returns:
+            The initialized APIContext.
+        """
+        cls._instance = cls(hass)
+        return cls._instance
+
+    @classmethod
+    def is_initialized(cls) -> bool:
+        """Check if context is initialized. @zara"""
+        return cls._instance is not None
+
+
+# Backwards compatibility - these will be removed in future versions
 SOLAR_PATH: Path | None = None
 GRID_PATH: Path | None = None
 HASS: HomeAssistant | None = None
@@ -73,13 +131,18 @@ async def async_setup_views(hass: HomeAssistant) -> None:
     """Register all API views. @zara"""
     global SOLAR_PATH, GRID_PATH, HASS
 
+    # Initialize new APIContext
+    ctx = APIContext.initialize(hass)
+
+    # Maintain backwards compatibility
     HASS = hass
     config_path = Path(hass.config.path())
     SOLAR_PATH = config_path / "solar_forecast_ml"
     GRID_PATH = config_path / "grid_price_monitor"
 
-    _LOGGER.debug("SFML Stats paths: Solar=%s, Grid=%s", SOLAR_PATH, GRID_PATH)
+    _LOGGER.debug("SFML Stats paths: Solar=%s, Grid=%s", ctx.solar_path, ctx.grid_path)
 
+    hass.http.register_view(HealthCheckView())
     hass.http.register_view(DashboardView())
     hass.http.register_view(SolarDataView())
     hass.http.register_view(PriceDataView())
@@ -121,6 +184,99 @@ async def _read_json_file(path: Path | None) -> dict | None:
     except Exception as e:
         _LOGGER.error("Error reading %s: %s", path, e)
         return None
+
+
+class HealthCheckView(HomeAssistantView):
+    """Health check endpoint for monitoring. @zara
+
+    Returns the health status of the SFML Stats integration,
+    including availability of data sources and configuration status.
+    """
+
+    url = "/api/sfml_stats/health"
+    name = "api:sfml_stats:health"
+    requires_auth = False
+
+    async def get(self, request: Request) -> Response:
+        """Return health status. @zara"""
+        try:
+            ctx = APIContext.get()
+
+            # Check various health indicators
+            checks = {
+                "solar_data_available": ctx.solar_path.exists(),
+                "grid_data_available": ctx.grid_path.exists(),
+                "integration_loaded": DOMAIN in ctx.hass.data,
+                "config_entries_present": len(
+                    ctx.hass.config_entries.async_entries(DOMAIN)
+                ) > 0,
+            }
+
+            # Check for specific data files
+            if checks["solar_data_available"]:
+                checks["solar_stats_available"] = (
+                    ctx.solar_path / "stats" / "daily_summaries.json"
+                ).exists()
+            else:
+                checks["solar_stats_available"] = False
+
+            if checks["grid_data_available"]:
+                checks["grid_prices_available"] = (
+                    ctx.grid_path / "data" / "price_cache.json"
+                ).exists()
+            else:
+                checks["grid_prices_available"] = False
+
+            # Determine overall health
+            critical_checks = [
+                checks["integration_loaded"],
+                checks["config_entries_present"],
+            ]
+            all_healthy = all(critical_checks)
+            degraded = not all(checks.values()) and all_healthy
+
+            if all_healthy and not degraded:
+                status = "healthy"
+                status_code = 200
+            elif degraded:
+                status = "degraded"
+                status_code = 200
+            else:
+                status = "unhealthy"
+                status_code = 503
+
+            return web.json_response(
+                {
+                    "status": status,
+                    "version": VERSION,
+                    "checks": checks,
+                    "timestamp": datetime.now().isoformat(),
+                },
+                status=status_code,
+            )
+
+        except RuntimeError:
+            # APIContext not initialized
+            return web.json_response(
+                {
+                    "status": "unhealthy",
+                    "version": VERSION,
+                    "error": "API context not initialized",
+                    "timestamp": datetime.now().isoformat(),
+                },
+                status=503,
+            )
+        except Exception as err:
+            _LOGGER.error("Health check error: %s", err)
+            return web.json_response(
+                {
+                    "status": "error",
+                    "version": VERSION,
+                    "error": str(err),
+                    "timestamp": datetime.now().isoformat(),
+                },
+                status=500,
+            )
 
 
 class DashboardView(HomeAssistantView):

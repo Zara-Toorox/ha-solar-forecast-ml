@@ -68,6 +68,8 @@ class TrainingResult:
     num_outputs: int = 1
     error_message: Optional[str] = None
     epochs_trained: int = 0
+    has_attention: bool = False
+    rmse: float = 0.0
 
 
 @dataclass
@@ -145,11 +147,12 @@ class AIPredictor:
         self.last_training_time: Optional[datetime] = None
         self.last_training_samples: int = 0
         self.training_samples: int = 0
+        self.use_attention: bool = True  # Attention mechanism flag (default: ON since v2.0.0)
 
         self.current_profile: Optional[HourlyProfile] = None
         self.current_weights: Optional[LearnedWeights] = None
 
-        self._historical_cache: Dict[str, Any] = {"daily_productions": {}}
+        self._historical_cache: Dict[str, Any] = {"daily_productions": {}, "hourly_data": {}}
 
         self.solar_capacity: float = self.total_capacity
         self.power_entity: Optional[str] = None
@@ -231,16 +234,37 @@ class AIPredictor:
             num_outputs = self.num_groups if self.num_groups > 0 else 1
             feature_count = calculate_feature_count(self.num_groups)
 
+            # Attention is now enabled by default (v2.0.0+)
+            # Existing models will be upgraded to use attention on next training
+            # New installations start with attention=True immediately
+            weights_file = self._data_dir / "ai" / "learned_weights.json"
+            use_attention = True  # Default: ON for all new installations
+            weights_exists = await loop.run_in_executor(None, weights_file.exists)
+            if weights_exists:
+                try:
+                    def _read_weights_check():
+                        with open(weights_file, "r") as f:
+                            return json.load(f)
+                    saved_weights = await loop.run_in_executor(None, _read_weights_check)
+                    # Use saved value if model already has attention weights
+                    # Otherwise keep attention=True for upgrade
+                    use_attention = saved_weights.get("has_attention", True)
+                except Exception:
+                    pass
+
+            self.use_attention = use_attention
+
             self.lstm = TinyLSTM(
                 input_size=feature_count,
                 hidden_size=32,
                 sequence_length=24,
                 num_outputs=num_outputs,
+                use_attention=self.use_attention,
             )
 
             _LOGGER.info(
                 f"LSTM initialized: {feature_count} features, {num_outputs} outputs, "
-                f"{self.num_groups} groups"
+                f"{self.num_groups} groups, attention={self.use_attention}"
             )
 
             # Load weights asynchronously
@@ -264,14 +288,16 @@ class AIPredictor:
                         self.training_samples = weights.get("training_samples", 0)
                         self.current_accuracy = weights.get("accuracy")
                         self.current_rmse = weights.get("rmse")  # RMSE in kWh
+                        self.use_attention = weights.get("has_attention", False)
                         self.state = ModelState.READY
                         rmse_str = f", RMSE={self.current_rmse:.3f}kWh" if self.current_rmse else ""
+                        attn_str = ", attention=ON" if self.use_attention else ""
                         _LOGGER.info(
                             f"AI model loaded: {self.training_samples} samples, "
                             f"{feature_count} features, {num_outputs} outputs, "
-                            f"R²={self.current_accuracy:.3f}{rmse_str}" if self.current_accuracy else
+                            f"R²={self.current_accuracy:.3f}{rmse_str}{attn_str}" if self.current_accuracy else
                             f"AI model loaded: {self.training_samples} samples, "
-                            f"{feature_count} features, {num_outputs} outputs"
+                            f"{feature_count} features, {num_outputs} outputs{attn_str}"
                         )
                     else:
                         _LOGGER.warning(
@@ -370,6 +396,9 @@ class AIPredictor:
         Multi-Output mode: One forward pass with combined features → n outputs
         Single-Output mode: One forward pass with base features → 1 output (total)
 
+        FIX #1: Now uses real 24-hour temporal sequences instead of repeating features.
+        FIX #2: Now uses real historical lag-features instead of 0.0.
+
         Returns:
             List of GroupPrediction, one per panel group (or one "Total" if no groups)
         """
@@ -377,38 +406,37 @@ class AIPredictor:
             return []
 
         try:
-            record = {
-                "target_hour": hour,
-                "target_day_of_year": datetime.now().timetuple().tm_yday,
-                "target_month": datetime.now().month,
-                "weather_corrected": weather_data,
-                "astronomy": astronomy_data,
-                "production_yesterday": 0.0,
-                "production_same_hour_yesterday": 0.0,
-            }
-
             # Get seasonal factor
             month = datetime.now().month
             seasonal_factor = self.seasonal.get_factor(month) if self.seasonal else 1.0
+
+            # Load historical predictions for building temporal sequence
+            all_predictions = await self._load_predictions_for_sequence()
+            target_date = datetime.now().strftime("%Y-%m-%d")
+
+            # Build real 24-hour temporal sequence (FIX #1 & #2)
+            sequence, prod_yesterday, prod_same_hour = await self._build_temporal_sequence(
+                target_hour=hour,
+                target_date=target_date,
+                weather_data=weather_data,
+                astronomy_data=astronomy_data,
+                all_predictions=all_predictions,
+            )
 
             results = []
 
             if self.panel_groups:
                 # MULTI-OUTPUT MODE: Combined features for all groups
                 # Single forward pass → multiple outputs (one per group)
-                features = self.feature_engineer.extract_combined_for_multi_output(
-                    record, self.panel_groups
-                )
-                if features is None:
-                    return []
-
-                # Single forward pass with combined features
-                sequence = [features] * 24
                 predictions = self.lstm.predict(sequence)  # Returns list of n values
+
+                # Handle empty predictions array
+                if not predictions or len(predictions) == 0:
+                    predictions = []
 
                 # Map each output to its corresponding group
                 for i, group in enumerate(self.panel_groups):
-                    if i < len(predictions):
+                    if predictions and i < len(predictions):
                         # DENORMALIZE: multiply by MAX_KWH_PER_HOUR to get actual kWh
                         pred_kwh = predictions[i] * MAX_KWH_PER_HOUR * seasonal_factor
                     else:
@@ -424,11 +452,6 @@ class AIPredictor:
             else:
                 # SINGLE-OUTPUT MODE: Only base features (17)
                 # Predict total production
-                features = self.feature_engineer.extract_base_features(record)
-                if features is None:
-                    return []
-
-                sequence = [features] * 24
                 predictions = self.lstm.predict(sequence)
                 # DENORMALIZE: multiply by MAX_KWH_PER_HOUR to get actual kWh
                 pred_kwh = predictions[0] * MAX_KWH_PER_HOUR * seasonal_factor if predictions else 0.0
@@ -509,9 +532,10 @@ class AIPredictor:
 
                 self.state = ModelState.READY
                 rmse_str = f", RMSE={self.current_rmse:.3f}kWh" if self.current_rmse else ""
+                attn_str = ", attention=ON" if self.use_attention else ""
                 _LOGGER.info(
                     f"Training complete: R2={self.current_accuracy:.3f}{rmse_str}, "
-                    f"samples={len(X_sequences)}, outputs={self.num_groups}"
+                    f"samples={len(X_sequences)}, outputs={self.num_groups}{attn_str}"
                 )
 
                 return TrainingResult(
@@ -520,7 +544,9 @@ class AIPredictor:
                     samples_used=len(X_sequences),
                     feature_count=calculate_feature_count(self.num_groups),
                     num_outputs=self.num_groups if self.num_groups > 0 else 1,
-                    epochs_trained=result.get("epochs_trained", 0)
+                    epochs_trained=result.get("epochs_trained", 0),
+                    has_attention=self.use_attention,
+                    rmse=self.current_rmse or 0.0,
                 )
             else:
                 self.state = ModelState.ERROR
@@ -539,6 +565,9 @@ class AIPredictor:
 
     async def _prepare_training_data(self) -> Tuple[List[List[List[float]]], List[Any], Dict[str, float]]:
         """Load and prepare Multi-Output training data from hourly_predictions @zara
+
+        FIX #1: Now creates real 24-hour temporal sequences instead of repeating features.
+        FIX #2: Now uses real historical lag-features instead of 0.0.
 
         Returns:
             Tuple of:
@@ -564,6 +593,13 @@ class AIPredictor:
             data = await self.hass.async_add_executor_job(_read_file)
             predictions = data.get("predictions", [])
 
+            # Build lookup dict for all predictions (needed for sequence building)
+            predictions_by_id: Dict[str, Dict[str, Any]] = {}
+            for p in predictions:
+                pid = p.get("id")
+                if pid:
+                    predictions_by_id[pid] = p
+
             # Get dates from last TRAINING_DAYS days
             today = datetime.now().date()
             cutoff = today - timedelta(days=TRAINING_DAYS)
@@ -571,7 +607,8 @@ class AIPredictor:
             for hour_data in predictions:
                 self._process_hour_data_for_training(
                     hour_data, cutoff, today,
-                    X_sequences, y_targets, daily_productions
+                    X_sequences, y_targets, daily_productions,
+                    predictions_by_id  # Pass for sequence building
                 )
 
             _LOGGER.info(
@@ -592,8 +629,12 @@ class AIPredictor:
         X_sequences: List,
         y_targets: List,
         daily_productions: Dict[str, float],
+        predictions_by_id: Dict[str, Dict[str, Any]],
     ) -> None:
         """Process single hour data for Multi-Output training @zara
+
+        FIX #1: Now creates real 24-hour temporal sequences using historical data.
+        FIX #2: Now uses real historical lag-features instead of 0.0.
 
         CORRECT Multi-Output approach:
         - Features: 17 base + 3 per group = 17 + 3*n total
@@ -613,6 +654,10 @@ class AIPredictor:
         except ValueError:
             return
 
+        target_hour = hour_data.get("target_hour")
+        if target_hour is None:
+            return
+
         # Get actual production - either total or per-group
         actual_kwh = hour_data.get("actual_kwh")
 
@@ -627,22 +672,127 @@ class AIPredictor:
         if flags.get("exclude_from_learning") or flags.get("inverter_clipped"):
             return
 
-        # Build record for feature extraction
-        record = self._build_training_record(hour_data, date_str)
-        if record is None:
-            return
+        # FIX #2: Calculate real lag-features from historical data
+        target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        yesterday_date = (target_dt - timedelta(days=1)).strftime("%Y-%m-%d")
 
-        if self.panel_groups:
-            # MULTI-OUTPUT MODE: Combined features for all groups
-            # Features = 17 base + 3*n group features
-            features = self.feature_engineer.extract_combined_for_multi_output(
-                record, self.panel_groups
-            )
+        # Production yesterday (sum of all hours)
+        production_yesterday = 0.0
+        for h in range(24):
+            pred_id = f"{yesterday_date}_{h}"
+            pred = predictions_by_id.get(pred_id)
+            if pred and pred.get("actual_kwh") is not None:
+                production_yesterday += pred.get("actual_kwh", 0.0)
+
+        # Production same hour yesterday
+        same_hour_yesterday_id = f"{yesterday_date}_{target_hour}"
+        same_hour_pred = predictions_by_id.get(same_hour_yesterday_id)
+        production_same_hour_yesterday = (
+            same_hour_pred.get("actual_kwh", 0.0)
+            if same_hour_pred and same_hour_pred.get("actual_kwh") is not None
+            else 0.0
+        )
+
+        # FIX #1: Build real 24-hour temporal sequence
+        sequence = []
+        for offset in range(-23, 1):  # -23 to 0 (inclusive), giving 24 timesteps
+            seq_dt = target_dt.replace(hour=target_hour) + timedelta(hours=offset)
+            seq_date = seq_dt.strftime("%Y-%m-%d")
+            seq_hour = seq_dt.hour
+
+            pred_id = f"{seq_date}_{seq_hour}"
+            hist_pred = predictions_by_id.get(pred_id)
+
+            if hist_pred and offset < 0:
+                # Use historical data for past hours
+                hist_weather = hist_pred.get("weather_corrected") or hist_pred.get("weather_forecast") or {}
+                hist_astronomy = hist_pred.get("astronomy") or {}
+
+                # Calculate lag features relative to this sequence position
+                seq_yesterday_date = (seq_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+                seq_prod_yesterday = 0.0
+                for h in range(24):
+                    pid = f"{seq_yesterday_date}_{h}"
+                    p = predictions_by_id.get(pid)
+                    if p and p.get("actual_kwh") is not None:
+                        seq_prod_yesterday += p.get("actual_kwh", 0.0)
+
+                seq_same_hour_id = f"{seq_yesterday_date}_{seq_hour}"
+                seq_same_hour_pred = predictions_by_id.get(seq_same_hour_id)
+                seq_prod_same_hour = (
+                    seq_same_hour_pred.get("actual_kwh", 0.0)
+                    if seq_same_hour_pred and seq_same_hour_pred.get("actual_kwh") is not None
+                    else 0.0
+                )
+
+                record = {
+                    "target_hour": seq_hour,
+                    "target_day_of_year": seq_dt.timetuple().tm_yday,
+                    "target_month": seq_dt.month,
+                    "weather_corrected": {
+                        "temperature": hist_weather.get("temperature", hist_weather.get("temperature_c", 15)),
+                        "solar_radiation_wm2": hist_weather.get("solar_radiation_wm2", 0),
+                        "wind": hist_weather.get("wind", hist_weather.get("wind_speed", 3)),
+                        "humidity": hist_weather.get("humidity", hist_weather.get("humidity_percent", 70)),
+                        "rain": hist_weather.get("rain", hist_weather.get("precipitation", 0)),
+                        "clouds": hist_weather.get("clouds", hist_weather.get("cloud_cover", 50)),
+                        "dni": hist_weather.get("direct_radiation", 0),
+                    },
+                    "astronomy": {
+                        "sun_elevation_deg": hist_astronomy.get("sun_elevation_deg", 0),
+                        "theoretical_max_kwh": hist_astronomy.get("theoretical_max_kwh", 0),
+                        "clear_sky_radiation_wm2": hist_astronomy.get("clear_sky_radiation_wm2", 0),
+                        "max_elevation_today": hist_astronomy.get("max_elevation_today", 60),
+                    },
+                    "production_yesterday": seq_prod_yesterday,
+                    "production_same_hour_yesterday": seq_prod_same_hour,
+                }
+            else:
+                # Use current hour's data for target position (offset == 0)
+                weather = hour_data.get("weather_corrected", {}) or {}
+                astronomy = hour_data.get("astronomy", {}) or {}
+
+                record = {
+                    "target_hour": target_hour,
+                    "target_day_of_year": target_dt.timetuple().tm_yday,
+                    "target_month": target_dt.month,
+                    "weather_corrected": {
+                        "temperature": weather.get("temperature", weather.get("temperature_c", 15)),
+                        "solar_radiation_wm2": weather.get("solar_radiation_wm2", 0),
+                        "wind": weather.get("wind", weather.get("wind_speed", 3)),
+                        "humidity": weather.get("humidity", weather.get("humidity_percent", 70)),
+                        "rain": weather.get("rain", weather.get("precipitation", 0)),
+                        "clouds": weather.get("clouds", weather.get("cloud_cover", 50)),
+                        "dni": weather.get("direct_radiation", 0),
+                    },
+                    "astronomy": {
+                        "sun_elevation_deg": astronomy.get("sun_elevation_deg", 0),
+                        "theoretical_max_kwh": astronomy.get("theoretical_max_kwh", 0),
+                        "clear_sky_radiation_wm2": astronomy.get("clear_sky_radiation_wm2", 0),
+                        "max_elevation_today": astronomy.get("max_elevation_today", 60),
+                    },
+                    "production_yesterday": production_yesterday,
+                    "production_same_hour_yesterday": production_same_hour_yesterday,
+                }
+
+            # Extract features based on mode
+            if self.panel_groups:
+                features = self.feature_engineer.extract_combined_for_multi_output(
+                    record, self.panel_groups
+                )
+            else:
+                features = self.feature_engineer.extract_base_features(record)
+
             if features is None:
-                return
+                # Fallback: create zero features if extraction fails
+                feature_count = calculate_feature_count(self.num_groups)
+                features = [0.0] * feature_count
 
+            sequence.append(features)
+
+        # Build targets
+        if self.panel_groups:
             # Build per-group targets (NORMALIZED to 0-1 range!)
-            # Each target corresponds to one output neuron
             if panel_group_actuals and isinstance(panel_group_actuals, dict):
                 # We have per-group actual values - extract in group order
                 targets = []
@@ -658,15 +808,9 @@ class AIPredictor:
                     ratio = capacity / self.total_capacity if self.total_capacity > 0 else 1.0 / self.num_groups
                     targets.append((actual_kwh * ratio) / MAX_KWH_PER_HOUR)
         else:
-            # SINGLE-OUTPUT MODE: Only base features (17)
-            # No panel groups defined - predict total production
-            features = self.feature_engineer.extract_base_features(record)
-            if features is None:
-                return
-            targets = [actual_kwh / MAX_KWH_PER_HOUR]  # Single normalized target
+            # SINGLE-OUTPUT MODE
+            targets = [actual_kwh / MAX_KWH_PER_HOUR]
 
-        # Create 24h sequence (simplified: repeat features for sequence)
-        sequence = [features] * 24
         X_sequences.append(sequence)
         y_targets.append(targets)
 
@@ -781,8 +925,170 @@ class AIPredictor:
         except Exception as e:
             _LOGGER.warning(f"Error updating DNI tracker: {e}")
 
+    async def _build_temporal_sequence(
+        self,
+        target_hour: int,
+        target_date: str,
+        weather_data: Dict[str, Any],
+        astronomy_data: Dict[str, Any],
+        all_predictions: List[Dict[str, Any]],
+    ) -> Tuple[List[List[float]], float, float]:
+        """Build a real 24-hour temporal sequence for LSTM prediction @zara
+
+        FIX #1: Creates a proper temporal sequence using the last 24 hours of data
+        instead of repeating the same features 24 times.
+
+        FIX #2: Fills lag-features (production_yesterday, production_same_hour_yesterday)
+        with real historical values instead of 0.0.
+
+        Args:
+            target_hour: The hour we're predicting for (0-23)
+            target_date: Date string YYYY-MM-DD
+            weather_data: Weather data for target hour
+            astronomy_data: Astronomy data for target hour
+            all_predictions: List of all hourly predictions for lookback
+
+        Returns:
+            Tuple of (24-step sequence, production_yesterday, production_same_hour_yesterday)
+        """
+        try:
+            target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+        except ValueError:
+            target_dt = datetime.now()
+            target_date = target_dt.strftime("%Y-%m-%d")
+
+        # Build lookup dict for fast access to historical predictions
+        predictions_by_id = {}
+        for p in all_predictions:
+            pid = p.get("id")
+            if pid:
+                predictions_by_id[pid] = p
+
+        # Calculate lag-features from real historical data (FIX #2)
+        yesterday_date = (target_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # Production yesterday (sum of all hours)
+        production_yesterday = 0.0
+        for h in range(24):
+            pred_id = f"{yesterday_date}_{h}"
+            pred = predictions_by_id.get(pred_id)
+            if pred and pred.get("actual_kwh") is not None:
+                production_yesterday += pred.get("actual_kwh", 0.0)
+
+        # Production same hour yesterday
+        same_hour_yesterday_id = f"{yesterday_date}_{target_hour}"
+        same_hour_pred = predictions_by_id.get(same_hour_yesterday_id)
+        production_same_hour_yesterday = (
+            same_hour_pred.get("actual_kwh", 0.0)
+            if same_hour_pred and same_hour_pred.get("actual_kwh") is not None
+            else 0.0
+        )
+
+        # Build 24-step sequence (FIX #1)
+        # We use the 23 hours before target_hour + target_hour itself
+        sequence = []
+
+        for offset in range(-23, 1):  # -23 to 0 (inclusive), giving 24 timesteps
+            # Calculate the datetime for this sequence step
+            seq_dt = target_dt.replace(hour=target_hour) + timedelta(hours=offset)
+            seq_date = seq_dt.strftime("%Y-%m-%d")
+            seq_hour = seq_dt.hour
+
+            pred_id = f"{seq_date}_{seq_hour}"
+            hist_pred = predictions_by_id.get(pred_id)
+
+            if hist_pred and offset < 0:
+                # Use historical data for past hours
+                hist_weather = hist_pred.get("weather_corrected") or hist_pred.get("weather_forecast") or {}
+                hist_astronomy = hist_pred.get("astronomy") or {}
+
+                # Calculate lag features relative to this sequence position
+                seq_yesterday_date = (seq_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+                seq_prod_yesterday = 0.0
+                for h in range(24):
+                    pid = f"{seq_yesterday_date}_{h}"
+                    p = predictions_by_id.get(pid)
+                    if p and p.get("actual_kwh") is not None:
+                        seq_prod_yesterday += p.get("actual_kwh", 0.0)
+
+                seq_same_hour_id = f"{seq_yesterday_date}_{seq_hour}"
+                seq_same_hour_pred = predictions_by_id.get(seq_same_hour_id)
+                seq_prod_same_hour = (
+                    seq_same_hour_pred.get("actual_kwh", 0.0)
+                    if seq_same_hour_pred and seq_same_hour_pred.get("actual_kwh") is not None
+                    else 0.0
+                )
+
+                record = {
+                    "target_hour": seq_hour,
+                    "target_day_of_year": seq_dt.timetuple().tm_yday,
+                    "target_month": seq_dt.month,
+                    "weather_corrected": {
+                        "temperature": hist_weather.get("temperature", hist_weather.get("temperature_c", 15)),
+                        "solar_radiation_wm2": hist_weather.get("solar_radiation_wm2", 0),
+                        "wind": hist_weather.get("wind", hist_weather.get("wind_speed", 3)),
+                        "humidity": hist_weather.get("humidity", hist_weather.get("humidity_percent", 70)),
+                        "rain": hist_weather.get("rain", hist_weather.get("precipitation", 0)),
+                        "clouds": hist_weather.get("clouds", hist_weather.get("cloud_cover", 50)),
+                        "dni": hist_weather.get("direct_radiation", 0),
+                    },
+                    "astronomy": {
+                        "sun_elevation_deg": hist_astronomy.get("sun_elevation_deg", 0),
+                        "theoretical_max_kwh": hist_astronomy.get("theoretical_max_kwh", 0),
+                        "clear_sky_radiation_wm2": hist_astronomy.get("clear_sky_radiation_wm2", 0),
+                        "max_elevation_today": hist_astronomy.get("max_elevation_today", 60),
+                    },
+                    "production_yesterday": seq_prod_yesterday,
+                    "production_same_hour_yesterday": seq_prod_same_hour,
+                }
+            else:
+                # Use provided data for target hour (offset == 0) or if no historical data
+                record = {
+                    "target_hour": seq_hour if offset < 0 else target_hour,
+                    "target_day_of_year": seq_dt.timetuple().tm_yday if offset < 0 else target_dt.timetuple().tm_yday,
+                    "target_month": seq_dt.month if offset < 0 else target_dt.month,
+                    "weather_corrected": weather_data,
+                    "astronomy": astronomy_data,
+                    "production_yesterday": production_yesterday,
+                    "production_same_hour_yesterday": production_same_hour_yesterday,
+                }
+
+            # Extract features based on mode
+            if self.panel_groups:
+                features = self.feature_engineer.extract_combined_for_multi_output(
+                    record, self.panel_groups
+                )
+            else:
+                features = self.feature_engineer.extract_base_features(record)
+
+            if features is None:
+                # Fallback: create zero features if extraction fails
+                feature_count = calculate_feature_count(self.num_groups)
+                features = [0.0] * feature_count
+
+            sequence.append(features)
+
+        return sequence, production_yesterday, production_same_hour_yesterday
+
+    async def _load_predictions_for_sequence(self) -> List[Dict[str, Any]]:
+        """Load recent predictions for building temporal sequences @zara"""
+        try:
+            predictions_file = self._data_dir / "stats" / "hourly_predictions.json"
+            if not predictions_file.exists():
+                return []
+
+            def _read():
+                with open(predictions_file, "r") as f:
+                    return json.load(f)
+
+            data = await self.hass.async_add_executor_job(_read)
+            return data.get("predictions", [])
+        except Exception as e:
+            _LOGGER.debug(f"Could not load predictions for sequence: {e}")
+            return []
+
     async def _save_weights_async(self):
-        """Save LSTM weights asynchronously @zara"""
+        """Save LSTM weights asynchronously with backup @zara"""
         if not self.lstm:
             return
 
@@ -794,13 +1100,24 @@ class AIPredictor:
             weights["rmse"] = self.current_rmse  # RMSE in kWh
 
             weights_file = self._ai_dir / "learned_weights.json"
+            backup_file = self._ai_dir / "learned_weights.backup.json"
 
-            def _write():
-                with open(weights_file, "w") as f:
+            def _write_with_backup():
+                import shutil
+                # Create backup of existing weights before overwriting
+                if weights_file.exists():
+                    shutil.copy2(weights_file, backup_file)
+
+                # Write new weights atomically
+                temp_file = weights_file.with_suffix(".tmp")
+                with open(temp_file, "w") as f:
                     json.dump(weights, f, indent=2)
+                temp_file.replace(weights_file)
 
-            await self.hass.async_add_executor_job(_write)
-            _LOGGER.info("Weights saved")
+            await self.hass.async_add_executor_job(_write_with_backup)
+
+            attn_str = " (attention)" if weights.get("has_attention") else ""
+            _LOGGER.info(f"Weights saved{attn_str}")
 
         except Exception as e:
             _LOGGER.error(f"Failed to save weights: {e}")
@@ -819,3 +1136,199 @@ class AIPredictor:
             _LOGGER.info("Weights saved")
         except Exception as e:
             _LOGGER.error(f"Failed to save weights: {e}")
+
+    async def enable_attention(self, enable: bool = True) -> bool:
+        """Enable or disable attention mechanism @zara
+
+        This will reinitialize the LSTM with the new attention setting.
+        The model will need to be retrained after enabling attention.
+
+        Args:
+            enable: True to enable attention, False to disable
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.lstm:
+            _LOGGER.warning("Cannot enable attention: LSTM not initialized")
+            return False
+
+        if self.use_attention == enable:
+            _LOGGER.info(f"Attention already {'enabled' if enable else 'disabled'}")
+            return True
+
+        try:
+            # Get current architecture params
+            feature_count = calculate_feature_count(self.num_groups)
+            num_outputs = self.num_groups if self.num_groups > 0 else 1
+
+            # Create new LSTM with attention setting
+            self.lstm = TinyLSTM(
+                input_size=feature_count,
+                hidden_size=32,
+                sequence_length=24,
+                num_outputs=num_outputs,
+                use_attention=enable,
+            )
+
+            self.use_attention = enable
+            self.state = ModelState.UNTRAINED  # Needs retraining
+
+            _LOGGER.info(
+                f"Attention {'enabled' if enable else 'disabled'} - "
+                f"model needs retraining"
+            )
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to enable attention: {e}")
+            return False
+
+    def get_attention_weights(
+        self,
+        sequence: List[List[float]]
+    ) -> Optional[List[float]]:
+        """Get attention weights for interpretability @zara
+
+        Returns the attention weights showing which of the 24 input hours
+        were most important for the prediction.
+
+        Args:
+            sequence: 24-step input sequence (24 x features)
+
+        Returns:
+            List of 24 attention weights (sum to 1.0), or None if attention disabled
+        """
+        if not self.lstm or not self.use_attention:
+            return None
+
+        try:
+            import numpy as np
+
+            # Run forward pass with training=True to get attention cache
+            X = np.array(sequence)
+            _, cache = self.lstm.forward(X, training=True)
+
+            if cache and 'attn_weights' in cache:
+                attn_weights = cache['attn_weights']
+                return attn_weights.tolist() if hasattr(attn_weights, 'tolist') else list(attn_weights)
+
+            return None
+
+        except Exception as e:
+            _LOGGER.debug(f"Could not get attention weights: {e}")
+            return None
+
+    def get_model_info(self) -> Dict[str, Any]:
+        """Get model information for diagnostics @zara"""
+        info = {
+            "state": self.state.value if self.state else "unknown",
+            "training_samples": self.training_samples,
+            "accuracy": self.current_accuracy,
+            "rmse": self.current_rmse,
+            "num_groups": self.num_groups,
+            "total_capacity_kwp": self.total_capacity,
+            "use_attention": self.use_attention,
+            "last_training_time": self.last_training_time.isoformat() if self.last_training_time else None,
+        }
+
+        if self.lstm:
+            info["model_size_kb"] = self.lstm.get_model_size_kb()
+            info["feature_count"] = self.lstm.input_size
+            info["hidden_size"] = self.lstm.hidden_size
+            info["num_outputs"] = self.lstm.num_outputs
+
+        return info
+
+    async def rollback_to_backup(self) -> bool:
+        """Rollback to previous model weights from backup @zara
+
+        Use this when the current model is performing poorly or
+        when a training run produced worse results.
+
+        Returns:
+            True if rollback successful, False otherwise
+        """
+        try:
+            weights_file = self._ai_dir / "learned_weights.json"
+            backup_file = self._ai_dir / "learned_weights.backup.json"
+
+            if not backup_file.exists():
+                _LOGGER.warning("No backup weights available for rollback")
+                return False
+
+            def _do_rollback():
+                import shutil
+                # Save current (failing) weights for debugging
+                if weights_file.exists():
+                    failed_file = self._ai_dir / "learned_weights.failed.json"
+                    shutil.copy2(weights_file, failed_file)
+
+                # Restore from backup
+                shutil.copy2(backup_file, weights_file)
+
+            await self.hass.async_add_executor_job(_do_rollback)
+
+            # Reload the restored weights
+            def _read_weights():
+                with open(weights_file, "r") as f:
+                    return json.load(f)
+
+            weights = await self.hass.async_add_executor_job(_read_weights)
+
+            # Update LSTM with restored weights
+            if self.lstm:
+                self.lstm.set_weights(weights)
+                self.training_samples = weights.get("training_samples", 0)
+                self.current_accuracy = weights.get("accuracy")
+                self.current_rmse = weights.get("rmse")
+                self.use_attention = weights.get("has_attention", False)
+                self.state = ModelState.READY
+
+            attn_str = " (attention)" if self.use_attention else ""
+            _LOGGER.info(
+                f"Model rollback successful{attn_str}: "
+                f"R²={self.current_accuracy:.3f}, samples={self.training_samples}"
+            )
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"Rollback failed: {e}")
+            return False
+
+    def has_backup_available(self) -> bool:
+        """Check if a backup is available for rollback @zara"""
+        backup_file = self._ai_dir / "learned_weights.backup.json"
+        return backup_file.exists()
+
+    async def get_backup_info(self) -> Optional[Dict[str, Any]]:
+        """Get information about the backup model @zara
+
+        Returns:
+            Dict with backup model info, or None if no backup exists
+        """
+        backup_file = self._ai_dir / "learned_weights.backup.json"
+
+        if not backup_file.exists():
+            return None
+
+        try:
+            def _read():
+                with open(backup_file, "r") as f:
+                    return json.load(f)
+
+            weights = await self.hass.async_add_executor_job(_read)
+
+            return {
+                "accuracy": weights.get("accuracy"),
+                "rmse": weights.get("rmse"),
+                "training_samples": weights.get("training_samples", 0),
+                "last_trained": weights.get("last_trained"),
+                "has_attention": weights.get("has_attention", False),
+                "input_size": weights.get("input_size"),
+                "num_outputs": weights.get("num_outputs", 1),
+            }
+
+        except Exception as e:
+            _LOGGER.debug(f"Could not read backup info: {e}")
+            return None

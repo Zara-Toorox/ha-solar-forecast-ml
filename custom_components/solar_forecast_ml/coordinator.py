@@ -343,13 +343,18 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             await self._load_persistent_state()
 
             # Initialize panel group sensor reader if any group has an energy sensor
-            # NOTE: Validation runs in background to not block HA startup
-            await self._initialize_panel_group_sensor_reader()
+            # NOTE: Runs in background to not block HA startup
+            self.hass.async_create_task(
+                self._initialize_panel_group_sensor_reader(),
+                "solar_forecast_ml_panel_group_sensor_init"
+            )
 
-            try:
-                await self.production_time_calculator.start_tracking()
-            except Exception as track_err:
-                _LOGGER.error(f"Failed to start production time tracking: {track_err}")
+            # Start production tracking in background - may wait for sensors to initialize
+            # NOTE: Runs in background to not block HA startup (can wait up to 90s for sensors)
+            self.hass.async_create_task(
+                self._start_production_tracking_safe(),
+                "solar_forecast_ml_production_tracking"
+            )
 
             await self._setup_power_peak_tracking()
 
@@ -532,6 +537,17 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     "Panel groups with invalid sensors will use fallback (proportional distribution). "
                     "Check entity IDs in configuration."
                 )
+
+    async def _start_production_tracking_safe(self) -> None:
+        """Start production tracking with error handling @zara
+
+        Wrapper method for background task execution.
+        Catches exceptions to prevent unhandled task errors.
+        """
+        try:
+            await self.production_time_calculator.start_tracking()
+        except Exception as track_err:
+            _LOGGER.error(f"Failed to start production time tracking: {track_err}")
 
     async def _setup_power_peak_tracking(self) -> None:
         """Setup event listener for power peak tracking @zara

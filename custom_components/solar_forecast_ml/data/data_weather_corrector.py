@@ -36,6 +36,42 @@ DEFAULT_WEATHER = {
 }
 
 
+def calculate_dni_dhi_ratio(cloud_cover: float) -> tuple[float, float]:
+    """Calculate dynamic DNI/DHI ratio based on cloud cover @zara
+
+    FIX #3: DNI/DHI ratio is now dynamic instead of fixed 70/30.
+
+    Physical basis:
+    - Clear sky (0% clouds): ~85% direct (DNI), ~15% diffuse (DHI)
+    - Partially cloudy (50%): ~50% direct, ~50% diffuse
+    - Overcast (100% clouds): ~15% direct, ~85% diffuse
+
+    The ratio transitions smoothly based on cloud cover percentage.
+
+    Args:
+        cloud_cover: Cloud cover percentage (0-100)
+
+    Returns:
+        Tuple of (dni_fraction, dhi_fraction) where both sum to 1.0
+    """
+    # Clamp cloud cover to valid range
+    clouds = max(0.0, min(100.0, cloud_cover or 0.0))
+
+    # Linear interpolation between clear sky and overcast conditions
+    # Clear sky: dni_fraction = 0.85, dhi_fraction = 0.15
+    # Overcast: dni_fraction = 0.15, dhi_fraction = 0.85
+    dni_clear = 0.85
+    dni_overcast = 0.15
+
+    # Calculate DNI fraction (decreases with cloud cover)
+    dni_fraction = dni_clear - (dni_clear - dni_overcast) * (clouds / 100.0)
+
+    # DHI is the remainder
+    dhi_fraction = 1.0 - dni_fraction
+
+    return dni_fraction, dhi_fraction
+
+
 class WeatherForecastCorrector(DataManagerIO):
     """Creates corrected weather forecasts by applying precision factors to Open-Meteo data.
 
@@ -304,9 +340,9 @@ class WeatherForecastCorrector(DataManagerIO):
             "cloud_cover_mid": hour_data.get("cloud_cover_mid"),
             "cloud_cover_high": hour_data.get("cloud_cover_high"),
             "pressure": hour_data.get("pressure"),
-            # V12.4.2: Calculated radiation split from POA
-            "direct_radiation": round(calculated_radiation * 0.7, 1),
-            "diffuse_radiation": round(calculated_radiation * 0.3, 1),
+            # FIX #3: Dynamic DNI/DHI ratio based on cloud cover
+            "direct_radiation": round(calculated_radiation * calculate_dni_dhi_ratio(cloud_cover)[0], 1),
+            "diffuse_radiation": round(calculated_radiation * calculate_dni_dhi_ratio(cloud_cover)[1], 1),
             "clear_sky_poa_radiation": round(poa_radiation, 1),
             "source": cloud_source,
             "blend_info": blend_info,
@@ -402,9 +438,9 @@ class WeatherForecastCorrector(DataManagerIO):
             "cloud_cover_mid": cloud_mid,
             "cloud_cover_high": cloud_high,
             "pressure": hour_data.get("pressure"),
-            # V12.4.2: Calculated radiation split from POA
-            "direct_radiation": round(calculated_radiation * 0.7, 1),  # ~70% direct
-            "diffuse_radiation": round(calculated_radiation * 0.3, 1),  # ~30% diffuse
+            # FIX #3: Dynamic DNI/DHI ratio based on cloud cover (instead of fixed 70/30)
+            "direct_radiation": round(calculated_radiation * calculate_dni_dhi_ratio(cloud_cover)[0], 1),
+            "diffuse_radiation": round(calculated_radiation * calculate_dni_dhi_ratio(cloud_cover)[1], 1),
             "clear_sky_poa_radiation": round(poa_radiation, 1),
             "source": cloud_source,
             "blend_info": blend_info,

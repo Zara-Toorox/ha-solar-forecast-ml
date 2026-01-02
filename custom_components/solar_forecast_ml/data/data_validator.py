@@ -468,3 +468,181 @@ class DataValidator:
         Uses centralized schema from data_schemas.py (Single Source of Truth).
         """
         return get_schema("learning_config")
+
+    @staticmethod
+    def validate_learned_weights(weights: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate learned_weights.json structure with attention support @zara
+
+        Args:
+            weights: Weights data dict from learned_weights.json
+
+        Returns:
+            Dict with validation result:
+            {
+                "valid": bool,
+                "has_attention": bool,
+                "issues": List[str],
+                "model_info": Dict[str, Any]
+            }
+        """
+        result = {
+            "valid": True,
+            "has_attention": False,
+            "issues": [],
+            "model_info": {},
+        }
+
+        if not isinstance(weights, dict):
+            result["valid"] = False
+            result["issues"].append("Weights data is not a dictionary")
+            return result
+
+        # Required LSTM gate weights
+        required_lstm_fields = ["Wf", "Wi", "Wc", "Wo", "bf", "bi", "bc", "bo"]
+        # Required output layer weights
+        required_output_fields = ["Wy", "by"]
+        # Required architecture info
+        required_info_fields = ["input_size", "hidden_size"]
+
+        # Check required LSTM fields
+        for field in required_lstm_fields:
+            if field not in weights:
+                result["valid"] = False
+                result["issues"].append(f"Missing required LSTM field: {field}")
+
+        # Check output layer fields
+        for field in required_output_fields:
+            if field not in weights:
+                result["valid"] = False
+                result["issues"].append(f"Missing required output field: {field}")
+
+        # Check architecture info
+        for field in required_info_fields:
+            if field not in weights:
+                result["issues"].append(f"Missing architecture info: {field}")
+
+        # Extract model info
+        result["model_info"] = {
+            "input_size": weights.get("input_size"),
+            "hidden_size": weights.get("hidden_size"),
+            "sequence_length": weights.get("sequence_length", 24),
+            "num_outputs": weights.get("num_outputs", 1),
+            "training_samples": weights.get("training_samples", 0),
+            "accuracy": weights.get("accuracy"),
+            "rmse": weights.get("rmse"),
+            "last_trained": weights.get("last_trained"),
+        }
+
+        # Check attention mechanism
+        has_attention = weights.get("has_attention", False)
+        result["has_attention"] = has_attention
+        result["model_info"]["has_attention"] = has_attention
+
+        if has_attention:
+            # Attention-specific fields required when has_attention=True
+            attention_fields = ["W_query", "W_key", "W_value", "W_attn_out", "b_attn_out"]
+
+            for field in attention_fields:
+                if field not in weights:
+                    result["valid"] = False
+                    result["issues"].append(f"Missing attention field: {field}")
+
+            # Validate attention weight shapes if present
+            hidden_size = weights.get("hidden_size", 32)
+            if "W_query" in weights:
+                w_query = weights["W_query"]
+                if isinstance(w_query, list):
+                    expected_shape = (hidden_size, hidden_size)
+                    actual_shape = (len(w_query), len(w_query[0]) if w_query else 0)
+                    if actual_shape != expected_shape:
+                        result["issues"].append(
+                            f"W_query shape mismatch: expected {expected_shape}, got {actual_shape}"
+                        )
+
+            if "W_attn_out" in weights:
+                w_attn_out = weights["W_attn_out"]
+                if isinstance(w_attn_out, list):
+                    expected_shape = (hidden_size, hidden_size * 2)
+                    actual_shape = (len(w_attn_out), len(w_attn_out[0]) if w_attn_out else 0)
+                    if actual_shape != expected_shape:
+                        result["issues"].append(
+                            f"W_attn_out shape mismatch: expected {expected_shape}, got {actual_shape}"
+                        )
+
+        # Validate weight arrays are not empty
+        for field in required_lstm_fields + required_output_fields:
+            if field in weights:
+                value = weights[field]
+                if isinstance(value, list) and len(value) == 0:
+                    result["valid"] = False
+                    result["issues"].append(f"Empty weight array: {field}")
+
+        # Validate accuracy if present
+        accuracy = weights.get("accuracy")
+        if accuracy is not None:
+            if not isinstance(accuracy, (int, float)):
+                result["issues"].append(f"Invalid accuracy type: {type(accuracy)}")
+            elif not -1.0 <= accuracy <= 1.0:
+                result["issues"].append(f"Accuracy out of range [-1, 1]: {accuracy}")
+
+        return result
+
+    @staticmethod
+    def validate_and_repair_learned_weights(
+        weights_file: Path,
+    ) -> Dict[str, Any]:
+        """Validate learned_weights.json, return validation status @zara
+
+        Note: This method does NOT auto-repair weights as that would
+        require retraining. It only validates and reports issues.
+
+        Args:
+            weights_file: Path to learned_weights.json
+
+        Returns:
+            Dict with validation result including model info
+        """
+        result = {
+            "exists": False,
+            "valid": False,
+            "has_attention": False,
+            "issues": [],
+            "model_info": {},
+            "message": "",
+        }
+
+        try:
+            if not weights_file.exists():
+                result["message"] = "No learned_weights.json found (model not trained)"
+                return result
+
+            result["exists"] = True
+
+            # Load and parse
+            try:
+                with open(weights_file, "r", encoding="utf-8") as f:
+                    weights = json.load(f)
+            except json.JSONDecodeError as e:
+                result["message"] = f"Corrupted weights file: {e}"
+                result["issues"].append("JSON parse error - retraining required")
+                return result
+
+            # Validate structure
+            validation = DataValidator.validate_learned_weights(weights)
+            result["valid"] = validation["valid"]
+            result["has_attention"] = validation["has_attention"]
+            result["issues"] = validation["issues"]
+            result["model_info"] = validation["model_info"]
+
+            if validation["valid"]:
+                attn_str = " (with attention)" if validation["has_attention"] else ""
+                result["message"] = f"Weights valid{attn_str}"
+            else:
+                result["message"] = f"Invalid weights: {', '.join(validation['issues'][:3])}"
+
+            return result
+
+        except Exception as e:
+            result["message"] = f"Error validating weights: {e}"
+            result["issues"].append(str(e))
+            return result

@@ -916,6 +916,9 @@ class DataFilesStatusSensor(BaseSolarSensor):
         ],
     }
 
+    # Cache validity in seconds - file status doesn't change frequently
+    CACHE_TTL_SECONDS = 60
+
     def __init__(self, coordinator: SolarForecastMLCoordinator, entry: ConfigEntry):
         """Initialize @zara"""
         super().__init__(coordinator, entry)
@@ -924,20 +927,30 @@ class DataFilesStatusSensor(BaseSolarSensor):
         self._attr_icon = "mdi:file-multiple-outline"
         self._attr_name = "Data Files Status"
         self._data_manager = getattr(coordinator, "data_manager", None)
+        # Cache for file status to avoid repeated I/O operations
+        self._cached_status: Dict[str, Dict[str, bool]] = {}
+        self._cache_timestamp: float = 0
 
     def _check_file_exists(self, file_path) -> bool:
         """Check if a file exists @zara"""
         try:
-            from pathlib import Path
-            return Path(file_path).exists()
+            return file_path.exists()
         except Exception:
             return False
 
     def _get_file_status(self) -> Dict[str, Dict[str, bool]]:
-        """Get status of all expected files by directory."""
+        """Get status of all expected files by directory. Uses caching to avoid slow I/O."""
+        import time
+
         if not self._data_manager:
             return {}
 
+        # Return cached result if still valid
+        current_time = time.monotonic()
+        if self._cached_status and (current_time - self._cache_timestamp) < self.CACHE_TTL_SECONDS:
+            return self._cached_status
+
+        # Rebuild cache
         status = {}
         for directory, files in self.EXPECTED_FILES.items():
             dir_path = self._data_manager.data_dir / directory
@@ -946,6 +959,8 @@ class DataFilesStatusSensor(BaseSolarSensor):
                 file_path = dir_path / filename
                 status[directory][filename] = self._check_file_exists(file_path)
 
+        self._cached_status = status
+        self._cache_timestamp = current_time
         return status
 
     @property

@@ -1,15 +1,12 @@
-# ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
-# * This program is protected by a Proprietary Non-Commercial License.
-# 1. Personal and Educational use only.
-# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
-# 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
-# ******************************************************************************
 """Weather Data Collector for SFML Stats.
 
 Lädt Wetterdaten aus Solar Forecast ML's hourly_weather_actual.json.
 Diese Daten werden bereits von Solar Forecast ML gesammelt und gespeichert.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
 """
 from __future__ import annotations
 
@@ -237,7 +234,7 @@ class WeatherDataCollector:
         total_sun_hours = sum(d.get("sun_hours", 0) for d in week_data)
 
         return {
-            "avgTemp": round(sum(d.get("temp_avg", 0) for d in week_data) / len(week_data), 1),
+            "avgTemp": round(sum(d.get("temp_avg", 0) for d in week_data) / len(week_data), 1) if week_data else 0,
             "maxTemp": round(max((d.get("temp_max", 0) for d in history_data), default=0), 1),
             "minTemp": round(min((d.get("temp_min", 0) for d in history_data), default=0), 1),
             "totalRain": round(sum(d.get("rain_total", 0) for d in month_data), 1),
