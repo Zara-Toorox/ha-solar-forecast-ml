@@ -1,0 +1,130 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ESC Easy Sensor Creation",
+        "description": "What type of sensor would you like to create?",
+        "data": {
+          "sensor_type": "Sensor Type"
+        }
+      },
+      "kwh_config": {
+        "title": "Create kWh Sensor",
+        "description": "Select the power sensor (in W or kW) to integrate. A native Home Assistant Riemann sensor (helper) will be created, ideal for the Energy Dashboard. You'll find it under **Settings > Devices & Services > Helpers** after creation.",
+        "data": {
+          "source_sensor": "Source Sensor (W)",
+          "sensor_name": "Name of the new kWh Sensor"
+        }
+      },
+      "battery_mode": {
+        "title": "Select Battery Mode",
+        "description": "Does your sensor provide positive (charge) or negative (discharge) values? The W sensor will filter accordingly, and a Riemann kWh helper will be created.",
+        "data": {
+          "battery_mode": "Mode"
+        }
+      },
+      "battery_sensor": {
+        "title": "Select Power Sensor for Battery",
+        "description": "Choose the sensor with values (can be positive/negative).",
+        "data": {
+          "source_sensor": "Source Sensor (W)"
+        }
+      },
+      "select_sensors": {
+        "title": "Select Sensors for Sum",
+        "description": "Select multiple sensors whose values should be added. Ensure all have the same unit of measurement.",
+        "data": {
+          "source_sensors": "Which sensors do you want to add?"
+        }
+      },
+      "select_single_sensor": {
+        "title": "Select Sensor for Statistics",
+        "description": "Select the sensor that will serve as the basis for the statistic calculation.",
+        "data": {
+          "source_sensors": "Sensor"
+        }
+      },
+      "select_delta_sensor": {
+        "title": "Select Sensor for Delta",
+        "description": "Select the sensor for the trend comparison.",
+        "data": {
+          "source_sensor": "Sensor"
+        }
+      },
+      "delta_period": {
+        "title": "Select Delta Period",
+        "description": "Over which time period should the comparison run?",
+        "data": {
+          "delta_period": "Period"
+        }
+      },
+      "select_sql_stat_type": {
+        "title": "Select Statistic Type",
+        "description": "Which statistic would you like to calculate?",
+        "data": {
+          "sql_stat_type": "Statistic Type"
+        }
+      },
+      "binary_threshold": {
+        "title": "Configure Binary Threshold",
+        "description": "Create an alarm that turns on when the value is above/below a threshold.",
+        "data": {
+          "source_sensor": "Source Sensor",
+          "threshold": "Threshold",
+          "above_threshold": "On if > Threshold (otherwise <)"
+        }
+      },
+      "toggle_target": {
+        "title": "Configure Toggle Target",
+        "description": "Select the entity you want to pause/reset.",
+        "data": {
+          "target_entity": "Target Entity",
+          "action": "Action"
+        }
+      },
+      "sfml_config": {
+        "title": "Create SFML Sensors",
+        "description": "Select the DC power sensor of your solar panels. 3 sensors will be created automatically:\n- **Power Sensor** (W, positive values only)\n- **Yield Sensor** (kWh, Riemann integration)\n- **Daily Yield** (kWh, daily reset at midnight)",
+        "data": {
+          "source_sensor": "DC Power Sensor (W)",
+          "sensor_name": "Name (e.g. Solar, PV)"
+        }
+      },
+      "sfml_panel_count": {
+        "title": "SFML Panel Groups",
+        "description": "How many panel groups/strings do you want to configure?",
+        "data": {
+          "panel_count": "Number of Panel Groups"
+        }
+      },
+      "sfml_panel_config": {
+        "title": "Panel Group {current} of {total}",
+        "description": "Configure the panel group. 3 sensors will be created:\n- **Power** (W)\n- **Yield** (kWh total)\n- **Daily Yield** (kWh/day)",
+        "data": {
+          "source_sensor": "Power Sensor (W)",
+          "panel_name": "Group Name (e.g. Grp01, East, West)"
+        }
+      },
+      "device_class": {
+        "title": "Classify Sensor",
+        "description": "Would you like to classify your sensor? This helps Home Assistant display the correct icon and format.",
+        "data": {
+          "device_class": "Classification"
+        }
+      },
+      "name_sensor": {
+        "title": "Name Sensor",
+        "description": "What should your new sensor be called?",
+        "data": {
+          "sensor_name": "Sensor Name"
+        }
+      }
+    },
+    "error": {
+      "name_exists": "A helper with this name already exists. Please choose a different name."
+    },
+    "abort": {
+      "kwh_helper_created": "Your kWh sensor has been created. You'll find it under Helpers."
+    }
+  }
+}

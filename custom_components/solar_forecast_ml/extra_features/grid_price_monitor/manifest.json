@@ -1,0 +1,12 @@
+{
+  "domain": "grid_price_monitor",
+  "name": "Grid Price Monitor",
+  "codeowners": ["@Zara-Toorox"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Zara-Toorox/ha-grid-price-monitor",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Zara-Toorox/ha-grid-price-monitor/issues",
+  "requirements": [],
+  "version": "6.0.0"
+}

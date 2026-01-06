@@ -1,0 +1,46 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2867
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica-Bold;\f1\fswiss\fcharset0 Helvetica;\f2\fnil\fcharset0 HelveticaNeue;
+}
+{\colortbl;\red255\green255\blue255;\red45\green45\blue45;\red255\green255\blue255;}
+{\*\expandedcolortbl;;\cssrgb\c23137\c23137\c23137;\cssrgb\c100000\c100000\c100000;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\b\fs24 \cf0 ANLEITUNG UM DAS DASHBOARD ZU INSTALLIEREN
+\f1\b0 \
+\
+\
+
+\f0\b Voraussetzungen:
+\f1\b0 \
+\
+- Solar Forecast ML muss installiert sein\
+- Kein PI oder ARM SBC\
+- Kein Proxmox\
+\
+
+\f0\b Installation
+\f1\b0 \
+\
+1. Den Ordner \'84 sfml_stats\'93 in den Ordner custom_components kopieren\
+2. HA Neustarten \
+3. Der Neustart wird etwas dauern, da entsprechende Bibliotheken von den offiziellen HA Server nachgeladen werden (ca. 20 - 30 MB) \
+\
+Die Integration wie gewohnt \'fcber das Men\'fc hinzuf\'fcgen und dann konfigurieren. Es ist kein Problem, wenn man nicht alle Sensoren zur Verf\'fcgung hat! Die Integration kann jederzeit \'fcber das Men\'fc neu konfiguriert werden. \
+\
+
+\f0\b WICHTIG: Nach der Konfiguration oder Neukonfiguration bitte HA Neuladen! 
+\f1\b0 \
+\
+Hinzuf\'fcgen des Dashboard (wenn gew\'fcnscht)\
+\
+Einstellungen\
+Neues Dashboard \
+Website\
+URL: 
+\f2\fs26 \cf2 \cb3 \expnd0\expndtw0\kerning0
+http://DEINE_IP_ADRESSE:8123/api/sfml_stats/dashboard als Dahboard einbindet\
+\
+Name: SFML \
+\
+Speichern }

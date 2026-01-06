@@ -1,0 +1,7 @@
+{
+  "name": "Solar Forecast ML",
+  "content_in_root": false,
+  "render_readme": true,
+  "domains": ["sensor", "button"],
+  "homeassistant": "2024.1.0"
+}

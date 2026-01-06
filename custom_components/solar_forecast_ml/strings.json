@@ -1,0 +1,361 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solar Forecast ML",
+        "description": "Required: Power Sensor, Daily Yield\nOptional: All other fields\n\nWeather data is provided automatically via Open-Meteo API (no configuration needed)",
+        "data": {
+          "power_entity": "Power Sensor (W)",
+          "solar_yield_today": "Daily Yield (kWh)",
+          "total_consumption_today": "Daily Consumption (kWh)",
+          "solar_capacity": "System Capacity (kWp)",
+          "inverter_max_power": "Inverter Max Power (kW)",
+          "rain_sensor": "Rain Sensor",
+          "lux_sensor": "Illuminance Sensor (lx)",
+          "temp_sensor": "Temperature Sensor",
+          "wind_sensor": "Wind Sensor",
+          "humidity_sensor": "Humidity Sensor",
+          "pressure_sensor": "Pressure Sensor (hPa)",
+          "solar_radiation_sensor": "Solar Radiation Sensor (W/m²)"
+        },
+        "data_description": {
+          "power_entity": "Current power in Watts (Required)",
+          "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
+          "total_consumption_today": "Daily consumption in kWh (Optional)",
+          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, auto-calculated with panel groups)",
+          "inverter_max_power": "Max AC power of inverter in kW. Forecasts are capped and clipped hours excluded from training. 0 = disabled. (Optional)",
+          "rain_sensor": "External rain sensor (Optional)",
+          "lux_sensor": "External illuminance in Lux (Optional)",
+          "temp_sensor": "External temperature (Optional)",
+          "wind_sensor": "External wind speed (Optional)",
+          "humidity_sensor": "External humidity (Optional)",
+          "pressure_sensor": "External barometric pressure in hPa (Optional)",
+          "solar_radiation_sensor": "External solar radiation in W/m² (Optional, preferred over Lux)"
+        }
+      },
+      "panel_groups": {
+        "title": "Configure Panel Groups (optional)",
+        "description": "⚠️ ONLY FILL IN if you have panels/strings with different orientations or tilt angles!\nOtherwise leave empty.\n\n⚠️ SYSTEM REQUIREMENTS:\n• Native x64 Home Assistant: Recommended (unlimited groups)\n• Proxmox VM: Max. 2 groups recommended\n• SD card systems (RPi): NOT recommended (high I/O load)\n\nFormat per group: Power(Wp)/Azimuth(°)/Tilt(°)/[Energy-Sensor]\nGroups can be entered comma-separated or on separate lines.\n\nExample:\n1425/180/9/sensor.pv1_kwh_day, 870/180/47/sensor.pv2_kwh_day\n\nAzimuth: 0°=North, 90°=East, 180°=South, 270°=West\nTilt: 0°=horizontal, 90°=vertical\n\nEnergy sensor (optional): Daily kWh sensor that resets at midnight.",
+        "data": {
+          "panel_groups_input": "Panel Groups"
+        },
+        "data_description": {
+          "panel_groups_input": "Format: Power/Azimuth/Tilt/[Daily-kWh-Sensor] - comma or newline separated"
+        }
+      },
+      "reconfigure_panel_groups": {
+        "title": "Reconfigure Panel Groups",
+        "description": "⚠️ ONLY FILL IN if you have panels/strings with different orientations or tilt angles!\nOtherwise leave empty.\n\n⚠️ SYSTEM REQUIREMENTS:\n• Native x64 Home Assistant: Recommended (unlimited groups)\n• Proxmox VM: Max. 2 groups recommended\n• SD card systems (RPi): NOT recommended (high I/O load)\n\nFormat: Power(Wp)/Azimuth(°)/Tilt(°)/[Energy-Sensor]\nComma-separated or one per line.\n\nEnergy sensor: Daily kWh sensor (resets at midnight)\n\nLeave empty for simple capacity calculation.",
+        "data": {
+          "panel_groups_input": "Panel Groups"
+        },
+        "data_description": {
+          "panel_groups_input": "Format: Power/Azimuth/Tilt/[Daily-kWh-Sensor] - comma or newline separated"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Solar Forecast ML",
+        "description": "Update configuration\nEmpty optional fields will clear their value\n\nWeather data is provided automatically via Open-Meteo API",
+        "data": {
+          "power_entity": "Power Sensor (W)",
+          "solar_yield_today": "Daily Yield (kWh)",
+          "total_consumption_today": "Daily Consumption (kWh)",
+          "solar_capacity": "System Capacity (kWp)",
+          "inverter_max_power": "Inverter Max Power (kW)",
+          "rain_sensor": "Rain Sensor",
+          "lux_sensor": "Illuminance Sensor (lx)",
+          "temp_sensor": "Temperature Sensor",
+          "wind_sensor": "Wind Sensor",
+          "humidity_sensor": "Humidity Sensor",
+          "pressure_sensor": "Pressure Sensor (hPa)",
+          "solar_radiation_sensor": "Solar Radiation Sensor (W/m²)"
+        },
+        "data_description": {
+          "power_entity": "Current power in Watts (Required)",
+          "solar_yield_today": "Daily yield in kWh - MUST reset at midnight (Required)",
+          "total_consumption_today": "Daily consumption in kWh (Optional)",
+          "solar_capacity": "Peak power in kWp, e.g., 5.5 (Optional, auto-calculated with panel groups)",
+          "inverter_max_power": "Max AC power of inverter in kW. Forecasts are capped and clipped hours excluded from training. 0 = disabled. (Optional)",
+          "rain_sensor": "External rain sensor (Optional)",
+          "lux_sensor": "External illuminance in Lux (Optional)",
+          "temp_sensor": "External temperature (Optional)",
+          "wind_sensor": "External wind speed (Optional)",
+          "humidity_sensor": "External humidity (Optional)",
+          "pressure_sensor": "External barometric pressure in hPa (Optional)",
+          "solar_radiation_sensor": "External solar radiation in W/m² (Optional, preferred over Lux)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Connection to sensor failed",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unknown error occurred",
+      "invalid_capacity": "Capacity must be 0.1-1000.0 kWp",
+      "invalid_input": "Invalid input format",
+      "required": "Field required",
+      "already_configured": "Weather entity already in use",
+      "sensor_not_found": "Sensor entity not found",
+      "invalid_sensor_state": "Sensor state invalid or unavailable",
+      "invalid_panel_format": "Invalid format. Please use: Power/Azimuth/Tilt (e.g., 1200/180/30)"
+    },
+    "abort": {
+      "already_configured": "Integration already configured",
+      "reconfigure_successful": "Reconfiguration successful",
+      "not_reconfigure": "Only available for reconfiguration",
+      "entry_not_found": "Configuration entry not found"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Advanced Options",
+        "description": "Configure update intervals and notifications",
+        "data": {
+          "update_interval": "Update Interval (s)",
+          "diagnostic": "Diagnostic Mode",
+          "hourly": "Hourly Forecast Sensor",
+          "notify_startup": "Startup Notification",
+          "notify_forecast": "Forecast Notifications",
+          "notify_learning": "Training Notifications",
+          "notify_successful_learning": "Success Notifications",
+          "ml_algorithm": "Mode",
+          "enable_tiny_lstm": "Enable / Disable AI",
+          "pirate_weather_api_key": "Pirate Weather API Key"
+        },
+        "data_description": {
+          "update_interval": "Forecast update interval (300-86400s, default: 3600)",
+          "diagnostic": "Enable diagnostic sensors for monitoring",
+          "hourly": "Enable next hour forecast sensor",
+          "notify_startup": "Show notification on startup",
+          "notify_forecast": "Notify on forecast updates",
+          "notify_learning": "Notify on training start",
+          "notify_successful_learning": "Notify on training success",
+          "ml_algorithm": "Choose algorithm: 'Automatic' lets system decide based on available data (recommended). 'Ridge' is fast and stable. 'Neural Network' provides 5-10% better accuracy with 100+ samples.",
+          "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled.",
+          "pirate_weather_api_key": "Optional: Free API key from https://pirate-weather.apiable.io/ - Enables NOAA GFS/HRRR weather model for improved cloud cover blending."
+        }
+      }
+    },
+    "error": {
+      "invalid_interval": "Interval must be 300-86400 seconds",
+      "invalid_input": "Invalid input format",
+      "energy_sensor_not_found": "Energy sensor not found",
+      "energy_sensor_not_numeric": "Energy sensor is not numeric"
+    }
+  },
+  "services": {
+    "train_model": {
+      "name": "Train ML Model",
+      "description": "Manually trigger ML model training with collected production data",
+      "fields": {
+        "force": {
+          "name": "Force Training",
+          "description": "Force training even if minimum samples not reached"
+        }
+      }
+    },
+    "force_forecast": {
+      "name": "Force Forecast Update",
+      "description": "Immediately update all forecast sensors"
+    },
+    "clear_training_data": {
+      "name": "Clear Training Data",
+      "description": "Delete all collected training samples (requires confirmation)"
+    },
+    "reset_model": {
+      "name": "Reset ML Model",
+      "description": "Reset trained model and switch to rule-based forecast"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "tomorrow_forecast": {
+        "name": "Forecast Tomorrow"
+      },
+      "next_hour_forecast": {
+        "name": "Next Hour Forecast"
+      },
+      "production_time": {
+        "name": "Production Time Today"
+      },
+      "self_sufficiency": {
+        "name": "Self-Sufficiency Today"
+      },
+      "efficiency": {
+        "name": "System Efficiency Today"
+      },
+      "model_state": {
+        "name": "ML Model State",
+        "state": {
+          "not_trained": "Not Trained",
+          "training": "Training",
+          "trained": "Trained",
+          "error": "Error",
+          "rule_based": "Rule-Based"
+        }
+      },
+      "training_samples": {
+        "name": "Training Samples"
+      },
+      "model_accuracy": {
+        "name": "Model Accuracy"
+      },
+      "ai_rmse": {
+        "name": "AI RMSE",
+        "state": {
+          "excellent": "Excellent",
+          "very_good": "Very Good",
+          "good": "Good",
+          "fair": "Fair",
+          "moderate": "Moderate",
+          "learning": "Learning"
+        }
+      },
+      "last_training": {
+        "name": "Last Training"
+      },
+      "next_training": {
+        "name": "Next Training"
+      },
+      "forecast_method": {
+        "name": "Forecast Method",
+        "state": {
+          "ml": "Machine Learning",
+          "rule_based": "Rule-Based",
+          "fallback": "Fallback"
+        }
+      },
+      "data_quality": {
+        "name": "Data Quality"
+      },
+      "api_status": {
+        "name": "Weather API Status",
+        "state": {
+          "ok": "OK",
+          "error": "Error",
+          "rate_limited": "Rate Limited",
+          "unavailable": "Unavailable"
+        }
+      },
+      "cloudiness_trend_1h": {
+        "name": "Cloudiness Trend 1h",
+        "state": {
+          "getting_clearer": "Getting Clearer",
+          "slightly_clearer": "Slightly Clearer",
+          "stable": "Stable",
+          "slightly_cloudier": "Slightly Cloudier",
+          "getting_cloudier": "Getting Cloudier"
+        }
+      },
+      "cloudiness_trend_3h": {
+        "name": "Cloudiness Trend 3h",
+        "state": {
+          "much_clearer": "Much Clearer",
+          "getting_clearer": "Getting Clearer",
+          "relatively_stable": "Relatively Stable",
+          "getting_cloudier": "Getting Cloudier",
+          "much_cloudier": "Much Cloudier"
+        }
+      },
+      "cloudiness_volatility": {
+        "name": "Weather Stability",
+        "state": {
+          "very_stable": "Very Stable",
+          "stable": "Stable",
+          "moderate": "Moderate",
+          "variable": "Variable",
+          "very_variable": "Very Variable"
+        }
+      },
+      "training_readiness": {
+        "name": "Training Readiness",
+        "state": {
+          "collecting": "Collecting Data",
+          "early": "Early Training",
+          "ready": "Ready",
+          "excellent": "Excellent"
+        }
+      },
+      "shadow_current": {
+        "name": "Shadow Current",
+        "state": {
+          "clear": "Clear",
+          "light_shadow": "Light Shadow",
+          "moderate_shadow": "Moderate Shadow",
+          "heavy_shadow": "Heavy Shadow",
+          "night": "Night",
+          "no_data": "No Data",
+          "error": "Error"
+        }
+      },
+      "shadow_today": {
+        "name": "Shadow Today"
+      },
+      "performance_loss_today": {
+        "name": "Performance Loss Today"
+      }
+    }
+  },
+  "state_attributes": {
+    "forecast": {
+      "method": "Forecast Method",
+      "confidence": "Confidence",
+      "updated": "Last Update",
+      "weather_condition": "Weather Condition",
+      "cloud_coverage": "Cloud Coverage",
+      "temperature": "Temperature",
+      "uv_index": "UV Index",
+      "sunshine_duration": "Sunshine Duration"
+    },
+    "model": {
+      "accuracy": "Accuracy",
+      "samples": "Training Samples",
+      "last_trained": "Last Training",
+      "mae": "Mean Absolute Error",
+      "rmse": "Root Mean Square Error",
+      "features": "Feature Count"
+    },
+    "production": {
+      "start_time": "Production Start",
+      "end_time": "Production End",
+      "peak_time": "Peak Time",
+      "peak_power": "Peak Power",
+      "current_power": "Current Power",
+      "total_today": "Total Today"
+    }
+  },
+  "issues": {
+    "model_training_failed": {
+      "title": "ML Model Training Failed",
+      "description": "Training failed: {error}\nCheck logs for details."
+    },
+    "insufficient_data": {
+      "title": "Insufficient Training Data",
+      "description": "Need {required} samples, have {current}. Continue collecting data."
+    },
+    "weather_api_error": {
+      "title": "Weather API Error",
+      "description": "Weather API unavailable: {error}\nUsing fallback forecast."
+    },
+    "sensor_unavailable": {
+      "title": "Sensor Unavailable",
+      "description": "Required sensor '{entity}' unavailable. Check configuration."
+    }
+  },
+  "selector": {
+    "forecast_method": {
+      "options": {
+        "ml": "Machine Learning (if trained)",
+        "rule_based": "Rule-Based Only",
+        "auto": "Automatic (ML with fallback)"
+      }
+    },
+    "ml_algorithm": {
+      "options": {
+        "auto": "Automatic (Recommended)",
+        "ridge": "Ridge Regression (Fast)",
+        "tiny_lstm": "Neural Network (Better Accuracy)"
+      }
+    }
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Grid Price Monitor Einrichtung",
+        "description": "Konfigurieren Sie Ihre Strommarkt-Region.",
+        "data": {
+          "country": "Land"
+        },
+        "data_description": {
+          "country": "Wählen Sie Ihren Strommarkt (Deutschland oder Österreich)"
+        }
+      },
+      "pricing": {
+        "title": "Preiskonfiguration",
+        "description": "Aktueller Börsenpreis (brutto): **{spot_price} ct/kWh**\n\nSie können entweder automatisch kalibrieren, indem Sie Ihren aktuellen Gesamtpreis eingeben, oder die einzelnen Komponenten manuell eingeben.",
+        "data": {
+          "vat_rate": "MwSt-Satz",
+          "use_calibration": "Automatische Kalibrierung verwenden",
+          "calibration_price": "Ihr aktueller Gesamtpreis (aus der Anbieter-App)",
+          "grid_fee": "Netzentgelt",
+          "taxes_fees": "Steuern und Abgaben",
+          "provider_markup": "Anbieter-Aufschlag",
+          "max_price": "Maximaler Preisschwellwert",
+          "battery_power_sensor": "Batterie-Leistungssensor"
+        },
+        "data_description": {
+          "vat_rate": "MwSt-Satz auf den Börsenpreis (19% DE, 20% AT, 7% ermäßigt)",
+          "use_calibration": "Aufschlag automatisch aus Ihrem aktuellen Preis berechnen",
+          "calibration_price": "Geben Sie den Preis ein, der jetzt in Ihrer Anbieter-App angezeigt wird",
+          "grid_fee": "Netznutzungsentgelte Ihres Netzbetreibers (brutto, inkl. MwSt)",
+          "taxes_fees": "Stromsteuer, EEG-Umlage, etc. (brutto, inkl. MwSt)",
+          "provider_markup": "Marge/Gewinn Ihres Stromanbieters (brutto, inkl. MwSt)",
+          "max_price": "Binärsensor schaltet EIN, wenn der Gesamtpreis unter diesem Schwellwert liegt",
+          "battery_power_sensor": "Leistungssensor für Batterieladung aus dem Netz (optional)"
+        }
+      },
+      "reconfigure": {
+        "title": "Grid Price Monitor neu konfigurieren",
+        "description": "Ändern Sie Ihre Strommarkt-Region. Danach können Sie alle Preiseinstellungen anpassen.",
+        "data": {
+          "country": "Land"
+        },
+        "data_description": {
+          "country": "Wählen Sie Ihren Strommarkt (Deutschland oder Österreich)"
+        }
+      }
+    },
+    "error": {
+      "calibration_failed": "Kalibrierung fehlgeschlagen. Bitte geben Sie die Werte manuell ein.",
+      "cannot_connect": "Verbindung zur aWATTar API nicht möglich",
+      "unknown": "Ein unbekannter Fehler ist aufgetreten"
+    },
+    "abort": {
+      "already_configured": "Grid Price Monitor ist bereits konfiguriert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Grid Price Monitor Optionen",
+        "description": "Aktueller Markt: **{country}**\n\nPassen Sie Ihre Preiskonfiguration an. Um das Land zu ändern, verwenden Sie 'Neu konfigurieren'.",
+        "data": {
+          "vat_rate": "MwSt-Satz",
+          "grid_fee": "Netzentgelt",
+          "taxes_fees": "Steuern und Abgaben",
+          "provider_markup": "Anbieter-Aufschlag",
+          "max_price": "Maximaler Preisschwellwert",
+          "battery_power_sensor": "Batterie-Leistungssensor"
+        },
+        "data_description": {
+          "vat_rate": "MwSt-Satz auf den Börsenpreis",
+          "grid_fee": "Netznutzungsentgelte Ihres Netzbetreibers (ct/kWh, brutto)",
+          "taxes_fees": "Stromsteuer, EEG-Umlage, etc. (ct/kWh, brutto)",
+          "provider_markup": "Marge/Gewinn Ihres Stromanbieters (ct/kWh, brutto)",
+          "max_price": "Binärsensor schaltet EIN, wenn der Gesamtpreis unter diesem Wert liegt",
+          "battery_power_sensor": "Leistungssensor für Batterieladung aus dem Netz (optional)"
+        }
+      }
+    },
+    "error": {
+      "invalid_max_price": "Maximaler Preis muss größer als 0 sein"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "spot_price": {
+        "name": "Börsenpreis"
+      },
+      "total_price": {
+        "name": "Gesamtpreis"
+      },
+      "spot_price_next_hour": {
+        "name": "Börsenpreis nächste Stunde"
+      },
+      "total_price_next_hour": {
+        "name": "Gesamtpreis nächste Stunde"
+      },
+      "cheapest_hour_today": {
+        "name": "Günstigste Stunde heute"
+      },
+      "most_expensive_hour_today": {
+        "name": "Teuerste Stunde heute"
+      },
+      "average_price_today": {
+        "name": "Durchschnittspreis heute"
+      },
+      "battery_power": {
+        "name": "Batterie-Leistung"
+      },
+      "battery_charged_today": {
+        "name": "Batterie geladen heute"
+      },
+      "battery_charged_week": {
+        "name": "Batterie geladen Woche"
+      },
+      "battery_charged_month": {
+        "name": "Batterie geladen Monat"
+      }
+    },
+    "binary_sensor": {
+      "cheap_energy": {
+        "name": "Günstiger Strom",
+        "state": {
+          "on": "Günstig",
+          "off": "Teuer"
+        }
+      }
+    }
+  }
+}

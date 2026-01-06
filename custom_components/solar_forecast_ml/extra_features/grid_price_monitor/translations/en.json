@@ -1,0 +1,131 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Grid Price Monitor Setup",
+        "description": "Configure your electricity market region.",
+        "data": {
+          "country": "Country"
+        },
+        "data_description": {
+          "country": "Select your electricity market (Germany or Austria)"
+        }
+      },
+      "pricing": {
+        "title": "Price Configuration",
+        "description": "Current spot price (gross): **{spot_price} ct/kWh**\n\nYou can either calibrate automatically by entering your current total price, or manually enter the individual components.",
+        "data": {
+          "vat_rate": "VAT rate",
+          "use_calibration": "Use automatic calibration",
+          "calibration_price": "Your current total price (from provider app)",
+          "grid_fee": "Grid fee",
+          "taxes_fees": "Taxes and fees",
+          "provider_markup": "Provider markup",
+          "max_price": "Maximum price threshold",
+          "battery_power_sensor": "Battery power sensor"
+        },
+        "data_description": {
+          "vat_rate": "VAT rate applied to spot price (19% DE, 20% AT, 7% reduced)",
+          "use_calibration": "Calculate markup automatically from your current price",
+          "calibration_price": "Enter the price shown in your provider's app right now",
+          "grid_fee": "Network charges from your grid operator (gross, incl. VAT)",
+          "taxes_fees": "Electricity tax, EEG surcharge, etc. (gross, incl. VAT)",
+          "provider_markup": "Your provider's margin/profit (gross, incl. VAT)",
+          "max_price": "Binary sensor turns ON when total price is below this threshold",
+          "battery_power_sensor": "Power sensor for battery charging from grid (optional)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Grid Price Monitor",
+        "description": "Change your electricity market region. After this step, you can adjust all pricing settings.",
+        "data": {
+          "country": "Country"
+        },
+        "data_description": {
+          "country": "Select your electricity market (Germany or Austria)"
+        }
+      }
+    },
+    "error": {
+      "calibration_failed": "Calibration failed. Please enter values manually.",
+      "cannot_connect": "Unable to connect to aWATTar API",
+      "unknown": "An unknown error occurred"
+    },
+    "abort": {
+      "already_configured": "Grid Price Monitor is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Grid Price Monitor Options",
+        "description": "Current market: **{country}**\n\nAdjust your pricing configuration. To change the country, use 'Reconfigure' instead.",
+        "data": {
+          "vat_rate": "VAT rate",
+          "grid_fee": "Grid fee",
+          "taxes_fees": "Taxes and fees",
+          "provider_markup": "Provider markup",
+          "max_price": "Maximum price threshold",
+          "battery_power_sensor": "Battery power sensor"
+        },
+        "data_description": {
+          "vat_rate": "VAT rate applied to spot price",
+          "grid_fee": "Network charges from your grid operator (ct/kWh, gross)",
+          "taxes_fees": "Electricity tax, EEG surcharge, etc. (ct/kWh, gross)",
+          "provider_markup": "Your provider's margin/profit (ct/kWh, gross)",
+          "max_price": "Binary sensor turns ON when total price is below this value",
+          "battery_power_sensor": "Power sensor for battery charging from grid (optional)"
+        }
+      }
+    },
+    "error": {
+      "invalid_max_price": "Maximum price must be greater than 0"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "spot_price": {
+        "name": "Spot Price"
+      },
+      "total_price": {
+        "name": "Total Price"
+      },
+      "spot_price_next_hour": {
+        "name": "Spot Price Next Hour"
+      },
+      "total_price_next_hour": {
+        "name": "Total Price Next Hour"
+      },
+      "cheapest_hour_today": {
+        "name": "Cheapest Hour Today"
+      },
+      "most_expensive_hour_today": {
+        "name": "Most Expensive Hour Today"
+      },
+      "average_price_today": {
+        "name": "Average Price Today"
+      },
+      "battery_power": {
+        "name": "Battery Power"
+      },
+      "battery_charged_today": {
+        "name": "Battery Charged Today"
+      },
+      "battery_charged_week": {
+        "name": "Battery Charged Week"
+      },
+      "battery_charged_month": {
+        "name": "Battery Charged Month"
+      }
+    },
+    "binary_sensor": {
+      "cheap_energy": {
+        "name": "Cheap Energy",
+        "state": {
+          "on": "Cheap",
+          "off": "Expensive"
+        }
+      }
+    }
+  }
+}

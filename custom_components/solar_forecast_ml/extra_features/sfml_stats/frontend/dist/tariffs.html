@@ -1,0 +1,1155 @@
+<!--
+    SFML Stats - Monthly Tariff Management @zara
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+    Copyright (C) 2025 Zara-Toorox
+-->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFML Stats - Monatliche Tarife</title>
+
+    <!-- Vue 3 -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+
+    <style>
+        /* ============================================================
+           CSS Variables - Dark Neon Theme (Default)
+           ============================================================ */
+        :root {
+            --bg-dark: #0a0a1a;
+            --bg-medium: #12122a;
+            --bg-light: #1a1a3a;
+            --bg-card: #1e1e3e;
+            --neon-yellow: #ffdd00;
+            --neon-orange: #ff8c00;
+            --neon-cyan: #00ffff;
+            --neon-green: #00ff88;
+            --neon-pink: #ff0080;
+            --neon-purple: #8b5cf6;
+            --neon-blue: #3b82f6;
+            --neon-battery: #22c55e;
+            --text-white: #ffffff;
+            --text-light: #e2e8f0;
+            --text-muted: #94a3b8;
+            --text-dark: #64748b;
+            --gradient-card: linear-gradient(145deg, var(--bg-card), var(--bg-medium));
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --border-accent: rgba(0, 255, 255, 0.3);
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        :root.light-theme {
+            --bg-dark: #f0f4f8;
+            --bg-medium: #e2e8f0;
+            --bg-light: #ffffff;
+            --bg-card: #ffffff;
+            --neon-yellow: #d97706;
+            --neon-orange: #ea580c;
+            --neon-cyan: #0891b2;
+            --neon-green: #059669;
+            --neon-pink: #db2777;
+            --neon-purple: #7c3aed;
+            --neon-blue: #2563eb;
+            --neon-battery: #16a34a;
+            --text-white: #1e293b;
+            --text-light: #334155;
+            --text-muted: #64748b;
+            --text-dark: #94a3b8;
+            --gradient-card: linear-gradient(145deg, #ffffff, #f1f5f9);
+            --border-subtle: rgba(0, 0, 0, 0.1);
+            --border-accent: rgba(8, 145, 178, 0.3);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow-x: hidden; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+
+        #app {
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--text-white);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-accent);
+            background: var(--bg-card);
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--bg-light);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background: var(--neon-blue);
+            border-color: var(--neon-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-success {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .btn-small {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        /* Year Selector */
+        .year-selector {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .year-selector button {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-light);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .year-selector button:hover {
+            background: var(--bg-light);
+        }
+
+        .year-selector span {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-white);
+            min-width: 80px;
+            text-align: center;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--gradient-card);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-subtle);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            color: var(--text-white);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        th, td {
+            padding: 0.75rem 0.5rem;
+            text-align: right;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        th:first-child, td:first-child {
+            text-align: left;
+        }
+
+        tr:hover {
+            background: var(--bg-light);
+        }
+
+        /* Source Icons */
+        .source-icon {
+            font-size: 0.875rem;
+            margin-left: 0.25rem;
+            cursor: help;
+        }
+
+        .source-auto { color: var(--neon-cyan); }
+        .source-default { color: var(--text-muted); }
+        .source-manual { color: var(--neon-orange); }
+        .source-estimated { color: var(--neon-purple); }
+
+        /* Status */
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-finalized {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success);
+        }
+
+        .status-open {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        /* Summary Cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .summary-item {
+            background: var(--bg-light);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-white);
+        }
+
+        .summary-value.positive { color: var(--neon-green); }
+        .summary-value.negative { color: var(--neon-pink); }
+
+        .summary-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-accent);
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            color: var(--text-white);
+            font-size: 1.125rem;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 1rem;
+        }
+
+        .modal-footer {
+            padding: 1rem;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-bottom: 0.25rem;
+        }
+
+        .form-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .form-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.5rem;
+            background: var(--bg-dark);
+            color: var(--text-light);
+            font-size: 0.875rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--neon-cyan);
+        }
+
+        .form-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .auto-value {
+            background: var(--bg-light);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .checkbox-wrapper input {
+            width: 1rem;
+            height: 1rem;
+        }
+
+        .checkbox-wrapper label {
+            font-size: 0.875rem;
+            color: var(--text-light);
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: var(--border-subtle);
+            margin: 1rem 0;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 2rem;
+            height: 2rem;
+            border: 3px solid var(--border-subtle);
+            border-top-color: var(--neon-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.875rem;
+            z-index: 2000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            table {
+                font-size: 0.75rem;
+            }
+
+            th, td {
+                padding: 0.5rem 0.25rem;
+            }
+        }
+
+        /* Back Link */
+        .back-link {
+            color: var(--neon-cyan);
+            text-decoration: none;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Editable cell */
+        .editable-cell {
+            cursor: pointer;
+            transition: background 0.2s ease;
+            border-radius: 0.25rem;
+            padding: 0.25rem;
+        }
+
+        .editable-cell:hover {
+            background: var(--bg-light);
+        }
+
+        /* Row clickable */
+        tr.clickable {
+            cursor: pointer;
+        }
+
+        tr.clickable:hover {
+            background: var(--bg-light);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <a href="/api/sfml_stats/dashboard" class="back-link">
+            ← Zurück zum Dashboard
+        </a>
+
+        <div class="header">
+            <h1>📊 Monatliche Tarife & Abrechnung</h1>
+            <div class="header-actions">
+                <button class="btn" @click="toggleTheme">
+                    {{ isDarkTheme ? '☀️' : '🌙' }}
+                </button>
+                <button class="btn" @click="exportCSV" :disabled="loading">
+                    📥 CSV Export
+                </button>
+                <button class="btn btn-primary" @click="showDefaultsModal = true">
+                    ⚙️ Defaults
+                </button>
+            </div>
+        </div>
+
+        <!-- Year Selector -->
+        <div class="year-selector">
+            <button @click="changeYear(-1)">◀</button>
+            <span>{{ selectedYear }}</span>
+            <button @click="changeYear(1)" :disabled="selectedYear >= currentYear">▶</button>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Lade Tarifdaten...</p>
+        </div>
+
+        <!-- Main Content -->
+        <div v-else>
+            <!-- Monthly Table -->
+            <div class="card">
+                <div class="card-title">
+                    📅 Monatliche Übersicht {{ selectedYear }}
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Monat</th>
+                                <th>Bezug (kWh)</th>
+                                <th>Bezugspreis (ct)</th>
+                                <th>Einspeisung (kWh)</th>
+                                <th>Vergütung (ct)</th>
+                                <th>Eigenverbr. (kWh)</th>
+                                <th>Referenz (ct)</th>
+                                <th>Netzgeb. (ct)</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="month in data.months"
+                                :key="month.month_key"
+                                class="clickable"
+                                @click="openEditModal(month)">
+                                <td>{{ getMonthName(month.month) }}</td>
+                                <td>{{ formatNumber(month.auto_calculated.import_kwh) }}</td>
+                                <td>
+                                    {{ formatNumber(month.effective.import_price_ct.value) }}
+                                    <span :class="'source-icon source-' + month.effective.import_price_ct.source"
+                                          :title="getSourceTitle(month.effective.import_price_ct.source)">
+                                        {{ getSourceIcon(month.effective.import_price_ct.source) }}
+                                    </span>
+                                </td>
+                                <td>{{ formatNumber(month.auto_calculated.export_kwh) }}</td>
+                                <td>
+                                    {{ formatNumber(month.effective.export_price_ct.value) }}
+                                    <span :class="'source-icon source-' + month.effective.export_price_ct.source"
+                                          :title="getSourceTitle(month.effective.export_price_ct.source)">
+                                        {{ getSourceIcon(month.effective.export_price_ct.source) }}
+                                    </span>
+                                </td>
+                                <td>{{ formatNumber(month.auto_calculated.self_consumption_kwh) }}</td>
+                                <td>
+                                    {{ formatNumber(month.effective.reference_price_ct.value) }}
+                                    <span :class="'source-icon source-' + month.effective.reference_price_ct.source"
+                                          :title="getSourceTitle(month.effective.reference_price_ct.source)">
+                                        {{ getSourceIcon(month.effective.reference_price_ct.source) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {{ formatNumber(month.effective.grid_fee_ct.value) }}
+                                    <span :class="'source-icon source-' + month.effective.grid_fee_ct.source"
+                                          :title="getSourceTitle(month.effective.grid_fee_ct.source)">
+                                        {{ getSourceIcon(month.effective.grid_fee_ct.source) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span :class="'status-badge ' + (month.is_finalized ? 'status-finalized' : 'status-open')">
+                                        {{ month.is_finalized ? '✅ Final' : '⏳ Offen' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="legend">
+                    <span class="legend-item"><span class="source-icon source-auto">🤖</span> Auto-berechnet</span>
+                    <span class="legend-item"><span class="source-icon source-default">⚙️</span> Default</span>
+                    <span class="legend-item"><span class="source-icon source-manual">✏️</span> Manuell</span>
+                    <span class="legend-item"><span class="source-icon source-estimated">📊</span> Geschätzt</span>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="card">
+                <div class="card-title">
+                    💰 Zusammenfassung {{ selectedYear }}
+                </div>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="summary-value negative">{{ formatCurrency(data.totals?.grid_cost_eur || 0) }}</div>
+                        <div class="summary-label">Stromkosten (Bezug)</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value positive">{{ formatCurrency(data.totals?.feed_in_revenue_eur || 0) }}</div>
+                        <div class="summary-label">Einspeise-Erlös</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value positive">{{ formatCurrency(data.totals?.savings_eur || 0) }}</div>
+                        <div class="summary-label">Einsparung (Eigenverbrauch)</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" :class="(data.totals?.net_benefit_eur || 0) >= 0 ? 'positive' : 'negative'">
+                            {{ formatCurrency(data.totals?.net_benefit_eur || 0) }}
+                        </div>
+                        <div class="summary-label">Netto-Vorteil PV</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>📝 {{ editMonth ? getMonthName(editMonth.month) + ' ' + selectedYear : '' }}</h3>
+                    <button class="modal-close" @click="showEditModal = false">×</button>
+                </div>
+                <div class="modal-body" v-if="editMonth">
+                    <!-- Import Price -->
+                    <div class="form-group">
+                        <label class="form-label">Bezugspreis (ct/kWh)</label>
+                        <div class="auto-value">
+                            {{ formatNumber(editMonth.auto_calculated.weighted_avg_price_ct) }} ct/kWh
+                            <span class="source-icon source-auto">🤖</span>
+                            <span style="color: var(--text-muted); font-size: 0.75rem;">Gewichteter Durchschnitt</span>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="override_import" v-model="editOverrides.import_price_enabled">
+                            <label for="override_import">Manuell überschreiben:</label>
+                        </div>
+                        <input type="number" step="0.01"
+                               class="form-input"
+                               v-model.number="editOverrides.import_price_ct"
+                               :disabled="!editOverrides.import_price_enabled"
+                               placeholder="z.B. 32.50">
+                    </div>
+
+                    <!-- Export Price -->
+                    <div class="form-group">
+                        <label class="form-label">Einspeisevergütung (ct/kWh)</label>
+                        <div class="auto-value">
+                            {{ formatNumber(editMonth.defaults.feed_in_tariff_ct) }} ct/kWh
+                            <span class="source-icon source-default">⚙️</span>
+                            <span style="color: var(--text-muted); font-size: 0.75rem;">Default</span>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="override_export" v-model="editOverrides.export_price_enabled">
+                            <label for="override_export">Manuell überschreiben:</label>
+                        </div>
+                        <input type="number" step="0.01"
+                               class="form-input"
+                               v-model.number="editOverrides.export_price_ct"
+                               :disabled="!editOverrides.export_price_enabled"
+                               placeholder="z.B. 8.10">
+                    </div>
+
+                    <!-- Reference Price -->
+                    <div class="form-group">
+                        <label class="form-label">Referenzpreis ohne PV (ct/kWh)</label>
+                        <div class="auto-value">
+                            {{ formatNumber(editMonth.defaults.reference_price_ct) }} ct/kWh
+                            <span class="source-icon source-default">⚙️</span>
+                            <span style="color: var(--text-muted); font-size: 0.75rem;">Default</span>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="override_reference" v-model="editOverrides.reference_price_enabled">
+                            <label for="override_reference">Manuell überschreiben:</label>
+                        </div>
+                        <input type="number" step="0.01"
+                               class="form-input"
+                               v-model.number="editOverrides.reference_price_ct"
+                               :disabled="!editOverrides.reference_price_enabled"
+                               placeholder="z.B. 26.00">
+                    </div>
+
+                    <!-- Grid Fee -->
+                    <div class="form-group">
+                        <label class="form-label">Netzgebühren (ct/kWh)</label>
+                        <div class="auto-value">
+                            ~{{ formatNumber(editMonth.auto_calculated.estimated_grid_fee_ct) }} ct/kWh
+                            <span class="source-icon source-estimated">📊</span>
+                            <span style="color: var(--text-muted); font-size: 0.75rem;">Geschätzt</span>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="override_grid_fee" v-model="editOverrides.grid_fee_enabled">
+                            <label for="override_grid_fee">Manuell überschreiben:</label>
+                        </div>
+                        <input type="number" step="0.01"
+                               class="form-input"
+                               v-model.number="editOverrides.grid_fee_ct"
+                               :disabled="!editOverrides.grid_fee_enabled"
+                               placeholder="z.B. 18.00">
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- Finalize -->
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="finalize" v-model="editOverrides.finalize">
+                            <label for="finalize">
+                                <strong>Monat als abgerechnet markieren</strong>
+                            </label>
+                        </div>
+                        <p class="form-hint" v-if="editOverrides.finalize">
+                            ⚠️ Historische Tage werden mit den neuen Preisen neu berechnet.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" @click="showEditModal = false">Abbrechen</button>
+                    <button class="btn btn-primary" @click="saveOverrides" :disabled="saving">
+                        {{ saving ? 'Speichern...' : 'Speichern' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Defaults Modal -->
+        <div v-if="showDefaultsModal" class="modal-overlay" @click.self="showDefaultsModal = false">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>⚙️ Tarif-Defaults</h3>
+                    <button class="modal-close" @click="showDefaultsModal = false">×</button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        Diese Werte werden als Standard für alle Monate verwendet,
+                        die noch nicht manuell überschrieben wurden.
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">Referenzpreis (ct/kWh)</label>
+                        <p class="form-hint">Was würde Strom ohne PV kosten?</p>
+                        <input type="number" step="0.01" class="form-input"
+                               v-model.number="defaults.reference_price_ct">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Einspeisevergütung (ct/kWh)</label>
+                        <p class="form-hint">EEG-Vergütung für eingespeisten Strom</p>
+                        <input type="number" step="0.01" class="form-input"
+                               v-model.number="defaults.feed_in_tariff_ct">
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        <strong>EEG / Energy Sharing (optional)</strong>
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">EEG-Bezugspreis (ct/kWh)</label>
+                        <p class="form-hint">Preis für Bezug aus der Energiegemeinschaft</p>
+                        <input type="number" step="0.01" class="form-input"
+                               v-model.number="defaults.eeg_import_price_ct">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">EEG-Einspeisepreis (ct/kWh)</label>
+                        <p class="form-hint">Vergütung für Einspeisung in die Energiegemeinschaft</p>
+                        <input type="number" step="0.01" class="form-input"
+                               v-model.number="defaults.eeg_feed_in_ct">
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="form-group">
+                        <label class="form-label">Basis-Netzgebühr (ct/kWh)</label>
+                        <p class="form-hint">Netzgebühr bei hohem Verbrauch (>5000 kWh/Jahr)</p>
+                        <input type="number" step="0.01" class="form-input"
+                               v-model.number="defaults.grid_fee_base_ct">
+                    </div>
+
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="grid_scaling" v-model="defaults.grid_fee_scaling_enabled">
+                        <label for="grid_scaling">Netzgebühren-Skalierung aktivieren</label>
+                    </div>
+                    <p class="form-hint">
+                        Bei geringerem Verbrauch steigen die Netzgebühren pro kWh (Fixkosten auf weniger kWh verteilt).
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" @click="showDefaultsModal = false">Abbrechen</button>
+                    <button class="btn btn-primary" @click="saveDefaults" :disabled="saving">
+                        {{ saving ? 'Speichern...' : 'Speichern' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div v-if="toast.show" :class="'toast toast-' + toast.type">
+            {{ toast.message }}
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                const loading = ref(true);
+                const saving = ref(false);
+                const selectedYear = ref(new Date().getFullYear());
+                const currentYear = new Date().getFullYear();
+                const isDarkTheme = ref(true);
+                const data = ref({ months: [], totals: {} });
+                const defaults = reactive({
+                    reference_price_ct: 26.0,
+                    feed_in_tariff_ct: 8.1,
+                    eeg_import_price_ct: 18.0,
+                    eeg_feed_in_ct: 12.0,
+                    grid_fee_base_ct: 13.0,
+                    grid_fee_scaling_enabled: true
+                });
+
+                const showEditModal = ref(false);
+                const showDefaultsModal = ref(false);
+                const editMonth = ref(null);
+                const editOverrides = reactive({
+                    import_price_enabled: false,
+                    import_price_ct: null,
+                    export_price_enabled: false,
+                    export_price_ct: null,
+                    reference_price_enabled: false,
+                    reference_price_ct: null,
+                    grid_fee_enabled: false,
+                    grid_fee_ct: null,
+                    finalize: false
+                });
+
+                const toast = reactive({
+                    show: false,
+                    type: 'success',
+                    message: ''
+                });
+
+                const monthNames = [
+                    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+                    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+                ];
+
+                const getMonthName = (month) => monthNames[month - 1] || '';
+
+                const formatNumber = (val) => {
+                    if (val === null || val === undefined) return '—';
+                    return val.toFixed(2).replace('.', ',');
+                };
+
+                const formatCurrency = (val) => {
+                    if (val === null || val === undefined) return '—';
+                    return val.toFixed(2).replace('.', ',') + ' €';
+                };
+
+                const getSourceIcon = (source) => {
+                    const icons = {
+                        'auto': '🤖',
+                        'default': '⚙️',
+                        'manual': '✏️',
+                        'estimated': '📊'
+                    };
+                    return icons[source] || '❓';
+                };
+
+                const getSourceTitle = (source) => {
+                    const titles = {
+                        'auto': 'Automatisch berechnet (gewichteter Durchschnitt)',
+                        'default': 'Standard-Wert aus Konfiguration',
+                        'manual': 'Manuell überschrieben',
+                        'estimated': 'Geschätzt basierend auf Jahresverbrauch'
+                    };
+                    return titles[source] || source;
+                };
+
+                const showToast = (message, type = 'success') => {
+                    toast.message = message;
+                    toast.type = type;
+                    toast.show = true;
+                    setTimeout(() => { toast.show = false; }, 3000);
+                };
+
+                const toggleTheme = () => {
+                    isDarkTheme.value = !isDarkTheme.value;
+                    document.documentElement.classList.toggle('light-theme', !isDarkTheme.value);
+                };
+
+                const fetchData = async () => {
+                    loading.value = true;
+                    try {
+                        const response = await fetch(`/api/sfml_stats/monthly_tariffs?year=${selectedYear.value}`);
+                        const result = await response.json();
+                        if (result.success) {
+                            data.value = result;
+                        } else {
+                            showToast('Fehler beim Laden: ' + result.error, 'error');
+                        }
+                    } catch (err) {
+                        showToast('Fehler beim Laden der Daten', 'error');
+                        console.error(err);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const fetchDefaults = async () => {
+                    try {
+                        const response = await fetch('/api/sfml_stats/monthly_tariffs/defaults');
+                        const result = await response.json();
+                        if (result.success && result.defaults) {
+                            Object.assign(defaults, result.defaults);
+                        }
+                    } catch (err) {
+                        console.error('Error fetching defaults:', err);
+                    }
+                };
+
+                const changeYear = (delta) => {
+                    const newYear = selectedYear.value + delta;
+                    if (newYear <= currentYear && newYear >= 2020) {
+                        selectedYear.value = newYear;
+                    }
+                };
+
+                const openEditModal = (month) => {
+                    editMonth.value = month;
+
+                    // Pre-fill from existing overrides
+                    const overrides = month.overrides || {};
+                    editOverrides.import_price_enabled = 'import_price_ct' in overrides;
+                    editOverrides.import_price_ct = overrides.import_price_ct || month.auto_calculated.weighted_avg_price_ct;
+                    editOverrides.export_price_enabled = 'export_price_ct' in overrides;
+                    editOverrides.export_price_ct = overrides.export_price_ct || month.defaults.feed_in_tariff_ct;
+                    editOverrides.reference_price_enabled = 'reference_price_ct' in overrides;
+                    editOverrides.reference_price_ct = overrides.reference_price_ct || month.defaults.reference_price_ct;
+                    editOverrides.grid_fee_enabled = 'grid_fee_ct' in overrides;
+                    editOverrides.grid_fee_ct = overrides.grid_fee_ct || month.auto_calculated.estimated_grid_fee_ct;
+                    editOverrides.finalize = month.is_finalized;
+
+                    showEditModal.value = true;
+                };
+
+                const saveOverrides = async () => {
+                    if (!editMonth.value) return;
+                    saving.value = true;
+
+                    try {
+                        const overrides = {};
+                        if (editOverrides.import_price_enabled) {
+                            overrides.import_price_ct = editOverrides.import_price_ct;
+                        }
+                        if (editOverrides.export_price_enabled) {
+                            overrides.export_price_ct = editOverrides.export_price_ct;
+                        }
+                        if (editOverrides.reference_price_enabled) {
+                            overrides.reference_price_ct = editOverrides.reference_price_ct;
+                        }
+                        if (editOverrides.grid_fee_enabled) {
+                            overrides.grid_fee_ct = editOverrides.grid_fee_ct;
+                        }
+
+                        // Save overrides
+                        const response = await fetch(
+                            `/api/sfml_stats/monthly_tariffs/${selectedYear.value}/${editMonth.value.month}`,
+                            {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ overrides })
+                            }
+                        );
+                        const result = await response.json();
+
+                        if (!result.success) {
+                            throw new Error(result.error);
+                        }
+
+                        // Finalize if requested
+                        if (editOverrides.finalize && !editMonth.value.is_finalized) {
+                            const finalizeResponse = await fetch(
+                                `/api/sfml_stats/monthly_tariffs/${selectedYear.value}/${editMonth.value.month}/finalize`,
+                                {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ recalculate_history: true })
+                                }
+                            );
+                            const finalizeResult = await finalizeResponse.json();
+                            if (!finalizeResult.success) {
+                                throw new Error(finalizeResult.error);
+                            }
+                        }
+
+                        showToast('Änderungen gespeichert');
+                        showEditModal.value = false;
+                        await fetchData();
+                    } catch (err) {
+                        showToast('Fehler beim Speichern: ' + err.message, 'error');
+                    } finally {
+                        saving.value = false;
+                    }
+                };
+
+                const saveDefaults = async () => {
+                    saving.value = true;
+                    try {
+                        const response = await fetch('/api/sfml_stats/monthly_tariffs/defaults', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(defaults)
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            showToast('Defaults gespeichert');
+                            showDefaultsModal.value = false;
+                            await fetchData();
+                        } else {
+                            throw new Error(result.error);
+                        }
+                    } catch (err) {
+                        showToast('Fehler beim Speichern: ' + err.message, 'error');
+                    } finally {
+                        saving.value = false;
+                    }
+                };
+
+                const exportCSV = async () => {
+                    try {
+                        const startMonth = `${selectedYear.value}-01`;
+                        const endMonth = `${selectedYear.value}-12`;
+                        window.location.href = `/api/sfml_stats/monthly_tariffs/export?start=${startMonth}&end=${endMonth}`;
+                    } catch (err) {
+                        showToast('Fehler beim Export', 'error');
+                    }
+                };
+
+                watch(selectedYear, () => {
+                    fetchData();
+                });
+
+                onMounted(() => {
+                    fetchData();
+                    fetchDefaults();
+                });
+
+                return {
+                    loading,
+                    saving,
+                    selectedYear,
+                    currentYear,
+                    isDarkTheme,
+                    data,
+                    defaults,
+                    showEditModal,
+                    showDefaultsModal,
+                    editMonth,
+                    editOverrides,
+                    toast,
+                    getMonthName,
+                    formatNumber,
+                    formatCurrency,
+                    getSourceIcon,
+                    getSourceTitle,
+                    toggleTheme,
+                    changeYear,
+                    openEditModal,
+                    saveOverrides,
+                    saveDefaults,
+                    exportCSV
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

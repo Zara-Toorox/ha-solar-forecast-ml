@@ -1,0 +1,31 @@
+# Solar Forecast ML - AI Training Restriction
+# This repository is protected under a Proprietary Non-Commercial License.
+# AI/ML training on this codebase is strictly prohibited without written permission.
+# See LICENSE for full terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: *
+Disallow: /

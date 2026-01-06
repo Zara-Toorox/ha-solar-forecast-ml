@@ -1,0 +1,872 @@
+# ============================================================================
+# Solar Forecast ML Integration - Service Definitions
+# ============================================================================
+#
+# ⚠️⚠️⚠️ WICHTIGE WARNUNG / IMPORTANT WARNING ⚠️⚠️⚠️
+#
+# Diese Services sind NUR für erfahrene Benutzer und Entwickler gedacht!
+# These services are intended for EXPERIENCED USERS and DEVELOPERS ONLY!
+#
+# ❌ RISIKEN / RISKS:
+#    - Datenverlust (ML-Modelle, Trainingsdaten, Konfigurationen)
+#    - Systeminstabilität durch fehlerhafte Konfiguration
+#    - Beschädigung der Integration, die Neuinstallation erfordert
+#    - Unerwartete Änderungen an Home Assistant Einstellungen
+#
+# ✅ EMPFEHLUNG / RECOMMENDATION:
+#    - NUR ausführen wenn vom Support/Entwickler angewiesen
+#    - IMMER vorher Backup erstellen (HA Snapshot)
+#    - Bei Unsicherheit: NICHT ausführen!
+#
+# 🔧 SUPPORT: github.com/your-repo/solar_forecast_ml/issues
+#
+# ============================================================================
+# Service categories:
+# - ML Services: Model training and management
+# - Emergency Services: Manual day-end task execution
+# - Testing Services: Essential testing and simulation
+# - Astronomy Services: Solar calculations and cache management
+# - Weather Services: Weather data management
+# - Battery Services: Battery sensor discovery and configuration
+# ============================================================================
+
+# ============================================================================
+# AI SERVICES - TinyLSTM Neural Network Model Management
+# ⚠️ DEVELOPER ONLY - Diese Services können das AI-System beschädigen!
+# ============================================================================
+
+retrain_ai_model:
+  name: "🧠 Retrain TinyLSTM AI Model"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🧠 TinyLSTM NEURAL NETWORK TRAINING
+
+    Forces immediate retraining of the TinyLSTM AI model with current data.
+
+    Training requirements:
+    - Minimum 50 training samples required
+    - Uses last 30 days of hourly_predictions.json data
+    - Multi-Output mode: One output per panel group
+
+    Data sources:
+    - hourly_predictions.json (main source with actual production)
+    - weather_forecast_corrected.json (weather + precision corrections)
+    - astronomy_cache.json (sun position, theoretical max, clear-sky radiation)
+
+    Model storage:
+    - Weights: /ai/learned_weights.json (TinyLSTM weights)
+    - Seasonal factors: /ai/seasonal.json
+    - DNI tracking: /ai/dni_tracker.json
+
+    Use this service:
+    - After collecting new production data (to improve accuracy)
+    - After fixing solar_capacity configuration
+    - If automatic training (06:00 daily) failed
+  fields: {}
+
+reset_ai_model:
+  name: "⚠️ Reset TinyLSTM AI Model"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨 GEFÄHRLICH / DANGEROUS - NUR FÜR ENTWICKLER / DEVELOPER ONLY         ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ ALLE gelernten Daten werden UNWIDERRUFLICH gelöscht!                    ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    ⚠️ DESTRUCTIVE ACTION - Resets AI model to untrained state!
+
+    Resets the TinyLSTM AI model to its initial untrained state.
+
+    What this service does:
+    - Reinitializes the TinyLSTM model
+    - Clears accuracy metrics and training sample count
+    - Sets model state to UNTRAINED
+    - Forces model to retrain from scratch on next training cycle
+
+    Use this service:
+    - After major configuration changes (solar_capacity, location)
+    - If model produces consistently wrong predictions
+    - To start fresh AI training
+    - After corrupted learned_weights.json file
+
+    What happens after reset:
+    - Model will use Rule-Based predictions until retrained
+    - Next training (06:00 or manual) will rebuild from scratch
+    - All historical prediction accuracy data is lost
+    - Requires ≥50 samples with actual production to retrain
+
+    ⚠️ CAUTION: This action CANNOT be undone!
+    Consider backing up /ai/learned_weights.json before resetting.
+
+    Alternative: Use retrain_ai_model service to keep model but retrain with latest data.
+  fields: {}
+
+# ============================================================================
+# EMERGENCY SERVICES - Manual Day-End Task Execution
+# ⚠️ DEVELOPER ONLY - Nur bei Systemfehlern und auf Anweisung verwenden!
+# ============================================================================
+# Use these services if automated day-end tasks fail or need manual triggering
+
+run_all_day_end_tasks:
+  name: "🌙 Run All Day-End Tasks"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Mehrfache Ausführung kann zu Datenkorruption führen!                    ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🌙 EMERGENCY SERVICE - Manual execution of complete 23:30 day-end workflow!
+
+    Executes the COMPLETE 10-step sequence that runs automatically at 23:30 daily.
+
+    Task sequence (10 steps - matches production/production_scheduled_tasks.py::end_of_day_workflow):
+    1. Finalize Day (read solar_yield_today before midnight reset)
+    2. Create Daily Summary (shadow analysis, ML accuracy metrics)
+    3. Move to History (archive today's predictions)
+    4. Update Yesterday Deviation (yesterday vs forecast comparison)
+    5. Calculate Statistics (MAE, RMSE, R² metrics)
+    6. Weather Precision (compare forecast vs actual weather)
+    7. Update RB Overall Correction (production-based factor)
+    8. Night Cleanup (remove duplicates, zero samples)
+    9. AI Model Training (TinyLSTM Multi-Output training)
+    10. Panel Group Efficiency Learning (per-group efficiency factors)
+
+    What this service does:
+    - Saves today's final production data before midnight
+    - Analyzes prediction accuracy (hourly + daily)
+    - Detects shadow patterns and obstructions
+    - Trains AI model with new data (TinyLSTM)
+    - Learns panel group efficiency factors
+    - Archives predictions to history
+    - Cleans up data duplicates
+    - Updates correction factors
+
+    Use this service:
+    - ⚠️ If automatic 23:30 task failed
+    - Before midnight to manually save today's data
+    - To trigger manually if automatic task failed
+    - To trigger AI model training manually
+
+    Processing time: ~3-10 seconds (10 steps)
+
+    Files affected:
+    - daily_summaries.json (new entry for today with shadow analysis)
+    - hourly_predictions.json (today moved to history section)
+    - ai/seasonal.json (seasonal adjustments updated)
+    - coordinator_state.json (yesterday deviation updated)
+    - hourly_samples.json (cleaned, duplicates removed)
+    - ai/learned_weights.json (TinyLSTM model weights)
+    - ai/seasonal.json (seasonal adjustment factors)
+    - ai/dni_tracker.json (DNI tracking data)
+
+    ⚠️ CAUTION: Run ONLY ONCE per day to avoid duplicate entries!
+    This service calls: coordinator.scheduled_tasks.end_of_day_workflow()
+  fields: {}
+
+# ============================================================================
+# TESTING SERVICES - Essential Testing and Simulation
+# ⚠️ DEVELOPER ONLY - Nur auf Anweisung verwenden!
+# ============================================================================
+# These services replicate EXACTLY what happens at specific times.
+# ⚠️ WARNING: Create backup before use - these modify forecast data!
+# ============================================================================
+
+test_morning_routine:
+  name: "🧪 TEST: Analyze 6 AM Morning Predictions (Real Data)"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ DEVELOPER ONLY                                                       ║
+    ║ This service is intended for debugging purposes only.                   ║
+    ║ No changes to the system (read-only).                                   ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    ⚠️ ANALYSIS SERVICE - No backup needed (read-only!)
+
+    Analyzes the ACTUAL data that was used at 6:00 AM today.
+
+    Code Reference: services/service_registry.py::_handle_test_morning_routine
+
+    What this service does:
+    1. Loads stored predictions from hourly_predictions.json (created at 06:00)
+    2. Loads weather data from open_meteo_cache.json (fetched at 06:00)
+    3. Analyzes predicted best hour vs actual best hour
+    4. Shows prediction accuracy and errors
+    5. Compares ML/Rule blending effectiveness
+
+    This service is READ-ONLY and uses REAL stored data from this morning's
+    06:00 routine.
+
+    Use cases:
+    - Why was hour X predicted as best?
+    - Did the 06:00 routine work correctly?
+    - Compare: Predicted vs actual production
+    - ML contribution and blending weights
+
+    Data sources:
+    - /stats/hourly_predictions.json (predictions created at 06:00)
+    - /data/open_meteo_cache.json (weather forecast from Open-Meteo)
+  fields: {}
+
+test_retrospective_forecast:
+  name: "🔄 TEST: Retrospective Forecast (Current Code)"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Erstellt eine "retrospektive" Prognose mit dem AKTUELLEN Code.          ║
+    ║ Schreibt NUR in retrospective_forecast.json (beeinflusst keine Daten).  ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🔄 RETROSPECTIVE FORECAST - Test code changes without waiting!
+
+    This service creates a forecast for TODAY using the CURRENT code, as if
+    it were running at "1 hour before sunrise".
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🎯 WHY USE THIS SERVICE?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    The regular "test_morning_routine" service always creates predictions
+    starting from the CURRENT time. This makes it impossible to test code
+    changes that were made AFTER the morning forecast.
+
+    Example scenario:
+    - 07:00: Automatic morning forecast runs (old code)
+    - 14:00: You change a correction factor in the code
+    - Problem: Running test_morning_routine at 14:00 only predicts 14:00-sunset
+
+    With THIS service:
+    - 14:00: You change a correction factor
+    - 14:00: Run test_retrospective_forecast
+    - Result: See what the 07:00 forecast WOULD have been with your new code
+    - Compare: retrospective_forecast.json vs hourly_predictions.json
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📋 WHAT THIS SERVICE DOES:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    1. Determines today's sunrise time from astronomy cache
+    2. Sets simulation time to "sunrise - 1 hour" (e.g., 07:00 in winter)
+    3. Loads current weather forecast (weather_forecast_corrected.json)
+    4. Loads current astronomy data for today
+    5. Runs the FULL forecast pipeline with CURRENT code:
+       - Physics engine calculations
+       - Panel group calculations
+       - AI/ML predictions (if available)
+       - All correction factors and calibrations
+    6. Calculates hourly predictions for ALL production hours (e.g., 08:00-16:00)
+    7. Saves result to stats/retrospective_forecast.json
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📁 OUTPUT FILE:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /config/solar_forecast_ml/stats/retrospective_forecast.json
+
+    Contains:
+    - simulation_context: When/why this was created
+    - forecast_summary: Total kWh, best hour, method, confidence
+    - hourly_predictions: Detailed per-hour predictions with weather/astronomy
+    - weather_data_used: Which weather data was used
+    - astronomy_data_used: Sunrise, sunset, daylight hours
+    - correction_factor_used: Current correction factor value
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🔒 SAFETY:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - DOES NOT modify hourly_predictions.json
+    - DOES NOT affect actual forecasts or sensors
+    - ONLY writes to retrospective_forecast.json
+    - Safe to run multiple times (overwrites previous result)
+
+    Use cases:
+    - Test new correction factors before committing
+    - Debug physics engine calculations
+    - Compare AI vs Physics predictions
+    - Validate panel group calibrations
+  fields: {}
+
+# ============================================================================
+# ASTRONOMY SERVICES - Independent Solar Calculations
+# ⚠️ DEVELOPER ONLY - Kann berechnete Astronomie-Daten überschreiben!
+# ============================================================================
+# These services manage the astronomy cache which provides sun positions,
+# solar radiation, and production windows independent of sun.sun entity.
+# ============================================================================
+
+build_astronomy_cache:
+  name: "🌞 Build Astronomy Cache"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Überschreibt existierende Astronomie-Daten!                             ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🌞 ASTRONOMY SERVICE - Build comprehensive solar position and radiation cache!
+
+    Creates physics-based astronomical data cache for ML feature engineering and production validation.
+
+    What this service does:
+    - Calculates sun position (elevation, azimuth) for every hour (0-23)
+    - Computes clear-sky solar radiation using atmospheric physics model
+    - Calculates theoretical maximum PV output based on YOUR system capacity
+    - Determines production windows (sunrise -30min to sunset +30min)
+    - Generates solar noon, daylight hours, day progress ratios
+
+    ⚠️ IMPORTANT: Uses your configured solar_capacity!
+    All theoretical_max_pv values will be calculated for YOUR specific system size.
+
+    The cache is used for:
+    - ML feature engineering (3 astronomy features: sun_elevation, theoretical_max, clear_sky_radiation)
+    - Physics-based prediction bounds (prevents unrealistic forecasts)
+    - Shadow detection (compares actual lux vs clear-sky radiation)
+    - Production window validation (replaces sun.sun entity dependency)
+
+    Default settings:
+    - days_back: 30 days (historical analysis + geometry learning)
+    - days_ahead: 7 days (forecast planning)
+    - system_capacity_kwp: FROM YOUR INTEGRATION CONFIG (e.g., 2.13 kWp)
+
+    Use this service:
+    - ✅ After updating solar_capacity in integration settings (rebuilds with correct kWp!)
+    - On first setup (runs automatically during installation)
+    - After changing Home Assistant location
+    - To rebuild corrupted cache file
+    - To extend historical range for analysis
+
+    Processing time: ~5 seconds for 37 days (30 back + today + 7 ahead)
+    File size: ~250 KB (compact JSON with hourly granularity)
+
+    Cache file: /config/solar_forecast_ml/stats/astronomy_cache.json
+
+    Location data: Automatically from Home Assistant configuration
+    - Latitude, Longitude, Elevation, Timezone
+
+    ⚠️ CAUTION: I/O intensive - avoid running during active ML training!
+  fields:
+    days_back:
+      description: "Days to calculate backwards from today (default: 30)"
+      example: 30
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 730
+          mode: box
+    days_ahead:
+      description: "Days to calculate ahead from today (default: 7)"
+      example: 7
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 30
+          mode: box
+
+refresh_cache_today:
+  name: "🔄 Refresh Cache for Today"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    Refresh astronomy cache for today + next 7 days.
+
+    This service updates the astronomy cache with fresh calculations
+    for the current week. It's designed for daily maintenance.
+
+    What this does:
+    - Recalculates: Today + next 7 days
+    - Updates: Sun positions, solar radiation, production windows
+    - Preserves: Historical data (not recalculated)
+    - Maintains: Max peak records (not overwritten)
+
+    When this runs:
+    - Automatically at 6:00 AM daily (planned)
+    - Manually via this service call
+    - After Home Assistant restart
+
+    Why daily refresh:
+    - Ensures accurate production windows for today
+    - Updates forecast data for next week
+    - Accounts for seasonal changes (sunrise/sunset shifts)
+    - Maintains cache freshness
+
+    Processing time: ~1 second (only 8 days recalculated)
+
+    Use this service:
+    - To manually refresh current week data
+    - If automatic 6 AM task failed
+    - After system capacity changes
+    - To test cache refresh logic
+
+    NOTE: This service does NOT rebuild historical data.
+    Use build_astronomy_cache for full rebuilds.
+  fields: {}
+
+# ============================================================================
+# WEATHER SERVICES - Weather Data Management
+# ⚠️ DEVELOPER ONLY - Kann Wetterdaten und Caches überschreiben!
+# ============================================================================
+
+run_weather_correction:
+  name: "🔄 Rebuild Corrected Weather Forecast"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ║ Überschreibt existierende Wettervorhersage-Korrekturen!                 ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    ⚠️ MANUAL TRIGGER - Rebuilds weather_forecast_corrected.json immediately!
+
+    This service manually triggers the corrected weather forecast generation
+    which normally runs automatically at:
+    - 00:15 LOCAL: Before first morning forecast (00:25)
+    - sunrise-40min: Before final morning forecast (sunrise-30min)
+
+    What this does:
+    1. Loads raw weather forecast from open_meteo_cache.json
+    2. Loads precision correction factors from weather_precision_daily.json
+    3. Loads astronomy data for clear_sky calculations
+    4. Applies physics-based corrections (clear_sky × cloud_factor)
+    5. Saves corrected forecast to weather_forecast_corrected.json
+
+    Use this service:
+    - To test weather correction logic immediately
+    - If automatic tasks failed
+    - After manually refreshing weather data
+
+    Processing time: ~1 second
+
+    Result file: /config/solar_forecast_ml/stats/weather_forecast_corrected.json
+
+    IMPORTANT: This service will overwrite the existing corrected forecast!
+  fields: {}
+
+refresh_open_meteo_cache:
+  name: "Refresh Open-Meteo Direct Radiation Cache"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
+    ║ Führen Sie diesen Service NUR auf Anweisung des Supports aus!           ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    Manually refresh Open-Meteo direct radiation data!
+
+    This service fetches fresh radiation forecasts from Open-Meteo API
+    and updates the persistent cache (open_meteo_cache.json).
+
+    What this does:
+    1. Fetches 72-hour forecast from api.open-meteo.com
+    2. Gets direct_radiation, diffuse_radiation, GHI (W/m2)
+    3. Gets temperature, clouds, humidity, wind, precipitation
+    4. Updates in-memory cache for immediate use
+    5. Saves to open_meteo_cache.json (survives HA restarts)
+
+    Direct Radiation Mode:
+    - Uses GHI (Global Horizontal Irradiance) directly from API
+    - No cloud-to-radiation calculation needed
+    - More accurate than physics-based cloud models
+    - GHI = direct_radiation + diffuse_radiation
+
+    Automatic schedule:
+    - 00:10 LOCAL: Pre-midnight refresh (before 00:15 corrected forecast)
+    - sunrise-45min: Dynamic refresh (before final morning forecast)
+
+    Use this service when:
+    - After HA restart if cache is stale (>12 hours old)
+    - "Open-Meteo unavailable" warnings in logs
+    - Want immediate weather/radiation data refresh
+
+    Processing time: ~2-5 seconds (depends on API response)
+
+    Result files:
+    - /config/solar_forecast_ml/data/open_meteo_cache.json (persistent)
+    - In-memory cache (immediate use in corrected forecast)
+
+    API: api.open-meteo.com (free, no API key required)
+  fields: {}
+
+refresh_multi_weather:
+  name: "🌤️ Refresh Multi-Weather Cache"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ℹ️ SICHER / SAFE - Kann von Benutzern verwendet werden                   ║
+    ║ Dieser Service aktualisiert nur Wetter-Caches.                          ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🌤️ Refresh Multi-Weather blended forecast (Open-Meteo + wttr.in)!
+
+    This service fetches weather data from multiple sources and blends
+    cloud cover predictions using learned accuracy weights.
+
+    What this does:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    1. Fetches 72-hour forecast from Open-Meteo (primary source)
+    2. If cloud_cover > 50%: Also fetches from wttr.in (World Weather Online)
+    3. Blends cloud_cover using learned weights (based on past accuracy)
+    4. Saves blended forecast to open_meteo_cache.json
+    5. Updates wttr_in_cache.json (6h cache, 12h fallback)
+
+    Multi-Source Blending:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    - Open-Meteo predicted 100% clouds, wttr.in predicted 35%
+    - With learned weights (30% OM, 70% WWO): Blended = 54%
+    - Actual was 10% → wttr.in was more accurate → Gets higher weight next time
+
+    Cache Strategy:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    - wttr.in cache: 6 hours (normal), 12 hours (fallback if API down)
+    - Reduces API calls (wttr.in has ~100 req/hour limit)
+    - Automatic retry with stale cache if API timeout
+
+    Automatic schedule:
+    - 06:00, 12:00, 18:00: Multi-Weather update (with trigger check)
+    - 23:30: Weight learning from daily actual data
+
+    Use this service when:
+    - Want immediate Multi-Weather refresh
+    - After configuration changes
+    - To test blending logic
+
+    Processing time: ~3-10 seconds (depends on API responses)
+
+    Result files:
+    - /config/solar_forecast_ml/data/open_meteo_cache.json (blended forecast)
+    - /config/solar_forecast_ml/data/wttr_in_cache.json (wttr.in cache)
+    - /config/solar_forecast_ml/data/weather_source_weights.json (learned weights)
+  fields:
+    force_wttr_refresh:
+      name: "Force wttr.in Refresh"
+      description: >
+        Force a fresh API call to wttr.in even if the cache is still valid.
+        Use this if you suspect the cache is outdated or want immediate fresh data.
+        Default: false (uses cache if < 6 hours old)
+      required: false
+      default: false
+      example: true
+      selector:
+        boolean:
+
+send_daily_briefing:
+  name: Send Daily Solar Briefing
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ℹ️ SICHER / SAFE - Kann von Benutzern verwendet werden                   ║
+    ║ Dieser Service sendet nur Benachrichtigungen und ändert keine Daten.    ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    ☀️ Send a daily solar weather briefing notification with today's forecast.
+
+    This service generates and sends a formatted notification with:
+    - Today's solar forecast (kWh prediction)
+    - Weather interpretation (sunny, partly cloudy, etc.)
+    - Comparison to yesterday's actual production
+    - Best production time (Solar Noon)
+    - Sunrise/Sunset times and daylight duration
+    - Smart emoji indicators
+
+    Perfect for morning routines to know what to expect from your solar system!
+
+    Example notification:
+    Title: "☀️ Solar Forecast - Samstag, 16. Nov"
+    Message:
+    "🌞 Guter Solar-Tag erwartet!
+
+    📊 Forecast: 4.45 kWh
+       → 6x besser als gestern (0.7 kWh)
+
+    🌤️ Wetter: Sonnig bis teilweise bewölkt
+       Beste Zeit: 10:51 Uhr (Solar Noon)
+
+    ⏰ Tageslicht: 8h 35min
+       🌅 Aufgang: 06:34 Uhr
+       🌇 Untergang: 15:11 Uhr
+
+    Viel Sonne heute! ☀️"
+
+    Use this service:
+    - In automations for daily morning notifications
+    - Manually to check today's forecast briefing
+    - With different notify services (mobile_app, persistent_notification, etc.)
+
+    Tip: Create an automation that runs at 07:00 every morning!
+  fields:
+    notify_service:
+      name: Mobile Device (Optional)
+      description: >
+        OPTIONAL: Add your mobile device to receive an additional push notification.
+
+        - Leave EMPTY or use "persistent_notification": Full message in HA UI only (recommended for most users)
+        - Enter "mobile_app_iphone" (or your device name): Get BOTH push notification + HA UI message
+
+        The full briefing is ALWAYS shown in Home Assistant UI (notification bell icon).
+
+        To find your device name: Go to Developer Tools > Services and search for "notify.mobile_app"
+      example: "mobile_app_iphone"
+      default: "persistent_notification"
+      required: false
+      selector:
+        text:
+    language:
+      name: Language
+      description: Language for the notification text (de=German, en=English)
+      example: "de"
+      default: "de"
+      required: false
+      selector:
+        select:
+          options:
+            - label: "Deutsch"
+              value: "de"
+            - label: "English"
+              value: "en"
+
+# ============================================================================
+# DATA MANAGEMENT SERVICES - Reset and Cleanup
+# ⚠️ USER CONTROLLED - Setzt gelernte Daten zurück (mit Backup)
+# ============================================================================
+
+borg_assimilation_reverse:
+  name: "🖖 Borg Assimilation Reverse"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🖖 BENUTZER-SERVICE / USER SERVICE                                       ║
+    ║ Setzt gelernte Daten zurück - IMMER mit automatischem Backup!            ║
+    ║ "We are the Borg. Your data distinctiveness will be... restored."        ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🖖 BORG ASSIMILATION REVERSE - Entfernt "assimilierte" (gelernte) Daten!
+
+    Dieser Service setzt ausgewählte gelernte Daten auf neutrale Standardwerte
+    zurück. Ein automatisches Backup wird VOR dem Reset erstellt.
+
+    Wann verwenden?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ Falsche Sensoren waren konfiguriert und wurden korrigiert
+    ✅ Panel-Gruppen wurden nachträglich hinzugefügt/geändert
+    ✅ ML-Modell produziert konsistent schlechte Vorhersagen
+    ✅ "Garbage Data" aus der Anfangszeit entfernen
+    ✅ Nach größeren Konfigurationsänderungen (solar_capacity, Standort)
+
+    Verfügbare Targets:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🧠 ai_weights
+       Setzt AI-Dateien zurück:
+       - ai/learned_weights.json (TinyLSTM weights)
+       - ai/seasonal.json (seasonal factors)
+       - ai/dni_tracker.json (DNI tracking)
+       ➜ ML-Modell startet Training von Grund auf neu
+
+    📜 hourly_history
+       Entfernt alte Einträge:
+       - stats/hourly_predictions.json
+       - stats/hourly_weather_actual.json
+       - Optional: before_date Parameter für gezieltes Löschen
+       ➜ Entfernt "Garbage Data" aus der Vergangenheit
+
+    🔄 all
+       Führt ALLE obigen Resets durch
+       ➜ Kompletter Neustart des Lernsystems
+
+    Sicherheit:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✓ Automatisches Backup in: /solar_forecast_ml/backups/borg_reverse_YYYYMMDD_HHMMSS/
+    ✓ Backup enthält alle betroffenen Dateien vor dem Reset
+    ✓ Backup-Retention: 30 Tage (ältere werden automatisch gelöscht)
+
+    Nach dem Reset:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    - System startet sofort mit neutralen Werten
+    - Lernen beginnt automatisch beim nächsten Daten-Eingang
+    - ML-Modell: Training läuft um 06:00 täglich
+
+    Beispiele:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Nur AI-Gewichte zurücksetzen
+    service: solar_forecast_ml.borg_assimilation_reverse
+    data:
+      target: ai_weights
+
+    # Alles zurücksetzen + Garbage vor dem 15.12. entfernen
+    service: solar_forecast_ml.borg_assimilation_reverse
+    data:
+      target: all
+      before_date: "2025-12-15"
+
+  fields:
+    target:
+      name: "Reset-Ziel"
+      description: >
+        Was soll zurückgesetzt werden?
+        - ai_weights: AI/ML-Modell Gewichte (learned_weights, seasonal, dni_tracker)
+        - hourly_history: Stündliche Vorhersage-Historie
+        - all: Alles oben genannte
+      required: true
+      example: "ai_weights"
+      selector:
+        select:
+          options:
+            - label: "🧠 AI-Modell Gewichte"
+              value: "ai_weights"
+            - label: "📜 Stündliche Historie"
+              value: "hourly_history"
+            - label: "🔄 Alles"
+              value: "all"
+    before_date:
+      name: "Daten VOR diesem Datum löschen (optional)"
+      description: >
+        Optional: Nur für target=hourly_history oder target=all.
+        Löscht nur Einträge VOR diesem Datum.
+        Format: YYYY-MM-DD (z.B. 2025-12-15)
+        Wenn nicht angegeben: Löscht Einträge älter als 30 Tage.
+      required: false
+      example: "2025-12-15"
+      selector:
+        date:
+    keep_backup:
+      name: "Backup erstellen"
+      description: >
+        Erstellt automatisch ein Backup vor dem Reset.
+        DRINGEND EMPFOHLEN! Standard: true
+      required: false
+      default: true
+      selector:
+        boolean:
+
+# ============================================================================
+# INSTALLATION SERVICES - Extra Features Management
+# ============================================================================
+
+# ============================================================================
+# PHYSICS CALIBRATION SERVICES - Emergency Calibration
+# 🚨 DEVELOPER ONLY - NUR AUF ANWEISUNG DES ENTWICKLERS AUSFÜHREN!
+# ============================================================================
+
+rescue_calibration:
+  name: "🚨 Rescue Calibration (DEVELOPER ONLY)"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨🚨🚨 WARNUNG / WARNING 🚨🚨🚨                                          ║
+    ║                                                                          ║
+    ║ NUR AUF ANWEISUNG DES ENTWICKLERS AUSFÜHREN!                            ║
+    ║ DO NOT RUN WITHOUT EXPLICIT DEVELOPER INSTRUCTION!                       ║
+    ║                                                                          ║
+    ║ Dieser Service ist NUR für Systeme gedacht, bei denen die normale       ║
+    ║ Kalibrierung aufgrund extremer Abweichungen nicht funktioniert.         ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🚨 RESCUE CALIBRATION - Einmalige Notfall-Kalibrierung für stark unterkalibrierte Systeme
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🎯 WANN WIRD DIESER SERVICE BENÖTIGT?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Dieser Service löst das "Henne-Ei-Problem":
+    - Die Physics Engine berechnet z.B. 0.66 kWh Vorhersage
+    - Tatsächliche Produktion war aber 7.09 kWh (Faktor ~11x)
+    - Normale Kalibrierung überspringt Ratios > 10 als "Outlier"
+    - Das System kann sich nie selbst korrigieren!
+
+    ⚠️ GÜLTIGER BEREICH: Ratio 10-40, NUR letzte 5 Tage
+    - Ratio < 10: Normale Kalibrierung funktioniert → Service nicht nötig
+    - Ratio 10-40: Rescue Calibration möglich → Service führt Kalibrierung durch
+    - Ratio > 40: Wahrscheinlich Konfigurationsfehler → Service bricht ab mit Warnung
+
+    ⏱️ ZEITFENSTER: Nur Daten der letzten 5 Tage
+    - Verhindert Einbeziehung alter, falscher Daten nach Sensorkorrekturen
+    - Nach Neukonfiguration: 2 Tage warten, dann Service ausführen
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🔧 WAS MACHT DIESER SERVICE?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    1. Analysiert daily_summaries.json und calibration_history.json
+    2. Sucht nach mindestens 2 Tagen mit Ratio zwischen 10 und 40 (actual/physics)
+    3. Prüft ob Ratio > 40 → Wahrscheinlich Konfigurationsfehler → BRICHT AB
+    4. Falls 10-40: Führt EINMALIGE Kalibrierung mit erhöhtem MAX_FACTOR=50 durch
+    5. Setzt Korrektur-Faktoren auf MAX_CORRECTION_FACTOR=10 (für normalen Betrieb)
+    6. Das System lernt ab dann normal weiter
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ⚠️ VORAUSSETZUNGEN
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - Mindestens 2 Tage mit Abweichung im gültigen Bereich (Ratio 10-40) müssen vorhanden sein
+    - Nur Daten der LETZTEN 5 TAGE werden berücksichtigt (Zeitfenster-Schutz)
+    - Die Daten müssen in hourly_predictions.json oder daily_summaries.json existieren
+    - Der Service wird NICHT ausgeführt, wenn weniger als 2 Tage gefunden werden
+    - Der Service BRICHT AB bei Ratio > 40 (Konfigurationsfehler wahrscheinlich)
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📁 BETROFFENE DATEIEN
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - /config/solar_forecast_ml/physics/learning_config.json (wird aktualisiert)
+    - Liest: daily_summaries.json, hourly_predictions.json, calibration_history.json
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ℹ️ NACH DER AUSFÜHRUNG
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - Das System verwendet sofort die neuen Korrektur-Faktoren
+    - Normale tägliche Kalibrierung (23:30) arbeitet wieder normal
+    - Der Service muss NICHT erneut ausgeführt werden
+    - Wenn das Problem bestehen bleibt, kontaktieren Sie den Support
+
+  fields: {}
+
+install_extra_features:
+  name: "📦 Install Extra Features"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ ℹ️ SICHER / SAFE - Kann von Benutzern verwendet werden                   ║
+    ║ Dieser Service installiert zusätzliche Integrationen.                   ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    📦 Install extra feature integrations to your custom_components folder!
+
+    This service copies additional integrations from the extra_features folder
+    to your custom_components directory, making them available for configuration.
+
+    Available features:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📊 grid_price_monitor
+       - Dynamic grid electricity price monitoring
+       - Tibber/Awattar/EPEX Spot integration
+       - Price-based automation triggers
+
+    📈 sfml_stats
+       - Solar Forecast ML Statistics Dashboard
+       - Detailed accuracy metrics and charts
+       - Historical performance analysis
+
+    What this service does:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    1. Checks which features are available in extra_features/
+    2. Copies each feature to custom_components/
+    3. Creates a persistent notification with instructions
+    4. Reports success/failure for each feature
+
+    After installation:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ⚠️ RESTART HOME ASSISTANT to load the new integrations!
+
+    Then configure via:
+    Settings → Devices & Services → Add Integration → Search for feature name
+
+    Processing time: ~1-2 seconds
+
+    Use this service:
+    - After fresh Solar Forecast ML installation
+    - To update extra features to latest version
+    - When new extra features become available
+  fields: {}
