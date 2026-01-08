@@ -1,8 +1,8 @@
 # SFML Stats Dashboard
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Zara-Toorox/sfml_stats)
+[![Version](https://img.shields.io/badge/version-6.0.2-blue.svg)](https://github.com/Zara-Toorox/sfml_stats)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 
 <a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee ' /></a>
 
@@ -53,6 +53,10 @@ The integration requires sufficient CPU and memory resources for generating char
 - Support for up to 4 separate solar panel strings
 - Weather integration for chart annotations
 - Dark and light theme support
+- **Monthly Tariff Management** - Track and manage monthly energy tariffs with EEG support
+- **Clothing Recommendation** - Weather-based clothing suggestions for the day
+- **Power Sources Chart** - Detailed stacked area visualization of energy sources
+- **Improved Caching** - Better performance with intelligent data caching
 
 ---
 
@@ -347,9 +351,15 @@ Or add it to your sidebar via the Home Assistant configuration.
 
 ## License
 
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+This software is licensed under a Proprietary Non-Commercial License.
+
+- Personal and educational use only
+- Commercial use and AI training are strictly prohibited
+- Clear attribution to "Zara-Toorox" is required
 
 Copyright (C) 2025 Zara-Toorox
+
+See [LICENSE](LICENSE) for full terms.
 
 ---
 

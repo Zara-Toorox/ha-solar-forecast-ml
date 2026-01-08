@@ -1007,15 +1007,16 @@
                     editMonth.value = month;
 
                     // Pre-fill from existing overrides
+                    // Use ?? (nullish coalescing) instead of || to allow 0 values
                     const overrides = month.overrides || {};
                     editOverrides.import_price_enabled = 'import_price_ct' in overrides;
-                    editOverrides.import_price_ct = overrides.import_price_ct || month.auto_calculated.weighted_avg_price_ct;
+                    editOverrides.import_price_ct = overrides.import_price_ct ?? month.auto_calculated.weighted_avg_price_ct;
                     editOverrides.export_price_enabled = 'export_price_ct' in overrides;
-                    editOverrides.export_price_ct = overrides.export_price_ct || month.defaults.feed_in_tariff_ct;
+                    editOverrides.export_price_ct = overrides.export_price_ct ?? month.defaults.feed_in_tariff_ct;
                     editOverrides.reference_price_enabled = 'reference_price_ct' in overrides;
-                    editOverrides.reference_price_ct = overrides.reference_price_ct || month.defaults.reference_price_ct;
+                    editOverrides.reference_price_ct = overrides.reference_price_ct ?? month.defaults.reference_price_ct;
                     editOverrides.grid_fee_enabled = 'grid_fee_ct' in overrides;
-                    editOverrides.grid_fee_ct = overrides.grid_fee_ct || month.auto_calculated.estimated_grid_fee_ct;
+                    editOverrides.grid_fee_ct = overrides.grid_fee_ct ?? month.auto_calculated.estimated_grid_fee_ct;
                     editOverrides.finalize = month.is_finalized;
 
                     showEditModal.value = true;

@@ -1,20 +1,13 @@
-"""REST API views for SFML Stats Dashboard. @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# ******************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2025 Zara-Toorox
-"""
+"""REST API views for SFML Stats Dashboard."""
 from __future__ import annotations
 
 import asyncio
@@ -227,6 +220,7 @@ async def async_setup_views(hass: HomeAssistant) -> None:
     hass.http.register_view(ExportHouseAnalyticsView())
     hass.http.register_view(ExportGridAnalyticsView())
     hass.http.register_view(WeatherHistoryView())
+    hass.http.register_view(WeatherComparisonView())
     hass.http.register_view(ExportWeatherAnalyticsView())
     hass.http.register_view(PowerSourcesHistoryView())
     hass.http.register_view(ExportPowerSourcesView())
@@ -933,11 +927,21 @@ def _get_weather_data(entity_id: str | None) -> dict[str, Any] | None:
         return None
 
     attrs = state.attributes
+
+    # Windgeschwindigkeit: Konvertiere km/h zu m/s falls nötig
+    # HA Weather-Entitäten liefern wind_speed_unit als Attribut
+    wind_speed = attrs.get("wind_speed")
+    if wind_speed is not None:
+        wind_speed_unit = attrs.get("wind_speed_unit", "km/h")
+        if wind_speed_unit == "km/h":
+            wind_speed = round(wind_speed / 3.6, 1)  # km/h -> m/s
+        # Wenn bereits m/s, keine Konvertierung nötig
+
     return {
         "state": state.state,  # z.B. "sunny", "cloudy", etc.
         "temperature": attrs.get("temperature"),
         "humidity": attrs.get("humidity"),
-        "wind_speed": attrs.get("wind_speed"),
+        "wind_speed": wind_speed,
         "wind_bearing": attrs.get("wind_bearing"),
         "pressure": attrs.get("pressure"),
         "cloud_coverage": attrs.get("cloud_coverage"),
@@ -1292,12 +1296,14 @@ class StatisticsView(HomeAssistantView):
                     "actual_kwh": actual_kwh,
                 })
 
-            # Calculate accuracy
+            # Calculate accuracy: 100% - |deviation%|
+            # Accuracy can never be >100% or <0%
             if group_data["prediction_total_kwh"] > 0 and group_data["actual_total_kwh"] > 0:
-                group_data["accuracy_percent"] = min(
-                    100,
-                    (group_data["actual_total_kwh"] / group_data["prediction_total_kwh"]) * 100
-                )
+                deviation_percent = abs(
+                    (group_data["actual_total_kwh"] - group_data["prediction_total_kwh"])
+                    / group_data["prediction_total_kwh"]
+                ) * 100
+                group_data["accuracy_percent"] = max(0, min(100, 100 - deviation_percent))
             else:
                 group_data["accuracy_percent"] = None
 
@@ -1580,6 +1586,37 @@ class WeatherHistoryView(HomeAssistantView):
             }, status=500)
 
 
+class WeatherComparisonView(HomeAssistantView):
+    """View to get IST vs KI weather comparison data."""
+
+    url = "/api/sfml_stats/weather_comparison"
+    name = "api:sfml_stats:weather_comparison"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: web.Request) -> web.Response:
+        """Get IST vs KI weather comparison data."""
+        try:
+            from ..weather_collector import WeatherDataCollector
+
+            days = int(request.query.get("days", 7))
+            days = min(days, 30)  # Max 30 days
+
+            data_path = Path(HASS.config.path()) / "sfml_stats_weather"
+            collector = WeatherDataCollector(HASS, data_path)
+
+            comparison = await collector.get_comparison_data(days=days)
+
+            return web.json_response(comparison)
+
+        except Exception as err:
+            _LOGGER.error("Error fetching weather comparison: %s", err, exc_info=True)
+            return web.json_response({
+                "success": False,
+                "error": str(err)
+            }, status=500)
+
+
 class ExportWeatherAnalyticsView(HomeAssistantView):
     """View to export weather analytics as PNG."""
 
@@ -1660,33 +1697,34 @@ class PowerSourcesHistoryView(HomeAssistantView):
                     "error": "No sensors configured"
                 })
 
-            # Get history from recorder
-            end_time = datetime.now(timezone.utc)
-            start_time = end_time - timedelta(hours=hours)
+            # Try collector data FIRST - it's more reliable than recorder
+            data_source = "collector"
+            collector_data = await self._get_power_sources_collector_data(hours)
 
-            history_data = await self._get_recorder_history(
-                entity_ids, start_time, end_time
-            )
+            if collector_data and len(collector_data) > 0:
+                processed_data = collector_data
+                _LOGGER.info("Got %d entries from power sources collector", len(collector_data))
+            else:
+                # Fallback to recorder if collector has no data
+                _LOGGER.info("No collector data, trying recorder")
+                end_time = datetime.now(timezone.utc)
+                start_time = end_time - timedelta(hours=hours)
 
-            # Process and align data
-            processed_data = self._process_history(history_data, sensors, start_time, end_time)
+                history_data = await self._get_recorder_history(
+                    entity_ids, start_time, end_time
+                )
 
-            # Check if we got any actual data
-            has_data = any(
-                any(d.get(k) is not None for k in ['solar_power', 'solar_to_house', 'solar_to_battery', 'battery_to_house', 'grid_to_house', 'home_consumption'])
-                for d in processed_data
-            )
+                # Process and align data
+                processed_data = self._process_history(history_data, sensors, start_time, end_time)
+                data_source = "recorder"
 
-            # If no data from recorder, try power sources collector data
-            data_source = "recorder"
-            if not has_data:
-                _LOGGER.info("No data from recorder, trying power sources collector data")
-                collector_data = await self._get_power_sources_collector_data(hours)
-                if collector_data:
-                    processed_data = collector_data
-                    data_source = "collector"
-                    _LOGGER.info("Got %d entries from power sources collector", len(collector_data))
-                else:
+                # Check if we got any actual data from recorder
+                has_data = any(
+                    any(d.get(k) is not None for k in ['solar_power', 'solar_to_house', 'solar_to_battery', 'battery_to_house', 'grid_to_house', 'home_consumption'])
+                    for d in processed_data
+                )
+
+                if not has_data:
                     # Last resort: try hourly file fallback
                     file_data = await self._get_hourly_history_from_file()
                     if file_data:
@@ -2037,13 +2075,22 @@ class EnergySourcesDailyStatsView(HomeAssistantView):
                                 "min_soc": day_data.get("min_soc", 0),
                                 "max_soc": day_data.get("max_soc", 0),
                                 "peak_battery_power_w": day_data.get("peak_battery_power_w", 0),
-                                "peak_consumption_w": 0,
+                                "peak_consumption_w": day_data.get("peak_battery_power_w", 0),  # Use battery peak as proxy
                             }
                         else:
                             # Merge additional fields from history into existing day data
                             existing = daily_stats["days"][date_str]
                             if existing.get("peak_battery_power_w") is None or existing.get("peak_battery_power_w") == 0:
                                 existing["peak_battery_power_w"] = day_data.get("peak_battery_power_w", 0)
+                            # Also merge home_consumption, autarky, etc. if missing
+                            if existing.get("home_consumption_kwh") is None or existing.get("home_consumption_kwh") == 0:
+                                existing["home_consumption_kwh"] = day_data.get("home_consumption_kwh", 0)
+                            if existing.get("autarky_percent") is None or existing.get("autarky_percent") == 0:
+                                existing["autarky_percent"] = day_data.get("autarky_percent", 0)
+                            if existing.get("self_consumption_percent") is None or existing.get("self_consumption_percent") == 0:
+                                existing["self_consumption_percent"] = day_data.get("self_consumption_percent", 0)
+                            if existing.get("peak_consumption_w") is None or existing.get("peak_consumption_w") == 0:
+                                existing["peak_consumption_w"] = day_data.get("peak_battery_power_w", 0)
 
             # Also get current sensor values for real-time display
             config = _get_config()

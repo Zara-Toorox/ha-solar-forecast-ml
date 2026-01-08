@@ -2191,12 +2191,12 @@
                           :opacity="energyFlow.flows.solar_to_house > 0 ? 1 : 0"/>
 
                     <!-- Solar to Battery (diagonal) -->
-                    <path d="M215,75 L115,155"
+                    <path v-if="hasBattery" d="M215,75 L115,155"
                           stroke="#ffdd00" stroke-width="3" stroke-linecap="round" fill="none"
                           :opacity="energyFlow.flows.solar_to_battery > 0 ? 1 : 0"/>
 
                     <!-- Battery to Home (horizontal) -->
-                    <path d="M120,190 L210,190"
+                    <path v-if="hasBattery" d="M120,190 L210,190"
                           stroke="#22c55e" stroke-width="3" stroke-linecap="round" fill="none"
                           :opacity="energyFlow.flows.battery_to_house > 0 ? 1 : 0"/>
 
@@ -2206,7 +2206,7 @@
                           :opacity="energyFlow.flows.grid_to_house > 0 ? 1 : 0"/>
 
                     <!-- Grid to Battery (curved path below) -->
-                    <path d="M380,220 Q250,340 120,220"
+                    <path v-if="hasBattery" d="M380,220 Q250,340 120,220"
                           stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" fill="none" stroke-dasharray="5,5"
                           :opacity="energyFlow.flows.grid_to_battery > 0 ? 1 : 0"/>
 
@@ -2222,12 +2222,12 @@
                     </circle>
 
                     <!-- Solar to Battery -->
-                    <circle v-if="energyFlow.flows.solar_to_battery > 0" r="5" fill="#ffdd00" filter="url(#glowYellow)">
+                    <circle v-if="hasBattery && energyFlow.flows.solar_to_battery > 0" r="5" fill="#ffdd00" filter="url(#glowYellow)">
                         <animateMotion dur="1.5s" repeatCount="indefinite" path="M215,75 L115,155"/>
                     </circle>
 
                     <!-- Battery to Home -->
-                    <circle v-if="energyFlow.flows.battery_to_house > 0" r="5" fill="#22c55e" filter="url(#glowGreen)">
+                    <circle v-if="hasBattery && energyFlow.flows.battery_to_house > 0" r="5" fill="#22c55e" filter="url(#glowGreen)">
                         <animateMotion dur="1.3s" repeatCount="indefinite" path="M120,190 L210,190"/>
                     </circle>
 
@@ -2242,7 +2242,7 @@
                     </circle>
 
                     <!-- Grid to Battery -->
-                    <circle v-if="energyFlow.flows.grid_to_battery > 0" r="4" fill="#8b5cf6" filter="url(#glowPurple)">
+                    <circle v-if="hasBattery && energyFlow.flows.grid_to_battery > 0" r="4" fill="#8b5cf6" filter="url(#glowPurple)">
                         <animateMotion dur="2.5s" repeatCount="indefinite" path="M380,220 Q250,340 120,220"/>
                     </circle>
 
@@ -2254,13 +2254,13 @@
                     </text>
 
                     <!-- Solar to Battery Label -->
-                    <text v-if="energyFlow.flows.solar_to_battery > 0" x="150" y="105"
+                    <text v-if="hasBattery && energyFlow.flows.solar_to_battery > 0" x="150" y="105"
                           fill="#ffdd00" font-size="11" font-weight="bold" text-anchor="middle">
                         {{ energyFlow.flows.solar_to_battery?.toFixed(0) }} W
                     </text>
 
                     <!-- Battery to Home Label -->
-                    <text v-if="energyFlow.flows.battery_to_house > 0" x="165" y="182"
+                    <text v-if="hasBattery && energyFlow.flows.battery_to_house > 0" x="165" y="182"
                           fill="#22c55e" font-size="11" font-weight="bold" text-anchor="middle">
                         {{ energyFlow.flows.battery_to_house?.toFixed(0) }} W
                     </text>
@@ -2310,7 +2310,7 @@
                     </text>
 
                     <!-- ========== BATTERY NODE (left) - Realistic Battery ========== -->
-                    <g class="node-glow-battery node-clickable" :class="{ active: energyFlow.battery.power !== 0 }" @click="openBatteryModal">
+                    <g v-if="hasBattery" class="node-glow-battery node-clickable" :class="{ active: energyFlow.battery.power !== 0 }" @click="openBatteryModal">
                         <circle cx="80" cy="190" r="38" fill="rgba(34, 197, 94, 0.15)" stroke="#22c55e" stroke-width="2"/>
                         <!-- SOC Ring -->
                         <circle v-if="energyFlow.battery.soc !== null" cx="80" cy="190" r="42" fill="none"
@@ -2336,12 +2336,12 @@
                             <line x1="-11" y1="5" x2="11" y2="5" stroke="#22c55e" stroke-width="1" opacity="0.4"/>
                         </g>
                     </g>
-                    <text x="80" y="250" fill="#22c55e" font-size="14" font-weight="bold" text-anchor="middle"
+                    <text v-if="hasBattery" x="80" y="250" fill="#22c55e" font-size="14" font-weight="bold" text-anchor="middle"
                           style="filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.7));">
                         {{ energyFlow.battery.soc?.toFixed(0) || '—' }} %
                     </text>
-                    <text x="80" y="265" fill="#94a3b8" font-size="10" text-anchor="middle">Batterie</text>
-                    <text v-if="energyFlow.battery.power" x="80" y="280" fill="#64748b" font-size="9" text-anchor="middle">
+                    <text v-if="hasBattery" x="80" y="265" fill="#94a3b8" font-size="10" text-anchor="middle">Batterie</text>
+                    <text v-if="hasBattery && energyFlow.battery.power" x="80" y="280" fill="#64748b" font-size="9" text-anchor="middle">
                         {{ energyFlow.battery.power > 0 ? '+' : '' }}{{ energyFlow.battery.power?.toFixed(0) }} W
                     </text>
 
@@ -2564,7 +2564,7 @@
                         </div>
                     </div>
                     <!-- Solar → Akku -->
-                    <div class="weather-widget" style="border-color: #ffdd00;">
+                    <div v-if="hasBattery" class="weather-widget" style="border-color: #ffdd00;">
                         <div class="weather-main">
                             <div class="weather-icon">☀️🔋</div>
                             <div>
@@ -2579,8 +2579,8 @@
                     </div>
                 </div>
 
-                <!-- Gruppe 2: Akku Live -->
-                <div class="widget-group-container">
+                <!-- Gruppe 2: Akku Live (nur wenn Batterie vorhanden) -->
+                <div v-if="hasBattery" class="widget-group-container">
                     <span class="widget-group-label">🔋 Dilithium-Kammer</span>
                     <!-- Akku → Haus -->
                     <div class="weather-widget" style="border-color: #22c55e;">
@@ -2661,7 +2661,7 @@
                         </div>
                         <div class="weather-details">
                             <div class="weather-detail"><span>☀️</span><span>{{ energyFlow.flows.solar_to_house?.toFixed(0) || '0' }} W Solar</span></div>
-                            <div class="weather-detail"><span>🔋</span><span>{{ energyFlow.flows.battery_to_house?.toFixed(0) || '0' }} W Akku</span></div>
+                            <div v-if="hasBattery" class="weather-detail"><span>🔋</span><span>{{ energyFlow.flows.battery_to_house?.toFixed(0) || '0' }} W Akku</span></div>
                             <div class="weather-detail"><span>⚡</span><span>{{ energyFlow.flows.grid_to_house?.toFixed(0) || '0' }} W Netz</span></div>
                         </div>
                     </div>
@@ -2745,8 +2745,8 @@
                     </div>
                 </div>
 
-                <!-- ===== BLOCK 2: AKKU ===== -->
-                <div style="margin-bottom: var(--spacing-md);">
+                <!-- ===== BLOCK 2: AKKU (nur wenn Batterie vorhanden) ===== -->
+                <div v-if="hasBattery" style="margin-bottom: var(--spacing-md);">
                     <div style="font-size: 0.9rem; font-weight: 600; color: var(--neon-green); margin-bottom: var(--spacing-sm); display: flex; align-items: center; gap: 8px;">
                         <span>🔋</span> Gesamtladung Akku
                     </div>
@@ -3510,11 +3510,11 @@
                             <div class="modal-stat-value" style="color: #FFB74D;">{{ powerSourcesModal.stats.solarToHouse?.toFixed(2) || '—' }} kWh</div>
                             <div class="modal-stat-label">Solar → Haus</div>
                         </div>
-                        <div class="modal-stat-card">
+                        <div v-if="hasBattery" class="modal-stat-card">
                             <div class="modal-stat-value" style="color: #9ACD32;">{{ powerSourcesModal.stats.solarToBattery?.toFixed(2) || '—' }} kWh</div>
                             <div class="modal-stat-label">Solar → Batterie</div>
                         </div>
-                        <div class="modal-stat-card">
+                        <div v-if="hasBattery" class="modal-stat-card">
                             <div class="modal-stat-value" style="color: #4DD0E1;">{{ powerSourcesModal.stats.batteryTotal?.toFixed(2) || '—' }} kWh</div>
                             <div class="modal-stat-label">Batterie → Haus</div>
                         </div>
@@ -3543,7 +3543,7 @@
                         <button class="modal-tab" :class="{ active: powerSourcesModal.activeTab === 'week' }" @click="changePowerSourcesTab('week')">
                             Letzte 7 Tage
                         </button>
-                        <button class="modal-tab" :class="{ active: powerSourcesModal.activeTab === 'custom' }" @click="powerSourcesModal.activeTab = 'custom'" style="border-color: #8b5cf6;">
+                        <button class="modal-tab" :class="{ active: powerSourcesModal.activeTab === 'custom' }" @click="changePowerSourcesTab('custom')" style="border-color: #8b5cf6;">
                             📅 Benutzerdefiniert
                         </button>
                     </div>
@@ -4249,6 +4249,7 @@
                 const weatherHA = reactive({ state: null, temperature: null, humidity: null, wind_speed: null, cloud_coverage: null, pressure: null });
                 const live = reactive({ power: 0, yield: 0, price: null });
                 const currentPrice = reactive({ total_price: null, net_price: null, hour: null });
+                const hasBattery = ref(false);  // True if battery sensor is configured
                 const forecast = reactive({ todayTotal: 0, todayTotalCorrected: null, todayRemaining: 0, tomorrowTotal: 0, dayAfterTomorrowTotal: 0, todayHours: [], tomorrowHours: [], dayAfterTomorrowHours: [], maxHourly: 0.5 });
                 const todayAccuracy = ref(null);  // Tagesgenauigkeit in %
                 const bestHour = reactive({ hour: null, prediction_kwh: null });
@@ -4987,10 +4988,17 @@
                                 const gridKwh = dayData.grid_to_house_kwh || 0;
                                 const consumptionKwh = dayData.home_consumption_kwh || (solarKwh + batteryKwh + gridKwh);
 
-                                // Autarkie = (Verbrauch - Netzbezug) / Verbrauch = 1 - (Netz / Verbrauch)
-                                const autarky = consumptionKwh > 0 ? Math.max(0, (1 - gridKwh / consumptionKwh) * 100) : 0;
-                                const totalSolar = (dayData.solar_yield_kwh || solarKwh);
-                                const selfConsumption = totalSolar > 0 ? (solarKwh / totalSolar) * 100 : 0;
+                                // Use API values if available, otherwise calculate
+                                let autarky = dayData.autarky_percent;
+                                if (autarky === undefined || autarky === null) {
+                                    // Autarkie = (Verbrauch - Netzbezug) / Verbrauch = 1 - (Netz / Verbrauch)
+                                    autarky = consumptionKwh > 0 ? Math.max(0, (1 - gridKwh / consumptionKwh) * 100) : 0;
+                                }
+                                let selfConsumption = dayData.self_consumption_percent;
+                                if (selfConsumption === undefined || selfConsumption === null) {
+                                    const totalSolar = (dayData.solar_yield_kwh || solarKwh);
+                                    selfConsumption = totalSolar > 0 ? (solarKwh / totalSolar) * 100 : 0;
+                                }
 
                                 history.push({
                                     date: dateStr,
@@ -5000,7 +5008,7 @@
                                     grid_kwh: gridKwh,
                                     autarky: Math.min(100, autarky),
                                     self_consumption: Math.min(100, selfConsumption),
-                                    peak_power_w: dayData.peak_consumption_w || 0
+                                    peak_power_w: dayData.peak_consumption_w || dayData.peak_battery_power_w || 0
                                 });
                             }
                         }
@@ -5358,7 +5366,12 @@
 
                 function changePowerSourcesTab(tab) {
                     powerSourcesModal.activeTab = tab;
-                    loadPowerSourcesData(tab);
+                    if (tab === 'custom') {
+                        // Load custom range data automatically when switching to custom tab
+                        loadPowerSourcesCustomRange();
+                    } else {
+                        loadPowerSourcesData(tab);
+                    }
                 }
 
                 async function loadPowerSourcesData(period) {
@@ -5581,12 +5594,17 @@
                                 borderColor: '#22c55e',
                                 textStyle: { color: '#fff' }
                             },
-                            grid: { left: 50, right: 20, top: 20, bottom: 40 },
+                            grid: { left: 50, right: 20, top: 20, bottom: 60 },
                             xAxis: {
                                 type: 'category',
                                 data: timestamps,
                                 axisLine: { lineStyle: { color: '#404040' } },
-                                axisLabel: { color: '#94a3b8', rotate: 45, fontSize: 10 }
+                                axisLabel: {
+                                    color: '#94a3b8',
+                                    rotate: 45,
+                                    fontSize: 9,
+                                    interval: Math.floor(timestamps.length / 8)
+                                }
                             },
                             yAxis: {
                                 type: 'value',
@@ -6060,20 +6078,25 @@
                     weatherModal.stats.minTemp = Math.min(...history.map(d => d.temp_min));
                     weatherModal.stats.totalRain = monthData.reduce((sum, d) => sum + d.rain, 0);
                     weatherModal.stats.avgWind = history.reduce((sum, d) => sum + d.wind, 0) / history.length;
-                    weatherModal.stats.sunHours = monthData.reduce((sum, d) => sum + (d.radiation > 200 ? 8 : 4), 0);
+                    weatherModal.stats.sunHours = monthData.reduce((sum, d) => sum + (d.sun_hours || 0), 0);
 
                     renderWeatherCharts();
                 }
 
-                function renderWeatherCharts() {
+                async function renderWeatherCharts() {
                     // Check if we're on the comparison tab
                     if (weatherModal.activeTab === 'comparison') {
-                        renderWeatherComparisonCharts();
+                        await renderWeatherComparisonCharts();
                         return;
                     }
 
-                    const data = weatherModal.historicalData || [];
-                    if (!data.length) return;
+                    const allData = weatherModal.historicalData || [];
+                    if (!allData.length) return;
+
+                    // Filter data based on active tab
+                    const daysToShow = weatherModal.activeTab === 'week' ? 7 :
+                                       weatherModal.activeTab === 'month' ? 30 : 365;
+                    const data = allData.slice(-daysToShow);
 
                     const dates = data.map(d => d.date.slice(5));
 
@@ -6149,44 +6172,46 @@
                     }
                 }
 
-                function renderWeatherComparisonCharts() {
-                    // Generate mock data for IST vs KI comparison (7 days)
-                    const days = 7;
-                    const dates = [];
-                    const tempIST = [];
-                    const tempKI = [];
-                    const radiationIST = [];
-                    const radiationKI = [];
-                    const cloudsIST = [];
-                    const cloudsKI = [];
-                    const accuracy = [];
-                    const now = new Date();
+                async function renderWeatherComparisonCharts() {
+                    // Load real IST vs KI comparison data from API
+                    let comparisonData = [];
+                    let comparisonStats = {};
 
-                    for (let i = days - 1; i >= 0; i--) {
-                        const date = new Date(now);
-                        date.setDate(date.getDate() - i);
-                        dates.push(date.toISOString().slice(5, 10));
+                    try {
+                        const response = await fetch('/api/sfml_stats/weather_comparison?days=7');
+                        const result = await response.json();
 
-                        // Generate realistic IST data
-                        const baseTemp = 15 + Math.sin(i / 7 * Math.PI) * 8;
-                        const baseRadiation = 400 + Math.sin(i / 7 * Math.PI) * 200;
-                        const baseClouds = 30 + Math.random() * 50;
-
-                        tempIST.push(baseTemp + Math.random() * 3);
-                        tempKI.push(baseTemp + (Math.random() - 0.5) * 4); // KI prediction with variance
-
-                        radiationIST.push(Math.max(0, baseRadiation + Math.random() * 100));
-                        radiationKI.push(Math.max(0, baseRadiation + (Math.random() - 0.5) * 120));
-
-                        cloudsIST.push(Math.max(0, Math.min(100, baseClouds)));
-                        cloudsKI.push(Math.max(0, Math.min(100, baseClouds + (Math.random() - 0.5) * 20)));
-
-                        // Calculate accuracy (lower is better)
-                        const tempDiff = Math.abs(tempIST[days - 1 - i] - tempKI[days - 1 - i]);
-                        const radDiff = Math.abs(radiationIST[days - 1 - i] - radiationKI[days - 1 - i]) / 10;
-                        const cloudDiff = Math.abs(cloudsIST[days - 1 - i] - cloudsKI[days - 1 - i]);
-                        accuracy.push(Math.min(100, 100 - (tempDiff + radDiff + cloudDiff) / 3 * 10));
+                        if (result.success && result.data && result.data.length > 0) {
+                            comparisonData = result.data;
+                            comparisonStats = result.stats || {};
+                            console.log('Weather comparison data loaded:', comparisonData.length, 'days');
+                        } else {
+                            console.warn('No weather comparison data available:', result.error || 'empty data');
+                            return; // Don't render charts with no data
+                        }
+                    } catch (error) {
+                        console.error('Error fetching weather comparison data:', error);
+                        return; // Don't render charts on error
                     }
+
+                    // Extract data arrays from comparison data
+                    const dates = comparisonData.map(d => d.date.slice(5)); // MM-DD format
+                    const tempIST = comparisonData.map(d => d.temp_ist);
+                    const tempKI = comparisonData.map(d => d.temp_ki);
+                    const radiationIST = comparisonData.map(d => d.radiation_ist);
+                    const radiationKI = comparisonData.map(d => d.radiation_ki);
+                    const cloudsIST = comparisonData.map(d => d.clouds_ist);
+                    const cloudsKI = comparisonData.map(d => d.clouds_ki);
+
+                    // Calculate per-day accuracy
+                    const accuracy = comparisonData.map(d => {
+                        if (d.temp_ki === 0 && d.radiation_ki === 0) return 0;
+                        const tempError = Math.abs(d.temp_ist - d.temp_ki);
+                        const radError = d.radiation_ki > 0 ? Math.abs(d.radiation_ist - d.radiation_ki) / 5 : 0;
+                        const tempAcc = Math.max(0, 100 - tempError * 10);
+                        const radAcc = Math.max(0, 100 - radError);
+                        return (tempAcc + radAcc) / 2;
+                    });
 
                     // Temperature IST vs KI Chart
                     if (weatherTempComparisonChart.value) {
@@ -6496,7 +6521,7 @@
 
                     const accuracyData = history.filter(d => d.accuracy > 0);
                     solarModal.stats.avgAccuracy = accuracyData.length > 0
-                        ? accuracyData.reduce((sum, d) => sum + d.accuracy, 0) / accuracyData.length
+                        ? Math.min(100, accuracyData.reduce((sum, d) => sum + Math.min(100, d.accuracy), 0) / accuracyData.length)
                         : 0;
 
                     solarModal.stats.peakPower = Math.max(...history.map(d => d.peak_power_w || 0));
@@ -6787,11 +6812,17 @@
                         // If switching to comparison tab, initialize comparison charts first
                         if (weatherModal.activeTab === 'comparison') {
                             initWeatherComparisonCharts();
-                            setTimeout(() => {
-                                renderWeatherComparisonCharts();
+                            setTimeout(async () => {
+                                await renderWeatherComparisonCharts();
                             }, 200);
                         } else {
-                            updateWeatherCharts();
+                            // For week/month/year tabs, just re-render with existing data (filtered by tab)
+                            // Only fetch if no data loaded yet
+                            if (weatherModal.historicalData && weatherModal.historicalData.length > 0) {
+                                renderWeatherCharts();
+                            } else {
+                                updateWeatherCharts();
+                            }
                         }
                     }
                 });
@@ -6922,6 +6953,9 @@
                             Object.assign(energyFlow.home, energyFlowData.home);
                             Object.assign(energyFlow.statistics, energyFlowData.statistics);
 
+                            // Check if battery is configured (has valid SOC value)
+                            hasBattery.value = energyFlowData.battery?.soc !== null && energyFlowData.battery?.soc !== undefined;
+
                             // Panel data
                             if (energyFlowData.panels) {
                                 energyFlow.panels = energyFlowData.panels;
@@ -7025,14 +7059,36 @@
                                 weather.radiation = actualWeather.solar_radiation_wm2;
                                 weather.humidity = actualWeather.humidity_percent;
                                 weather.wind = actualWeather.wind_speed_ms;
-                                // Wolken aus condition ableiten
-                                const cond = (actualWeather.condition || '').toLowerCase();
-                                if (cond.includes('clear') || cond.includes('sunny')) weather.clouds = 0;
-                                else if (cond.includes('partly')) weather.clouds = 30;
-                                else if (cond.includes('cloudy')) weather.clouds = 75;
-                                else if (cond.includes('overcast')) weather.clouds = 100;
-                                else if (cond.includes('rain') || cond.includes('fog')) weather.clouds = 90;
-                                else weather.clouds = 50; // Default
+                                // Wolken aus Strahlungsdaten berechnen (W/m² Sensor)
+                                // Physikalische Ableitung: Weniger Strahlung = mehr Wolken
+                                if (actualWeather.solar_radiation_wm2 !== undefined && actualWeather.solar_radiation_wm2 !== null) {
+                                    // Maximale erwartete Strahlung basierend auf Jahreszeit
+                                    // Winter (Nov-Feb): ~500 W/m² max, Sommer: ~900 W/m² max
+                                    const month = new Date().getMonth(); // 0-11
+                                    const hour = currentHour;
+                                    const isSummer = month >= 4 && month <= 8;
+                                    const maxRadiation = isSummer ? 900 : 500;
+
+                                    // Nur tagsüber berechnen (Strahlung > 0 erwartet)
+                                    const isDaytime = hour >= 7 && hour <= 19;
+                                    if (isDaytime && maxRadiation > 0) {
+                                        const clearSkyRatio = Math.min(1, actualWeather.solar_radiation_wm2 / maxRadiation);
+                                        weather.clouds = Math.round((1 - clearSkyRatio) * 100);
+                                    } else {
+                                        // Nachts: Fallback auf KI-Daten wenn verfügbar
+                                        const correctedHour = solar.data.weather_corrected?.[todayStr]?.[String(currentHour)];
+                                        weather.clouds = correctedHour?.clouds ?? 50;
+                                    }
+                                } else {
+                                    // Fallback: condition-basierte Logik
+                                    const cond = (actualWeather.condition || '').toLowerCase();
+                                    if (cond.includes('clear') || cond.includes('sunny')) weather.clouds = 0;
+                                    else if (cond.includes('partly')) weather.clouds = 30;
+                                    else if (cond.includes('cloudy')) weather.clouds = 75;
+                                    else if (cond.includes('overcast')) weather.clouds = 100;
+                                    else if (cond.includes('rain') || cond.includes('fog')) weather.clouds = 90;
+                                    else weather.clouds = 50;
+                                }
                             } else if (currentPred) {
                                 // Fallback: weather_forecast aus predictions
                                 const wf = currentPred.weather_forecast || {};
@@ -7889,7 +7945,7 @@
                     if (last30.length > 0) {
                         historyStats.avgProduction = last30.reduce((s, d) => s + (d.actual_kwh || 0), 0) / last30.length;
                         historyStats.avgForecast = last30.reduce((s, d) => s + (d.predicted_kwh || 0), 0) / last30.length;
-                        historyStats.avgAccuracy = last30.filter(d => d.accuracy > 0).reduce((s, d, _, a) => s + d.accuracy / a.length, 0);
+                        historyStats.avgAccuracy = Math.min(100, last30.filter(d => d.accuracy > 0).reduce((s, d, _, a) => s + Math.min(100, d.accuracy) / a.length, 0));
                         historyStats.totalProduction = sorted.reduce((s, d) => s + (d.actual_kwh || 0), 0);
                         historyStats.monthPeak = Math.max(...last30.map(d => d.peak_power_w || 0));
                         historyStats.allTimePeak = statistics?.all_time_peak?.power_w || historyStats.monthPeak;
@@ -8028,7 +8084,7 @@
                 });
 
                 return {
-                    lastUpdate, isDarkTheme, toggleTheme,
+                    lastUpdate, isDarkTheme, toggleTheme, hasBattery,
                     weather, weatherCorrected, weatherHA, weatherIcon, weatherCondition, weatherHAIcon, live, forecast, kpis,
                     productionChart, priceChart, timelineChart, todayProductionChart, accuracyChart,
                     trendChart, monthlyChart,

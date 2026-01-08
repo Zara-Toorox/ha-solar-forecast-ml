@@ -2,305 +2,223 @@
   "config": {
     "step": {
       "user": {
-        "title": "SFML Stats - Grundeinstellungen",
-        "description": "Konfiguriere die Statistik-Generierung für Solar Forecast ML.",
+        "title": "SFML Stats - System Detection",
+        "description": "Scanning for compatible systems...\n\n**{detected_count} system(s) detected.**\n\nSelect your system to auto-map sensors.",
         "data": {
-          "auto_generate": "Automatische Generierung",
-          "generate_weekly": "Wöchentliche Reports",
-          "generate_monthly": "Monatliche Reports",
-          "theme": "Farbschema"
+          "inverter_profile": "System"
         },
         "data_description": {
-          "auto_generate": "Reports automatisch nach Zeitplan generieren",
-          "generate_weekly": "Jeden Sonntag einen Wochenbericht erstellen",
-          "generate_monthly": "Am 1. jeden Monats einen Monatsbericht erstellen",
-          "theme": "Dark oder Light Theme für die Charts"
+          "inverter_profile": "Systems marked with a checkmark (✓) were auto-detected in your Home Assistant."
         }
       },
-      "energy_flow": {
-        "title": "Energiefluss-Sensoren (Live-Leistung)",
-        "description": "Diese Sensoren zeigen die AKTUELLE Leistung in Watt (W) für das Live-Energiefluss-Diagramm.\n\nAlle Felder sind optional - konfiguriere nur was dein System hat.\n\n⚡ WICHTIG: Hier NUR Watt-Sensoren (momentane Leistung), KEINE kWh-Sensoren (Energiemenge)!\n\n💡 TIPP: Bei Hybrid-Wechselrichtern (Fronius, Huawei, SMA) findest du diese Sensoren meist unter 'Power' oder 'Leistung'.",
+      "detection_result": {
+        "title": "Detection Result - {profile_name}",
+        "description": "**{found_count}/{total_count} sensors found:**\n\n{found_sensors}\n\n**Not found:**\n{missing_sensors}\n\nClick NEXT to review and adjust.",
+        "data": {}
+      },
+      "sensors": {
+        "title": "Sensor Configuration",
+        "description": "Review and adjust sensor mappings. Empty fields are optional.",
         "data": {
-          "sensor_solar_power": "☀️ PV-Gesamtleistung (W)",
-          "sensor_solar_to_house": "☀️→🏠 Solar direkt ins Haus (W)",
-          "sensor_solar_to_battery": "☀️→🔋 Solar in Batterie (W)",
-          "sensor_grid_to_house": "🔌→🏠 Netzbezug ins Haus (W)",
-          "sensor_grid_to_battery": "🔌→🔋 Netzbezug in Batterie (W)",
-          "sensor_house_to_grid": "🏠→🔌 Einspeisung ins Netz (W)",
-          "sensor_smartmeter_import": "📊 Smartmeter Bezug (W)",
-          "sensor_smartmeter_export": "📊 Smartmeter Einspeisung (W)"
+          "sensor_solar_power": "Solar Power (W)",
+          "sensor_solar_yield_daily": "Solar Yield Today (kWh)",
+          "sensor_grid_to_house": "Grid Import (W)",
+          "sensor_house_to_grid": "Grid Export (W)",
+          "sensor_battery_soc": "Battery SOC (%)",
+          "sensor_battery_power": "Battery Power (W)",
+          "sensor_battery_to_house": "Battery Discharge (W)",
+          "sensor_home_consumption": "Home Consumption (W)",
+          "weather_entity": "Weather Entity"
         },
         "data_description": {
-          "sensor_solar_power": "GESAMT-Leistung aller PV-Module in Watt. Was der Wechselrichter gerade produziert. Beispiel: 'sensor.inverter_pv_power' zeigt 4500 W. NICHT die Aufteilung wohin der Strom fließt!",
-          "sensor_solar_to_house": "Anteil der Solarleistung der DIREKT ins Haus fließt (ohne Batterie, ohne Netz). Nur nötig wenn dein WR diesen Wert separat ausgibt. Beispiel: Fronius 'Power Real AC' oder Huawei 'Active Power'. Falls nicht vorhanden: wird automatisch berechnet.",
-          "sensor_solar_to_battery": "Solarleistung die gerade in die Batterie lädt. NUR positive Werte! Beispiel: 'sensor.battery_charge_power' zeigt 2000 W beim Laden. Zeigt 0 wenn Batterie entlädt.",
-          "sensor_grid_to_house": "Leistung die vom Stromnetz bezogen wird für direkten Verbrauch (OHNE Akkuladung). Falls dein System nur Gesamt-Netzbezug hat: nutze stattdessen 'Smartmeter Bezug'. Beispiel: 1500 W.",
-          "sensor_grid_to_battery": "Leistung die vom Netz in die Batterie lädt (z.B. bei günstigen Strompreisen). Die meisten Systeme laden nur von Solar - dann leer lassen. Beispiel: 0-5000 W.",
-          "sensor_house_to_grid": "Überschuss-Einspeisung ins Netz in Watt. Was gerade verkauft/eingespeist wird. Beispiel: 'sensor.grid_export_power' zeigt 3000 W. NICHT kWh-Zähler!",
-          "sensor_smartmeter_import": "Aktuelle Bezugsleistung vom Smartmeter/Stromzähler. Gesamter Netzbezug inkl. Akkuladung. Alternativ zu 'Netz zu Haus' wenn keine Aufteilung verfügbar. Wird für stündliche Preisberechnung verwendet. Beispiel: 'sensor.smartmeter_power_import' = 800 W.",
-          "sensor_smartmeter_export": "Aktuelle Einspeiseleistung vom Smartmeter. Wie 'Einspeisung ins Netz', aber direkt vom Zähler. Beispiel: 'sensor.smartmeter_power_export' = 2500 W."
+          "sensor_solar_power": "Total PV power output in Watts",
+          "sensor_solar_yield_daily": "Daily solar yield in kWh (resets at midnight)",
+          "sensor_grid_to_house": "Power imported from grid in Watts",
+          "sensor_house_to_grid": "Power exported to grid in Watts",
+          "sensor_battery_soc": "Battery state of charge (0-100%)",
+          "sensor_battery_power": "Battery charge/discharge power in Watts",
+          "sensor_battery_to_house": "Battery discharge to house in Watts",
+          "sensor_home_consumption": "Total home consumption in Watts",
+          "weather_entity": "Home Assistant weather entity (e.g. weather.home)"
         }
       },
-      "battery": {
-        "title": "Batterie & Hausverbrauch (Live)",
-        "description": "Sensoren für Batterie-Status und Hausverbrauch.\n\nAlle Felder sind optional - ohne Batterie diesen Schritt überspringen.\n\n🔋 WICHTIG: SOC muss 0-100 sein (nicht 0-1)!\n\n⚠️ ACHTUNG bei Batterie-Leistung: Prüfe ob dein System positive oder negative Werte für Entladung verwendet!",
+      "helpers": {
+        "title": "Missing kWh Sensors",
+        "description": "**{missing_count}** daily kWh sensor(s) missing:\n\n**{missing_sensors}**\n\nThese can be created from your Watt sensors.\n\n**How to:**\n1. Go to Settings → Devices & Services → Helpers\n2. Create a \"Riemann sum integral\" sensor (W → kWh)\n3. Create a \"Utility meter\" with daily reset\n\nOr add the following to configuration.yaml:\n\n```yaml\n{yaml_config}\n```",
         "data": {
-          "sensor_battery_soc": "🔋 Ladestand/SOC (%)",
-          "sensor_battery_power": "🔋 Batterie-Leistung (+/- W)",
-          "sensor_battery_to_house": "🔋→🏠 Entladung ins Haus (W)",
-          "sensor_battery_to_grid": "🔋→🔌 Entladung ins Netz (W)",
-          "sensor_home_consumption": "🏠 Hausverbrauch gesamt (W)"
+          "show_yaml": "I have copied the YAML configuration"
         },
         "data_description": {
-          "sensor_battery_soc": "Aktueller Ladestand (State of Charge) in PROZENT. MUSS zwischen 0 und 100 liegen! Falls dein Sensor 0.0-1.0 zeigt: erstelle einen Template-Sensor der mit 100 multipliziert. Beispiel: 'sensor.battery_soc' = 75 bedeutet 75% geladen.",
-          "sensor_battery_power": "Kombinierte Lade-/Entladeleistung. ⚠️ ACHTUNG: Die Vorzeichen-Konvention ist NICHT standardisiert! Fronius/SMA: positiv=laden, negativ=entladen. Huawei/andere: kann umgekehrt sein. Prüfe in den Entwicklertools! Beispiel: +2000W = Laden, -1500W = Entladen (oder umgekehrt).",
-          "sensor_battery_to_house": "Entladeleistung die ins Haus fließt. IMMER POSITIVE Werte (0 wenn nicht entladen wird). Nutze diesen Sensor STATT 'Batterie-Leistung' wenn dein System separate Sensoren hat. Beispiel: 'sensor.battery_discharge_power' = 1500 W.",
-          "sensor_battery_to_grid": "Batterie-Einspeisung ins Netz (z.B. bei Stromhandel/Arbitrage). Die meisten Systeme speisen nicht aus Batterie ein - dann leer lassen. NUR positive Werte!",
-          "sensor_home_consumption": "GESAMTER aktueller Stromverbrauch des Hauses in Watt. Summe aller Verbraucher. Wichtig für Autarkie-Berechnung! Beispiel: 'sensor.house_power_consumption' = 1850 W. Falls nicht vorhanden: wird aus Solar + Netz - Export berechnet."
+          "show_yaml": "Confirm to continue. You can also create the sensors later."
         }
       },
-      "statistics": {
-        "title": "Tagesstatistik-Sensoren (kWh)",
-        "description": "Sensoren für Tages-Energiemengen und Preise.\n\nAlle Felder sind optional!\n\n📊 UNTERSCHIED ZU ENERGIEFLUSS:\n• Energiefluss = Watt (momentane Leistung, z.B. 3500 W)\n• Statistik = kWh (Energiemenge über Zeit, z.B. 15.3 kWh/Tag)\n\n⚠️ Diese Sensoren müssen sich um Mitternacht auf 0 zurücksetzen!",
+      "settings": {
+        "title": "Settings",
+        "description": "Configure automatic reports and billing.",
         "data": {
-          "sensor_solar_yield_daily": "☀️ Solarertrag heute (kWh)",
-          "sensor_grid_import_daily": "🔌 Netzbezug heute (kWh)",
-          "sensor_grid_import_yearly": "📅 Netzbezug Jahr (kWh)",
-          "sensor_battery_charge_solar_daily": "☀️→🔋 Solar-Ladung heute (kWh)",
-          "sensor_battery_charge_grid_daily": "🔌→🔋 Netz-Ladung heute (kWh)",
-          "sensor_price_total": "💰 Strompreis aktuell (ct/kWh)",
-          "weather_entity": "🌤️ Wetter-Entity"
+          "auto_generate": "Auto-generate Reports",
+          "theme": "Color Theme",
+          "billing_start_month": "Billing Start Month",
+          "billing_start_day": "Billing Start Day",
+          "billing_price_mode": "Price Mode",
+          "billing_fixed_price": "Fixed Price (ct/kWh)",
+          "feed_in_tariff": "Feed-in Tariff (ct/kWh)"
         },
         "data_description": {
-          "sensor_solar_yield_daily": "Gesamte PV-Produktion HEUTE in kWh. Startet jeden Tag bei 0 und zählt hoch. NICHT der Gesamtzähler seit Installation! Beispiel: 'sensor.inverter_daily_yield' zeigt um 15 Uhr bereits 12.5 kWh. Typisch: 0-50 kWh je nach Anlagengröße.",
-          "sensor_grid_import_daily": "Gesamter Netzbezug HEUTE in kWh. Wie viel Strom wurde heute vom Netz bezogen? Startet täglich bei 0. Beispiel: 'sensor.grid_import_daily' = 8.2 kWh. NICHT der Smartmeter-Zählerstand!",
-          "sensor_grid_import_yearly": "Netzbezug im laufenden Kalenderjahr in kWh. Für Jahresstatistiken. Startet am 1. Januar bei 0. Falls nicht verfügbar: wird aus täglichen Werten aufsummiert.",
-          "sensor_battery_charge_solar_daily": "Energie die HEUTE vom Solar in die Batterie geladen wurde. Wichtig für Eigenverbrauchs-Berechnung. Startet täglich bei 0. Beispiel: 5.3 kWh. Falls nicht vorhanden: leer lassen.",
-          "sensor_battery_charge_grid_daily": "Energie die HEUTE vom Netz in die Batterie geladen wurde (z.B. bei günstigem Nachtstrom). Die meisten Systeme laden nur von Solar - dann leer lassen.",
-          "sensor_price_total": "AKTUELLER Strompreis in Cent pro kWh INKL. aller Steuern und Abgaben (Brutto). Bei dynamischen Tarifen: ändert sich stündlich. Bei Fixpreis: konstant. Beispiel: 32.5 ct/kWh. Wird für Kostenberechnung verwendet.",
-          "weather_entity": "Home Assistant Wetter-Integration für Temperatur/Wind-Anzeige. Beispiel: 'weather.home' oder 'weather.openweathermap'. Wetterdaten für Solar-Prognose kommen aus Solar Forecast ML."
-        }
-      },
-      "panels": {
-        "title": "PV-Panel Sensoren (optional)",
-        "description": "Konfiguriere bis zu 4 individuelle PV-Panels.\n\nAlle Felder sind optional!\n\nFür jedes Panel kannst du einen Namen und einen Live-Watt-Sensor angeben.",
-        "data": {
-          "panel1_name": "Panel 1 Name",
-          "sensor_panel1_power": "Panel 1 Live Leistung",
-          "panel2_name": "Panel 2 Name",
-          "sensor_panel2_power": "Panel 2 Live Leistung",
-          "panel3_name": "Panel 3 Name",
-          "sensor_panel3_power": "Panel 3 Live Leistung",
-          "panel4_name": "Panel 4 Name",
-          "sensor_panel4_power": "Panel 4 Live Leistung"
-        },
-        "data_description": {
-          "panel1_name": "Name des Panels (z.B. 'Süd-Ost' oder 'Garage')",
-          "sensor_panel1_power": "Aktuelle Leistung in Watt",
-          "panel2_name": "Name des Panels",
-          "sensor_panel2_power": "Aktuelle Leistung in Watt",
-          "panel3_name": "Name des Panels",
-          "sensor_panel3_power": "Aktuelle Leistung in Watt",
-          "panel4_name": "Name des Panels",
-          "sensor_panel4_power": "Aktuelle Leistung in Watt"
-        }
-      },
-      "billing": {
-        "title": "Jahresabrechnung & Zählerstände",
-        "description": "Berechnet deine Stromkosten und Ersparnis über den Abrechnungszeitraum.\n\n📅 ABRECHNUNGSZEITRAUM: Wann beginnt dein Stromjahr? (steht auf deiner Jahresabrechnung)\n\n⚠️ WICHTIG - ZÄHLERSTAND-SENSOREN:\nHier werden ABSOLUTE Zählerstände benötigt (steigen immer weiter), NICHT Tageswerte!\nDie Integration berechnet automatisch die Differenz seit Abrechnungsbeginn.\n\n💡 Erkennungsmerkmal: Ein Zählerstand zeigt z.B. '12345.67 kWh' und steigt nie auf 0 zurück.",
-        "data": {
-          "billing_start_day": "📅 Abrechnungs-Starttag (1-28)",
-          "billing_start_month": "📅 Abrechnungs-Startmonat",
-          "billing_price_mode": "💰 Preisberechnung",
-          "billing_fixed_price": "💰 Fixpreis Bezug (ct/kWh)",
-          "feed_in_tariff": "💸 Einspeisevergütung (ct/kWh)",
-          "sensor_smartmeter_import_kwh": "📊 Zählerstand Bezug (kWh)",
-          "sensor_smartmeter_export_kwh": "📊 Zählerstand Einspeisung (kWh)",
-          "sensor_solar_yield_total_kwh": "📊 Zählerstand Solarertrag (kWh)"
-        },
-        "data_description": {
-          "billing_start_day": "TAG an dem dein Abrechnungsjahr beim Stromanbieter beginnt. Schau auf deine Stromrechnung! Beispiel: Wenn dort 'Abrechnungszeitraum: 15.03.2024 - 14.03.2025' steht → hier '15' eintragen.",
-          "billing_start_month": "MONAT in dem dein Abrechnungsjahr beginnt. Beispiel: Bei 'Abrechnungszeitraum: 15.03.2024 - 14.03.2025' → hier 'März' wählen. Die Jahresbilanz läuft dann immer vom 15.03. bis 14.03.",
-          "billing_price_mode": "WIE sollen Kosten berechnet werden?\n• DYNAMISCH: Nutzt stündliche Börsenpreise (benötigt Grid Price Monitor Integration). Ideal für Tibber, aWATTar, etc.\n• FIXPREIS: Nutzt deinen festen Tarifpreis (unten eintragen). Für klassische Stromtarife.",
-          "billing_fixed_price": "Dein BEZUGS-Preis in Cent pro kWh (Brutto). NUR bei Fixpreis-Modus relevant! Was du pro kWh an deinen Stromanbieter zahlst. Beispiel: 35.0 für 35 ct/kWh. Steht auf deiner Stromrechnung als 'Arbeitspreis'.",
-          "feed_in_tariff": "Was du für EINGESPEISTEN Strom vom Netzbetreiber erhältst. EEG-Vergütung je nach Inbetriebnahme: ~8.1 ct/kWh (2023), ~7.5 ct/kWh (2024). Schau in deinen Einspeisevertrag! Beispiel: 8.1 für 8,1 Cent pro eingespeister kWh.",
-          "sensor_smartmeter_import_kwh": "ZÄHLERSTAND für Netzbezug vom Smartmeter. Dieser Wert steigt IMMER (wird nie 0). Zeigt wie viel Strom du INSGESAMT je vom Netz bezogen hast. Beispiel: 'sensor.smartmeter_total_import' zeigt 12345.67 kWh. NICHT verwechseln mit Tageswerten! State-Class muss 'total_increasing' sein.",
-          "sensor_smartmeter_export_kwh": "ZÄHLERSTAND für Einspeisung vom Smartmeter. Dieser Wert steigt IMMER. Zeigt wie viel Strom du INSGESAMT je eingespeist hast. Beispiel: 'sensor.smartmeter_total_export' zeigt 5432.10 kWh. State-Class muss 'total_increasing' sein.",
-          "sensor_solar_yield_total_kwh": "ZÄHLERSTAND vom Wechselrichter für Gesamtertrag. Zeigt wie viel Strom deine PV-Anlage INSGESAMT je produziert hat (seit Installation). Beispiel: 'sensor.inverter_total_yield' zeigt 15000.00 kWh. State-Class muss 'total_increasing' sein."
-        }
-      },
-      "panel_group_names": {
-        "title": "Panel-Gruppen Namen",
-        "description": "Überschreibe die automatisch generierten Namen der Panel-Gruppen aus Solar Forecast ML.\n\n📝 Format: OriginalName=NeuerName (kommagetrennt)\n\nBeispiel: {example}",
-        "data": {
-          "panel_group_names_input": "Namens-Mapping"
-        },
-        "data_description": {
-          "panel_group_names_input": "Mapping der Panel-Gruppen-Namen. Format: Gruppe 1=String Süd, Gruppe 2=String West. Leer lassen für Standard-Namen."
+          "auto_generate": "Automatically generate weekly and monthly reports",
+          "theme": "Dark or Light theme for charts",
+          "billing_start_month": "Month when your billing year starts",
+          "billing_start_day": "Day when your billing year starts",
+          "billing_price_mode": "Dynamic (spot price) or Fixed price",
+          "billing_fixed_price": "Your electricity price in cents per kWh",
+          "feed_in_tariff": "Feed-in tariff in cents per kWh"
         }
       }
     },
     "abort": {
-      "single_instance_allowed": "SFML Stats ist bereits konfiguriert.",
-      "raspberry_pi_not_supported": "Installation auf Raspberry Pi wird nicht unterstützt. Die Integration verwendet matplotlib für Chart-Generierung, was auf Raspberry Pi zu Performance-Problemen und hoher CPU-Last führt. Bitte verwenden Sie ein leistungsstärkeres System (x86_64 oder einen leistungsstarken ARM-Server).",
-      "proxmox_not_recommended": "Installation auf Proxmox VE Host erkannt. Bitte beachten Sie: Home Assistant sollte in einer VM oder LXC-Container laufen, nicht direkt auf dem Proxmox-Host. Die matplotlib-basierte Chart-Generierung kann auf dem Proxmox-Host zu Performance-Problemen führen. Bitte installieren Sie Home Assistant in einer dedizierten VM oder einem LXC-Container."
+      "single_instance_allowed": "SFML Stats is already configured.",
+      "raspberry_pi_not_supported": "Installation on Raspberry Pi is not supported. The integration uses matplotlib for chart generation, which causes performance issues on Raspberry Pi. Please use a more powerful system.",
+      "proxmox_not_recommended": "Installation on Proxmox VE host detected. Home Assistant should run in a VM or LXC container, not directly on the Proxmox host."
     },
     "error": {
-      "cannot_connect": "Verbindung fehlgeschlagen",
-      "unknown": "Unbekannter Fehler"
+      "cannot_connect": "Connection failed",
+      "unknown": "Unknown error"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "SFML Stats Optionen",
-        "description": "Wähle welche Einstellungen du ändern möchtest.",
+        "title": "SFML Stats Options",
+        "description": "Select a category to configure.",
+        "data": {
+          "menu_choice": "Category"
+        },
         "menu_options": {
-          "general": "Grundeinstellungen",
-          "energy_flow": "Energiefluss-Sensoren",
-          "battery": "Batterie & Verbrauch",
-          "statistics": "Statistik-Sensoren",
-          "panels": "PV-Panel Sensoren",
-          "billing": "Stromrechnung & Abrechnung",
-          "panel_group_names": "Panel-Gruppen Namen"
+          "sensors": "Sensors",
+          "settings": "Settings",
+          "advanced": "Advanced"
         }
       },
-      "general": {
-        "title": "Grundeinstellungen",
-        "description": "Report-Generierung und Theme anpassen.",
+      "sensors": {
+        "title": "All Sensors",
+        "description": "Configure all sensor mappings.\n\nUse Watt sensors for live power, kWh sensors for daily statistics.",
         "data": {
-          "auto_generate": "Automatische Generierung",
-          "generate_weekly": "Wöchentliche Reports",
-          "generate_monthly": "Monatliche Reports",
-          "theme": "Farbschema"
+          "sensor_solar_power": "Solar Power (W)",
+          "sensor_solar_to_house": "Solar to House (W)",
+          "sensor_solar_to_battery": "Solar to Battery (W)",
+          "sensor_solar_yield_daily": "Solar Yield Today (kWh)",
+          "sensor_grid_to_house": "Grid to House (W)",
+          "sensor_grid_to_battery": "Grid to Battery (W)",
+          "sensor_house_to_grid": "Export to Grid (W)",
+          "sensor_grid_import_daily": "Grid Import Today (kWh)",
+          "sensor_grid_import_yearly": "Grid Import Yearly (kWh)",
+          "sensor_smartmeter_import": "Smartmeter Import (W)",
+          "sensor_smartmeter_export": "Smartmeter Export (W)",
+          "sensor_battery_soc": "Battery SOC (%)",
+          "sensor_battery_power": "Battery Power (W)",
+          "sensor_battery_to_house": "Battery to House (W)",
+          "sensor_battery_to_grid": "Battery to Grid (W)",
+          "sensor_battery_charge_solar_daily": "Battery Charge Solar (kWh)",
+          "sensor_battery_charge_grid_daily": "Battery Charge Grid (kWh)",
+          "sensor_home_consumption": "Home Consumption (W)",
+          "sensor_price_total": "Current Price (ct/kWh)",
+          "weather_entity": "Weather Entity"
         },
         "data_description": {
-          "auto_generate": "Reports automatisch nach Zeitplan generieren",
-          "generate_weekly": "Jeden Sonntag einen Wochenbericht erstellen",
-          "generate_monthly": "Am 1. jeden Monats einen Monatsbericht erstellen",
-          "theme": "Dark oder Light Theme für die Charts"
+          "sensor_solar_power": "Total PV power in Watts",
+          "sensor_solar_to_house": "Solar power flowing directly to house",
+          "sensor_solar_to_battery": "Solar power charging battery",
+          "sensor_solar_yield_daily": "PV production TODAY in kWh",
+          "sensor_grid_to_house": "Grid import for house consumption",
+          "sensor_grid_to_battery": "Grid import for battery charging",
+          "sensor_house_to_grid": "Export to grid in Watts",
+          "sensor_grid_import_daily": "Grid import TODAY in kWh",
+          "sensor_grid_import_yearly": "Grid import this calendar year",
+          "sensor_smartmeter_import": "Import power from smartmeter",
+          "sensor_smartmeter_export": "Export power from smartmeter",
+          "sensor_battery_soc": "State of charge in PERCENT (0-100)",
+          "sensor_battery_power": "Charge/discharge power in Watts",
+          "sensor_battery_to_house": "Discharge power to house",
+          "sensor_battery_to_grid": "Battery export to grid",
+          "sensor_battery_charge_solar_daily": "Solar charging TODAY in kWh",
+          "sensor_battery_charge_grid_daily": "Grid charging TODAY in kWh",
+          "sensor_home_consumption": "TOTAL home consumption in Watts",
+          "sensor_price_total": "Electricity price in ct/kWh",
+          "weather_entity": "HA Weather integration"
         }
       },
-      "energy_flow": {
-        "title": "Energiefluss-Sensoren (Live-Leistung)",
-        "description": "⚡ Hier NUR Watt-Sensoren (momentane Leistung), KEINE kWh!\n\n💡 Bei Hybrid-WR: Sensoren meist unter 'Power' oder 'Leistung'.",
+      "settings": {
+        "title": "Settings",
+        "description": "Configure reports, theme, and billing.",
         "data": {
-          "sensor_solar_power": "☀️ PV-Gesamtleistung (W)",
-          "sensor_solar_to_house": "☀️→🏠 Solar direkt ins Haus (W)",
-          "sensor_solar_to_battery": "☀️→🔋 Solar in Batterie (W)",
-          "sensor_grid_to_house": "🔌→🏠 Netzbezug ins Haus (W)",
-          "sensor_grid_to_battery": "🔌→🔋 Netzbezug in Batterie (W)",
-          "sensor_house_to_grid": "🏠→🔌 Einspeisung ins Netz (W)",
-          "sensor_smartmeter_import": "📊 Smartmeter Bezug (W)",
-          "sensor_smartmeter_export": "📊 Smartmeter Einspeisung (W)"
+          "auto_generate": "Auto-generate",
+          "generate_weekly": "Weekly Reports",
+          "generate_monthly": "Monthly Reports",
+          "theme": "Color Theme",
+          "billing_start_month": "Billing Start Month",
+          "billing_start_day": "Billing Start Day",
+          "billing_price_mode": "Price Mode",
+          "billing_fixed_price": "Fixed Price (ct/kWh)",
+          "feed_in_tariff": "Feed-in Tariff (ct/kWh)"
         },
         "data_description": {
-          "sensor_solar_power": "GESAMT-Leistung aller PV-Module in Watt. Beispiel: 'sensor.inverter_pv_power' = 4500 W.",
-          "sensor_solar_to_house": "Solarleistung die DIREKT ins Haus fließt. Falls nicht vorhanden: wird berechnet.",
-          "sensor_solar_to_battery": "Solarleistung die in Batterie lädt. NUR positive Werte! 0 wenn entladen wird.",
-          "sensor_grid_to_house": "Netzbezug für Hausverbrauch (OHNE Akkuladung). Alternativ: Smartmeter Bezug.",
-          "sensor_grid_to_battery": "Netzbezug für Akkuladung (bei günstigen Preisen). Meist leer lassen.",
-          "sensor_house_to_grid": "Einspeisung ins Netz in Watt. NICHT kWh-Zähler!",
-          "sensor_smartmeter_import": "Bezugsleistung vom Smartmeter. Für stündliche Preisberechnung.",
-          "sensor_smartmeter_export": "Einspeiseleistung vom Smartmeter."
+          "auto_generate": "Automatically generate reports on schedule",
+          "generate_weekly": "Create a weekly report every Sunday",
+          "generate_monthly": "Create a monthly report on the 1st of each month",
+          "theme": "Dark or Light theme for the charts",
+          "billing_start_month": "Month when your billing year starts",
+          "billing_start_day": "Day when your billing year starts",
+          "billing_price_mode": "Dynamic (spot price) or Fixed price",
+          "billing_fixed_price": "Your electricity price in cents per kWh",
+          "feed_in_tariff": "Feed-in tariff in cents per kWh"
         }
       },
-      "battery": {
-        "title": "Batterie & Hausverbrauch (Live)",
-        "description": "🔋 SOC muss 0-100 sein (nicht 0-1)!\n\n⚠️ Bei Batterie-Leistung: Prüfe Vorzeichen-Konvention deines Systems!",
+      "advanced": {
+        "title": "Advanced Options",
+        "description": "Additional configuration options.",
         "data": {
-          "sensor_battery_soc": "🔋 Ladestand/SOC (%)",
-          "sensor_battery_power": "🔋 Batterie-Leistung (+/- W)",
-          "sensor_battery_to_house": "🔋→🏠 Entladung ins Haus (W)",
-          "sensor_battery_to_grid": "🔋→🔌 Entladung ins Netz (W)",
-          "sensor_home_consumption": "🏠 Hausverbrauch gesamt (W)"
+          "menu_choice": "Option"
         },
-        "data_description": {
-          "sensor_battery_soc": "Ladestand in PROZENT (0-100). Falls Sensor 0.0-1.0 zeigt: Template mit *100 erstellen.",
-          "sensor_battery_power": "Lade-/Entladeleistung. ⚠️ Vorzeichen nicht standardisiert! Prüfe in Entwicklertools.",
-          "sensor_battery_to_house": "Entladeleistung ins Haus. IMMER positive Werte. Alternative zu 'Batterie-Leistung'.",
-          "sensor_battery_to_grid": "Batterie-Einspeisung (Arbitrage). Meist leer lassen.",
-          "sensor_home_consumption": "GESAMTER Hausverbrauch in Watt. Wichtig für Autarkie!"
+        "menu_options": {
+          "panels": "PV Panels",
+          "panel_group_names": "Panel Group Names",
+          "redetect": "Re-detect Sensors"
         }
       },
-      "statistics": {
-        "title": "Tagesstatistik-Sensoren (kWh)",
-        "description": "📊 Hier kWh-Sensoren (Energiemenge), NICHT Watt!\n\n⚠️ Diese Sensoren müssen sich um Mitternacht auf 0 zurücksetzen!",
+      "redetect": {
+        "title": "Re-detect Sensors",
+        "description": "**{detected_count} system(s)** found.\n\nSelect to re-map sensors automatically.",
         "data": {
-          "sensor_solar_yield_daily": "☀️ Solarertrag heute (kWh)",
-          "sensor_grid_import_daily": "🔌 Netzbezug heute (kWh)",
-          "sensor_grid_import_yearly": "📅 Netzbezug Jahr (kWh)",
-          "sensor_battery_charge_solar_daily": "☀️→🔋 Solar-Ladung heute (kWh)",
-          "sensor_battery_charge_grid_daily": "🔌→🔋 Netz-Ladung heute (kWh)",
-          "sensor_price_total": "💰 Strompreis aktuell (ct/kWh)",
-          "weather_entity": "🌤️ Wetter-Entity"
+          "inverter_profile": "System"
         },
         "data_description": {
-          "sensor_solar_yield_daily": "PV-Produktion HEUTE in kWh. Startet täglich bei 0. NICHT Gesamtzähler!",
-          "sensor_grid_import_daily": "Netzbezug HEUTE in kWh. Startet täglich bei 0.",
-          "sensor_grid_import_yearly": "Netzbezug im Kalenderjahr. Falls nicht vorhanden: wird aufsummiert.",
-          "sensor_battery_charge_solar_daily": "Solar-Ladung HEUTE in kWh. Startet täglich bei 0.",
-          "sensor_battery_charge_grid_daily": "Netz-Ladung HEUTE in kWh. Meist leer lassen.",
-          "sensor_price_total": "Strompreis in ct/kWh inkl. Steuern. Bei dynamisch: ändert sich stündlich.",
-          "weather_entity": "HA Wetter-Integration. Beispiel: 'weather.home'."
+          "inverter_profile": "Systems marked with checkmark were auto-detected."
         }
+      },
+      "redetect_result": {
+        "title": "Detection Result - {profile_name}",
+        "description": "**{found_count}/{total_count} sensors found:**\n\n{found_sensors}\n\n**Not found:**\n{missing_sensors}\n\nClick SUBMIT to apply these mappings.",
+        "data": {}
       },
       "panels": {
-        "title": "PV-Panel Sensoren",
-        "description": "Konfiguriere bis zu 4 individuelle PV-Panels mit Live-Leistung.",
+        "title": "PV Panel Sensors",
+        "description": "Configure up to 4 individual PV panels.",
         "data": {
           "panel1_name": "Panel 1 Name",
-          "sensor_panel1_power": "Panel 1 Live Leistung",
+          "sensor_panel1_power": "Panel 1 Live Power",
           "panel2_name": "Panel 2 Name",
-          "sensor_panel2_power": "Panel 2 Live Leistung",
+          "sensor_panel2_power": "Panel 2 Live Power",
           "panel3_name": "Panel 3 Name",
-          "sensor_panel3_power": "Panel 3 Live Leistung",
+          "sensor_panel3_power": "Panel 3 Live Power",
           "panel4_name": "Panel 4 Name",
-          "sensor_panel4_power": "Panel 4 Live Leistung"
-        },
-        "data_description": {
-          "panel1_name": "Name des Panels (z.B. 'Süd-Ost' oder 'Garage')",
-          "sensor_panel1_power": "Aktuelle Leistung in Watt",
-          "panel2_name": "Name des Panels",
-          "sensor_panel2_power": "Aktuelle Leistung in Watt",
-          "panel3_name": "Name des Panels",
-          "sensor_panel3_power": "Aktuelle Leistung in Watt",
-          "panel4_name": "Name des Panels",
-          "sensor_panel4_power": "Aktuelle Leistung in Watt"
-        }
-      },
-      "billing": {
-        "title": "Jahresabrechnung & Zählerstände",
-        "description": "⚠️ Hier ABSOLUTE Zählerstände (steigen immer), NICHT Tageswerte!\n\nDie Integration berechnet die Differenz seit Abrechnungsbeginn.",
-        "data": {
-          "billing_start_day": "📅 Abrechnungs-Starttag (1-28)",
-          "billing_start_month": "📅 Abrechnungs-Startmonat",
-          "billing_price_mode": "💰 Preisberechnung",
-          "billing_fixed_price": "💰 Fixpreis Bezug (ct/kWh)",
-          "feed_in_tariff": "💸 Einspeisevergütung (ct/kWh)",
-          "sensor_smartmeter_import_kwh": "📊 Zählerstand Bezug (kWh)",
-          "sensor_smartmeter_export_kwh": "📊 Zählerstand Einspeisung (kWh)",
-          "sensor_solar_yield_total_kwh": "📊 Zählerstand Solarertrag (kWh)"
-        },
-        "data_description": {
-          "billing_start_day": "TAG deines Abrechnungsstarts. Schau auf deine Stromrechnung!",
-          "billing_start_month": "MONAT deines Abrechnungsstarts.",
-          "billing_price_mode": "DYNAMISCH = stündliche Börsenpreise. FIXPREIS = fester Tarif.",
-          "billing_fixed_price": "Dein Bezugspreis in ct/kWh. Nur bei Fixpreis-Modus.",
-          "feed_in_tariff": "EEG-Vergütung in ct/kWh. Beispiel: 8.1 für 8,1 ct.",
-          "sensor_smartmeter_import_kwh": "ZÄHLERSTAND Bezug (total_increasing). Zeigt z.B. 12345 kWh, wird NIE 0!",
-          "sensor_smartmeter_export_kwh": "ZÄHLERSTAND Einspeisung (total_increasing). Wird NIE 0!",
-          "sensor_solar_yield_total_kwh": "ZÄHLERSTAND Solarertrag (total_increasing). Gesamtertrag seit Installation."
+          "sensor_panel4_power": "Panel 4 Live Power"
         }
       },
       "panel_group_names": {
-        "title": "Panel-Gruppen Namen",
-        "description": "Überschreibe die automatisch generierten Namen der Panel-Gruppen aus Solar Forecast ML.\n\n📝 Format: OriginalName=NeuerName (kommagetrennt)\n\nBeispiel: {example}",
+        "title": "Panel Group Names",
+        "description": "Format: OriginalName=NewName (comma separated)\n\nExample: {example}",
         "data": {
-          "panel_group_names_input": "Namens-Mapping"
-        },
-        "data_description": {
-          "panel_group_names_input": "Mapping der Panel-Gruppen-Namen. Format: Gruppe 1=String Süd, Gruppe 2=String West. Leer lassen für Standard-Namen."
+          "panel_group_names_input": "Name Mapping"
         }
       }
     }

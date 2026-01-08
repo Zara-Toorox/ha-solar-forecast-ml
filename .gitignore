@@ -5,8 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
-# ABER: PyArmor Runtime .so Dateien MÜSSEN included werden!
-!custom_components/*/pyarmor_runtime_*/**/*.so
+# PyArmor Runtime .so files must be included
+!**/pyarmor_runtime_*/**/*.so
 
 # Distribution / packaging
 .Python
@@ -207,28 +207,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-# Alle versteckten Ordner und Dateien (ausser .gitignore)
-.*
-!.gitignore
 
-# AI Arbeitsverzeichnis (sensible Daten - NIEMALS pushen!)
-/AI/
-
-# ============================================================================
-# ORIGINAL SOURCE CODE - NIEMALS PUSHEN!
-# ============================================================================
-# Enthält unverschlüsselten Quellcode für Entwicklung.
-# Nur die obfuscated Version in custom_components/ wird veröffentlicht.
-/src/
-
-# PyArmor Build-Artefakte
-/obfuscated_build/
-
-# PyArmor Lizenz-Key (NIEMALS pushen!)
-pyarmor-regcode-*.txt
-
-# Build-Scripts (lokal behalten)
-build_obfuscated.sh
-
-# Test-ZIPs
+# Archives
 *.zip

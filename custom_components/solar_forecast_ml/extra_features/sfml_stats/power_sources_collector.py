@@ -1,13 +1,15 @@
-"""Power Sources Data Collector for SFML Stats. @zara
+# ******************************************************************************
+# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# ******************************************************************************
+
+"""Power Sources Data Collector for SFML Stats.
 
 Collects power flow data every few minutes for the Power Sources chart.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-Copyright (C) 2025 Zara-Toorox
 """
 from __future__ import annotations
 
@@ -332,6 +334,13 @@ class PowerSourcesCollector:
                 today["peak_battery_power_w"] = 0.0
             today["peak_battery_power_w"] = max(today.get("peak_battery_power_w", 0.0), battery_power)
 
+        # Track peak home consumption power
+        if data_point.get("home_consumption") is not None:
+            consumption_power = data_point["home_consumption"]
+            if "peak_consumption_w" not in today:
+                today["peak_consumption_w"] = 0.0
+            today["peak_consumption_w"] = max(today.get("peak_consumption_w", 0.0), consumption_power)
+
         today["last_updated"] = now.isoformat()
         today["data_points_count"] += 1
 
@@ -360,6 +369,7 @@ class PowerSourcesCollector:
             "soc_readings_count": 0,
             "soc_readings_sum": 0.0,
             "peak_battery_power_w": 0.0,
+            "peak_consumption_w": 0.0,
             "data_points_count": 0,
             "last_updated": None,
         }
