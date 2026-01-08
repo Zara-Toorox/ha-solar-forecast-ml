@@ -1,6 +1,6 @@
-# Solar Forecast ML V12.8.2 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
+# Solar Forecast ML V12.8.4 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
 
-[![Version](https://img.shields.io/badge/version-12.8.2-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-12.8.4-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 
@@ -13,7 +13,7 @@ Further information:
 
 **Intelligent Solar Forecasting for Home Assistant with Physics-First Hybrid-AI Architecture**
 
-Imagine your smart home not just reacting, but *predicting* - using Hybrid-AI that adapts daily to your unique solar installation. That's exactly what Solar Forecast ML does. With **Version 12.8.2 "Sarpeidon"** we introduce enhanced **Multi-Weather Blending**, **Per-Panel-Group Learning**, **Learning Filters**, and the new **SFML Stats Lite** dashboard for all platforms.
+Imagine your smart home not just reacting, but *predicting* - using Hybrid-AI that adapts daily to your unique solar installation. That's exactly what Solar Forecast ML does. With **Version 12.8.4 "Sarpeidon"** we introduce enhanced **Multi-Weather Blending**, **Per-Panel-Group Learning**, **Learning Filters**, and the new **SFML Stats Lite** dashboard for all platforms.
 
 <p align="center">
   <img src="docs/images/progose_graph.png" alt="Solar Forecast ML Prognose" width="600">
@@ -34,7 +34,7 @@ The integration adapts to your specific roof orientation, local weather conditio
 
 ---
 
-## New in Version 12.8.2 "Sarpeidon"
+## New in Version 12.8.4 "Sarpeidon"
 
 ### SFML Stats Lite
 - **Universal Dashboard** - Works on ALL platforms including Raspberry Pi and ARM
