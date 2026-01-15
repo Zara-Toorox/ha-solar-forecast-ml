@@ -11,29 +11,36 @@
 import json
 import logging
 import os
-import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    DEFAULT_SOURCE_PATH,
+    FALLBACK_SOURCE_PATH,
+    CACHE_DIR,
+    CACHE_FILE,
+    CACHE_MAX_AGE_HOURS,
+    CACHE_MAX_SIZE_MB,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
-# Source paths (Solar Forecast ML)
-# Primary: weather_integration_ml.json (updated 5x daily for accurate weather display)
-# Fallback: weather_forecast_corrected.json (updated 1-2x daily for solar forecasting)
-SOURCE_PATH = "/config/solar_forecast_ml/stats/weather_integration_ml.json"
-FALLBACK_SOURCE_PATH = "/config/solar_forecast_ml/stats/weather_forecast_corrected.json"
-
-# Cache directory
-CACHE_DIR = "/config/sfml_weather"
-CACHE_FILE = "weather_cache.json"
+# Cache metadata file name
 CACHE_METADATA_FILE = "cache_metadata.json"
 
 
 class CacheManager:
     """Manages local caching of weather data from Solar Forecast ML."""
 
-    def __init__(self, hass, source_path: str = SOURCE_PATH, fallback_path: str = FALLBACK_SOURCE_PATH) -> None:
+    def __init__(
+        self,
+        hass,
+        source_path: str = DEFAULT_SOURCE_PATH,
+        fallback_path: str = FALLBACK_SOURCE_PATH
+    ) -> None:
         """Initialize the cache manager."""
         self.hass = hass
         self._source_path = source_path
@@ -42,6 +49,7 @@ class CacheManager:
         self._cache_file = self._cache_dir / CACHE_FILE
         self._metadata_file = self._cache_dir / CACHE_METADATA_FILE
         self._active_source: str = source_path  # Track which source is being used
+        self._consecutive_failures: int = 0  # Track failures for backoff
 
     async def async_initialize(self) -> None:
         """Initialize cache directory structure."""
@@ -49,10 +57,17 @@ class CacheManager:
 
     def _ensure_directories(self) -> None:
         """Ensure cache directories exist."""
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_subdir = self._cache_dir / "cache"
-        cache_subdir.mkdir(exist_ok=True)
-        _LOGGER.debug(f"Cache directory ensured: {self._cache_dir}")
+        try:
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_subdir = self._cache_dir / "cache"
+            cache_subdir.mkdir(exist_ok=True)
+            _LOGGER.debug("Cache directory ensured: %s", self._cache_dir)
+        except PermissionError as err:
+            _LOGGER.error("Permission denied creating cache directory: %s", err)
+            raise
+        except OSError as err:
+            _LOGGER.error("OS error creating cache directory: %s", err)
+            raise
 
     async def async_update_cache(self) -> dict[str, Any] | None:
         """
@@ -78,17 +93,21 @@ class CacheManager:
             self._active_source = str(source_path)
         elif fallback_path.exists():
             _LOGGER.info(
-                f"Primary source not found ({self._source_path}), "
-                f"using fallback: {self._fallback_path}"
+                "Primary source not found (%s), using fallback: %s",
+                self._source_path,
+                self._fallback_path
             )
             active_path = fallback_path
             self._active_source = str(fallback_path)
         else:
             _LOGGER.warning(
-                f"No source files found: {self._source_path} or {self._fallback_path}"
+                "No source files found: %s or %s",
+                self._source_path,
+                self._fallback_path
             )
-            # Try to return existing cache
-            return self._load_cache()
+            self._consecutive_failures += 1
+            # Try to return existing cache (with staleness check)
+            return self._load_cache(check_staleness=True)
 
         try:
             # Check if source is newer than cache
@@ -96,29 +115,58 @@ class CacheManager:
             cache_mtime = self._cache_file.stat().st_mtime if self._cache_file.exists() else 0
 
             if source_mtime > cache_mtime:
-                _LOGGER.debug(f"Source file is newer, updating cache from {active_path.name}")
-                return self._copy_and_load(active_path, source_mtime)
+                _LOGGER.debug("Source file is newer, updating cache from %s", active_path.name)
+                data = self._copy_and_load(active_path, source_mtime)
+                if data:
+                    self._consecutive_failures = 0  # Reset on success
+                return data
             else:
                 _LOGGER.debug("Cache is up to date")
+                self._consecutive_failures = 0  # Reset on success
                 return self._load_cache()
 
+        except PermissionError as err:
+            _LOGGER.error("Permission denied accessing source file: %s", err)
+            self._consecutive_failures += 1
+            return self._load_cache(check_staleness=True)
+        except json.JSONDecodeError as err:
+            _LOGGER.error("Invalid JSON in source file: %s", err)
+            self._consecutive_failures += 1
+            return self._load_cache(check_staleness=True)
+        except OSError as err:
+            _LOGGER.error("OS error updating cache: %s", err)
+            self._consecutive_failures += 1
+            return self._load_cache(check_staleness=True)
         except Exception as err:
-            _LOGGER.error(f"Error updating cache: {err}")
-            # Try to return existing cache on error
-            return self._load_cache()
+            _LOGGER.error("Unexpected error updating cache: %s", err)
+            self._consecutive_failures += 1
+            return self._load_cache(check_staleness=True)
 
     def _copy_and_load(self, source_path: Path, source_mtime: float) -> dict[str, Any] | None:
         """Copy source to cache and load data."""
         try:
+            # Check file size before loading
+            file_size_mb = source_path.stat().st_size / (1024 * 1024)
+            if file_size_mb > CACHE_MAX_SIZE_MB:
+                _LOGGER.warning(
+                    "Source file too large (%.2f MB > %d MB limit)",
+                    file_size_mb,
+                    CACHE_MAX_SIZE_MB
+                )
+                return None
+
             # Read source data
             with open(source_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+
+            # Use timezone-aware datetime
+            now = dt_util.now()
 
             # Enrich with cache metadata
             cache_data = {
                 "source": "solar_forecast_ml",
                 "source_file": str(source_path),
-                "cached_at": datetime.now().isoformat(),
+                "cached_at": now.isoformat(),
                 "source_modified": datetime.fromtimestamp(source_mtime).isoformat(),
                 "data": data,
             }
@@ -130,45 +178,76 @@ class CacheManager:
             # Update metadata
             self._update_metadata(source_mtime)
 
-            _LOGGER.info(f"Cache updated from {source_path}")
+            _LOGGER.info("Cache updated from %s", source_path)
             return data
 
-        except Exception as err:
-            _LOGGER.error(f"Error copying to cache: {err}")
+        except json.JSONDecodeError as err:
+            _LOGGER.error("Invalid JSON in source file %s: %s", source_path, err)
+            return None
+        except PermissionError as err:
+            _LOGGER.error("Permission denied writing cache: %s", err)
+            return None
+        except OSError as err:
+            _LOGGER.error("OS error copying to cache: %s", err)
             return None
 
-    def _load_cache(self) -> dict[str, Any] | None:
-        """Load data from cache file."""
+    def _load_cache(self, check_staleness: bool = False) -> dict[str, Any] | None:
+        """Load data from cache file.
+
+        Args:
+            check_staleness: If True, warn if cache is older than CACHE_MAX_AGE_HOURS.
+        """
         if not self._cache_file.exists():
             _LOGGER.debug("No cache file exists yet")
             return None
 
         try:
+            # Check cache age if requested
+            if check_staleness:
+                cache_mtime = self._cache_file.stat().st_mtime
+                cache_age_hours = (datetime.now().timestamp() - cache_mtime) / 3600
+                if cache_age_hours > CACHE_MAX_AGE_HOURS:
+                    _LOGGER.warning(
+                        "Cache is stale (%.1f hours old, max %d hours). "
+                        "Data may be outdated.",
+                        cache_age_hours,
+                        CACHE_MAX_AGE_HOURS
+                    )
+
             with open(self._cache_file, "r", encoding="utf-8") as f:
                 cache_data = json.load(f)
 
             # Return the actual weather data, not the wrapper
             return cache_data.get("data", cache_data)
 
-        except Exception as err:
-            _LOGGER.error(f"Error loading cache: {err}")
+        except json.JSONDecodeError as err:
+            _LOGGER.error("Invalid JSON in cache file: %s", err)
+            return None
+        except PermissionError as err:
+            _LOGGER.error("Permission denied reading cache: %s", err)
+            return None
+        except OSError as err:
+            _LOGGER.error("OS error loading cache: %s", err)
             return None
 
     def _update_metadata(self, source_mtime: float) -> None:
         """Update cache metadata file."""
+        now = dt_util.now()
         metadata = {
             "version": "1.0",
-            "last_update": datetime.now().isoformat(),
+            "last_update": now.isoformat(),
             "source_modified": datetime.fromtimestamp(source_mtime).isoformat(),
             "source_path": self._source_path,
+            "active_source": self._active_source,
             "cache_file": str(self._cache_file),
+            "consecutive_failures": self._consecutive_failures,
         }
 
         try:
             with open(self._metadata_file, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2)
-        except Exception as err:
-            _LOGGER.warning(f"Could not update metadata: {err}")
+        except OSError as err:
+            _LOGGER.warning("Could not update metadata: %s", err)
 
     async def async_get_cache_info(self) -> dict[str, Any]:
         """Get information about the cache status."""
@@ -188,24 +267,38 @@ class CacheManager:
             "fallback_source_exists": fallback_exists,
             "active_source": self._active_source,
             "using_high_frequency_cache": primary_exists,  # True if using 5x daily updates
+            "consecutive_failures": self._consecutive_failures,
+            "max_cache_age_hours": CACHE_MAX_AGE_HOURS,
         }
 
         if self._cache_file.exists():
-            stat = self._cache_file.stat()
-            info["cache_modified"] = datetime.fromtimestamp(stat.st_mtime).isoformat()
-            info["cache_size_kb"] = round(stat.st_size / 1024, 2)
+            try:
+                stat = self._cache_file.stat()
+                cache_mtime = stat.st_mtime
+                info["cache_modified"] = datetime.fromtimestamp(cache_mtime).isoformat()
+                info["cache_size_kb"] = round(stat.st_size / 1024, 2)
+
+                # Calculate cache age
+                cache_age_hours = (datetime.now().timestamp() - cache_mtime) / 3600
+                info["cache_age_hours"] = round(cache_age_hours, 2)
+                info["cache_is_stale"] = cache_age_hours > CACHE_MAX_AGE_HOURS
+            except OSError:
+                pass
 
         # Show info for active source
         active_path = Path(self._active_source)
         if active_path.exists():
-            stat = active_path.stat()
-            info["source_modified"] = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            try:
+                stat = active_path.stat()
+                info["source_modified"] = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            except OSError:
+                pass
 
         if self._metadata_file.exists():
             try:
                 with open(self._metadata_file, "r", encoding="utf-8") as f:
                     info["metadata"] = json.load(f)
-            except Exception:
+            except (json.JSONDecodeError, OSError):
                 pass
 
         return info

@@ -7120,16 +7120,13 @@
                             live.yield = todayPreds.filter(h => h.actual_kwh != null).reduce((s, h) => s + (h.actual_kwh || 0), 0);
                             forecast.todayRemaining = todayPreds.filter(h => h.target_hour > currentHour).reduce((s, h) => s + (h.prediction_kwh || 0), 0);
 
-                            // Tagesgenauigkeit berechnen (nur Stunden mit tatsächlichen Werten)
-                            const hoursWithActual = todayPreds.filter(h => h.actual_kwh != null && h.prediction_kwh > 0);
-                            if (hoursWithActual.length > 0) {
-                                const totalActual = hoursWithActual.reduce((s, h) => s + (h.actual_kwh || 0), 0);
-                                const totalPredicted = hoursWithActual.reduce((s, h) => s + (h.prediction_kwh || 0), 0);
-                                // Genauigkeit = 100 - |Abweichung in %|
-                                if (totalPredicted > 0) {
-                                    const deviation = Math.abs((totalActual - totalPredicted) / totalPredicted) * 100;
-                                    todayAccuracy.value = Math.max(0, 100 - deviation);
-                                }
+                            // Tagesgenauigkeit berechnen aus angezeigten Werten (Sensor vs Prognose-Summe)
+                            // Dies stellt sicher, dass die Genauigkeit konsistent mit den angezeigten Ertrag/Prognose-Werten ist
+                            const actualFromSensor = energyFlow.statistics?.solar_yield_daily || 0;
+                            const predictedTotal = forecast.todayTotal || 0;
+                            if (predictedTotal > 0 && actualFromSensor > 0) {
+                                const deviation = Math.abs((actualFromSensor - predictedTotal) / predictedTotal) * 100;
+                                todayAccuracy.value = Math.max(0, 100 - deviation);
                             }
 
                             const tomorrowPreds = hourly.filter(h => h.target_date === tomorrowStr && h.target_hour >= 6 && h.target_hour <= 20);

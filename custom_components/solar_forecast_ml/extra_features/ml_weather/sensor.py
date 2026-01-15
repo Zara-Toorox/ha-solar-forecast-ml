@@ -22,6 +22,7 @@ from homeassistant.const import (
     PERCENTAGE,
     UnitOfEnergy,
     UnitOfIrradiance,
+    UnitOfLength,
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
@@ -47,6 +48,9 @@ from .const import (
     SENSOR_TYPE_CLOUD_COVER_LOW,
     SENSOR_TYPE_CLOUD_COVER_MID,
     SENSOR_TYPE_CLOUD_COVER_HIGH,
+    SENSOR_TYPE_VISIBILITY,
+    SENSOR_TYPE_FOG_DETECTED,
+    SENSOR_TYPE_FOG_TYPE,
     SENSOR_TYPE_PV_FORECAST_TODAY,
     SENSOR_TYPE_PV_FORECAST_TOMORROW,
     SENSOR_TYPE_PV_FORECAST_DAY_AFTER,
@@ -54,6 +58,42 @@ from .const import (
 from .coordinator import MLWeatherCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Key mapping for weather sensors - centralized to avoid duplication
+WEATHER_SENSOR_KEY_MAP: dict[str, str] = {
+    SENSOR_TYPE_TEMPERATURE: "temperature",
+    SENSOR_TYPE_HUMIDITY: "humidity",
+    SENSOR_TYPE_PRESSURE: "pressure",
+    SENSOR_TYPE_WIND_SPEED: "wind_speed",
+    SENSOR_TYPE_CLOUD_COVERAGE: "cloud_coverage",
+    SENSOR_TYPE_PRECIPITATION: "precipitation",
+    SENSOR_TYPE_SOLAR_RADIATION: "solar_radiation",
+    SENSOR_TYPE_DIRECT_RADIATION: "direct_radiation",
+    SENSOR_TYPE_DIFFUSE_RADIATION: "diffuse_radiation",
+    SENSOR_TYPE_CLOUD_COVER_LOW: "cloud_cover_low",
+    SENSOR_TYPE_CLOUD_COVER_MID: "cloud_cover_mid",
+    SENSOR_TYPE_CLOUD_COVER_HIGH: "cloud_cover_high",
+    SENSOR_TYPE_VISIBILITY: "visibility",
+    SENSOR_TYPE_FOG_DETECTED: "fog_detected",
+    SENSOR_TYPE_FOG_TYPE: "fog_type",
+}
+
+# Key mapping for PV forecast sensors
+PV_FORECAST_KEY_MAP: dict[str, str] = {
+    SENSOR_TYPE_PV_FORECAST_TODAY: "today",
+    SENSOR_TYPE_PV_FORECAST_TOMORROW: "tomorrow",
+    SENSOR_TYPE_PV_FORECAST_DAY_AFTER: "day_after_tomorrow",
+}
+
+# Sensors that may not always have data (optional fields)
+OPTIONAL_SENSORS = frozenset([
+    SENSOR_TYPE_CLOUD_COVER_LOW,
+    SENSOR_TYPE_CLOUD_COVER_MID,
+    SENSOR_TYPE_CLOUD_COVER_HIGH,
+    SENSOR_TYPE_VISIBILITY,
+    SENSOR_TYPE_FOG_DETECTED,
+    SENSOR_TYPE_FOG_TYPE,
+])
 
 
 SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
@@ -149,6 +189,24 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:clouds",
     ),
+    SensorEntityDescription(
+        key=SENSOR_TYPE_VISIBILITY,
+        name="Visibility",
+        native_unit_of_measurement=UnitOfLength.METERS,
+        device_class=SensorDeviceClass.DISTANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:eye",
+    ),
+    SensorEntityDescription(
+        key=SENSOR_TYPE_FOG_DETECTED,
+        name="Fog Detected",
+        icon="mdi:weather-fog",
+    ),
+    SensorEntityDescription(
+        key=SENSOR_TYPE_FOG_TYPE,
+        name="Fog Type",
+        icon="mdi:weather-fog",
+    ),
 )
 
 # PV Forecast sensor descriptions
@@ -217,7 +275,8 @@ class MLWeatherSensor(CoordinatorEntity[MLWeatherCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._entry = entry
         self.entity_description = description
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        # Use 'weather_' prefix to avoid collision with PV sensors
+        self._attr_unique_id = f"{entry.entry_id}_weather_{description.key}"
         self._attr_name = description.name
 
     @property
@@ -233,29 +292,19 @@ class MLWeatherSensor(CoordinatorEntity[MLWeatherCoordinator], SensorEntity):
         }
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> float | str | bool | None:
         """Return the sensor value."""
         current = self.coordinator.get_current_weather()
-
-        key_mapping = {
-            SENSOR_TYPE_TEMPERATURE: "temperature",
-            SENSOR_TYPE_HUMIDITY: "humidity",
-            SENSOR_TYPE_PRESSURE: "pressure",
-            SENSOR_TYPE_WIND_SPEED: "wind_speed",
-            SENSOR_TYPE_CLOUD_COVERAGE: "cloud_coverage",
-            SENSOR_TYPE_PRECIPITATION: "precipitation",
-            SENSOR_TYPE_SOLAR_RADIATION: "solar_radiation",
-            SENSOR_TYPE_DIRECT_RADIATION: "direct_radiation",
-            SENSOR_TYPE_DIFFUSE_RADIATION: "diffuse_radiation",
-            SENSOR_TYPE_CLOUD_COVER_LOW: "cloud_cover_low",
-            SENSOR_TYPE_CLOUD_COVER_MID: "cloud_cover_mid",
-            SENSOR_TYPE_CLOUD_COVER_HIGH: "cloud_cover_high",
-        }
-
-        data_key = key_mapping.get(self.entity_description.key)
+        data_key = WEATHER_SENSOR_KEY_MAP.get(self.entity_description.key)
         if data_key:
             value = current.get(data_key)
             if value is not None:
+                # Handle different value types
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, str):
+                    return value
+                # Numeric values get rounded
                 return round(value, 1)
         return None
 
@@ -265,32 +314,13 @@ class MLWeatherSensor(CoordinatorEntity[MLWeatherCoordinator], SensorEntity):
         if not self.coordinator.last_update_success:
             return False
 
-        # Check if we have current weather data
-        current = self.coordinator.get_current_weather()
-        key_mapping = {
-            SENSOR_TYPE_TEMPERATURE: "temperature",
-            SENSOR_TYPE_HUMIDITY: "humidity",
-            SENSOR_TYPE_PRESSURE: "pressure",
-            SENSOR_TYPE_WIND_SPEED: "wind_speed",
-            SENSOR_TYPE_CLOUD_COVERAGE: "cloud_coverage",
-            SENSOR_TYPE_PRECIPITATION: "precipitation",
-            SENSOR_TYPE_SOLAR_RADIATION: "solar_radiation",
-            SENSOR_TYPE_DIRECT_RADIATION: "direct_radiation",
-            SENSOR_TYPE_DIFFUSE_RADIATION: "diffuse_radiation",
-            SENSOR_TYPE_CLOUD_COVER_LOW: "cloud_cover_low",
-            SENSOR_TYPE_CLOUD_COVER_MID: "cloud_cover_mid",
-            SENSOR_TYPE_CLOUD_COVER_HIGH: "cloud_cover_high",
-        }
-        data_key = key_mapping.get(self.entity_description.key)
-
-        # Cloud layer sensors may not always have data
-        if self.entity_description.key in [
-            SENSOR_TYPE_CLOUD_COVER_LOW,
-            SENSOR_TYPE_CLOUD_COVER_MID,
-            SENSOR_TYPE_CLOUD_COVER_HIGH,
-        ]:
+        # Optional sensors may not always have data
+        if self.entity_description.key in OPTIONAL_SENSORS:
             return self.coordinator.last_update_success
 
+        # Check if we have current weather data
+        current = self.coordinator.get_current_weather()
+        data_key = WEATHER_SENSOR_KEY_MAP.get(self.entity_description.key)
         return current.get(data_key) is not None if data_key else False
 
     @callback
@@ -314,7 +344,8 @@ class MLPVForecastSensor(CoordinatorEntity[MLWeatherCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._entry = entry
         self.entity_description = description
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        # Use 'pv_' prefix to avoid collision with weather sensors
+        self._attr_unique_id = f"{entry.entry_id}_pv_{description.key}"
         self._attr_name = description.name
 
     @property
@@ -333,14 +364,7 @@ class MLPVForecastSensor(CoordinatorEntity[MLWeatherCoordinator], SensorEntity):
     def native_value(self) -> float | None:
         """Return the PV forecast value."""
         pv_forecast = self.coordinator.get_pv_forecast()
-
-        key_mapping = {
-            SENSOR_TYPE_PV_FORECAST_TODAY: "today",
-            SENSOR_TYPE_PV_FORECAST_TOMORROW: "tomorrow",
-            SENSOR_TYPE_PV_FORECAST_DAY_AFTER: "day_after_tomorrow",
-        }
-
-        data_key = key_mapping.get(self.entity_description.key)
+        data_key = PV_FORECAST_KEY_MAP.get(self.entity_description.key)
         if data_key:
             value = pv_forecast.get(data_key)
             if value is not None:
@@ -378,12 +402,7 @@ class MLPVForecastSensor(CoordinatorEntity[MLWeatherCoordinator], SensorEntity):
             return False
 
         pv_forecast = self.coordinator.get_pv_forecast()
-        key_mapping = {
-            SENSOR_TYPE_PV_FORECAST_TODAY: "today",
-            SENSOR_TYPE_PV_FORECAST_TOMORROW: "tomorrow",
-            SENSOR_TYPE_PV_FORECAST_DAY_AFTER: "day_after_tomorrow",
-        }
-        data_key = key_mapping.get(self.entity_description.key)
+        data_key = PV_FORECAST_KEY_MAP.get(self.entity_description.key)
         return pv_forecast.get(data_key) is not None if data_key else False
 
     @callback

@@ -902,6 +902,52 @@ def _get_config() -> dict[str, Any]:
     return {}
 
 
+def _get_sfml_panel_groups() -> list[dict[str, Any]]:
+    """Get panel groups configuration from SFML. @zara"""
+    if HASS is None:
+        return []
+
+    try:
+        # SFML domain - coordinator is stored directly (not as dict)
+        sfml_domain = "solar_forecast_ml"
+        entries = HASS.data.get(sfml_domain, {})
+
+        for entry_id, entry_data in entries.items():
+            # Coordinator is stored directly, not as {"coordinator": ...}
+            # Check if entry_data has panel_groups attribute (it's the coordinator itself)
+            if hasattr(entry_data, "panel_groups"):
+                panel_groups = entry_data.panel_groups
+                if panel_groups:
+                    _LOGGER.debug("Found %d panel groups from SFML coordinator", len(panel_groups))
+                    return panel_groups
+        return []
+    except Exception as e:
+        _LOGGER.debug("Could not get SFML panel groups: %s", e)
+        return []
+
+
+def _read_panel_group_sensor(entity_id: str) -> float | None:
+    """Read current value from a panel group energy sensor. @zara"""
+    if not HASS or not entity_id:
+        return None
+
+    try:
+        state = HASS.states.get(entity_id)
+        if state is None or state.state in ["unavailable", "unknown", None]:
+            return None
+
+        value = float(state.state)
+
+        # Convert Wh to kWh if needed
+        unit = state.attributes.get("unit_of_measurement", "")
+        if unit.lower() == "wh":
+            value = value / 1000.0
+
+        return round(value, 3)
+    except (ValueError, TypeError):
+        return None
+
+
 def _get_sensor_value(entity_id: str | None) -> float | None:
     """Read current value from a sensor. @zara"""
     if not entity_id or not HASS:
@@ -1233,6 +1279,17 @@ class StatisticsView(HomeAssistantView):
 
     async def _get_panel_group_data(self) -> dict[str, Any]:
         """Extract panel group predictions and actuals for today. @zara"""
+        # Get live sensor values from SFML panel group config
+        sfml_groups = _get_sfml_panel_groups()
+        live_sensor_values: dict[str, float] = {}
+        for group in sfml_groups:
+            group_name = group.get("name", "")
+            energy_sensor = group.get("energy_sensor", "")
+            if group_name and energy_sensor:
+                value = _read_panel_group_sensor(energy_sensor)
+                if value is not None:
+                    live_sensor_values[group_name] = value
+
         predictions = await _read_json_file(SOLAR_PATH / "stats" / "hourly_predictions.json")
         if not predictions or "predictions" not in predictions:
             return {"available": False, "groups": {}}
@@ -1295,6 +1352,14 @@ class StatisticsView(HomeAssistantView):
                     "prediction_kwh": pred_kwh,
                     "actual_kwh": actual_kwh,
                 })
+
+            # Use live sensor value if available (more accurate than hourly sum)
+            original_name = group_data.get("original_name", group_name)
+            if original_name in live_sensor_values:
+                group_data["actual_total_kwh"] = live_sensor_values[original_name]
+                group_data["actual_source"] = "live_sensor"
+            else:
+                group_data["actual_source"] = "hourly_sum"
 
             # Calculate accuracy: 100% - |deviation%|
             # Accuracy can never be >100% or <0%

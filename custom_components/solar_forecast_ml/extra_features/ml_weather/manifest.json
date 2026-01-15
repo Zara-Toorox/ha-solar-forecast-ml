@@ -1,7 +1,7 @@
 {
   "domain": "ml_weather",
   "name": "ML Weather (Korrigierte Wetterdaten)",
-  "version": "6.0.0",
+  "version": "6.2.0",
   "documentation": "https://github.com/custom-components/ml_weather",
   "issue_tracker": "https://github.com/custom-components/ml_weather/issues",
   "dependencies": [],

@@ -544,12 +544,14 @@ refresh_multi_weather:
     - /config/solar_forecast_ml/data/wttr_in_cache.json (wttr.in cache)
     - /config/solar_forecast_ml/data/weather_source_weights.json (learned weights)
   fields:
-    force_wttr_refresh:
-      name: "Force wttr.in Refresh"
+    force_update:
+      name: "Force Update"
       description: >
-        Force a fresh API call to wttr.in even if the cache is still valid.
-        Use this if you suspect the cache is outdated or want immediate fresh data.
-        Default: false (uses cache if < 6 hours old)
+        V12.8: Force a fresh API call to ALL weather sources (Open-Meteo, wttr.in,
+        Bright Sky, Pirate Weather) even if the cache is still valid.
+        This bypasses the memory cache and forces new API requests.
+        Use this to get fresh visibility data for fog detection.
+        Default: false (uses cache if still valid)
       required: false
       default: false
       example: true

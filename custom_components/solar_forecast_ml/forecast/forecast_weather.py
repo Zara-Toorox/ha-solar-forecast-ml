@@ -224,12 +224,17 @@ class WeatherService:
                                 "clouds": hour_data.get("clouds", DEFAULT_WEATHER_DATA["cloud_cover"]),
                                 "wind_speed": hour_data.get("wind", DEFAULT_WEATHER_DATA["wind_speed"]),
                                 "precipitation": hour_data.get("rain", DEFAULT_WEATHER_DATA["precipitation"]),
+                                "rain": hour_data.get("rain", DEFAULT_WEATHER_DATA["precipitation"]),
                                 "pressure": hour_data.get("pressure", DEFAULT_WEATHER_DATA["pressure"]),
                                 "ghi": hour_data.get("solar_radiation_wm2", 0.0),
                                 "solar_radiation": hour_data.get("solar_radiation_wm2", 0.0),
                                 "solar_radiation_wm2": hour_data.get("solar_radiation_wm2", 0.0),
                                 "direct_radiation": hour_data.get("direct_radiation", 0.0),
                                 "diffuse_radiation": hour_data.get("diffuse_radiation", 0.0),
+                                # V12.8.5: FOG detection parameters
+                                "visibility_m": hour_data.get("visibility_m"),
+                                "fog_detected": hour_data.get("fog_detected", False),
+                                "fog_type": hour_data.get("fog_type"),
                                 "_source": "weather_forecast_corrected",
                             }
                             result.append(entry)

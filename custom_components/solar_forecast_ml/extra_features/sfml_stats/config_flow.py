@@ -9,10 +9,11 @@
 
 """Config flow for SFML Stats integration. @zara
 
-Redesigned for better user experience:
-- Clear auto-detection feedback
-- Logical sensor grouping
-- Simplified options menu
+Simplified setup flow:
+- Step 1: Welcome
+- Step 2: All sensors on one page (grouped)
+- Step 3: Helper check
+- Step 4: Settings (billing, theme)
 """
 from __future__ import annotations
 
@@ -86,18 +87,9 @@ from .const import (
     DEFAULT_FEED_IN_TARIFF,
     CONF_PANEL_GROUP_NAMES,
 )
-from .inverter_profiles import (
-    InverterDiscovery,
-    InverterProfile,
-    INVERTER_PROFILES,
-    get_profile_choices,
-)
 from .sensor_helpers import check_and_suggest_helpers
 
 _LOGGER = logging.getLogger(__name__)
-
-# Configuration key for selected profile
-CONF_INVERTER_PROFILE: str = "inverter_profile"
 
 # Month names for translations
 MONTHS_DE = {
@@ -111,6 +103,35 @@ MONTHS_EN = {
     5: "May", 6: "June", 7: "July", 8: "August",
     9: "September", 10: "October", 11: "November", 12: "December"
 }
+
+# All sensor keys for configuration - used in both initial and options flow
+ALL_SENSOR_KEYS = [
+    # === SOLAR (4) ===
+    CONF_SENSOR_SOLAR_POWER,
+    CONF_SENSOR_SOLAR_TO_HOUSE,
+    CONF_SENSOR_SOLAR_TO_BATTERY,
+    CONF_SENSOR_SOLAR_YIELD_DAILY,
+    # === GRID (7) ===
+    CONF_SENSOR_GRID_TO_HOUSE,
+    CONF_SENSOR_GRID_TO_BATTERY,
+    CONF_SENSOR_HOUSE_TO_GRID,
+    CONF_SENSOR_GRID_IMPORT_DAILY,
+    CONF_SENSOR_GRID_IMPORT_YEARLY,
+    CONF_SENSOR_SMARTMETER_IMPORT,
+    CONF_SENSOR_SMARTMETER_EXPORT,
+    # === BATTERY (6) ===
+    CONF_SENSOR_BATTERY_SOC,
+    CONF_SENSOR_BATTERY_POWER,
+    CONF_SENSOR_BATTERY_TO_HOUSE,
+    CONF_SENSOR_BATTERY_TO_GRID,
+    CONF_SENSOR_BATTERY_CHARGE_SOLAR_DAILY,
+    CONF_SENSOR_BATTERY_CHARGE_GRID_DAILY,
+    # === HOME (1) ===
+    CONF_SENSOR_HOME_CONSUMPTION,
+    # === ANDERE (2) ===
+    CONF_SENSOR_PRICE_TOTAL,
+    CONF_WEATHER_ENTITY,
+]
 
 
 def _is_raspberry_pi() -> bool:
@@ -187,30 +208,25 @@ def get_entity_selector_optional() -> selector.Selector:
 class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for SFML Stats. @zara
 
-    Redesigned setup flow:
-    Step 1: System detection with clear feedback
+    Simplified setup flow:
+    Step 1: Welcome screen
     Step 2: All sensors on one page (grouped)
-    Step 3: Settings (billing, theme)
+    Step 3: Helper check
+    Step 4: Settings (billing, theme)
     """
 
-    VERSION = 4
+    VERSION = 5
 
     def __init__(self) -> None:
         """Initialize the config flow. @zara"""
         self._data: dict[str, Any] = {}
-        self._discovery: InverterDiscovery | None = None
-        self._detected_profiles: list[InverterProfile] = []
-        self._selected_profile: InverterProfile | None = None
-        self._sensor_mapping: dict[str, str | None] = {}
         self._helper_yaml: str = ""
 
     async def async_step_user(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle the initial step - System Detection with feedback. @zara"""
-        errors: dict[str, str] = {}
-
+        """Handle the initial step - Welcome screen. @zara"""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 
@@ -227,216 +243,47 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             return self.async_abort(reason="proxmox_not_recommended")
 
-        # Run auto-discovery
-        self._discovery = InverterDiscovery(self.hass)
-        self._detected_profiles = await self._discovery.async_discover()
-
         if user_input is not None:
-            selected_id = user_input.get(CONF_INVERTER_PROFILE, "manual")
-            self._selected_profile = INVERTER_PROFILES.get(selected_id)
-            self._data[CONF_INVERTER_PROFILE] = selected_id
-
-            if self._selected_profile and selected_id != "manual":
-                # Get auto-mapped sensors
-                self._sensor_mapping = self._discovery.get_sensor_mapping(
-                    self._selected_profile
-                )
-                # Show detection results first
-                return await self.async_step_detection_result()
-            else:
-                self._sensor_mapping = {}
-                return await self.async_step_sensors()
-
-        # Build profile choices with detection status
-        choices = {}
-        detected_ids = [p.id for p in self._detected_profiles]
-
-        # Add detected profiles first (with checkmark)
-        for profile in self._detected_profiles:
-            choices[profile.id] = f"✓ {profile.name}"
-
-        # Add non-detected profiles
-        for profile_id, profile in INVERTER_PROFILES.items():
-            if profile_id not in detected_ids and profile_id != "manual":
-                choices[profile_id] = profile.name
-
-        # Add manual option at the end
-        choices["manual"] = "Manuelle Konfiguration"
-
-        # Determine default selection
-        default_profile = "manual"
-        if self._detected_profiles:
-            default_profile = self._detected_profiles[0].id
-
-        # Build detection feedback message
-        if self._detected_profiles:
-            detected_names = [p.name for p in self._detected_profiles]
-            detection_status = "detected"
-            detection_info = ", ".join(detected_names)
-        else:
-            detection_status = "none"
-            detection_info = ""
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema({
-                vol.Required(
-                    CONF_INVERTER_PROFILE,
-                    default=default_profile,
-                ): vol.In(choices),
-            }),
-            errors=errors,
-            description_placeholders={
-                "detected_count": str(len(self._detected_profiles)),
-                "detection_status": detection_status,
-                "detected_systems": detection_info,
-            },
-        )
-
-    async def async_step_detection_result(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Show detection results with found sensors. @zara"""
-        if user_input is not None:
-            # User confirmed, proceed to sensor config
+            # User clicked "Next", proceed to sensor configuration
             return await self.async_step_sensors()
 
-        # Build list of found sensors for display
-        found_sensors = []
-        not_found = []
-
-        sensor_labels = {
-            CONF_SENSOR_SOLAR_POWER: "Solar Power",
-            CONF_SENSOR_HOME_CONSUMPTION: "Home Consumption",
-            CONF_SENSOR_GRID_TO_HOUSE: "Grid Import",
-            CONF_SENSOR_HOUSE_TO_GRID: "Grid Export",
-            CONF_SENSOR_BATTERY_SOC: "Battery SOC",
-            CONF_SENSOR_BATTERY_POWER: "Battery Power",
-            CONF_SENSOR_BATTERY_TO_HOUSE: "Battery Discharge",
-            CONF_SENSOR_SOLAR_YIELD_DAILY: "Solar Yield Daily",
-            CONF_WEATHER_ENTITY: "Weather",
-        }
-
-        for key, label in sensor_labels.items():
-            entity_id = self._sensor_mapping.get(key)
-            if entity_id:
-                found_sensors.append(f"✓ {label}: {entity_id}")
-            else:
-                not_found.append(f"✗ {label}")
-
-        # Build result text
-        if found_sensors:
-            found_text = "\n".join(found_sensors)
-        else:
-            found_text = "Keine Sensoren automatisch erkannt"
-
-        if not_found:
-            missing_text = "\n".join(not_found)
-        else:
-            missing_text = "Alle Sensoren gefunden!"
-
+        # Show welcome screen
         return self.async_show_form(
-            step_id="detection_result",
+            step_id="user",
             data_schema=vol.Schema({}),
-            description_placeholders={
-                "profile_name": self._selected_profile.name if self._selected_profile else "Manual",
-                "found_count": str(len(found_sensors)),
-                "total_count": str(len(sensor_labels)),
-                "found_sensors": found_text,
-                "missing_sensors": missing_text,
-            },
         )
 
     async def async_step_sensors(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 3 - All sensors on one page. @zara"""
+        """Handle sensor configuration - All sensors on one page. @zara"""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Filter out empty values
+            # Filter out empty values and save
             for key, value in user_input.items():
                 if value and isinstance(value, str) and value.strip():
                     self._data[key] = value.strip()
             # Check for missing kWh sensors
             return await self.async_step_helpers()
 
-        # Pre-fill with auto-detected values
-        defaults = self._sensor_mapping
-
-        # Count auto-filled sensors
-        filled_count = sum(1 for v in defaults.values() if v)
-
-        # Build comprehensive sensor schema - ALL sensors on one page
+        # Build sensor schema with all sensors
         schema_dict = {}
-
-        # === SOLAR SENSORS ===
-        schema_dict[vol.Optional(
-            CONF_SENSOR_SOLAR_POWER,
-            default=defaults.get(CONF_SENSOR_SOLAR_POWER, ""),
-        )] = get_entity_selector_optional()
-
-        schema_dict[vol.Optional(
-            CONF_SENSOR_SOLAR_YIELD_DAILY,
-            default=defaults.get(CONF_SENSOR_SOLAR_YIELD_DAILY, ""),
-        )] = get_entity_selector_optional()
-
-        # === GRID SENSORS ===
-        schema_dict[vol.Optional(
-            CONF_SENSOR_GRID_TO_HOUSE,
-            default=defaults.get(CONF_SENSOR_GRID_TO_HOUSE, ""),
-        )] = get_entity_selector_optional()
-
-        schema_dict[vol.Optional(
-            CONF_SENSOR_HOUSE_TO_GRID,
-            default=defaults.get(CONF_SENSOR_HOUSE_TO_GRID, ""),
-        )] = get_entity_selector_optional()
-
-        # === BATTERY SENSORS ===
-        schema_dict[vol.Optional(
-            CONF_SENSOR_BATTERY_SOC,
-            default=defaults.get(CONF_SENSOR_BATTERY_SOC, ""),
-        )] = get_entity_selector_optional()
-
-        schema_dict[vol.Optional(
-            CONF_SENSOR_BATTERY_POWER,
-            default=defaults.get(CONF_SENSOR_BATTERY_POWER, ""),
-        )] = get_entity_selector_optional()
-
-        schema_dict[vol.Optional(
-            CONF_SENSOR_BATTERY_TO_HOUSE,
-            default=defaults.get(CONF_SENSOR_BATTERY_TO_HOUSE, ""),
-        )] = get_entity_selector_optional()
-
-        # === HOME CONSUMPTION ===
-        schema_dict[vol.Optional(
-            CONF_SENSOR_HOME_CONSUMPTION,
-            default=defaults.get(CONF_SENSOR_HOME_CONSUMPTION, ""),
-        )] = get_entity_selector_optional()
-
-        # === WEATHER ===
-        schema_dict[vol.Optional(
-            CONF_WEATHER_ENTITY,
-            default=defaults.get(CONF_WEATHER_ENTITY, ""),
-        )] = get_entity_selector_optional()
+        for key in ALL_SENSOR_KEYS:
+            schema_dict[vol.Optional(key, default="")] = get_entity_selector_optional()
 
         return self.async_show_form(
             step_id="sensors",
             data_schema=vol.Schema(schema_dict),
             errors=errors,
-            description_placeholders={
-                "filled_count": str(filled_count),
-                "profile_name": self._selected_profile.name if self._selected_profile else "Manual",
-            },
         )
 
     async def async_step_helpers(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 3 - Check for missing kWh sensors. @zara"""
+        """Handle helper check - Check for missing kWh sensors. @zara"""
         if user_input is not None:
             return await self.async_step_settings()
 
@@ -469,7 +316,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 4 - General settings. @zara"""
+        """Handle settings - General settings. @zara"""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -555,14 +402,12 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
     Simplified menu structure:
     1. Sensoren - All sensor configuration
     2. Einstellungen - Theme, billing, reports
-    3. Erweitert - Panels, group names, re-detect
+    3. Erweitert - Panels, group names
     """
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow. @zara"""
         self._config_entry = config_entry
-        self._redetect_mapping: dict[str, str | None] = {}
-        self._redetect_profile: InverterProfile | None = None
 
     def _process_sensor_input(
         self,
@@ -622,36 +467,8 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Manage ALL sensor options on one page. @zara"""
-        all_sensor_keys = [
-            # Solar
-            CONF_SENSOR_SOLAR_POWER,
-            CONF_SENSOR_SOLAR_TO_HOUSE,
-            CONF_SENSOR_SOLAR_TO_BATTERY,
-            CONF_SENSOR_SOLAR_YIELD_DAILY,
-            # Grid
-            CONF_SENSOR_GRID_TO_HOUSE,
-            CONF_SENSOR_GRID_TO_BATTERY,
-            CONF_SENSOR_HOUSE_TO_GRID,
-            CONF_SENSOR_GRID_IMPORT_DAILY,
-            CONF_SENSOR_GRID_IMPORT_YEARLY,
-            CONF_SENSOR_SMARTMETER_IMPORT,
-            CONF_SENSOR_SMARTMETER_EXPORT,
-            # Battery
-            CONF_SENSOR_BATTERY_SOC,
-            CONF_SENSOR_BATTERY_POWER,
-            CONF_SENSOR_BATTERY_TO_HOUSE,
-            CONF_SENSOR_BATTERY_TO_GRID,
-            CONF_SENSOR_BATTERY_CHARGE_SOLAR_DAILY,
-            CONF_SENSOR_BATTERY_CHARGE_GRID_DAILY,
-            # Home
-            CONF_SENSOR_HOME_CONSUMPTION,
-            # Price & Weather
-            CONF_SENSOR_PRICE_TOTAL,
-            CONF_WEATHER_ENTITY,
-        ]
-
         if user_input is not None:
-            new_data = self._process_sensor_input(user_input, all_sensor_keys)
+            new_data = self._process_sensor_input(user_input, ALL_SENSOR_KEYS)
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=new_data
             )
@@ -659,7 +476,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="sensors",
-            data_schema=self._build_sensor_schema(all_sensor_keys),
+            data_schema=self._build_sensor_schema(ALL_SENSOR_KEYS),
         )
 
     async def async_step_settings(
@@ -752,130 +569,15 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_panels()
             elif next_step == "panel_group_names":
                 return await self.async_step_panel_group_names()
-            elif next_step == "redetect":
-                return await self.async_step_redetect()
 
         return self.async_show_form(
             step_id="advanced",
             data_schema=vol.Schema({
-                vol.Required("menu_choice", default="redetect"): vol.In({
+                vol.Required("menu_choice", default="panels"): vol.In({
                     "panels": "PV-Panels",
                     "panel_group_names": "Panel-Gruppen Namen",
-                    "redetect": "Sensoren neu erkennen",
                 }),
             }),
-        )
-
-    async def async_step_redetect(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Re-run auto-detection for sensors. @zara"""
-        if user_input is not None:
-            selected_id = user_input.get(CONF_INVERTER_PROFILE)
-            if selected_id and selected_id != "manual":
-                self._redetect_profile = INVERTER_PROFILES.get(selected_id)
-                if self._redetect_profile:
-                    discovery = InverterDiscovery(self.hass)
-                    await discovery.async_discover()
-                    self._redetect_mapping = discovery.get_sensor_mapping(
-                        self._redetect_profile
-                    )
-                    # Show results before applying
-                    return await self.async_step_redetect_result()
-            # Manual selected - go back
-            return self.async_create_entry(title="", data={})
-
-        # Run discovery to show detection status
-        discovery = InverterDiscovery(self.hass)
-        detected = await discovery.async_discover()
-        detected_ids = [p.id for p in detected]
-
-        # Build profile choices with detection status
-        choices = {}
-        for profile in detected:
-            choices[profile.id] = f"✓ {profile.name}"
-
-        for profile_id, profile in INVERTER_PROFILES.items():
-            if profile_id not in detected_ids and profile_id != "manual":
-                choices[profile_id] = profile.name
-
-        choices["manual"] = "Manuelle Konfiguration"
-
-        return self.async_show_form(
-            step_id="redetect",
-            data_schema=vol.Schema({
-                vol.Required(
-                    CONF_INVERTER_PROFILE,
-                    default=self._config_entry.data.get(CONF_INVERTER_PROFILE, "manual"),
-                ): vol.In(choices),
-            }),
-            description_placeholders={
-                "detected_count": str(len(detected)),
-            },
-        )
-
-    async def async_step_redetect_result(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Show redetection results before applying. @zara"""
-        if user_input is not None:
-            # User confirmed - apply changes
-            new_data = {**self._config_entry.data}
-            for key, value in self._redetect_mapping.items():
-                if value:
-                    new_data[key] = value
-
-            self.hass.config_entries.async_update_entry(
-                self._config_entry, data=new_data
-            )
-            return self.async_create_entry(title="", data={})
-
-        # Build list of found sensors for display
-        found_sensors = []
-        not_found = []
-
-        sensor_labels = {
-            CONF_SENSOR_SOLAR_POWER: "Solar Power",
-            CONF_SENSOR_HOME_CONSUMPTION: "Home Consumption",
-            CONF_SENSOR_GRID_TO_HOUSE: "Grid Import",
-            CONF_SENSOR_HOUSE_TO_GRID: "Grid Export",
-            CONF_SENSOR_BATTERY_SOC: "Battery SOC",
-            CONF_SENSOR_BATTERY_POWER: "Battery Power",
-            CONF_SENSOR_BATTERY_TO_HOUSE: "Battery Discharge",
-            CONF_SENSOR_SOLAR_YIELD_DAILY: "Solar Yield Daily",
-            CONF_WEATHER_ENTITY: "Weather",
-        }
-
-        for key, label in sensor_labels.items():
-            entity_id = self._redetect_mapping.get(key)
-            if entity_id:
-                found_sensors.append(f"✓ {label}: {entity_id}")
-            else:
-                not_found.append(f"✗ {label}")
-
-        # Build result text
-        if found_sensors:
-            found_text = "\n".join(found_sensors)
-        else:
-            found_text = "Keine Sensoren gefunden"
-
-        if not_found:
-            missing_text = "\n".join(not_found)
-        else:
-            missing_text = "Alle Sensoren gefunden!"
-
-        return self.async_show_form(
-            step_id="redetect_result",
-            data_schema=vol.Schema({}),
-            description_placeholders={
-                "profile_name": self._redetect_profile.name if self._redetect_profile else "Unknown",
-                "found_count": str(len(found_sensors)),
-                "total_count": str(len(sensor_labels)),
-                "found_sensors": found_text,
-                "missing_sensors": missing_text,
-            },
         )
 
     async def async_step_panels(

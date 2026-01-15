@@ -2,44 +2,57 @@
   "config": {
     "step": {
       "user": {
-        "title": "SFML Stats - System Detection",
-        "description": "Scanning for compatible systems...\n\n**{detected_count} system(s) detected.**\n\nSelect your system to auto-map sensors.",
-        "data": {
-          "inverter_profile": "System"
-        },
-        "data_description": {
-          "inverter_profile": "Systems marked with a checkmark (✓) were auto-detected in your Home Assistant."
-        }
-      },
-      "detection_result": {
-        "title": "Detection Result - {profile_name}",
-        "description": "**{found_count}/{total_count} sensors found:**\n\n{found_sensors}\n\n**Not found:**\n{missing_sensors}\n\nClick NEXT to review and adjust.",
-        "data": {}
+        "title": "SFML Stats - Welcome",
+        "description": "Welcome to SFML Stats!\n\nThis integration tracks your solar production, battery, grid usage and calculates costs.\n\nClick NEXT to configure your sensors.",
+        "data": {},
+        "data_description": {}
       },
       "sensors": {
         "title": "Sensor Configuration",
-        "description": "Review and adjust sensor mappings. Empty fields are optional.",
+        "description": "Configure all sensor mappings. Leave empty if not available.\n\nUse Watt sensors for live power, kWh sensors for daily statistics.",
         "data": {
           "sensor_solar_power": "Solar Power (W)",
+          "sensor_solar_to_house": "Solar to House (W)",
+          "sensor_solar_to_battery": "Solar to Battery (W)",
           "sensor_solar_yield_daily": "Solar Yield Today (kWh)",
-          "sensor_grid_to_house": "Grid Import (W)",
-          "sensor_house_to_grid": "Grid Export (W)",
+          "sensor_grid_to_house": "Grid to House (W)",
+          "sensor_grid_to_battery": "Grid to Battery (W)",
+          "sensor_house_to_grid": "Export to Grid (W)",
+          "sensor_grid_import_daily": "Grid Import Today (kWh)",
+          "sensor_grid_import_yearly": "Grid Import Yearly (kWh)",
+          "sensor_smartmeter_import": "Smartmeter Import (W)",
+          "sensor_smartmeter_export": "Smartmeter Export (W)",
           "sensor_battery_soc": "Battery SOC (%)",
           "sensor_battery_power": "Battery Power (W)",
-          "sensor_battery_to_house": "Battery Discharge (W)",
+          "sensor_battery_to_house": "Battery to House (W)",
+          "sensor_battery_to_grid": "Battery to Grid (W)",
+          "sensor_battery_charge_solar_daily": "Battery Charge Solar (kWh)",
+          "sensor_battery_charge_grid_daily": "Battery Charge Grid (kWh)",
           "sensor_home_consumption": "Home Consumption (W)",
+          "sensor_price_total": "Current Price (ct/kWh)",
           "weather_entity": "Weather Entity"
         },
         "data_description": {
-          "sensor_solar_power": "Total PV power output in Watts",
-          "sensor_solar_yield_daily": "Daily solar yield in kWh (resets at midnight)",
-          "sensor_grid_to_house": "Power imported from grid in Watts",
-          "sensor_house_to_grid": "Power exported to grid in Watts",
-          "sensor_battery_soc": "Battery state of charge (0-100%)",
-          "sensor_battery_power": "Battery charge/discharge power in Watts",
-          "sensor_battery_to_house": "Battery discharge to house in Watts",
-          "sensor_home_consumption": "Total home consumption in Watts",
-          "weather_entity": "Home Assistant weather entity (e.g. weather.home)"
+          "sensor_solar_power": "Total PV power in Watts",
+          "sensor_solar_to_house": "Solar power flowing directly to house",
+          "sensor_solar_to_battery": "Solar power charging battery",
+          "sensor_solar_yield_daily": "PV production TODAY in kWh",
+          "sensor_grid_to_house": "Grid import for house consumption",
+          "sensor_grid_to_battery": "Grid import for battery charging",
+          "sensor_house_to_grid": "Export to grid in Watts",
+          "sensor_grid_import_daily": "Grid import TODAY in kWh",
+          "sensor_grid_import_yearly": "Grid import this calendar year",
+          "sensor_smartmeter_import": "Import power from smartmeter",
+          "sensor_smartmeter_export": "Export power from smartmeter",
+          "sensor_battery_soc": "State of charge in PERCENT (0-100)",
+          "sensor_battery_power": "Charge/discharge power in Watts",
+          "sensor_battery_to_house": "Discharge power to house",
+          "sensor_battery_to_grid": "Battery export to grid",
+          "sensor_battery_charge_solar_daily": "Solar charging TODAY in kWh",
+          "sensor_battery_charge_grid_daily": "Grid charging TODAY in kWh",
+          "sensor_home_consumption": "TOTAL home consumption in Watts",
+          "sensor_price_total": "Electricity price in ct/kWh",
+          "weather_entity": "HA Weather integration"
         }
       },
       "helpers": {
@@ -181,24 +194,8 @@
         },
         "menu_options": {
           "panels": "PV Panels",
-          "panel_group_names": "Panel Group Names",
-          "redetect": "Re-detect Sensors"
+          "panel_group_names": "Panel Group Names"
         }
-      },
-      "redetect": {
-        "title": "Re-detect Sensors",
-        "description": "**{detected_count} system(s)** found.\n\nSelect to re-map sensors automatically.",
-        "data": {
-          "inverter_profile": "System"
-        },
-        "data_description": {
-          "inverter_profile": "Systems marked with checkmark were auto-detected."
-        }
-      },
-      "redetect_result": {
-        "title": "Detection Result - {profile_name}",
-        "description": "**{found_count}/{total_count} sensors found:**\n\n{found_sensors}\n\n**Not found:**\n{missing_sensors}\n\nClick SUBMIT to apply these mappings.",
-        "data": {}
       },
       "panels": {
         "title": "PV Panel Sensors",

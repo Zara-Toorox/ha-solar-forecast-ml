@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 
 from ..const import (
     CONF_NOTIFY_FORECAST,
+    CONF_NOTIFY_FOG,
     CONF_NOTIFY_FROST,
     CONF_NOTIFY_LEARNING,
     CONF_NOTIFY_STARTUP,
@@ -36,6 +37,7 @@ NOTIFICATION_ID_FORECAST = "solar_forecast_ml_forecast"
 NOTIFICATION_ID_LEARNING = "solar_forecast_ml_learning"
 NOTIFICATION_ID_RETRAINING = "solar_forecast_ml_retraining"
 NOTIFICATION_ID_FROST = "solar_forecast_ml_frost"
+NOTIFICATION_ID_FOG = "solar_forecast_ml_fog"
 NOTIFICATION_ID_WEATHER_ALERT = "solar_forecast_ml_weather_alert"
 NOTIFICATION_ID_SNOW_COVERED = "solar_forecast_ml_snow_covered"
 
@@ -422,6 +424,54 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
     async def dismiss_frost_notification(self) -> bool:
         """Remove frost notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_FROST)
+
+    async def show_fog_warning(
+        self,
+        visibility_m: float,
+        temperature_c: float,
+        humidity: float,
+        hour: int,
+        fog_type: str = "dense",
+    ) -> bool:
+        """Show fog warning notification when dense fog is detected @zara"""
+        if not self._should_notify(CONF_NOTIFY_FOG):
+            return False
+
+        try:
+            visibility_km = visibility_m / 1000.0
+            fog_type_de = "Dichter Nebel" if fog_type == "dense" else "Leichter Nebel"
+
+            message = f"""**{fog_type_de} erkannt!** 🌫️
+
+**Zeit:** {hour:02d}:00 Uhr
+**Sichtweite:** {visibility_km:.1f} km
+**Luftfeuchtigkeit:** {humidity:.0f}%
+**Temperatur:** {temperature_c:.1f}°C
+
+**Auswirkungen auf Solarproduktion:**
+• Nebel blockiert weniger Licht als echte Wolken
+• Diffuse Strahlung passiert den Nebel
+• Die Prognose wird automatisch angepasst
+
+**Hinweis:** Nebel löst sich oft auf, sobald die Sonne stärker wird und die Temperatur steigt.
+
+*"Through the fog, the sun still shines."* — Inspired by Star Trek 🖖"""
+
+            await self._safe_create_notification(
+                message=message,
+                title="🌫️ Starker Nebel erkannt",
+                notification_id=NOTIFICATION_ID_FOG,
+            )
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"[X] Error showing fog notification: {e}", exc_info=True)
+            return False
+
+    async def dismiss_fog_notification(self) -> bool:
+        """Remove fog notification @zara"""
+        return await self._safe_dismiss_notification(NOTIFICATION_ID_FOG)
 
     async def show_weather_alert(
         self,

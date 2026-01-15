@@ -30,6 +30,10 @@ OPEN_METEO_MAX_API_CALLS_PER_HOUR = 5
 OPEN_METEO_RATE_LIMIT_WINDOW = 3600
 OPEN_METEO_HISTORY_RETENTION_DAYS = 730  # 2 years
 
+# V12.8.5: Visibility API settings
+# ECMWF model doesn't provide visibility, so we fetch it separately from default model
+OPEN_METEO_VISIBILITY_CACHE_DURATION = 3600  # 1 hour cache for visibility data
+
 DEFAULT_WEATHER = {
     "temperature": 15.0,
     "humidity": 70.0,
@@ -65,6 +69,10 @@ class OpenMeteoClient:
 
         # Auto-save to file cache after API fetch
         self.auto_save_cache = True
+
+        # V12.8.5: Visibility cache (separate from ECMWF data)
+        self._visibility_cache: Dict[str, Dict[int, float]] = {}  # date -> hour -> visibility_m
+        self._visibility_cache_time: Optional[datetime] = None
 
         _LOGGER.info(
             f"OpenMeteoClient initialized "
@@ -182,6 +190,7 @@ class OpenMeteoClient:
                     "diffuse_radiation": diffuse_rad,
                     "ghi": ghi,
                     "global_tilted_irradiance": entry.get("global_tilted_irradiance"),
+                    "visibility_m": entry.get("visibility_m"),  # V12.8: For fog detection
                 }
 
                 # Include source tracking for diagnostics
@@ -346,6 +355,7 @@ class OpenMeteoClient:
                     "diffuse_radiation",
                     "global_tilted_irradiance",
                     "shortwave_radiation",
+                    "visibility",  # V12.8: For fog detection (in meters)
                 ]),
                 "daily": ",".join([
                     "sunrise",
@@ -403,6 +413,111 @@ class OpenMeteoClient:
             _LOGGER.error(f"Open-Meteo API error: {e}", exc_info=True)
             return None
 
+    async def _fetch_visibility_from_default_model(self) -> bool:
+        """V12.8.5: Fetch visibility data from Open-Meteo default model.
+
+        ECMWF model doesn't provide visibility data, so we fetch it separately
+        from the default model (which uses best_match for the location).
+
+        This is a lightweight request that only fetches visibility.
+        """
+        try:
+            params = {
+                "latitude": self.latitude,
+                "longitude": self.longitude,
+                "hourly": "visibility",
+                "timezone": "auto",
+                "forecast_days": 3,
+                # No "models" parameter = use default best_match model
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    OPEN_METEO_BASE_URL,
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=OPEN_METEO_TIMEOUT)
+                ) as response:
+                    if response.status != 200:
+                        _LOGGER.debug(f"Open-Meteo visibility API returned status {response.status}")
+                        return False
+
+                    data = await response.json()
+
+            hourly = data.get("hourly", {})
+            times = hourly.get("time", [])
+            visibility_values = hourly.get("visibility", [])
+
+            if not times or not visibility_values:
+                _LOGGER.debug("Open-Meteo visibility response has no data")
+                return False
+
+            self._visibility_cache.clear()
+            valid_count = 0
+
+            for i, time_str in enumerate(times):
+                if i >= len(visibility_values):
+                    break
+
+                visibility = visibility_values[i]
+                if visibility is None:
+                    continue
+
+                dt = datetime.fromisoformat(time_str)
+                date_str = dt.date().isoformat()
+                hour = dt.hour
+
+                if date_str not in self._visibility_cache:
+                    self._visibility_cache[date_str] = {}
+                self._visibility_cache[date_str][hour] = float(visibility)
+                valid_count += 1
+
+            self._visibility_cache_time = datetime.now()
+
+            _LOGGER.debug(
+                f"Open-Meteo: Fetched {valid_count} visibility values from default model "
+                f"(separate from ECMWF)"
+            )
+            return valid_count > 0
+
+        except Exception as e:
+            _LOGGER.debug(f"Open-Meteo visibility fetch error: {e}")
+            return False
+
+    def _is_visibility_cache_valid(self) -> bool:
+        """Check if visibility cache is still valid."""
+        if not self._visibility_cache_time or not self._visibility_cache:
+            return False
+        age = (datetime.now() - self._visibility_cache_time).total_seconds()
+        return age < OPEN_METEO_VISIBILITY_CACHE_DURATION
+
+    async def get_visibility(self, date: str, hour: int) -> Optional[float]:
+        """V12.8.5: Get visibility in meters for fog detection.
+
+        Visibility is fetched separately from the default Open-Meteo model
+        because ECMWF doesn't provide visibility data.
+
+        Args:
+            date: Date string (YYYY-MM-DD)
+            hour: Hour (0-23)
+
+        Returns:
+            Visibility in meters, or None if not available
+        """
+        # Check cache first
+        if self._is_visibility_cache_valid():
+            if date in self._visibility_cache and hour in self._visibility_cache[date]:
+                return self._visibility_cache[date][hour]
+
+        # Fetch fresh visibility data if cache is stale/empty
+        if not self._is_visibility_cache_valid():
+            await self._fetch_visibility_from_default_model()
+
+        # Return from cache (may be freshly fetched)
+        if date in self._visibility_cache and hour in self._visibility_cache[date]:
+            return self._visibility_cache[date][hour]
+
+        return None
+
     def _parse_hourly_response(self, data: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
         try:
             hourly = data.get("hourly", {})
@@ -425,6 +540,9 @@ class OpenMeteoClient:
                 cloud_mid = self._safe_get(hourly, "cloud_cover_mid", i)
                 cloud_high = self._safe_get(hourly, "cloud_cover_high", i)
 
+                # V12.8: Get visibility for fog detection (in meters)
+                visibility_m = self._safe_get(hourly, "visibility", i)
+
                 hour_data = {
                     "datetime": dt,
                     "date": dt.date().isoformat(),
@@ -442,6 +560,7 @@ class OpenMeteoClient:
                     "diffuse_radiation": diffuse_rad,
                     "ghi": ghi,
                     "global_tilted_irradiance": self._safe_get(hourly, "global_tilted_irradiance", i),
+                    "visibility_m": visibility_m,  # V12.8: For fog detection
                     "source": "open-meteo",
                     "blend_info": {
                         "sources": ["open-meteo"],
@@ -452,6 +571,7 @@ class OpenMeteoClient:
                             "mid": cloud_mid,
                             "high": cloud_high,
                         },
+                        "visibility_m": visibility_m,  # V12.8: For fog detection
                     },
                 }
                 result.append(hour_data)

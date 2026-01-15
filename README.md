@@ -1,6 +1,6 @@
-# Solar Forecast ML V12.8.4 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
+# Solar Forecast ML V12.8.6 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
 
-[![Version](https://img.shields.io/badge/version-12.8.4-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-12.8.6-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 
@@ -11,9 +11,30 @@ Support my work with a coffe
 Further information:
 🌐 **[Website & Documentation](https://zara-toorox.github.io/index.html)**
 
-**Intelligent Solar Forecasting for Home Assistant with Physics-First Hybrid-AI Architecture**
+## Solar Forecast ML – Sarpeidon Edition
+*No static API calls. No rigid, off-the-shelf models.*
 
-Imagine your smart home not just reacting, but *predicting* - using Hybrid-AI that adapts daily to your unique solar installation. That's exactly what Solar Forecast ML does. With **Version 12.8.4 "Sarpeidon"** we introduce enhanced **Multi-Weather Blending**, **Per-Panel-Group Learning**, **Learning Filters**, and the new **SFML Stats Lite** dashboard for all platforms.
+Experience an adaptive hybrid AI ecosystem powered by three proprietary, locally-hosted AI engines working in perfect synergy. This system continuously molds itself to the unique characteristics of your installation: from complex shading patterns and local topography to the specific thermal behavior of your inverter under peak loads.
+
+Solar Forecast ML is not just another forecasting tool—it is a sophisticated AI Solar Companion for Home Assistant that doesn't just deliver data, but actively learns and evolves with your home.
+
+With Version 12.8.6 "Sarpeidon," solar optimization enters a new dimension:
+
+**Triple-AI Core Architecture:** Three specialized, locally-deployed AI models collaborate to synchronize energy generation, weather dynamics, and system behavior—all without a single external server request.
+
+**Fog/Visibility Intelligence:** Detects fog and haze with significantly higher precision than standard weather apps, adjusting atmospheric transmittance in real-time.
+
+**5-Weather-Expert Blending:** Five independent weather services compete for accuracy. Every hour, the AI dynamically decides which model currently provides the highest validity for your specific location.
+
+**Precipitation Sentinel:** Provides targeted alerts for potential yield losses due to snow or heavy rain before the front even arrives.
+
+**Transmittance-Based Learning:** The system masters the actual atmospheric transparency of your local environment—becoming more precise with every passing day.
+
+**The Result:** Your smart home stops reacting. It starts anticipating.
+
+**100% Local – 100% Privacy.** This system operates entirely without ChatGPT, Gemini, Claude, or other cloud-based LLMs. The entire intelligence resides on your hardware. Zero data leaves your network. No exploitative API fees, no cloud dependency—just pure physics and high-performance machine learning on your own machine.
+
+*Welcome to the future of solar optimization. The sun doesn't just shine anymore—it is now predicted.*
 
 <p align="center">
   <img src="docs/images/progose_graph.png" alt="Solar Forecast ML Prognose" width="600">
@@ -21,27 +42,24 @@ Imagine your smart home not just reacting, but *predicting* - using Hybrid-AI th
 
 ---
 
-## What Makes This Integration Special?
+## Features in V12.8.6 "Sarpeidon"
 
-Unlike simple weather API services, Solar Forecast ML learns from your real data **and** uses actual solar physics. This means:
+### 5-Weather-Expert Blending
+- **Multi-Source Weather Data** - Combines 5 independent weather services for optimal accuracy
+- **Adaptive Weight Learning** - System learns which weather source is most accurate for your location
+- **Automatic Failover** - Seamless switching between sources if one fails
 
-- **Day 1:** Accurate forecasts using real physics (POA irradiance, temperature correction)
-- **Week 1:** System learns your panel geometry (tilt/azimuth) automatically
-- **Week 2+:** AI enhances physics predictions with local patterns (shadows, obstructions)
-- **Month 1+:** 93-97% accuracy with full Physics+AI ensemble
+### Fog & Visibility Detection
+- **FOG Detection** - Visibility below 1 km triggers FOG cloud type
+- **FOG_LIGHT Detection** - Visibility 1-5 km triggers light fog classification
+- **Transmittance-Based Learning** - VisibilityLearner determines optimal visibility data source
+- **Automatic Transmittance Reduction** - Fog conditions reduce solar transmittance calculations
 
-The integration adapts to your specific roof orientation, local weather conditions, shading patterns, and seasonal characteristics - all without manual configuration.
-
----
-
-## New in Version 12.8.4 "Sarpeidon"
-
-### SFML Stats Lite
-- **Universal Dashboard** - Works on ALL platforms including Raspberry Pi and ARM
-- **Real-time Energy Flow** - Visualize solar, battery, grid, and house consumption
-- **Cost Tracking** - Fixed or dynamic pricing support
-- **Multi-String Support** - Track up to 4 panel groups individually
-- **Automated Reports** - Weekly and monthly chart generation
+### Precipitation Notifications
+- **Rain Alerts** - Persistent notification when rain is expected
+- **Snow Alerts** - Temperature-based snow detection (below 2°C)
+- **Configurable Threshold** - Rain detection at 0.5 mm/h
+- **Home Assistant Integration** - Notifications via HA persistent notification system
 
 ### Learning Filter System
 - **Intelligent Data Filtering** - Excludes anomalous hours from AI training
@@ -49,31 +67,19 @@ The integration adapts to your specific roof orientation, local weather conditio
 - **Inverter Clipping Detection** - Excludes hardware-limited data points
 - **Daily Learning Protection** - Skips training if >25% of data is flagged
 
-### Clothing Recommendation (NEW in SFML Stats)
-- **Weather-based Recommendations** - Suggests appropriate clothing based on forecast
-- **Multi-language Support** - German and English recommendations
-- **Icon-based Display** - Visual clothing suggestions
-
-### Multi-Weather Source Blending
-- **Open-Meteo + wttr.in** - Combines multiple weather sources for better cloud predictions
-- **Adaptive Weight Learning** - System learns which weather source is more accurate for your location
-- **Trigger-based Fetching** - Only queries secondary source when cloud cover > 50%
-
 ### Per-Panel-Group Learning
 - **Individual Energy Sensors** - Configure separate kWh sensors per panel group
 - **Group-specific Efficiency** - Each panel group learns its own hourly efficiency factors
 - **Shadow Detection per Group** - Identifies which panels are affected by shadows
 
 ### Hourly Correction Factors
-- **Hour-specific Weather Corrections** - Instead of daily averages, corrections are applied per hour
+- **Hour-specific Weather Corrections** - Corrections applied per hour instead of daily averages
 - **Morning/Afternoon Optimization** - Addresses systematic forecast biases at different times
 - **7-day Rolling Learning** - Continuously improves based on recent performance
 
 ### Physics-First Hybrid-AI Architecture
-The core architecture - a complete redesign from traditional solar forecasting:
-
 - **PhysicsEngine** - Real solar physics calculations (POA, temperature correction, cell efficiency)
-- **GeometryLearner** - Automatically learns your panel tilt & azimuth using Levenberg-Marquardt optimization
+- **GeometryLearner** - Automatically learns panel tilt & azimuth using Levenberg-Marquardt optimization
 - **AI Neural Network** - Pure NumPy AI that captures temporal patterns
 - **Residual Learning** - AI learns the difference between physics and reality
 - **Weighted Ensemble** - Confidence-based blending of physics + AI predictions
@@ -84,15 +90,24 @@ The core architecture - a complete redesign from traditional solar forecasting:
 - **Physics-based Frost Detection** - Uses Magnus formula (dew point) for accurate frost warnings
 - **Cloud Layer Physics** - Separate transmission models for low/mid/high clouds
 
-### Unique Dashboard and statistics " SFML-STATS" 
-- **First Home Assistant interactive Dashboard*** - Self hosted web-dashboard for local access 
-- **Beautiful UX** - stunning dashboard with dark and white mode
-- **Advanced statistic** - Download stunning png charts about your solar-system
+### SFML Stats Lite
+- **Universal Dashboard** - Works on ALL platforms including Raspberry Pi and ARM
+- **Real-time Energy Flow** - Visualize solar, battery, grid, and house consumption
+- **Cost Tracking** - Fixed or dynamic pricing support
+- **Multi-String Support** - Track up to 4 panel groups individually
+- **Automated Reports** - Weekly and monthly chart generation
 
-### Unique Grid Price Monitoring "Grid Price Monitor"
-- **Germany & Austria only*** 
-- **Triggers automaticaly advanced Grid Power Automations** - Automatic charging of you EV, Battery when price is low
-- **Advanced statistic** - together with SFML-STATS
+### SFML Stats (x86_64 only)
+- **Interactive Web Dashboard** - Self-hosted dashboard for local access
+- **Beautiful UX** - Dark and light mode support
+- **Advanced Statistics** - Download charts about your solar system
+- **Clothing Recommendation** - Weather-based clothing suggestions
+
+### Grid Price Monitor (DE/AT)
+- **Dynamic Spot Prices** - Real-time electricity price monitoring
+- **Automation Triggers** - Automatic EV/battery charging when prices are low
+- **Price Forecasts** - Today's and tomorrow's hourly prices
+
 ---
 
 ## Core Features
@@ -158,7 +173,7 @@ Solar Forecast ML includes 5 companion integrations that extend its capabilities
 - Automated weekly and monthly report generation
 - Weather overlay on charts
 - Dark and light theme support
-- **NEW:** Clothing recommendations based on weather
+- Clothing recommendations based on weather
 
 **Installation:**
 1. Go to Settings > Devices & Services > Add Integration > SFML Stats
@@ -415,7 +430,7 @@ automation:
 
 ---
 
-## Panel Group Configuration (NEW in V12)
+## Panel Group Configuration
 
 For systems with multiple panel orientations, you can configure individual groups:
 
@@ -572,4 +587,4 @@ This project is licensed under a **Proprietary Non-Commercial License** - see th
 
 ---
 
-*Made with solar power in mind*
+*Made with ☀️ & late-night passion in Germany*

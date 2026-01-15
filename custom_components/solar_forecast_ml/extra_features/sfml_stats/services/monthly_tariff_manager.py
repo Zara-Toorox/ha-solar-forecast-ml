@@ -27,6 +27,7 @@ from ..const import (
     HOURLY_BILLING_HISTORY,
     CONF_FEED_IN_TARIFF,
     CONF_BILLING_FIXED_PRICE,
+    CONF_BILLING_PRICE_MODE,
     CONF_REFERENCE_PRICE,
     CONF_EEG_IMPORT_PRICE,
     CONF_EEG_FEED_IN_PRICE,
@@ -39,6 +40,7 @@ from ..const import (
     DEFAULT_EEG_FEED_IN_PRICE,
     DEFAULT_GRID_FEE_BASE,
     DEFAULT_GRID_FEE_SCALING,
+    PRICE_MODE_FIXED,
     GRID_FEE_THRESHOLD_HIGH,
     GRID_FEE_THRESHOLD_MEDIUM,
     GRID_FEE_THRESHOLD_LOW,
@@ -281,6 +283,11 @@ class MonthlyTariffManager:
         month_key = self._get_month_key(year, month)
         data = await self._load_data()
         defaults = self._get_defaults()
+        config = self._get_config()
+
+        # Check if fixed price mode is active
+        price_mode = config.get(CONF_BILLING_PRICE_MODE, "dynamic")
+        is_fixed_price_mode = (price_mode == PRICE_MODE_FIXED)
 
         # Calculate automatic values
         auto_calc = await self.calculate_weighted_average_price(year, month)
@@ -329,6 +336,20 @@ class MonthlyTariffManager:
                     "source": "default",
                 }
 
+        # For import price: use fixed price directly if in fixed price mode
+        if is_fixed_price_mode:
+            import_price_effective = get_effective(
+                "import_price_ct",
+                None,  # Don't use weighted average in fixed price mode
+                defaults["fixed_price_ct"],
+            )
+        else:
+            import_price_effective = get_effective(
+                "import_price_ct",
+                auto_calc["weighted_avg_price_ct"],
+                defaults["fixed_price_ct"],
+            )
+
         result = {
             "month_key": month_key,
             "year": year,
@@ -346,11 +367,7 @@ class MonthlyTariffManager:
             },
             "overrides": overrides,
             "effective": {
-                "import_price_ct": get_effective(
-                    "import_price_ct",
-                    auto_calc["weighted_avg_price_ct"],
-                    defaults["fixed_price_ct"],
-                ),
+                "import_price_ct": import_price_effective,
                 "export_price_ct": get_effective(
                     "export_price_ct",
                     None,

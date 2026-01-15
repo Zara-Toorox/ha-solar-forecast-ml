@@ -172,7 +172,7 @@ PRODUCTION_TIME_STATE_SCHEMA = {
 }
 
 WEATHER_EXPERT_WEIGHTS_SCHEMA = {
-    "version": "1.0",
+    "version": "1.1",  # V12.8: Added FOG support
     "weights": {
         "clear": {
             "open_meteo": 0.15,
@@ -223,6 +223,21 @@ WEATHER_EXPERT_WEIGHTS_SCHEMA = {
             "bright_sky": 0.2,
             "pirate_weather": 0.2,
         },
+        # V12.8: Fog detection - visibility-based cloud types
+        "fog": {
+            "open_meteo": 0.1,
+            "wttr_in": 0.05,
+            "ecmwf_layers": 0.05,
+            "bright_sky": 0.5,  # DWD best for fog in Germany
+            "pirate_weather": 0.3,
+        },
+        "fog_light": {
+            "open_meteo": 0.15,
+            "wttr_in": 0.1,
+            "ecmwf_layers": 0.1,
+            "bright_sky": 0.4,
+            "pirate_weather": 0.25,
+        },
     },
     "metadata": {
         "last_updated": None,
@@ -241,6 +256,8 @@ WEATHER_EXPERT_WEIGHTS_SCHEMA = {
             "stratus",
             "overcast",
             "snow",
+            "fog",        # V12.8: Dense fog (visibility < 1km)
+            "fog_light",  # V12.8: Light fog (visibility 1-5km)
         ],
     },
     "snow_prediction_stats": {
@@ -292,7 +309,7 @@ CALIBRATION_HISTORY_SCHEMA = {
 }
 
 LEARNING_CONFIG_SCHEMA = {
-    "version": "2.0",
+    "version": "2.1",  # V12.8: Added FOG buckets
     "updated_at": None,
     "physics_defaults": {
         "albedo": 0.2,
@@ -316,6 +333,8 @@ LEARNING_CONFIG_SCHEMA = {
             "rainy",
             "rainy_low_sun",
             "snowy",
+            "fog",          # V12.8: Dense fog (visibility < 1km)
+            "fog_low_sun",  # V12.8: Fog + low sun angle
         ],
     },
 }

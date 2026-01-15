@@ -16,6 +16,12 @@
     },
     "error": {
       "file_not_found": "Die angegebene Datei wurde nicht gefunden. Bitte überprüfe den Pfad.",
+      "not_a_file": "Der angegebene Pfad ist keine Datei.",
+      "file_too_large": "Die Datei ist zu groß zur Verarbeitung.",
+      "permission_denied": "Zugriff verweigert. Die Datei kann nicht gelesen werden.",
+      "invalid_json": "Die Datei enthält keine gültigen JSON-Daten.",
+      "cannot_read": "Die Datei kann nicht gelesen werden. Bitte Berechtigungen prüfen.",
+      "path_not_allowed": "Der Pfad muss innerhalb von /config/ oder /share/ sein.",
       "unknown": "Ein unbekannter Fehler ist aufgetreten."
     },
     "abort": {
@@ -32,7 +38,13 @@
       }
     },
     "error": {
-      "file_not_found": "Die angegebene Datei wurde nicht gefunden. Bitte überprüfe den Pfad."
+      "file_not_found": "Die angegebene Datei wurde nicht gefunden. Bitte überprüfe den Pfad.",
+      "not_a_file": "Der angegebene Pfad ist keine Datei.",
+      "file_too_large": "Die Datei ist zu groß zur Verarbeitung.",
+      "permission_denied": "Zugriff verweigert. Die Datei kann nicht gelesen werden.",
+      "invalid_json": "Die Datei enthält keine gültigen JSON-Daten.",
+      "cannot_read": "Die Datei kann nicht gelesen werden. Bitte Berechtigungen prüfen.",
+      "path_not_allowed": "Der Pfad muss innerhalb von /config/ oder /share/ sein."
     }
   },
   "entity": {
@@ -72,6 +84,15 @@
       },
       "cloud_cover_high": {
         "name": "Hohe Wolken"
+      },
+      "visibility": {
+        "name": "Sichtweite"
+      },
+      "fog_detected": {
+        "name": "Nebel erkannt"
+      },
+      "fog_type": {
+        "name": "Nebeltyp"
       }
     },
     "weather": {

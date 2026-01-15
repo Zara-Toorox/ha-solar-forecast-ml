@@ -14,7 +14,7 @@ from homeassistant.const import Platform
 # Base component constants
 DOMAIN = "ml_weather"
 NAME = "ML Weather"
-VERSION = "1.0.0"
+VERSION = "6.2.0"  # Must match manifest.json
 ATTRIBUTION = "Data provided by Solar Forecast ML (Multi-Expert Blended & Corrected)"
 
 # Platforms
@@ -74,6 +74,9 @@ SENSOR_TYPE_DIFFUSE_RADIATION = "diffuse_radiation"
 SENSOR_TYPE_CLOUD_COVER_LOW = "cloud_cover_low"
 SENSOR_TYPE_CLOUD_COVER_MID = "cloud_cover_mid"
 SENSOR_TYPE_CLOUD_COVER_HIGH = "cloud_cover_high"
+SENSOR_TYPE_VISIBILITY = "visibility"
+SENSOR_TYPE_FOG_DETECTED = "fog_detected"
+SENSOR_TYPE_FOG_TYPE = "fog_type"
 
 # PV Forecast sensor types
 SENSOR_TYPE_PV_FORECAST_TODAY = "pv_forecast_today"
@@ -81,10 +84,26 @@ SENSOR_TYPE_PV_FORECAST_TOMORROW = "pv_forecast_tomorrow"
 SENSOR_TYPE_PV_FORECAST_DAY_AFTER = "pv_forecast_day_after_tomorrow"
 
 # Weather conditions mapping (clouds % to condition)
+# Ranges are [low, high) - upper bound is exclusive, except 100 which is handled separately
 CONDITION_MAP = {
     (0, 10): "sunny",
     (10, 25): "partlycloudy",
     (25, 50): "partlycloudy",
     (50, 75): "cloudy",
-    (75, 100): "cloudy",
+    (75, 101): "cloudy",  # Include 100%
 }
+
+# Forecast constants
+FORECAST_HOURS = 120  # Number of hours for hourly forecast (5 days)
+FORECAST_DAYS = 5     # Number of days for daily forecast
+
+# Rain thresholds for condition determination (mm)
+RAIN_THRESHOLD_LIGHT = 0.0   # Any rain
+RAIN_THRESHOLD_MODERATE = 0.5  # Moderate rain
+
+# Wind speed conversion factor (m/s to km/h)
+WIND_SPEED_CONVERSION = 3.6
+
+# Cache constants
+CACHE_MAX_AGE_HOURS = 24  # Maximum cache age before considered stale
+CACHE_MAX_SIZE_MB = 10    # Maximum cache size in MB

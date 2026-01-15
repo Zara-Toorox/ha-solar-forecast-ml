@@ -13,12 +13,12 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "12.8.4"
-RELEASE_VERSION = "12.8.4"
+VERSION = "12.8.6"
+RELEASE_VERSION = "12.8.6"
 RELEASE_NAME = "Sarpeidon"
-SOFTWARE_VERSION = "12.8.4"
-INTEGRATION_MODEL = "V12.8.4"
-AI_VERSION = "12.8.4"
+SOFTWARE_VERSION = "12.8.6"
+INTEGRATION_MODEL = "V12.8.6"
+AI_VERSION = "12.8.6"
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -79,6 +79,7 @@ CONF_NOTIFY_FORECAST = "notify_forecast"
 CONF_NOTIFY_LEARNING = "notify_learning"
 CONF_NOTIFY_SUCCESSFUL_LEARNING = "notify_successful_learning"
 CONF_NOTIFY_FROST = "notify_frost"
+CONF_NOTIFY_FOG = "notify_fog"
 CONF_NOTIFY_WEATHER_ALERT = "notify_weather_alert"
 CONF_NOTIFY_SNOW_COVERED = "notify_snow_covered_panels"
 CONF_LEARNING_ENABLED = "learning_enabled"

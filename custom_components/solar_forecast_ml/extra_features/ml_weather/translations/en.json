@@ -16,6 +16,12 @@
     },
     "error": {
       "file_not_found": "The specified file was not found. Please check the path.",
+      "not_a_file": "The specified path is not a file.",
+      "file_too_large": "The file is too large to process.",
+      "permission_denied": "Permission denied. Cannot read the file.",
+      "invalid_json": "The file does not contain valid JSON data.",
+      "cannot_read": "Cannot read the file. Please check permissions.",
+      "path_not_allowed": "Path must be within /config/ or /share/ directory.",
       "unknown": "An unknown error occurred."
     },
     "abort": {
@@ -32,7 +38,13 @@
       }
     },
     "error": {
-      "file_not_found": "The specified file was not found. Please check the path."
+      "file_not_found": "The specified file was not found. Please check the path.",
+      "not_a_file": "The specified path is not a file.",
+      "file_too_large": "The file is too large to process.",
+      "permission_denied": "Permission denied. Cannot read the file.",
+      "invalid_json": "The file does not contain valid JSON data.",
+      "cannot_read": "Cannot read the file. Please check permissions.",
+      "path_not_allowed": "Path must be within /config/ or /share/ directory."
     }
   },
   "entity": {
@@ -72,6 +84,15 @@
       },
       "cloud_cover_high": {
         "name": "Cloud Cover High"
+      },
+      "visibility": {
+        "name": "Visibility"
+      },
+      "fog_detected": {
+        "name": "Fog Detected"
+      },
+      "fog_type": {
+        "name": "Fog Type"
       }
     },
     "weather": {

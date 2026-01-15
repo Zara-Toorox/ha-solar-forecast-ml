@@ -596,6 +596,10 @@ class ServiceRegistry:
                         "precipitation_mm": weather.get("precipitation", 0) if weather else 0,
                         "direct_radiation": weather.get("direct_radiation") if weather else None,
                         "diffuse_radiation": weather.get("diffuse_radiation") if weather else None,
+                        # V12.8.5: FOG detection parameters
+                        "visibility_m": weather.get("visibility_m") if weather else None,
+                        "fog_detected": weather.get("fog_detected", False) if weather else False,
+                        "fog_type": weather.get("fog_type") if weather else None,
                     },
                     "astronomy": {
                         "sun_elevation_deg": hourly_astro.get("elevation_deg"),
@@ -606,6 +610,26 @@ class ServiceRegistry:
                 }
 
                 result["hourly_predictions"].append(prediction_entry)
+
+            # V12.8.5: Calculate today_kwh from hourly predictions (full day sum)
+            # The orchestrator's forecast.get("today") only counts hours >= current hour,
+            # but for retrospective we want the FULL day as if calculated at sunrise
+            retrospective_today_kwh = sum(
+                h.get("prediction_kwh", 0.0) or 0.0
+                for h in result["hourly_predictions"]
+            )
+            result["forecast_summary"]["today_kwh"] = round(retrospective_today_kwh, 2)
+            result["forecast_summary"]["today_kwh_note"] = "Recalculated from hourly sum (full day)"
+
+            # Also find best hour from full day
+            best_hour_entry = max(
+                result["hourly_predictions"],
+                key=lambda h: h.get("prediction_kwh", 0.0) or 0.0,
+                default=None
+            )
+            if best_hour_entry:
+                result["forecast_summary"]["best_hour"] = best_hour_entry.get("hour")
+                result["forecast_summary"]["best_hour_kwh"] = best_hour_entry.get("prediction_kwh", 0.0)
 
             # Step 9: Write result to retrospective_forecast.json
             output_file = self.coordinator.data_manager.data_dir / "stats" / "retrospective_forecast.json"
@@ -619,9 +643,9 @@ class ServiceRegistry:
 
             _LOGGER.info("=" * 70)
             _LOGGER.info("RETROSPECTIVE FORECAST COMPLETE")
-            _LOGGER.info(f"  Total today: {forecast.get('today', 0):.2f} kWh")
+            _LOGGER.info(f"  Total today: {retrospective_today_kwh:.2f} kWh (full day sum)")
             _LOGGER.info(f"  Method: {forecast.get('method')}")
-            _LOGGER.info(f"  Best hour: {forecast.get('best_hour')} ({forecast.get('best_hour_kwh', 0):.3f} kWh)")
+            _LOGGER.info(f"  Best hour: {result['forecast_summary']['best_hour']} ({result['forecast_summary']['best_hour_kwh']:.3f} kWh)")
             _LOGGER.info(f"  Hours predicted: {len(today_hourly)}")
             _LOGGER.info(f"  Output file: {output_file}")
             _LOGGER.info("=" * 70)
@@ -635,9 +659,9 @@ class ServiceRegistry:
                         "title": "Retrospective Forecast erstellt",
                         "message": (
                             f"**Simulierter Zeitpunkt:** {simulation_time.strftime('%H:%M')} (1h vor Sonnenaufgang)\n\n"
-                            f"**Tagesprognose:** {forecast.get('today', 0):.2f} kWh\n"
+                            f"**Tagesprognose:** {retrospective_today_kwh:.2f} kWh (Summe aller Stunden)\n"
                             f"**Methode:** {forecast.get('method')}\n"
-                            f"**Beste Stunde:** {forecast.get('best_hour')} ({forecast.get('best_hour_kwh', 0):.3f} kWh)\n"
+                            f"**Beste Stunde:** {result['forecast_summary']['best_hour']} ({result['forecast_summary']['best_hour_kwh']:.3f} kWh)\n"
                             f"**Stunden:** {len(today_hourly)}\n\n"
                             f"Ergebnis gespeichert in:\n`{output_file}`\n\n"
                             f"Vergleichen Sie mit `hourly_predictions.json` um Unterschiede zu sehen."
@@ -787,6 +811,8 @@ class ServiceRegistry:
 
         V12.3: Uses WeatherExpertBlender (Open-Meteo, wttr.in, ECMWF, Bright Sky, Pirate Weather).
         This is now an alias for refresh_open_meteo_cache.
+
+        V12.8: Added force_update parameter to bypass memory cache and force API fetch.
         """
         try:
             if not hasattr(self.coordinator, 'weather_pipeline_manager'):
@@ -795,10 +821,14 @@ class ServiceRegistry:
 
             pipeline = self.coordinator.weather_pipeline_manager
 
-            _LOGGER.info("Service: refresh_multi_weather (5-source ExpertBlender)")
+            # V12.8: Read force_update from service call data
+            # Note: services.yaml uses force_wttr_refresh for backwards compatibility
+            force_update = call.data.get("force_update", False) or call.data.get("force_wttr_refresh", False)
 
-            # V12.3: Use unified weather refresh
-            success = await pipeline.update_weather_cache()
+            _LOGGER.info(f"Service: refresh_multi_weather (5-source ExpertBlender, force={force_update})")
+
+            # V12.3: Use unified weather refresh, V12.8: Pass force parameter
+            success = await pipeline.update_weather_cache(force=force_update)
 
             if success:
                 stats = {}
@@ -840,7 +870,7 @@ class ServiceRegistry:
                 _LOGGER.error("Daily briefing handler not initialized")
                 return
 
-            notify_service = call.data.get("notify_service", "notify")
+            notify_service = call.data.get("notify_service", "persistent_notification")
             language = call.data.get("language", "de")
 
             result = await self._daily_briefing_handler.send_daily_briefing(

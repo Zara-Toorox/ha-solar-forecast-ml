@@ -2,44 +2,57 @@
   "config": {
     "step": {
       "user": {
-        "title": "SFML Stats - Systemerkennung",
-        "description": "Suche nach kompatiblen Systemen...\n\n**{detected_count} System(e) erkannt.**\n\nWähle dein System um die Sensoren automatisch zuzuordnen.",
-        "data": {
-          "inverter_profile": "System"
-        },
-        "data_description": {
-          "inverter_profile": "Systeme mit ✓ wurden automatisch in deinem Home Assistant erkannt."
-        }
-      },
-      "detection_result": {
-        "title": "Erkennungsergebnis - {profile_name}",
-        "description": "**{found_count}/{total_count} Sensoren gefunden:**\n\n{found_sensors}\n\n**Nicht gefunden:**\n{missing_sensors}\n\nKlicke WEITER um zu prüfen und anzupassen.",
-        "data": {}
+        "title": "SFML Stats - Willkommen",
+        "description": "Willkommen bei SFML Stats!\n\nDiese Integration erfasst deine Solarproduktion, Batterie, Netzbezug und berechnet Kosten.\n\nKlicke WEITER um deine Sensoren zu konfigurieren.",
+        "data": {},
+        "data_description": {}
       },
       "sensors": {
         "title": "Sensor-Konfiguration",
-        "description": "Prüfe und passe die Sensor-Zuordnungen an. Leere Felder sind optional.",
+        "description": "Konfiguriere alle Sensor-Zuordnungen. Lasse leer wenn nicht verfügbar.\n\nVerwende Watt-Sensoren für Live-Leistung, kWh-Sensoren für Tagesstatistiken.",
         "data": {
           "sensor_solar_power": "PV-Leistung (W)",
+          "sensor_solar_to_house": "Solar → Haus (W)",
+          "sensor_solar_to_battery": "Solar → Batterie (W)",
           "sensor_solar_yield_daily": "Solarertrag heute (kWh)",
-          "sensor_grid_to_house": "Netzbezug (W)",
+          "sensor_grid_to_house": "Netz → Haus (W)",
+          "sensor_grid_to_battery": "Netz → Batterie (W)",
           "sensor_house_to_grid": "Einspeisung (W)",
+          "sensor_grid_import_daily": "Netzbezug heute (kWh)",
+          "sensor_grid_import_yearly": "Netzbezug Jahr (kWh)",
+          "sensor_smartmeter_import": "Smartmeter Bezug (W)",
+          "sensor_smartmeter_export": "Smartmeter Einspeisung (W)",
           "sensor_battery_soc": "Batterie SOC (%)",
           "sensor_battery_power": "Batterie-Leistung (W)",
-          "sensor_battery_to_house": "Batterie-Entladung (W)",
+          "sensor_battery_to_house": "Batterie → Haus (W)",
+          "sensor_battery_to_grid": "Batterie → Netz (W)",
+          "sensor_battery_charge_solar_daily": "Solar-Ladung heute (kWh)",
+          "sensor_battery_charge_grid_daily": "Netz-Ladung heute (kWh)",
           "sensor_home_consumption": "Hausverbrauch (W)",
+          "sensor_price_total": "Strompreis aktuell (ct/kWh)",
           "weather_entity": "Wetter-Entity"
         },
         "data_description": {
           "sensor_solar_power": "Gesamte PV-Leistung in Watt",
-          "sensor_solar_yield_daily": "Täglicher Solarertrag in kWh (Reset um Mitternacht)",
-          "sensor_grid_to_house": "Netzbezug in Watt",
+          "sensor_solar_to_house": "Solarleistung die direkt ins Haus fließt",
+          "sensor_solar_to_battery": "Solarleistung die in Batterie lädt",
+          "sensor_solar_yield_daily": "PV-Produktion HEUTE in kWh",
+          "sensor_grid_to_house": "Netzbezug für Hausverbrauch",
+          "sensor_grid_to_battery": "Netzbezug für Akkuladung",
           "sensor_house_to_grid": "Einspeisung ins Netz in Watt",
-          "sensor_battery_soc": "Batterie-Ladestand (0-100%)",
-          "sensor_battery_power": "Batterie Lade-/Entladeleistung in Watt",
-          "sensor_battery_to_house": "Batterie-Entladung ins Haus in Watt",
-          "sensor_home_consumption": "Gesamter Hausverbrauch in Watt",
-          "weather_entity": "Home Assistant Wetter-Entity (z.B. weather.home)"
+          "sensor_grid_import_daily": "Netzbezug HEUTE in kWh",
+          "sensor_grid_import_yearly": "Netzbezug im Kalenderjahr",
+          "sensor_smartmeter_import": "Bezugsleistung vom Smartmeter",
+          "sensor_smartmeter_export": "Einspeiseleistung vom Smartmeter",
+          "sensor_battery_soc": "Ladestand in PROZENT (0-100)",
+          "sensor_battery_power": "Lade-/Entladeleistung in Watt",
+          "sensor_battery_to_house": "Entladeleistung ins Haus",
+          "sensor_battery_to_grid": "Batterie-Einspeisung ins Netz",
+          "sensor_battery_charge_solar_daily": "Solar-Ladung HEUTE in kWh",
+          "sensor_battery_charge_grid_daily": "Netz-Ladung HEUTE in kWh",
+          "sensor_home_consumption": "GESAMTER Hausverbrauch in Watt",
+          "sensor_price_total": "Strompreis in ct/kWh",
+          "weather_entity": "HA Wetter-Integration"
         }
       },
       "helpers": {
@@ -181,24 +194,8 @@
         },
         "menu_options": {
           "panels": "PV-Panels",
-          "panel_group_names": "Panel-Gruppen Namen",
-          "redetect": "Sensoren neu erkennen"
+          "panel_group_names": "Panel-Gruppen Namen"
         }
-      },
-      "redetect": {
-        "title": "Sensoren neu erkennen",
-        "description": "**{detected_count} System(e)** gefunden.\n\nWähle aus um Sensoren automatisch neu zuzuordnen.",
-        "data": {
-          "inverter_profile": "System"
-        },
-        "data_description": {
-          "inverter_profile": "Systeme mit ✓ wurden automatisch erkannt."
-        }
-      },
-      "redetect_result": {
-        "title": "Erkennungsergebnis - {profile_name}",
-        "description": "**{found_count}/{total_count} Sensoren gefunden:**\n\n{found_sensors}\n\n**Nicht gefunden:**\n{missing_sensors}\n\nKlicke ABSENDEN um die Zuordnungen zu übernehmen.",
-        "data": {}
       },
       "panels": {
         "title": "PV-Panel Sensoren",

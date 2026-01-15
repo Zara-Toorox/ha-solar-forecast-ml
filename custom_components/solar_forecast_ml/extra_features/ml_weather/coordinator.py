@@ -17,6 +17,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -25,10 +26,19 @@ from .const import (
     CONF_DATA_PATH,
     CONDITION_MAP,
     PV_FORECAST_SOURCE_PATH,
+    FORECAST_HOURS,
+    FORECAST_DAYS,
+    RAIN_THRESHOLD_LIGHT,
+    RAIN_THRESHOLD_MODERATE,
 )
 from .cache_manager import CacheManager
 
 _LOGGER = logging.getLogger(__name__)
+
+# Retry constants
+MAX_CONSECUTIVE_FAILURES = 5
+BACKOFF_MULTIPLIER = 2  # Double interval on each failure
+MAX_BACKOFF_MINUTES = 60  # Cap at 1 hour
 
 
 class MLWeatherCoordinator(DataUpdateCoordinator):
@@ -41,6 +51,8 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
         self._source_path = entry.data.get(CONF_DATA_PATH, DEFAULT_SOURCE_PATH)
         self._raw_data: dict = {}
         self._pv_forecast_data: dict = {}
+        self._consecutive_failures: int = 0
+        self._base_interval = DEFAULT_SCAN_INTERVAL
 
         # Initialize cache manager
         self._cache_manager = CacheManager(hass, self._source_path)
@@ -58,12 +70,13 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
         await super().async_config_entry_first_refresh()
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data via cache manager."""
+        """Fetch data via cache manager with retry backoff."""
         try:
             # Update cache from source (if newer) and get data
             data = await self._cache_manager.async_update_cache()
 
             if data is None:
+                self._handle_failure()
                 raise UpdateFailed("No weather data available (source and cache empty)")
 
             self._raw_data = data
@@ -73,10 +86,59 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
                 self._load_pv_forecast
             )
 
+            # Success - reset failure counter and interval
+            self._handle_success()
+
             return self._process_data(data)
 
+        except UpdateFailed:
+            raise
+        except json.JSONDecodeError as err:
+            self._handle_failure()
+            raise UpdateFailed(f"Invalid JSON in weather data: {err}") from err
+        except PermissionError as err:
+            self._handle_failure()
+            raise UpdateFailed(f"Permission denied accessing weather data: {err}") from err
+        except OSError as err:
+            self._handle_failure()
+            raise UpdateFailed(f"OS error loading weather data: {err}") from err
         except Exception as err:
-            raise UpdateFailed(f"Error loading weather data: {err}") from err
+            self._handle_failure()
+            raise UpdateFailed(f"Unexpected error loading weather data: {err}") from err
+
+    def _handle_failure(self) -> None:
+        """Handle update failure with exponential backoff."""
+        self._consecutive_failures += 1
+
+        if self._consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+            # Apply exponential backoff
+            backoff_minutes = min(
+                self._base_interval.total_seconds() / 60 * (BACKOFF_MULTIPLIER ** (self._consecutive_failures - MAX_CONSECUTIVE_FAILURES + 1)),
+                MAX_BACKOFF_MINUTES
+            )
+            self.update_interval = timedelta(minutes=backoff_minutes)
+            _LOGGER.warning(
+                "Multiple consecutive failures (%d). "
+                "Backing off update interval to %.1f minutes",
+                self._consecutive_failures,
+                backoff_minutes
+            )
+        else:
+            _LOGGER.debug(
+                "Update failure %d of %d before backoff",
+                self._consecutive_failures,
+                MAX_CONSECUTIVE_FAILURES
+            )
+
+    def _handle_success(self) -> None:
+        """Handle successful update - reset counters."""
+        if self._consecutive_failures > 0:
+            _LOGGER.info(
+                "Update successful after %d failures. Resetting interval.",
+                self._consecutive_failures
+            )
+        self._consecutive_failures = 0
+        self.update_interval = self._base_interval
 
     def _load_pv_forecast(self) -> dict[str, Any]:
         """Load PV forecast data from Solar Forecast ML."""
@@ -96,8 +158,8 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
         """Process raw data into usable format."""
         forecast_data = raw_data.get("forecast", {})
 
-        # Get current weather (current hour)
-        now = datetime.now()
+        # Get current weather (current hour) - use timezone-aware datetime
+        now = dt_util.now()
         today_str = now.strftime("%Y-%m-%d")
         current_hour = str(now.hour)
 
@@ -133,6 +195,9 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
             "solar_radiation": hour_data.get("solar_radiation_wm2"),
             "direct_radiation": hour_data.get("direct_radiation"),
             "diffuse_radiation": hour_data.get("diffuse_radiation"),
+            "visibility": hour_data.get("visibility_m"),
+            "fog_detected": hour_data.get("fog_detected"),
+            "fog_type": hour_data.get("fog_type"),
             "condition": self._get_condition(hour_data),
         }
 
@@ -151,6 +216,9 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
             "solar_radiation": None,
             "direct_radiation": None,
             "diffuse_radiation": None,
+            "visibility": None,
+            "fog_detected": None,
+            "fog_type": None,
             "condition": "unknown",
         }
 
@@ -159,20 +227,18 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
         rain = hour_data.get("rain", 0) or 0
         clouds = hour_data.get("clouds", 0) or 0
 
-        # Check for precipitation first
-        if rain > 0.5:
+        # Check for precipitation first (using constants)
+        if rain > RAIN_THRESHOLD_MODERATE:
             return "rainy"
-        if rain > 0:
+        if rain > RAIN_THRESHOLD_LIGHT:
             return "rainy"
 
-        # Check cloud coverage
+        # Check cloud coverage using condition map
         for (low, high), condition in CONDITION_MAP.items():
             if low <= clouds < high:
                 return condition
 
-        if clouds >= 100:
-            return "cloudy"
-
+        # Fallback for edge cases
         return "sunny"
 
     def get_current_weather(self) -> dict[str, Any]:
@@ -182,16 +248,16 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
         return self._default_weather()
 
     def get_hourly_forecast(self) -> list[dict[str, Any]]:
-        """Get hourly forecast for the next 48 hours."""
+        """Get hourly forecast for the next FORECAST_HOURS hours."""
         if not self.data:
             return []
 
         forecast_data = self.data.get("forecast", {})
         forecasts = []
-        now = datetime.now()
+        now = dt_util.now()  # Use timezone-aware datetime
 
-        # Generate forecasts for next 48 hours
-        for hours_ahead in range(48):
+        # Generate forecasts for next FORECAST_HOURS hours
+        for hours_ahead in range(FORECAST_HOURS):
             forecast_time = now + timedelta(hours=hours_ahead)
             date_str = forecast_time.strftime("%Y-%m-%d")
             hour_str = str(forecast_time.hour)
@@ -223,11 +289,11 @@ class MLWeatherCoordinator(DataUpdateCoordinator):
         forecast_data = self.data.get("forecast", {})
         daily_forecasts = []
 
-        # Get unique dates from forecast - only from today onwards
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        # Get unique dates from forecast - only from today onwards (timezone-aware)
+        today_str = dt_util.now().strftime("%Y-%m-%d")
         dates = sorted([d for d in forecast_data.keys() if d >= today_str])
 
-        for date_str in dates[:7]:  # Next 7 days starting from today
+        for date_str in dates[:FORECAST_DAYS]:  # Next FORECAST_DAYS days starting from today
             day_data = forecast_data.get(date_str, {})
 
             if not day_data:

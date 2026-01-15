@@ -30,7 +30,7 @@ class DailyBriefingService:
 
     async def send_daily_briefing(
         self,
-        notify_service: str = "notify",
+        notify_service: str = "persistent_notification",
         language: str = "de",
     ) -> dict[str, Any]:
         """Generate and send daily solar briefing notification.
@@ -63,7 +63,7 @@ class DailyBriefingService:
             weather_data = await self._get_today_weather_data()
 
             message_data = await self._generate_briefing_message(
-                forecast_data, yesterday_data, astro_data, language
+                forecast_data, yesterday_data, astro_data, weather_data, language
             )
 
             persistent_notification = {
@@ -87,8 +87,9 @@ class DailyBriefingService:
             if notify_service and notify_service != "persistent_notification" and "mobile_app" in notify_service:
 
                 prediction_kwh = forecast_data['prediction_kwh']
-                weather_emoji, _ = self._interpret_weather(prediction_kwh, language)
-                weather_desc = self._get_weather_description(prediction_kwh, language)
+                clouds = weather_data.get("clouds") if weather_data else None
+                weather_emoji, _ = self._interpret_weather(prediction_kwh, clouds, language)
+                weather_desc = self._get_weather_description(clouds, language)
 
                 temp_str = ""
                 if weather_data and weather_data.get("temperature") is not None:
@@ -240,6 +241,7 @@ class DailyBriefingService:
         forecast_data: dict[str, Any],
         yesterday_data: dict[str, Any] | None,
         astro_data: dict[str, Any] | None,
+        weather_data: dict[str, Any] | None,
         language: str,
     ) -> dict[str, str]:
         """Generate formatted briefing message.
@@ -248,6 +250,7 @@ class DailyBriefingService:
             forecast_data: Today's forecast data
             yesterday_data: Yesterday's actual data (optional)
             astro_data: Today's astronomy data (optional)
+            weather_data: Today's weather data (optional)
             language: Language code ("de" or "en")
 
         Returns:
@@ -275,7 +278,8 @@ class DailyBriefingService:
         message_parts = []
 
         prediction_kwh = forecast_data["prediction_kwh"]
-        weather_emoji, weather_text = self._interpret_weather(prediction_kwh, language)
+        clouds = weather_data.get("clouds") if weather_data else None
+        weather_emoji, weather_text = self._interpret_weather(prediction_kwh, clouds, language)
         message_parts.append(f"{weather_emoji} {weather_text}")
         message_parts.append("")
 
@@ -318,11 +322,15 @@ class DailyBriefingService:
 
         message_parts.append("")
 
-        weather_desc = self._get_weather_description(prediction_kwh, language)
+        weather_desc = self._get_weather_description(clouds, language)
+        temp_str = ""
+        if weather_data and weather_data.get("temperature") is not None:
+            temp = weather_data["temperature"]
+            temp_str = f" ({temp:.0f}°C)"
         if language == "de":
-            message_parts.append(f"🌤️ Wetter: {weather_desc}")
+            message_parts.append(f"🌤️ Wetter: {weather_desc}{temp_str}")
         else:
-            message_parts.append(f"🌤️ Weather: {weather_desc}")
+            message_parts.append(f"🌤️ Weather: {weather_desc}{temp_str}")
 
         if astro_data and astro_data.get("solar_noon"):
             solar_noon = astro_data["solar_noon"]
@@ -373,35 +381,70 @@ class DailyBriefingService:
 
         return {"title": title, "message": message}
 
-    def _interpret_weather(self, prediction_kwh: float, language: str) -> tuple[str, str]:
-        """Interpret weather from prediction value @zara"""
-        if prediction_kwh > 15:
-            return ("🌞", "Sehr guter Solar-Tag erwartet!" if language == "de" else "Excellent solar day expected!")
-        elif prediction_kwh > 10:
-            return ("☀️", "Guter Solar-Tag erwartet!" if language == "de" else "Good solar day expected!")
-        elif prediction_kwh > 5:
-            return ("⛅", "Ordentlicher Solar-Tag erwartet!" if language == "de" else "Decent solar day expected!")
-        elif prediction_kwh > 2:
-            return ("🌥️", "Mäßiger Solar-Tag erwartet." if language == "de" else "Moderate solar day expected.")
-        elif prediction_kwh > 0.5:
-            return ("☁️", "Schwacher Solar-Tag erwartet." if language == "de" else "Weak solar day expected.")
-        else:
-            return ("🌧️", "Kaum Solar-Produktion erwartet." if language == "de" else "Minimal solar production expected.")
+    def _interpret_weather(self, prediction_kwh: float, clouds: float | None, language: str) -> tuple[str, str]:
+        """Interpret weather from cloud cover and prediction value @zara
 
-    def _get_weather_description(self, prediction_kwh: float, language: str) -> str:
-        """Get detailed weather description from prediction value. @zara"""
-        if prediction_kwh > 15:
-            return "Sonnig, ideal" if language == "de" else "Sunny, ideal"
-        elif prediction_kwh > 10:
-            return "Sonnig bis teilweise bewölkt" if language == "de" else "Sunny to partly cloudy"
-        elif prediction_kwh > 5:
-            return "Teilweise bewölkt" if language == "de" else "Partly cloudy"
-        elif prediction_kwh > 2:
-            return "Bewölkt mit sonnigen Phasen" if language == "de" else "Cloudy with sunny periods"
-        elif prediction_kwh > 0.5:
-            return "Stark bewölkt" if language == "de" else "Mostly cloudy"
+        Args:
+            prediction_kwh: Today's forecast in kWh
+            clouds: Cloud cover percentage (0-100) from weather data
+            language: Language code ("de" or "en")
+        """
+        # Use cloud cover if available, otherwise fall back to prediction-based estimation
+        if clouds is not None:
+            if clouds < 20:
+                emoji = "🌞"
+                text = "Sonnig - sehr guter Solar-Tag!" if language == "de" else "Sunny - excellent solar day!"
+            elif clouds < 40:
+                emoji = "☀️"
+                text = "Überwiegend sonnig - guter Solar-Tag!" if language == "de" else "Mostly sunny - good solar day!"
+            elif clouds < 60:
+                emoji = "⛅"
+                text = "Teilweise bewölkt - ordentlicher Solar-Tag." if language == "de" else "Partly cloudy - decent solar day."
+            elif clouds < 80:
+                emoji = "🌥️"
+                text = "Überwiegend bewölkt - mäßiger Solar-Tag." if language == "de" else "Mostly cloudy - moderate solar day."
+            else:
+                emoji = "☁️"
+                text = "Stark bewölkt - schwacher Solar-Tag." if language == "de" else "Heavily overcast - weak solar day."
         else:
-            return "Bedeckt/Regen" if language == "de" else "Overcast/Rain"
+            # Fallback: use prediction_kwh if no cloud data available
+            if prediction_kwh > 15:
+                emoji, text = "🌞", "Sehr guter Solar-Tag erwartet!" if language == "de" else "Excellent solar day expected!"
+            elif prediction_kwh > 10:
+                emoji, text = "☀️", "Guter Solar-Tag erwartet!" if language == "de" else "Good solar day expected!"
+            elif prediction_kwh > 5:
+                emoji, text = "⛅", "Ordentlicher Solar-Tag erwartet!" if language == "de" else "Decent solar day expected!"
+            elif prediction_kwh > 2:
+                emoji, text = "🌥️", "Mäßiger Solar-Tag erwartet." if language == "de" else "Moderate solar day expected."
+            elif prediction_kwh > 0.5:
+                emoji, text = "☁️", "Schwacher Solar-Tag erwartet." if language == "de" else "Weak solar day expected."
+            else:
+                emoji, text = "🌧️", "Kaum Solar-Produktion erwartet." if language == "de" else "Minimal solar production expected."
+
+        return (emoji, text)
+
+    def _get_weather_description(self, clouds: float | None, language: str) -> str:
+        """Get detailed weather description from cloud cover @zara
+
+        Args:
+            clouds: Cloud cover percentage (0-100) from weather data
+            language: Language code ("de" or "en")
+        """
+        if clouds is None:
+            return "Keine Wetterdaten" if language == "de" else "No weather data"
+
+        if clouds < 10:
+            return "Klar, wolkenlos" if language == "de" else "Clear, cloudless"
+        elif clouds < 25:
+            return "Sonnig" if language == "de" else "Sunny"
+        elif clouds < 50:
+            return "Teilweise bewölkt" if language == "de" else "Partly cloudy"
+        elif clouds < 75:
+            return "Überwiegend bewölkt" if language == "de" else "Mostly cloudy"
+        elif clouds < 90:
+            return "Stark bewölkt" if language == "de" else "Heavily cloudy"
+        else:
+            return "Bedeckt" if language == "de" else "Overcast"
 
     def _get_closing_message(self, prediction_kwh: float, language: str) -> str:
         """Get closing message based on prediction value. @zara"""

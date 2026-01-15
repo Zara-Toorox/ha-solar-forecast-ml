@@ -38,6 +38,7 @@ from .const import (
     ATTR_FORECAST_SOLAR_RADIATION,
     ATTR_FORECAST_DIRECT_RADIATION,
     ATTR_FORECAST_DIFFUSE_RADIATION,
+    WIND_SPEED_CONVERSION,
 )
 from .coordinator import MLWeatherCoordinator
 
@@ -131,8 +132,8 @@ class MLWeatherEntity(CoordinatorEntity[MLWeatherCoordinator], WeatherEntity):
         current = self.coordinator.get_current_weather()
         wind = current.get("wind_speed")
         if wind is not None:
-            # Convert m/s to km/h
-            return round(wind * 3.6, 1)
+            # Convert m/s to km/h using constant
+            return round(wind * WIND_SPEED_CONVERSION, 1)
         return None
 
     @property
@@ -189,7 +190,7 @@ class MLWeatherEntity(CoordinatorEntity[MLWeatherCoordinator], WeatherEntity):
                 "native_temperature": item.get("temperature"),
                 "condition": item.get("condition"),
                 "native_precipitation": item.get("precipitation", 0),
-                "native_wind_speed": round(item["wind_speed"] * 3.6, 1) if item.get("wind_speed") else None,
+                "native_wind_speed": round(item["wind_speed"] * WIND_SPEED_CONVERSION, 1) if item.get("wind_speed") else None,
                 "humidity": item.get("humidity"),
             }
 
@@ -221,7 +222,7 @@ class MLWeatherEntity(CoordinatorEntity[MLWeatherCoordinator], WeatherEntity):
                 "native_templow": item.get("templow"),
                 "condition": item.get("condition"),
                 "native_precipitation": item.get("precipitation", 0),
-                "native_wind_speed": round(item["wind_speed"] * 3.6, 1) if item.get("wind_speed") else None,
+                "native_wind_speed": round(item["wind_speed"] * WIND_SPEED_CONVERSION, 1) if item.get("wind_speed") else None,
                 "humidity": item.get("humidity"),
             }
 
