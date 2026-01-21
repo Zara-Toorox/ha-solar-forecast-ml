@@ -128,6 +128,10 @@ from ..const import (
     CONF_FEED_IN_TARIFF,
     DEFAULT_FEED_IN_TARIFF,
     CONF_PANEL_GROUP_NAMES,
+    CONF_DASHBOARD_STYLE,
+    DEFAULT_DASHBOARD_STYLE,
+    CONF_THEME,
+    DEFAULT_THEME,
 )
 from ..utils import get_json_cache, read_json_safe
 
@@ -243,6 +247,9 @@ async def async_setup_views(hass: HomeAssistant) -> None:
     # Forecast Comparison
     hass.http.register_view(ForecastComparisonView())
     hass.http.register_view(ForecastComparisonChartView())
+
+    # Dashboard Settings (for style toggle)
+    hass.http.register_view(DashboardSettingsView())
 
     _LOGGER.info("SFML Stats API views registered")
 
@@ -3172,3 +3179,68 @@ class ForecastComparisonChartView(HomeAssistantView):
             query = {"days": str(days)}
 
         return await self.get(MockRequest())
+
+
+class DashboardSettingsView(HomeAssistantView):
+    """API endpoint for dashboard settings (theme, style). @zara
+
+    GET /api/sfml_stats/dashboard_settings
+    Returns current dashboard settings including dashboard_style and theme.
+
+    POST /api/sfml_stats/dashboard_settings
+    Updates dashboard settings (stores in session, does not persist to config).
+    """
+
+    url = "/api/sfml_stats/dashboard_settings"
+    name = "api:sfml_stats:dashboard_settings"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: web.Request) -> web.Response:
+        """Return current dashboard settings. @zara"""
+        config = _get_config()
+
+        return web.json_response({
+            "success": True,
+            "data": {
+                "dashboard_style": config.get(CONF_DASHBOARD_STYLE, DEFAULT_DASHBOARD_STYLE),
+                "theme": config.get(CONF_THEME, DEFAULT_THEME),
+            }
+        })
+
+    @local_only
+    async def post(self, request: web.Request) -> web.Response:
+        """Update dashboard settings (session only, not persisted). @zara
+
+        This allows the frontend to temporarily switch styles without
+        modifying the Home Assistant config entry.
+        """
+        try:
+            data = await request.json()
+            dashboard_style = data.get("dashboard_style")
+            theme = data.get("theme")
+
+            # Store in HASS data for session (not persisted)
+            if HASS is not None and DOMAIN in HASS.data:
+                entries = HASS.data.get(DOMAIN, {})
+                for entry_id, entry_data in entries.items():
+                    if isinstance(entry_data, dict):
+                        if "session_settings" not in entry_data:
+                            entry_data["session_settings"] = {}
+                        if dashboard_style:
+                            entry_data["session_settings"]["dashboard_style"] = dashboard_style
+                        if theme:
+                            entry_data["session_settings"]["theme"] = theme
+                        break
+
+            return web.json_response({
+                "success": True,
+                "message": "Settings updated for this session"
+            })
+
+        except Exception as err:
+            _LOGGER.error("Error updating dashboard settings: %s", err)
+            return web.json_response({
+                "success": False,
+                "error": str(err)
+            }, status=500)

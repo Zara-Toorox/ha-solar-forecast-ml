@@ -35,12 +35,16 @@ from .const import (
     CONF_GENERATE_MONTHLY,
     CONF_AUTO_GENERATE,
     CONF_THEME,
+    CONF_DASHBOARD_STYLE,
     DEFAULT_GENERATE_WEEKLY,
     DEFAULT_GENERATE_MONTHLY,
     DEFAULT_AUTO_GENERATE,
     DEFAULT_THEME,
+    DEFAULT_DASHBOARD_STYLE,
     THEME_DARK,
     THEME_LIGHT,
+    DASHBOARD_STYLE_3D,
+    DASHBOARD_STYLE_2D,
     CONF_SENSOR_SOLAR_POWER,
     CONF_SENSOR_SOLAR_TO_HOUSE,
     CONF_SENSOR_SOLAR_TO_BATTERY,
@@ -351,6 +355,13 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     THEME_LIGHT: "Light",
                 }),
                 vol.Required(
+                    CONF_DASHBOARD_STYLE,
+                    default=DEFAULT_DASHBOARD_STYLE,
+                ): vol.In({
+                    DASHBOARD_STYLE_3D: "3D Isometrisch",
+                    DASHBOARD_STYLE_2D: "2D Klassisch",
+                }),
+                vol.Required(
                     CONF_BILLING_START_MONTH,
                     default=DEFAULT_BILLING_START_MONTH,
                 ): vol.In(MONTHS_DE),
@@ -521,6 +532,13 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                 ): vol.In({
                     THEME_DARK: "Dark",
                     THEME_LIGHT: "Light",
+                }),
+                vol.Required(
+                    CONF_DASHBOARD_STYLE,
+                    default=current.get(CONF_DASHBOARD_STYLE, DEFAULT_DASHBOARD_STYLE),
+                ): vol.In({
+                    DASHBOARD_STYLE_3D: "3D Isometrisch",
+                    DASHBOARD_STYLE_2D: "2D Klassisch",
                 }),
                 vol.Required(
                     CONF_BILLING_START_MONTH,

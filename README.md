@@ -1,11 +1,11 @@
-# Solar Forecast ML V12.8.8 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
+# Solar Forecast ML V12.10.0 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
 
-[![Version](https://img.shields.io/badge/version-12.8.6-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-12.10.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 
 
-Support my work with a coffe
+Fuel my late-night ideas with a coffee? I'd really appreciate it ♡
 <a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee ' /></a>
 
 Further information:
@@ -42,7 +42,7 @@ With Version 12.8.8 "Sarpeidon," solar optimization enters a new dimension:
 
 ---
 
-## Features in V12.8.8 "Sarpeidon"
+## Features in V12.10.0 "Sarpeidon"
 
 ### 5-Weather-Expert Blending
 - **Multi-Source Weather Data** - Combines 5 independent weather services for optimal accuracy
@@ -142,7 +142,7 @@ With Version 12.8.8 "Sarpeidon," solar optimization enters a new dimension:
 
 ---
 
-## Extra Modules (v6.0.0)
+## Extra Modules (v6.4.4)
 
 Solar Forecast ML includes 5 companion integrations that extend its capabilities. All modules are installed via the `install_extras` service and share data seamlessly.
 

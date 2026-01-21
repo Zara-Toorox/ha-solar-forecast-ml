@@ -109,6 +109,47 @@
     box-shadow: 0 0 10px var(--neon-cyan);
 }
 
+/* Style Toggle Button (2D/3D) */
+.style-toggle {
+    background: var(--bg-card);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.style-toggle:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px var(--neon-purple);
+    border-color: var(--neon-purple);
+}
+.style-toggle.active-3d {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(99, 102, 241, 0.2));
+    border-color: var(--neon-purple);
+}
+.style-toggle.active-2d {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(57, 255, 20, 0.2));
+    border-color: var(--neon-cyan);
+}
+.style-toggle-icon {
+    font-size: 1rem;
+}
+
+/* Header Controls Container */
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow-x: hidden; }
 body {

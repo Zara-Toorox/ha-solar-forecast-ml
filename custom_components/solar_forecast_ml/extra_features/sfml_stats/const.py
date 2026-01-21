@@ -15,7 +15,7 @@ from typing import Final
 
 DOMAIN: Final = "sfml_stats"
 NAME: Final = "SFML Stats"
-VERSION: Final = "6.4.2"
+VERSION: Final = "6.4.4"
 
 SOLAR_FORECAST_ML_BASE: Final = Path("solar_forecast_ml")
 SOLAR_FORECAST_ML_STATS: Final = SOLAR_FORECAST_ML_BASE / "stats"
@@ -138,14 +138,19 @@ CONF_GENERATE_WEEKLY: Final = "generate_weekly"
 CONF_GENERATE_MONTHLY: Final = "generate_monthly"
 CONF_AUTO_GENERATE: Final = "auto_generate"
 CONF_THEME: Final = "theme"
+CONF_DASHBOARD_STYLE: Final = "dashboard_style"
 
 THEME_DARK: Final = "dark"
 THEME_LIGHT: Final = "light"
+
+DASHBOARD_STYLE_3D: Final = "3d"
+DASHBOARD_STYLE_2D: Final = "2d"
 
 DEFAULT_GENERATE_WEEKLY: Final = True
 DEFAULT_GENERATE_MONTHLY: Final = True
 DEFAULT_AUTO_GENERATE: Final = True
 DEFAULT_THEME: Final = THEME_DARK
+DEFAULT_DASHBOARD_STYLE: Final = DASHBOARD_STYLE_3D
 
 CONF_SENSOR_SOLAR_POWER: Final = "sensor_solar_power"
 CONF_SENSOR_SOLAR_TO_HOUSE: Final = "sensor_solar_to_house"

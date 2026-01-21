@@ -71,6 +71,7 @@
         "data": {
           "auto_generate": "Auto-generate Reports",
           "theme": "Color Theme",
+          "dashboard_style": "Energy Flow Style",
           "billing_start_month": "Billing Start Month",
           "billing_start_day": "Billing Start Day",
           "billing_price_mode": "Price Mode",
@@ -80,6 +81,7 @@
         "data_description": {
           "auto_generate": "Automatically generate weekly and monthly reports",
           "theme": "Dark or Light theme for charts",
+          "dashboard_style": "3D isometric or classic 2D energy flow diagram",
           "billing_start_month": "Month when your billing year starts",
           "billing_start_day": "Day when your billing year starts",
           "billing_price_mode": "Dynamic (spot price) or Fixed price",
@@ -168,6 +170,7 @@
           "generate_weekly": "Weekly Reports",
           "generate_monthly": "Monthly Reports",
           "theme": "Color Theme",
+          "dashboard_style": "Energy Flow Style",
           "billing_start_month": "Billing Start Month",
           "billing_start_day": "Billing Start Day",
           "billing_price_mode": "Price Mode",
@@ -179,6 +182,7 @@
           "generate_weekly": "Create a weekly report every Sunday",
           "generate_monthly": "Create a monthly report on the 1st of each month",
           "theme": "Dark or Light theme for the charts",
+          "dashboard_style": "3D isometric or classic 2D energy flow diagram",
           "billing_start_month": "Month when your billing year starts",
           "billing_start_day": "Day when your billing year starts",
           "billing_price_mode": "Dynamic (spot price) or Fixed price",
