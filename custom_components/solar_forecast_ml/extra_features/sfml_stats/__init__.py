@@ -42,12 +42,21 @@ from .const import (
     DAILY_AGGREGATION_HOUR,
     DAILY_AGGREGATION_MINUTE,
     DAILY_AGGREGATION_SECOND,
+    FORECAST_MORNING_HOUR,
+    FORECAST_MORNING_MINUTE,
+    FORECAST_EVENING_HOUR,
+    FORECAST_EVENING_MINUTE,
+    FORECAST_CHART_HOUR,
+    FORECAST_CHART_MINUTE,
+    CONF_FORECAST_ENTITY_1,
+    CONF_FORECAST_ENTITY_2,
 )
 from .storage import DataValidator
 from .api import async_setup_views, async_setup_websocket
 from .services.daily_aggregator import DailyEnergyAggregator
 from .services.billing_calculator import BillingCalculator
 from .services.monthly_tariff_manager import MonthlyTariffManager
+from .services.forecast_comparison_collector import ForecastComparisonCollector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -154,6 +163,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error("Failed to initialize weather collector: %s", err)
             # Weather collector is optional
 
+    # Initialize Forecast Comparison Collector
+    forecast_comparison_collector = ForecastComparisonCollector(hass, config_path)
+    _LOGGER.info("Forecast comparison collector initialized")
+
     hass.data[DOMAIN][entry.entry_id] = {
         "validator": validator,
         "config": entry_config,
@@ -162,6 +175,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "monthly_tariff_manager": monthly_tariff_manager,
         "power_sources_collector": power_sources_collector,
         "weather_collector": weather_collector,
+        "forecast_comparison_collector": forecast_comparison_collector,
     }
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -189,6 +203,86 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DAILY_AGGREGATION_MINUTE,
     )
 
+    # Schedule forecast comparison morning job (08:00 - collect forecasts)
+    async def _forecast_morning_job(now: datetime) -> None:
+        """Run morning forecast collection job. @zara"""
+        _LOGGER.info("Starting scheduled morning forecast collection")
+        try:
+            await forecast_comparison_collector.async_collect_morning_forecasts()
+        except Exception as err:
+            _LOGGER.error("Morning forecast collection failed: %s", err)
+
+    cancel_forecast_morning_job = async_track_time_change(
+        hass,
+        _forecast_morning_job,
+        hour=FORECAST_MORNING_HOUR,
+        minute=FORECAST_MORNING_MINUTE,
+        second=0,
+    )
+    hass.data[DOMAIN][entry.entry_id]["cancel_forecast_morning_job"] = cancel_forecast_morning_job
+
+    _LOGGER.info(
+        "Morning forecast collection scheduled for %02d:%02d",
+        FORECAST_MORNING_HOUR,
+        FORECAST_MORNING_MINUTE,
+    )
+
+    # Schedule forecast comparison evening job (23:50 - collect actual production)
+    async def _forecast_evening_job(now: datetime) -> None:
+        """Run evening actual production collection job. @zara"""
+        _LOGGER.info("Starting scheduled evening actual collection")
+        try:
+            await forecast_comparison_collector.async_collect_evening_actual()
+        except Exception as err:
+            _LOGGER.error("Evening actual collection failed: %s", err)
+
+    cancel_forecast_evening_job = async_track_time_change(
+        hass,
+        _forecast_evening_job,
+        hour=FORECAST_EVENING_HOUR,
+        minute=FORECAST_EVENING_MINUTE,
+        second=0,
+    )
+    hass.data[DOMAIN][entry.entry_id]["cancel_forecast_evening_job"] = cancel_forecast_evening_job
+
+    _LOGGER.info(
+        "Evening actual collection scheduled for %02d:%02d",
+        FORECAST_EVENING_HOUR,
+        FORECAST_EVENING_MINUTE,
+    )
+
+    # Schedule forecast comparison chart generation job
+    async def _forecast_chart_job(now: datetime) -> None:
+        """Generate forecast comparison chart. @zara"""
+        # Only generate if external forecasts are configured
+        if not entry_config.get(CONF_FORECAST_ENTITY_1) and not entry_config.get(CONF_FORECAST_ENTITY_2):
+            _LOGGER.debug("No external forecast entities configured, skipping chart generation")
+            return
+
+        _LOGGER.info("Starting scheduled forecast comparison chart generation")
+        try:
+            from .charts import ForecastComparisonChart
+            chart = ForecastComparisonChart(validator)
+            await chart.save()
+            _LOGGER.info("Forecast comparison chart generated successfully")
+        except Exception as err:
+            _LOGGER.error("Forecast comparison chart generation failed: %s", err)
+
+    cancel_chart_job = async_track_time_change(
+        hass,
+        _forecast_chart_job,
+        hour=FORECAST_CHART_HOUR,
+        minute=FORECAST_CHART_MINUTE,
+        second=0,
+    )
+    hass.data[DOMAIN][entry.entry_id]["cancel_forecast_chart_job"] = cancel_chart_job
+
+    _LOGGER.info(
+        "Forecast comparison chart generation scheduled for %02d:%02d",
+        FORECAST_CHART_HOUR,
+        FORECAST_CHART_MINUTE,
+    )
+
     smartmeter_import_kwh = entry.data.get(CONF_SENSOR_SMARTMETER_IMPORT_KWH)
 
     if smartmeter_import_kwh:
@@ -213,6 +307,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         f"{DOMAIN}_initial_aggregation",
     )
 
+    # Run initial forecast comparison collection if no data exists
+    async def _initial_forecast_collection() -> None:
+        """Run initial forecast comparison collection if needed. @zara"""
+        import asyncio
+
+        try:
+            from .readers.forecast_comparison_reader import ForecastComparisonReader
+            reader = ForecastComparisonReader(config_path)
+
+            # Check if data file exists or has less than 7 days
+            needs_historical = False
+
+            if not reader.is_available:
+                needs_historical = True
+                _LOGGER.info("No forecast comparison data found")
+            else:
+                # Check how many days we have
+                comparison_days = await reader.async_get_comparison_days(days=7)
+                days_with_data = sum(1 for d in comparison_days if d.has_data)
+                if days_with_data < 7:
+                    needs_historical = True
+                    _LOGGER.info(
+                        "Only %d days of forecast data found, will load historical data",
+                        days_with_data
+                    )
+
+            if needs_historical:
+                # Wait 60 seconds for all sensors to initialize after HA restart
+                _LOGGER.info("Waiting 60s for sensors to initialize before collecting historical data")
+                await asyncio.sleep(60)
+                _LOGGER.info("Running historical forecast comparison collection")
+                await forecast_comparison_collector.async_collect_historical(days=7)
+            else:
+                _LOGGER.debug("Forecast comparison data complete, skipping initial collection")
+        except Exception as err:
+            _LOGGER.error("Initial forecast comparison collection failed: %s", err)
+
+    hass.async_create_background_task(
+        _initial_forecast_collection(),
+        f"{DOMAIN}_initial_forecast_collection",
+    )
+
     _LOGGER.info(
         "%s successfully set up. Export path: %s",
         NAME,
@@ -232,13 +368,34 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry_data = hass.data[DOMAIN][entry.entry_id]
 
-    # Cancel scheduled job
+    # Cancel scheduled jobs
     if "cancel_daily_job" in entry_data:
         try:
             entry_data["cancel_daily_job"]()
             _LOGGER.debug("Daily aggregation job cancelled")
         except Exception as err:
             _LOGGER.warning("Error cancelling daily job: %s", err)
+
+    if "cancel_forecast_morning_job" in entry_data:
+        try:
+            entry_data["cancel_forecast_morning_job"]()
+            _LOGGER.debug("Morning forecast collection job cancelled")
+        except Exception as err:
+            _LOGGER.warning("Error cancelling morning forecast job: %s", err)
+
+    if "cancel_forecast_evening_job" in entry_data:
+        try:
+            entry_data["cancel_forecast_evening_job"]()
+            _LOGGER.debug("Evening actual collection job cancelled")
+        except Exception as err:
+            _LOGGER.warning("Error cancelling evening forecast job: %s", err)
+
+    if "cancel_forecast_chart_job" in entry_data:
+        try:
+            entry_data["cancel_forecast_chart_job"]()
+            _LOGGER.debug("Forecast comparison chart job cancelled")
+        except Exception as err:
+            _LOGGER.warning("Error cancelling forecast chart job: %s", err)
 
     # Stop power sources collector
     if "power_sources_collector" in entry_data and entry_data["power_sources_collector"]:
@@ -321,5 +478,8 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
             _LOGGER.debug("MonthlyTariffManager config updated")
         except Exception as err:
             _LOGGER.warning("Error updating MonthlyTariffManager config: %s", err)
+
+    # ForecastComparisonCollector doesn't need config update
+    # It reads config fresh from hass.data on each collection
 
     _LOGGER.info("Configuration refresh complete")

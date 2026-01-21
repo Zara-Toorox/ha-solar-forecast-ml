@@ -1,4 +1,4 @@
-"""File operations utilities for SFML Stats Lite. @zara
+"""File operations utilities for SFML Stats Lite.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -35,16 +35,7 @@ async def read_json_safe(
     retries: int = FILE_RETRY_COUNT,
     delay: float = FILE_RETRY_DELAY_SECONDS,
 ) -> dict[str, Any] | None:
-    """Read JSON file with retry logic. @zara
-
-    Args:
-        path: Path to the JSON file.
-        retries: Number of retry attempts.
-        delay: Base delay between retries (multiplied by attempt number).
-
-    Returns:
-        Parsed JSON data or None if file doesn't exist or parsing fails.
-    """
+    """Read JSON file with retry logic."""
     for attempt in range(retries):
         try:
             if not path.exists():
@@ -83,20 +74,7 @@ async def write_json_safe(
     retries: int = FILE_RETRY_COUNT,
     indent: int = 2,
 ) -> bool:
-    """Write JSON file atomically with retry. @zara
-
-    Uses atomic rename pattern: write to temp file, then rename.
-    This prevents partial writes from corrupting existing data.
-
-    Args:
-        path: Path to the JSON file.
-        data: Data to write.
-        retries: Number of retry attempts.
-        indent: JSON indentation level.
-
-    Returns:
-        True if write was successful, False otherwise.
-    """
+    """Write JSON file atomically with retry."""
     temp_path = path.with_suffix(".tmp")
 
     for attempt in range(retries):
@@ -135,16 +113,7 @@ async def append_to_file_safe(
     content: str,
     retries: int = FILE_RETRY_COUNT,
 ) -> bool:
-    """Append content to file with retry logic. @zara
-
-    Args:
-        path: Path to the file.
-        content: Content to append.
-        retries: Number of retry attempts.
-
-    Returns:
-        True if append was successful, False otherwise.
-    """
+    """Append content to file with retry logic."""
     for attempt in range(retries):
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,14 +138,7 @@ async def append_to_file_safe(
 
 
 def ensure_directory(path: Path) -> bool:
-    """Ensure a directory exists. @zara
-
-    Args:
-        path: Path to the directory.
-
-    Returns:
-        True if directory exists or was created, False on error.
-    """
+    """Ensure a directory exists."""
     try:
         path.mkdir(parents=True, exist_ok=True)
         return True

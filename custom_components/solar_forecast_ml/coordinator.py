@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -260,6 +260,21 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
             except Exception as e:
                 _LOGGER.warning(f"Could not connect PhysicsCalibrator: {e}")
 
+        # V12.8.8: Connect WeatherActualTracker to the RuleBasedStrategy for SNOWY bucket detection
+        # The tracker is on the coordinator's weather_pipeline_manager, not on data_manager
+        if self.weather_pipeline_manager:
+            try:
+                strategy = self.forecast_orchestrator.rule_based_strategy
+                weather_actual_tracker = getattr(self.weather_pipeline_manager, 'weather_actual_tracker', None)
+                if strategy and weather_actual_tracker:
+                    strategy.set_weather_actual_tracker(weather_actual_tracker)
+                    _LOGGER.info(
+                        "WeatherActualTracker passed to RuleBasedStrategy - "
+                        "SNOWY bucket detection in forecasts enabled"
+                    )
+            except Exception as e:
+                _LOGGER.warning(f"Could not connect WeatherActualTracker: {e}")
+
     async def async_setup(self) -> bool:
         """Setup coordinator and start tracking @zara"""
         try:
@@ -329,12 +344,24 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     _LOGGER.error("Failed to setup Weather Data Pipeline Manager")
                     return False
 
-                pipeline_start_ok = await self.weather_pipeline_manager.start_pipeline()
-                if not pipeline_start_ok:
-                    _LOGGER.error("Failed to start Weather Data Pipeline")
-                    return False
-
                 self.weather_service = self.weather_pipeline_manager.weather_service
+
+                # CRITICAL FIX V12.8.7: Start pipeline in background to not block HA startup
+                # This can take 10+ seconds if weather APIs are slow
+                async def _start_pipeline_background():
+                    try:
+                        pipeline_start_ok = await self.weather_pipeline_manager.start_pipeline()
+                        if not pipeline_start_ok:
+                            _LOGGER.warning("Weather Data Pipeline failed to start - will retry on next update")
+                        else:
+                            _LOGGER.info("Weather Data Pipeline started successfully")
+                    except Exception as e:
+                        _LOGGER.warning(f"Weather Data Pipeline start failed: {e} - will retry on next update")
+
+                self.hass.async_create_task(
+                    _start_pipeline_background(),
+                    name="solar_forecast_ml_pipeline_start"
+                )
 
             except Exception as e:
                 _LOGGER.error(f"Failed to initialize Weather Data Pipeline Manager: {e}")
@@ -342,19 +369,11 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
             await self._load_persistent_state()
 
-            # Initialize panel group sensor reader if any group has an energy sensor
-            # NOTE: Runs in background to not block HA startup
-            self.hass.async_create_task(
-                self._initialize_panel_group_sensor_reader(),
-                "solar_forecast_ml_panel_group_sensor_init"
-            )
-
-            # Start production tracking in background - may wait for sensors to initialize
-            # NOTE: Runs in background to not block HA startup (can wait up to 90s for sensors)
-            self.hass.async_create_task(
-                self._start_production_tracking_safe(),
-                "solar_forecast_ml_production_tracking"
-            )
+            # Initialize panel group sensor reader and production tracking
+            # CRITICAL FIX V12.8.7: Wait for EVENT_HOMEASSISTANT_STARTED before
+            # validating sensors - this ensures SQL sensors, Utility Meters, etc.
+            # are fully loaded before we try to access them
+            await self._schedule_delayed_sensor_init()
 
             await self._setup_power_peak_tracking()
 
@@ -424,11 +443,59 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         except Exception as e:
             _LOGGER.error(f"Error during coordinator shutdown: {e}")
 
+    async def _schedule_delayed_sensor_init(self) -> None:
+        """Schedule sensor initialization after Home Assistant is fully started. @zara
+
+        CRITICAL FIX V12.8.7: Sensors from other integrations (SQL, Utility Meter, etc.)
+        may not be available during our setup phase. By waiting for EVENT_HOMEASSISTANT_STARTED,
+        we ensure all other integrations have completed their setup first.
+
+        This prevents race conditions that caused:
+        - "Entity sensor.xxx not found" errors
+        - "Setup taking over 10 seconds" warnings
+        - Blocking HA startup for 90+ seconds
+        """
+        async def _delayed_init(event=None):
+            """Run sensor initialization after HA is fully started."""
+            _LOGGER.info(
+                "[SENSOR_INIT] Home Assistant fully started - beginning sensor initialization"
+            )
+
+            # Small delay to ensure all state machines are settled
+            await asyncio.sleep(2)
+
+            # Initialize panel group sensor reader
+            await self._initialize_panel_group_sensor_reader()
+
+            # Start production tracking
+            await self._start_production_tracking_safe()
+
+            _LOGGER.info("[SENSOR_INIT] Delayed sensor initialization completed")
+
+        if self.hass.is_running:
+            # HA is already running (e.g., integration reload)
+            _LOGGER.info(
+                "[SENSOR_INIT] HA already running - starting sensor initialization immediately"
+            )
+            self.hass.async_create_task(
+                _delayed_init(),
+                name="solar_forecast_ml_delayed_sensor_init"
+            )
+        else:
+            # HA is still starting - wait for EVENT_HOMEASSISTANT_STARTED
+            _LOGGER.info(
+                "[SENSOR_INIT] HA still starting - scheduling sensor initialization for after startup"
+            )
+            self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _delayed_init)
+
     async def _initialize_panel_group_sensor_reader(self) -> None:
         """Initialize the panel group sensor reader if any group has an energy sensor. @zara
 
         CRITICAL FIX V12.4.1: Sensor validation now runs in background task
         to prevent blocking Home Assistant startup (was causing 15+ minute delays).
+
+        CRITICAL FIX V12.8.7: Now called after EVENT_HOMEASSISTANT_STARTED to ensure
+        all sensors from other integrations are available.
         """
         try:
             if not self.panel_groups:
@@ -480,25 +547,29 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         """Validate panel group sensors with retry for startup race condition. @zara
 
         CRITICAL FIX V12.4.1: This now runs as a background task to prevent
-        blocking Home Assistant startup. Reduced retry delay from 30s to 15s.
-        """
-        import asyncio
+        blocking Home Assistant startup.
 
+        CRITICAL FIX V12.8.7: Now called after EVENT_HOMEASSISTANT_STARTED.
+        Using exponential backoff (5s -> 10s -> 20s) for faster recovery.
+        """
         # Guard: Ensure sensor reader was initialized
         if not self.panel_group_sensor_reader:
             _LOGGER.debug("Panel group sensor reader not initialized - skipping validation")
             return
 
-        max_retries = 3
-        retry_delay_seconds = 15  # Reduced from 30s to 15s
+        max_retries = 4
+        base_delay = 5  # Start with 5 seconds
 
         for attempt in range(1, max_retries + 1):
+            # Exponential backoff: 5s, 10s, 20s, 40s
+            retry_delay = base_delay * (2 ** (attempt - 1))
+
             try:
                 validation_results = await self.panel_group_sensor_reader.validate_sensors()
             except Exception as e:
                 _LOGGER.warning(f"Sensor validation attempt {attempt} failed: {e}")
                 if attempt < max_retries:
-                    await asyncio.sleep(retry_delay_seconds)
+                    await asyncio.sleep(retry_delay)
                 continue
 
             valid_count = sum(1 for r in validation_results.values() if r.get("valid"))
@@ -519,13 +590,13 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
 
             if attempt < max_retries:
                 _LOGGER.debug(
-                    f"Panel group sensor validation: {valid_count}/{total_count} valid (attempt {attempt}/{max_retries}). "
-                    f"Retrying in {retry_delay_seconds}s... (Utility Meters load later)"
+                    f"Panel group sensor validation: {valid_count}/{total_count} valid "
+                    f"(attempt {attempt}/{max_retries}). Retrying in {retry_delay}s..."
                 )
                 for name, error in invalid_sensors:
                     _LOGGER.debug(f"  - {name}: {error}")
 
-                await asyncio.sleep(retry_delay_seconds)
+                await asyncio.sleep(retry_delay)
             else:
                 # Final attempt failed
                 _LOGGER.warning(

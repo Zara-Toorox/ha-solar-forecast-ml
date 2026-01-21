@@ -194,7 +194,8 @@
         },
         "menu_options": {
           "panels": "PV Panels",
-          "panel_group_names": "Panel Group Names"
+          "panel_group_names": "Panel Group Names",
+          "forecast_comparison": "Forecast Comparison"
         }
       },
       "panels": {
@@ -216,6 +217,22 @@
         "description": "Format: OriginalName=NewName (comma separated)\n\nExample: {example}",
         "data": {
           "panel_group_names_input": "Name Mapping"
+        }
+      },
+      "forecast_comparison": {
+        "title": "Forecast Comparison",
+        "description": "Configure up to 2 external forecast entities for the 7-day comparison chart.\n\nEntities should provide daily forecast values in kWh (e.g., Solcast, Forecast.Solar).",
+        "data": {
+          "forecast_entity_1": "External Forecast 1 (Entity ID)",
+          "forecast_entity_1_name": "Name for Forecast 1",
+          "forecast_entity_2": "External Forecast 2 (Entity ID)",
+          "forecast_entity_2_name": "Name for Forecast 2"
+        },
+        "data_description": {
+          "forecast_entity_1": "e.g. sensor.solcast_forecast_today",
+          "forecast_entity_1_name": "Display name in chart (e.g. Solcast)",
+          "forecast_entity_2": "e.g. sensor.forecast_solar_energy_today",
+          "forecast_entity_2_name": "Display name in chart (e.g. Forecast.Solar)"
         }
       }
     }

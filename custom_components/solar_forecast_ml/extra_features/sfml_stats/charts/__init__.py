@@ -13,10 +13,12 @@ from __future__ import annotations
 from .styles import ChartStyles, apply_dark_theme
 from .base import BaseChart
 from .weekly_report import WeeklyReportChart
+from .forecast_comparison import ForecastComparisonChart
 
 __all__ = [
     "ChartStyles",
     "apply_dark_theme",
     "BaseChart",
     "WeeklyReportChart",
+    "ForecastComparisonChart",
 ]

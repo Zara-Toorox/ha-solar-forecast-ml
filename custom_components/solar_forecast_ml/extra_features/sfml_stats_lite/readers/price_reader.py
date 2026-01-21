@@ -1,4 +1,4 @@
-"""Price data reader for SFML Stats. @zara
+"""Price data reader for SFML Stats.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -37,7 +37,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class HourlyPrice:
-    """Hourly electricity price. @zara"""
+    """Hourly electricity price."""
 
     timestamp: datetime
     hour: int
@@ -45,13 +45,13 @@ class HourlyPrice:
 
     @property
     def date(self) -> date:
-        """Return the date. @zara"""
+        """Return the date."""
         return self.timestamp.date()
 
 
 @dataclass
 class DailyPriceStats:
-    """Daily price statistics. @zara"""
+    """Daily price statistics."""
 
     date: date
     average_net: float
@@ -61,13 +61,13 @@ class DailyPriceStats:
 
     @property
     def price_spread(self) -> float:
-        """Price spread between min and max. @zara"""
+        """Price spread between min and max."""
         return self.max_price - self.min_price
 
 
 @dataclass
 class PriceExtremes:
-    """Price extremes. @zara"""
+    """Price extremes."""
 
     all_time_low: float
     all_time_high: float
@@ -77,7 +77,7 @@ class PriceExtremes:
 
 @dataclass
 class BatteryStats:
-    """Battery charging statistics. @zara"""
+    """Battery charging statistics."""
 
     today_kwh: float
     week_kwh: float
@@ -85,20 +85,20 @@ class BatteryStats:
 
 
 class PriceDataReader:
-    """Reads and parses data from Grid Price Monitor. @zara"""
+    """Reads and parses data from Grid Price Monitor."""
 
     def __init__(self, config_path: Path) -> None:
-        """Initialize the price data reader. @zara"""
+        """Initialize the price data reader."""
         self._config_path = config_path
         self._data_path = config_path / GRID_PRICE_MONITOR_DATA
 
     @property
     def is_available(self) -> bool:
-        """Check if Grid Price Monitor data is available. @zara"""
+        """Check if Grid Price Monitor data is available."""
         return self._data_path.exists()
 
     async def _read_json_file(self, file_path: Path) -> dict | None:
-        """Read a JSON file asynchronously. @zara"""
+        """Read a JSON file asynchronously."""
         if not file_path.exists():
             _LOGGER.debug("File not found: %s", file_path)
             return None
@@ -119,7 +119,7 @@ class PriceDataReader:
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> list[HourlyPrice]:
-        """Read the hourly prices. @zara"""
+        """Read the hourly prices."""
         file_path = self._data_path / GRID_PRICE_HISTORY
         data = await self._read_json_file(file_path)
 
@@ -156,7 +156,7 @@ class PriceDataReader:
         return prices
 
     async def async_get_daily_stats(self) -> list[DailyPriceStats]:
-        """Read the daily price statistics. @zara"""
+        """Read the daily price statistics."""
         file_path = self._data_path / GRID_STATISTICS
         data = await self._read_json_file(file_path)
 
@@ -183,7 +183,7 @@ class PriceDataReader:
         return stats
 
     async def async_get_price_extremes(self) -> PriceExtremes | None:
-        """Read the price extremes. @zara"""
+        """Read the price extremes."""
         file_path = self._data_path / GRID_STATISTICS
         data = await self._read_json_file(file_path)
 
@@ -211,7 +211,7 @@ class PriceDataReader:
             return None
 
     async def async_get_battery_stats(self) -> BatteryStats | None:
-        """Read the battery statistics. @zara"""
+        """Read the battery statistics."""
         file_path = self._data_path / GRID_STATISTICS
         data = await self._read_json_file(file_path)
 
@@ -230,7 +230,7 @@ class PriceDataReader:
             return None
 
     async def async_get_prices_for_date(self, target_date: date) -> list[HourlyPrice]:
-        """Get all prices for a specific date. @zara"""
+        """Get all prices for a specific date."""
         all_prices = await self.async_get_hourly_prices(
             start_date=target_date,
             end_date=target_date,
@@ -238,7 +238,7 @@ class PriceDataReader:
         return [p for p in all_prices if p.date == target_date]
 
     async def async_get_weekly_stats(self, year: int, week: int) -> dict[str, Any]:
-        """Calculate statistics for a specific calendar week. @zara"""
+        """Calculate statistics for a specific calendar week."""
         all_prices = await self.async_get_hourly_prices()
 
         week_prices = [
@@ -281,7 +281,7 @@ class PriceDataReader:
         }
 
     async def async_get_monthly_stats(self, year: int, month: int) -> dict[str, Any]:
-        """Calculate statistics for a specific month. @zara"""
+        """Calculate statistics for a specific month."""
         all_prices = await self.async_get_hourly_prices()
 
         month_prices = [
@@ -339,7 +339,7 @@ class PriceDataReader:
         target_date: date,
         hour: int,
     ) -> float | None:
-        """Get the price for a specific hour. @zara"""
+        """Get the price for a specific hour."""
         prices = await self.async_get_prices_for_date(target_date)
         for price in prices:
             if price.hour == hour:

@@ -1,4 +1,4 @@
-"""Services for SFML Stats integration. @zara
+"""Services for SFML Stats integration.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,5 +17,6 @@ Copyright (C) 2025 Zara-Toorox
 """
 from .daily_aggregator import DailyEnergyAggregator
 from .billing_calculator import BillingCalculator
+from .forecast_comparison_collector import ForecastComparisonCollector
 
-__all__ = ["DailyEnergyAggregator", "BillingCalculator"]
+__all__ = ["DailyEnergyAggregator", "BillingCalculator", "ForecastComparisonCollector"]

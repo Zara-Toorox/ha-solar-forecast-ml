@@ -86,6 +86,12 @@ from .const import (
     DEFAULT_BILLING_FIXED_PRICE,
     DEFAULT_FEED_IN_TARIFF,
     CONF_PANEL_GROUP_NAMES,
+    CONF_FORECAST_ENTITY_1,
+    CONF_FORECAST_ENTITY_2,
+    CONF_FORECAST_ENTITY_1_NAME,
+    CONF_FORECAST_ENTITY_2_NAME,
+    DEFAULT_FORECAST_ENTITY_1_NAME,
+    DEFAULT_FORECAST_ENTITY_2_NAME,
 )
 from .sensor_helpers import check_and_suggest_helpers
 
@@ -569,6 +575,8 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_panels()
             elif next_step == "panel_group_names":
                 return await self.async_step_panel_group_names()
+            elif next_step == "forecast_comparison":
+                return await self.async_step_forecast_comparison()
 
         return self.async_show_form(
             step_id="advanced",
@@ -576,6 +584,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                 vol.Required("menu_choice", default="panels"): vol.In({
                     "panels": "PV-Panels",
                     "panel_group_names": "Panel-Gruppen Namen",
+                    "forecast_comparison": "Prognose-Vergleich",
                 }),
             }),
         )
@@ -666,4 +675,53 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "example": "Gruppe 1=String Süd, Gruppe 2=String West"
             },
+        )
+
+    async def async_step_forecast_comparison(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage forecast comparison entities for 7-day chart. @zara"""
+        forecast_keys = [
+            CONF_FORECAST_ENTITY_1,
+            CONF_FORECAST_ENTITY_1_NAME,
+            CONF_FORECAST_ENTITY_2,
+            CONF_FORECAST_ENTITY_2_NAME,
+        ]
+
+        if user_input is not None:
+            new_data = {**self._config_entry.data}
+            for key in forecast_keys:
+                value = user_input.get(key)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    new_data.pop(key, None)
+                else:
+                    new_data[key] = value
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            return self.async_create_entry(title="", data={})
+
+        current = self._config_entry.data
+
+        return self.async_show_form(
+            step_id="forecast_comparison",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_FORECAST_ENTITY_1,
+                    default=current.get(CONF_FORECAST_ENTITY_1, ""),
+                ): get_entity_selector_optional(),
+                vol.Optional(
+                    CONF_FORECAST_ENTITY_1_NAME,
+                    default=current.get(CONF_FORECAST_ENTITY_1_NAME, DEFAULT_FORECAST_ENTITY_1_NAME),
+                ): str,
+                vol.Optional(
+                    CONF_FORECAST_ENTITY_2,
+                    default=current.get(CONF_FORECAST_ENTITY_2, ""),
+                ): get_entity_selector_optional(),
+                vol.Optional(
+                    CONF_FORECAST_ENTITY_2_NAME,
+                    default=current.get(CONF_FORECAST_ENTITY_2_NAME, DEFAULT_FORECAST_ENTITY_2_NAME),
+                ): str,
+            }),
         )

@@ -34,23 +34,23 @@
         }
       },
       "panel_groups": {
-        "title": "Panel-Gruppen konfigurieren (optional)",
-        "description": "⚠️ NUR AUSFÜLLEN wenn Du Panels/Strings in verschiedenen Ausrichtungen oder Winkeln hast!\nAnsonsten leer lassen.\n\n⚠️ SYSTEMANFORDERUNGEN:\n• Natives x64 Home Assistant: Empfohlen (unbegrenzte Gruppen)\n• Proxmox VM: Max. 2 Gruppen empfohlen\n• SD-Karten-Systeme (RPi): NICHT empfohlen (hohe I/O-Last)\n\nFormat pro Gruppe: Leistung(Wp)/Azimut(°)/Neigung(°)/[Energy-Sensor]\nGruppen können kommagetrennt oder untereinander eingegeben werden.\n\nBeispiel:\n1425/180/9/sensor.pv1_kwh_tag, 870/180/47/sensor.pv2_kwh_tag\n\nAzimut: 0°=Nord, 90°=Ost, 180°=Süd, 270°=West\nNeigung: 0°=horizontal, 90°=vertikal\n\nEnergy-Sensor (optional): Täglicher kWh-Sensor der um Mitternacht zurückgesetzt wird.",
+        "title": "Panel-Gruppen konfigurieren (Pflicht)",
+        "description": "⚠️ PFLICHTFELD: Mindestens 1 Panel-Gruppe erforderlich (max. 4)\n\nFormat: Leistung(Wp)/Azimut(°)/Neigung(°)/Tages-kWh-Sensor\n\nBeispiel Süd-Anlage:\n5000/180/30/sensor.pv_energy_today\n\nBeispiel Ost-West:\n2500/90/15/sensor.pv_ost_today, 2500/270/15/sensor.pv_west_today\n\nAzimut: 0°=Nord, 90°=Ost, 180°=Süd, 270°=West\nNeigung: 0°=horizontal, 90°=vertikal\n\nTages-kWh-Sensor: Pflicht für korrektes Gruppen-Learning (muss um Mitternacht zurückgesetzt werden)",
         "data": {
           "panel_groups_input": "Panel-Gruppen"
         },
         "data_description": {
-          "panel_groups_input": "Format: Leistung/Azimut/Neigung/[Tages-kWh-Sensor] - kommagetrennt oder untereinander"
+          "panel_groups_input": "Format: Leistung/Azimut/Neigung/Tages-kWh-Sensor - kommagetrennt oder untereinander"
         }
       },
       "reconfigure_panel_groups": {
-        "title": "Panel-Gruppen neu konfigurieren",
-        "description": "⚠️ NUR AUSFÜLLEN wenn Du Panels/Strings in verschiedenen Ausrichtungen oder Winkeln hast!\nAnsonsten leer lassen.\n\n⚠️ SYSTEMANFORDERUNGEN:\n• Natives x64 Home Assistant: Empfohlen (unbegrenzte Gruppen)\n• Proxmox VM: Max. 2 Gruppen empfohlen\n• SD-Karten-Systeme (RPi): NICHT empfohlen (hohe I/O-Last)\n\nFormat: Leistung(Wp)/Azimut(°)/Neigung(°)/[Energy-Sensor]\nKommagetrennt oder untereinander.\n\nEnergy-Sensor: Täglicher kWh-Sensor (Reset um Mitternacht)\n\nLeer lassen für einfache Kapazitätsberechnung.",
+        "title": "Panel-Gruppen neu konfigurieren (Pflicht)",
+        "description": "⚠️ PFLICHTFELD: Mindestens 1 Panel-Gruppe erforderlich (max. 4)\n\nFormat: Leistung(Wp)/Azimut(°)/Neigung(°)/Tages-kWh-Sensor\n\nBeispiel: 5000/180/30/sensor.pv_energy_today\nOder: 2500/90/15/sensor.pv_ost, 2500/270/15/sensor.pv_west\n\nTages-kWh-Sensor: Pflicht für korrektes Gruppen-Learning",
         "data": {
           "panel_groups_input": "Panel-Gruppen"
         },
         "data_description": {
-          "panel_groups_input": "Format: Leistung/Azimut/Neigung/[Tages-kWh-Sensor] - kommagetrennt oder untereinander"
+          "panel_groups_input": "Format: Leistung/Azimut/Neigung/Tages-kWh-Sensor - kommagetrennt oder untereinander"
         }
       },
       "reconfigure": {
@@ -96,7 +96,9 @@
       "already_configured": "Wetter-Entität bereits in Verwendung",
       "sensor_not_found": "Sensor-Entität nicht gefunden",
       "invalid_sensor_state": "Sensor-Status ungültig oder nicht verfügbar",
-      "invalid_panel_format": "Ungültiges Format. Bitte verwenden Sie: Leistung/Azimut/Neigung (z.B. 1200/180/30)"
+      "invalid_panel_format": "Ungültiges Format. Bitte verwenden Sie: Leistung/Azimut/Neigung (z.B. 1200/180/30)",
+      "panel_groups_required": "Mindestens 1 Panel-Gruppe erforderlich. Format: Leistung/Azimut/Neigung/Sensor (z.B. 5000/180/30/sensor.pv_today)",
+      "too_many_panel_groups": "Maximal 4 Panel-Gruppen erlaubt"
     },
     "abort": {
       "already_configured": "Integration bereits konfiguriert",

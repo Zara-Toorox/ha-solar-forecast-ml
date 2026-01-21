@@ -194,7 +194,8 @@
         },
         "menu_options": {
           "panels": "PV-Panels",
-          "panel_group_names": "Panel-Gruppen Namen"
+          "panel_group_names": "Panel-Gruppen Namen",
+          "forecast_comparison": "Prognose-Vergleich"
         }
       },
       "panels": {
@@ -216,6 +217,22 @@
         "description": "Format: OriginalName=NeuerName (kommagetrennt)\n\nBeispiel: {example}",
         "data": {
           "panel_group_names_input": "Namens-Mapping"
+        }
+      },
+      "forecast_comparison": {
+        "title": "Prognose-Vergleich",
+        "description": "Konfiguriere bis zu 2 externe Prognose-Entitäten für den 7-Tage-Vergleichsgraph.\n\nDie Entitäten sollten den täglichen Prognose-Wert in kWh liefern (z.B. Solcast, Forecast.Solar).",
+        "data": {
+          "forecast_entity_1": "Externe Prognose 1 (Entity ID)",
+          "forecast_entity_1_name": "Name für Prognose 1",
+          "forecast_entity_2": "Externe Prognose 2 (Entity ID)",
+          "forecast_entity_2_name": "Name für Prognose 2"
+        },
+        "data_description": {
+          "forecast_entity_1": "z.B. sensor.solcast_forecast_today",
+          "forecast_entity_1_name": "Anzeigename im Chart (z.B. Solcast)",
+          "forecast_entity_2": "z.B. sensor.forecast_solar_energy_today",
+          "forecast_entity_2_name": "Anzeigename im Chart (z.B. Forecast.Solar)"
         }
       }
     }

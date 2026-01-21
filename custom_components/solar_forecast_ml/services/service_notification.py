@@ -557,32 +557,36 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
         precipitation_mm: float,
         hour: int,
     ) -> bool:
-        """Show warning when snow coverage on panels is detected @zara"""
+        """Show warning when snow coverage on panels is possible @zara
+
+        V12.9.1: Changed to tentative wording - snow detection is not 100% certain
+        """
         if not self._should_notify(CONF_NOTIFY_SNOW_COVERED):
             return False
 
         try:
-            estimated_depth = precipitation_mm * 10  # Rough estimate: 1mm rain = 10mm snow
+            # V12.9.1: Adjusted factor from 10x to 8x
+            estimated_depth = precipitation_mm * 8  # Conservative estimate
 
-            message = f"""**Schneebedeckung auf Solarpanelen erkannt!** ❄️
+            # V12.9.1: Use tentative wording - "möglich" instead of "erkannt"
+            message = f"""**Schneebedeckung auf Solarpanelen möglich** ❄️
 
 **Zeit:** {hour:02d}:00 Uhr
 **Temperatur:** {temperature_c:.1f}°C
 **Niederschlag:** {precipitation_mm:.1f} mm
-**Geschätzte Schneehöhe:** ~{estimated_depth:.0f} mm
+**Mögliche Schneehöhe:** ~{estimated_depth:.0f} mm (Schätzung)
 
-**Auswirkungen:**
-• Die Solarproduktion ist stark reduziert oder auf 0
-• Diese Stunde wird vom ML-Training ausgeschlossen
-• Die Prognose-Genauigkeit kann beeinträchtigt sein
+**Mögliche Auswirkungen:**
+• Die Solarproduktion könnte reduziert sein
+• Diese Stunde wird vorsichtshalber vom ML-Training ausgeschlossen
 
-**Hinweis:** Der Schnee schmilzt, sobald die Temperatur über 2°C steigt und die Sonne die Panele erwärmt. Sie werden benachrichtigt, wenn der Schnee schmilzt.
+**Hinweis:** Diese Warnung basiert auf Wetterdaten und ist eine Schätzung. Prüfen Sie bei Bedarf die Panele visuell.
 
 *"Even in the coldest winter, the sun still rises."* — Inspired by Star Trek 🖖"""
 
             await self._safe_create_notification(
                 message=message,
-                title="❄️ Schnee auf Solarpanelen",
+                title="❄️ Schnee möglich",
                 notification_id=NOTIFICATION_ID_SNOW_COVERED,
             )
 
@@ -597,22 +601,25 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
         temperature_c: float,
         hour: int,
     ) -> bool:
-        """Show info when snow starts melting from panels @zara"""
+        """Show info when snow may be melting from panels @zara
+
+        V12.9.1: Changed to tentative wording
+        """
         if not self._should_notify(CONF_NOTIFY_SNOW_COVERED):
             return False
 
         try:
-            message = f"""**Schnee schmilzt von den Solarpanelen** ☀️
+            message = f"""**Schnee schmilzt wahrscheinlich** ☀️
 
 **Zeit:** {hour:02d}:00 Uhr
 **Temperatur:** {temperature_c:.1f}°C
 
 **Status:**
-• Die Temperatur ist über 2°C gestiegen
-• Der Schnee beginnt zu schmelzen
-• Die Solarproduktion normalisiert sich
+• Die Temperatur ist gestiegen
+• Der Schnee könnte schmelzen
+• Die Solarproduktion könnte sich normalisieren
 
-**Hinweis:** Es kann einige Stunden dauern, bis die Panele vollständig schneefrei sind und die volle Leistung erreichen.
+**Hinweis:** Es kann einige Stunden dauern, bis die Panele schneefrei sind. Dies ist eine automatische Schätzung.
 
 *"After every storm, comes the calm."* — Inspired by Star Trek 🖖"""
 

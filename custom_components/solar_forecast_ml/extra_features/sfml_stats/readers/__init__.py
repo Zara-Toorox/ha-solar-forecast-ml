@@ -12,5 +12,6 @@ from __future__ import annotations
 
 from .solar_reader import SolarDataReader
 from .price_reader import PriceDataReader
+from .forecast_comparison_reader import ForecastComparisonReader
 
-__all__ = ["SolarDataReader", "PriceDataReader"]
+__all__ = ["SolarDataReader", "PriceDataReader", "ForecastComparisonReader"]

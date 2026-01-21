@@ -1,4 +1,4 @@
-"""REST API views for SFML Stats Dashboard. @zara
+"""REST API views for SFML Stats Dashboard.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -46,7 +46,7 @@ LOCAL_NETWORKS = [
 
 
 def _get_client_ip(request: web.Request) -> str:
-    """Extract real client IP from request. @zara"""
+    """Extract real client IP from request."""
     cf_ip = request.headers.get("CF-Connecting-IP")
     if cf_ip:
         return cf_ip.strip()
@@ -60,7 +60,7 @@ def _get_client_ip(request: web.Request) -> str:
 
 
 def _is_local_ip(ip_str: str) -> bool:
-    """Check if IP is in local network range. @zara"""
+    """Check if IP is in local network range."""
     try:
         ip = ipaddress.ip_address(ip_str)
         return any(ip in network for network in LOCAL_NETWORKS)
@@ -69,7 +69,7 @@ def _is_local_ip(ip_str: str) -> bool:
 
 
 def local_only(func):
-    """Decorator: Block external (non-local) requests. @zara"""
+    """Decorator: Block external (non-local) requests."""
     @functools.wraps(func)
     async def wrapper(self, request: web.Request, *args, **kwargs):
         client_ip = _get_client_ip(request)
@@ -141,7 +141,7 @@ HASS: HomeAssistant | None = None
 
 
 async def async_setup_views(hass: HomeAssistant) -> None:
-    """Register all API views. @zara"""
+    """Register all API views."""
     global SOLAR_PATH, GRID_PATH, HASS
 
     HASS = hass
@@ -157,6 +157,9 @@ async def async_setup_views(hass: HomeAssistant) -> None:
     hass.http.register_view(SummaryDataView())
     hass.http.register_view(RealtimeDataView())
     hass.http.register_view(StaticFilesView())
+    hass.http.register_view(CSSFilesView())
+    hass.http.register_view(JSFilesView())
+    hass.http.register_view(BackgroundImageView())
     hass.http.register_view(EnergyFlowView())
     hass.http.register_view(StatisticsView())
     hass.http.register_view(BillingDataView())
@@ -165,12 +168,13 @@ async def async_setup_views(hass: HomeAssistant) -> None:
     hass.http.register_view(EnergySourcesDailyStatsView())
     hass.http.register_view(HealthCheckView())
     hass.http.register_view(ClothingRecommendationView())
+    hass.http.register_view(ForecastComparisonView())
 
     _LOGGER.info("SFML Stats API views registered")
 
 
 async def _read_json_file(path: Path | None) -> dict | None:
-    """Read a JSON file asynchronously. @zara"""
+    """Read a JSON file asynchronously."""
     if path is None:
         _LOGGER.warning("Path is None - was async_setup_views called?")
         return None
@@ -190,7 +194,7 @@ async def _read_json_file(path: Path | None) -> dict | None:
 
 
 class DashboardView(HomeAssistantView):
-    """Main view serving the Vue.js app. @zara"""
+    """Main view serving the Vue.js app."""
 
     url = "/api/sfml_stats_lite/dashboard"
     name = "api:sfml_stats_lite:dashboard"
@@ -199,7 +203,7 @@ class DashboardView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return the dashboard HTML page. @zara"""
+        """Return the dashboard HTML page."""
         frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
 
         if not frontend_path.exists():
@@ -222,7 +226,7 @@ class DashboardView(HomeAssistantView):
         )
 
     def _get_fallback_html(self) -> str:
-        """Return fallback HTML when build is not present. @zara"""
+        """Return fallback HTML when build is not present."""
         return """<!DOCTYPE html>
 <html>
 <head>
@@ -253,7 +257,7 @@ class DashboardView(HomeAssistantView):
 
 
 class StaticFilesView(HomeAssistantView):
-    """Serve static files (JS, CSS, Assets). @zara"""
+    """Serve static files (JS, CSS, Assets)."""
 
     url = "/api/sfml_stats_lite/assets/{filename:.*}"
     name = "api:sfml_stats_lite:assets"
@@ -261,10 +265,46 @@ class StaticFilesView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request, filename: str) -> Response:
-        """Return a static file. @zara"""
-        frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "assets" / filename
+        """Return a static file.
+
+        Supports files from:
+        - frontend/dist/assets/  (images, fonts)
+        - frontend/dist/css/     (stylesheets)
+        - frontend/dist/js/      (javascript modules)
+        """
+        frontend_path = None
+
+        # Determine the subdirectory based on file type
+        if filename.startswith("css/") or filename.endswith(".css"):
+            subdir = "css"
+            # Remove css/ prefix if present
+            clean_filename = filename[4:] if filename.startswith("css/") else filename
+        elif filename.startswith("js/") or filename.endswith(".js"):
+            subdir = "js"
+            # Remove js/ prefix if present
+            clean_filename = filename[3:] if filename.startswith("js/") else filename
+        else:
+            subdir = "assets"
+            clean_filename = filename
+
+        # Try via HASS.config.path() first (works in Docker)
+        if HASS is not None:
+            frontend_path = Path(HASS.config.path()) / "custom_components" / "sfml_stats_lite" / "frontend" / "dist" / subdir / clean_filename
+            if not frontend_path.exists():
+                # Fallback to assets folder for backward compatibility
+                frontend_path = Path(HASS.config.path()) / "custom_components" / "sfml_stats_lite" / "frontend" / "dist" / "assets" / filename
+                if not frontend_path.exists():
+                    frontend_path = None
+
+        # Fallback via __file__
+        if frontend_path is None:
+            frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / subdir / clean_filename
+            if not frontend_path.exists():
+                # Fallback to assets folder
+                frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "assets" / filename
 
         if not frontend_path.exists():
+            _LOGGER.warning("Static file not found: %s (tried %s)", filename, frontend_path)
             return web.Response(status=404, text="Not found")
 
         content_type = "application/octet-stream"
@@ -286,8 +326,78 @@ class StaticFilesView(HomeAssistantView):
         return web.Response(body=content, content_type=content_type)
 
 
+class CSSFilesView(HomeAssistantView):
+    """Serve CSS files."""
+
+    url = "/api/sfml_stats_lite/css/{filename:.*}"
+    name = "api:sfml_stats_lite:css"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: Request, filename: str) -> Response:
+        """Return a CSS file."""
+        frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "css" / filename
+
+        if not frontend_path.exists():
+            return web.Response(status=404, text="Not found")
+
+        import aiofiles
+        async with aiofiles.open(frontend_path, "rb") as f:
+            content = await f.read()
+
+        return web.Response(body=content, content_type="text/css")
+
+
+class JSFilesView(HomeAssistantView):
+    """Serve JavaScript files."""
+
+    url = "/api/sfml_stats_lite/js/{filename:.*}"
+    name = "api:sfml_stats_lite:js"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: Request, filename: str) -> Response:
+        """Return a JavaScript file."""
+        frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "js" / filename
+
+        if not frontend_path.exists():
+            return web.Response(status=404, text="Not found")
+
+        import aiofiles
+        async with aiofiles.open(frontend_path, "rb") as f:
+            content = await f.read()
+
+        return web.Response(body=content, content_type="application/javascript")
+
+
+class BackgroundImageView(HomeAssistantView):
+    """Serve background image."""
+
+    url = "/api/sfml_stats_lite/background.png"
+    name = "api:sfml_stats_lite:background"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: Request) -> Response:
+        """Return the background image."""
+        frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "background.png"
+
+        if not frontend_path.exists():
+            return web.Response(status=404, text="Not found")
+
+        import aiofiles
+        async with aiofiles.open(frontend_path, "rb") as f:
+            content = await f.read()
+
+        return web.Response(
+            body=content,
+            content_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+
+
 class SolarDataView(HomeAssistantView):
-    """API for solar data. @zara"""
+    """API for solar data."""
 
     url = "/api/sfml_stats_lite/solar"
     name = "api:sfml_stats_lite:solar"
@@ -295,7 +405,7 @@ class SolarDataView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return solar data. @zara"""
+        """Return solar data."""
         days = int(request.query.get("days", 7))
         include_hourly = request.query.get("hourly", "true").lower() == "true"
 
@@ -417,7 +527,7 @@ class SolarDataView(HomeAssistantView):
 
 
 class PriceDataView(HomeAssistantView):
-    """API for electricity price data. @zara"""
+    """API for electricity price data."""
 
     url = "/api/sfml_stats_lite/prices"
     name = "api:sfml_stats_lite:prices"
@@ -425,7 +535,7 @@ class PriceDataView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return price data. @zara"""
+        """Return price data."""
         days = int(request.query.get("days", 7))
 
         result = {
@@ -472,7 +582,7 @@ class PriceDataView(HomeAssistantView):
 
 
 class SummaryDataView(HomeAssistantView):
-    """API for aggregated dashboard data. @zara"""
+    """API for aggregated dashboard data."""
 
     url = "/api/sfml_stats_lite/summary"
     name = "api:sfml_stats_lite:summary"
@@ -480,7 +590,7 @@ class SummaryDataView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return a summary for the dashboard. @zara"""
+        """Return a summary for the dashboard."""
         result = {
             "success": True,
             "timestamp": datetime.now().isoformat(),
@@ -539,7 +649,7 @@ class SummaryDataView(HomeAssistantView):
             result["kpis"]["ai_training_samples"] = ai_weights.get("training_samples", 0)
 
         def extract_time(iso_string: str | None) -> str | None:
-            """Extract HH:MM from ISO string. @zara"""
+            """Extract HH:MM from ISO string."""
             if not iso_string:
                 return None
             try:
@@ -584,7 +694,7 @@ class SummaryDataView(HomeAssistantView):
 
 
 class RealtimeDataView(HomeAssistantView):
-    """API for realtime data (polled by frontend). @zara"""
+    """API for realtime data (polled by frontend)."""
 
     url = "/api/sfml_stats_lite/realtime"
     name = "api:sfml_stats_lite:realtime"
@@ -592,7 +702,7 @@ class RealtimeDataView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return current realtime data. @zara"""
+        """Return current realtime data."""
         result = {
             "success": True,
             "timestamp": datetime.now().isoformat(),
@@ -643,7 +753,7 @@ class RealtimeDataView(HomeAssistantView):
 
 
 def _get_config() -> dict[str, Any]:
-    """Get current configuration from the first config entry. @zara"""
+    """Get current configuration from the first config entry."""
     if HASS is None:
         _LOGGER.debug("_get_config: HASS is None")
         return {}
@@ -667,7 +777,7 @@ def _get_config() -> dict[str, Any]:
 
 
 def _get_sensor_value(entity_id: str | None) -> float | None:
-    """Read current value from a sensor. @zara"""
+    """Read current value from a sensor."""
     if not entity_id or not HASS:
         return None
 
@@ -682,7 +792,7 @@ def _get_sensor_value(entity_id: str | None) -> float | None:
 
 
 def _get_weather_data(entity_id: str | None) -> dict[str, Any] | None:
-    """Read weather data from a Home Assistant weather entity. @zara"""
+    """Read weather data from a Home Assistant weather entity."""
     if not entity_id or not HASS:
         return None
 
@@ -705,7 +815,7 @@ def _get_weather_data(entity_id: str | None) -> dict[str, Any] | None:
 
 
 class EnergyFlowView(HomeAssistantView):
-    """API for energy flow data from Home Assistant sensors. @zara"""
+    """API for energy flow data from Home Assistant sensors."""
 
     url = "/api/sfml_stats_lite/energy_flow"
     name = "api:sfml_stats_lite:energy_flow"
@@ -713,7 +823,7 @@ class EnergyFlowView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return current energy flow data. @zara"""
+        """Return current energy flow data."""
         config = _get_config()
 
         # Battery configuration check
@@ -790,7 +900,7 @@ class EnergyFlowView(HomeAssistantView):
         return web.json_response(result)
 
     async def _get_current_price(self) -> dict[str, Any] | None:
-        """Read current electricity price from price_cache.json. @zara"""
+        """Read current electricity price from price_cache.json."""
         price_cache = await _read_json_file(GRID_PATH / "data" / "price_cache.json")
         if not price_cache or "prices" not in price_cache:
             return None
@@ -808,7 +918,7 @@ class EnergyFlowView(HomeAssistantView):
         return None
 
     async def _get_sun_position(self) -> dict[str, Any] | None:
-        """Read current sun position from astronomy_cache.json. @zara"""
+        """Read current sun position from astronomy_cache.json."""
         astronomy = await _read_json_file(SOLAR_PATH / "stats" / "astronomy_cache.json")
         if not astronomy or "days" not in astronomy:
             return None
@@ -836,7 +946,7 @@ class EnergyFlowView(HomeAssistantView):
         }
 
     def _azimuth_to_direction(self, azimuth: float) -> str:
-        """Convert azimuth degrees to cardinal direction. @zara"""
+        """Convert azimuth degrees to cardinal direction."""
         if azimuth is None:
             return "—"
         azimuth = azimuth % 360
@@ -845,7 +955,7 @@ class EnergyFlowView(HomeAssistantView):
         return directions[index]
 
     def _extract_time(self, iso_string: str | None) -> str | None:
-        """Extract HH:MM from ISO string. @zara"""
+        """Extract HH:MM from ISO string."""
         if not iso_string:
             return None
         try:
@@ -857,7 +967,7 @@ class EnergyFlowView(HomeAssistantView):
             return None
 
     def _get_panel_data(self, config: dict[str, Any]) -> list[dict[str, Any]]:
-        """Read panel data from configured sensors. @zara"""
+        """Read panel data from configured sensors."""
         panels = []
 
         if config.get(CONF_SENSOR_PANEL1_POWER):
@@ -896,7 +1006,7 @@ class EnergyFlowView(HomeAssistantView):
 
 
 class StatisticsView(HomeAssistantView):
-    """API for statistics data from JSON files. @zara"""
+    """API for statistics data from JSON files."""
 
     url = "/api/sfml_stats_lite/statistics"
     name = "api:sfml_stats_lite:statistics"
@@ -904,7 +1014,7 @@ class StatisticsView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return statistics data from Solar Forecast ML JSON files. @zara"""
+        """Return statistics data from Solar Forecast ML JSON files."""
         # Normal statistics response
         result = {
             "success": True,
@@ -974,7 +1084,7 @@ class StatisticsView(HomeAssistantView):
         return web.json_response(result)
 
     async def _get_panel_group_data(self) -> dict[str, Any]:
-        """Extract panel group predictions and actuals for today. @zara"""
+        """Extract panel group predictions and actuals for today."""
         predictions = await _read_json_file(SOLAR_PATH / "stats" / "hourly_predictions.json")
         if not predictions or "predictions" not in predictions:
             return {"available": False, "groups": {}}
@@ -1052,7 +1162,7 @@ class StatisticsView(HomeAssistantView):
         return result
 
     async def _save_panel_group_cache(self, data: dict[str, Any], today_str: str) -> None:
-        """Save panel group data to cache file. @zara"""
+        """Save panel group data to cache file."""
         try:
             cache_path = SOLAR_PATH / "stats" / "panel_group_today_cache.json"
             cache_data = {
@@ -1068,7 +1178,7 @@ class StatisticsView(HomeAssistantView):
 
 
 class BillingDataView(HomeAssistantView):
-    """API for billing and annual balance data. @zara"""
+    """API for billing and annual balance data."""
 
     url = "/api/sfml_stats_lite/billing"
     name = "api:sfml_stats_lite:billing"
@@ -1076,7 +1186,7 @@ class BillingDataView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return billing configuration and annual balance data. @zara"""
+        """Return billing configuration and annual balance data."""
         if HASS is None:
             return web.json_response({
                 "success": False,
@@ -1142,7 +1252,7 @@ class WeatherHistoryView(HomeAssistantView):
 
 
 class PowerSourcesHistoryView(HomeAssistantView):
-    """View to get power sources history data from HA Recorder. @zara"""
+    """View to get power sources history data from HA Recorder."""
 
     url = "/api/sfml_stats_lite/power_sources_history"
     name = "api:sfml_stats_lite:power_sources_history"
@@ -1150,7 +1260,7 @@ class PowerSourcesHistoryView(HomeAssistantView):
 
     @local_only
     async def get(self, request: web.Request) -> web.Response:
-        """Get power sources history from Home Assistant Recorder. @zara"""
+        """Get power sources history from Home Assistant Recorder."""
         try:
             hours = int(request.query.get("hours", 24))
             hours = min(hours, 168)  # Max 7 days
@@ -1233,7 +1343,7 @@ class PowerSourcesHistoryView(HomeAssistantView):
         start_time: datetime,
         end_time: datetime
     ) -> dict[str, list]:
-        """Fetch history from Home Assistant Recorder. @zara"""
+        """Fetch history from Home Assistant Recorder."""
         if HASS is None:
             _LOGGER.error("HASS is None in _get_recorder_history")
             return {}
@@ -1280,7 +1390,7 @@ class PowerSourcesHistoryView(HomeAssistantView):
         self,
         entity_ids: list[str],
     ) -> dict[str, list]:
-        """Fallback: Get current states when recorder fails. @zara"""
+        """Fallback: Get current states when recorder fails."""
         if HASS is None:
             return {}
 
@@ -1295,7 +1405,7 @@ class PowerSourcesHistoryView(HomeAssistantView):
         return result
 
     async def _get_hourly_history_from_file(self) -> list[dict]:
-        """Get hourly history from our own data file as alternative. @zara"""
+        """Get hourly history from our own data file as alternative."""
         try:
             hourly_path = Path(HASS.config.path()) / "sfml_stats_lite" / "data" / "hourly_billing_history.json"
 
@@ -1328,7 +1438,7 @@ class PowerSourcesHistoryView(HomeAssistantView):
             return []
 
     async def _get_power_sources_collector_data(self, hours: int) -> list[dict]:
-        """Get data from power sources collector file. @zara"""
+        """Get data from power sources collector file."""
         try:
             collector_path = Path(HASS.config.path()) / "sfml_stats_lite" / "data" / "power_sources_history.json"
 
@@ -1373,7 +1483,7 @@ class PowerSourcesHistoryView(HomeAssistantView):
         start_time: datetime,
         end_time: datetime
     ) -> list[dict]:
-        """Process and align history data into time series. @zara"""
+        """Process and align history data into time series."""
         # Create time buckets (5-minute intervals)
         interval_minutes = 5
         buckets = []
@@ -1433,7 +1543,7 @@ class PowerSourcesHistoryView(HomeAssistantView):
 
 
 class EnergySourcesDailyStatsView(HomeAssistantView):
-    """API for daily energy sources statistics. @zara"""
+    """API for daily energy sources statistics."""
 
     url = "/api/sfml_stats_lite/energy_sources_daily_stats"
     name = "api:sfml_stats_lite:energy_sources_daily_stats"
@@ -1441,7 +1551,7 @@ class EnergySourcesDailyStatsView(HomeAssistantView):
 
     @local_only
     async def get(self, request: web.Request) -> web.Response:
-        """Get daily energy sources statistics. @zara"""
+        """Get daily energy sources statistics."""
         try:
             days = int(request.query.get("days", 7))
             days = min(days, 365)  # Max 1 year
@@ -1547,7 +1657,7 @@ class EnergySourcesDailyStatsView(HomeAssistantView):
 
 
 class HealthCheckView(HomeAssistantView):
-    """Health check endpoint for monitoring. @zara"""
+    """Health check endpoint for monitoring."""
 
     url = "/api/sfml_stats_lite/health"
     name = "api:sfml_stats_lite:health"
@@ -1556,7 +1666,7 @@ class HealthCheckView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return health status. @zara"""
+        """Return health status."""
         status = "healthy"
         checks = {}
 
@@ -1596,7 +1706,7 @@ class HealthCheckView(HomeAssistantView):
 
 
 class ClothingRecommendationView(HomeAssistantView):
-    """API for clothing recommendation based on weather. @zara"""
+    """API for clothing recommendation based on weather."""
 
     url = "/api/sfml_stats_lite/clothing"
     name = "api:sfml_stats_lite:clothing"
@@ -1605,7 +1715,7 @@ class ClothingRecommendationView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request) -> Response:
-        """Return clothing recommendation based on current weather. @zara"""
+        """Return clothing recommendation based on current weather."""
         try:
             from ..clothing_recommendation import get_recommendation
 
@@ -1685,6 +1795,70 @@ class ClothingRecommendationView(HomeAssistantView):
 
         except Exception as err:
             _LOGGER.error("Error getting clothing recommendation: %s", err, exc_info=True)
+            return web.json_response({
+                "success": False,
+                "error": str(err),
+            }, status=500)
+
+
+class ForecastComparisonView(HomeAssistantView):
+    """API for forecast comparison data."""
+
+    url = "/api/sfml_stats_lite/forecast_comparison"
+    name = "api:sfml_stats_lite:forecast_comparison"
+    requires_auth = False
+    cors_allowed = True
+
+    @local_only
+    async def get(self, request: Request) -> Response:
+        """Return forecast comparison data for chart rendering."""
+        try:
+            from pathlib import Path
+            from ..readers.forecast_comparison_reader import ForecastComparisonReader
+
+            days = int(request.query.get("days", 7))
+            config_path = Path(HASS.config.path()) if HASS else None
+
+            if not config_path:
+                return web.json_response({
+                    "success": False,
+                    "error": "HASS not initialized",
+                }, status=500)
+
+            reader = ForecastComparisonReader(config_path)
+
+            if not reader.is_available:
+                return web.json_response({
+                    "success": True,
+                    "data": {
+                        "dates": [],
+                        "actual": [],
+                        "sfml": [],
+                        "external_1": None,
+                        "external_1_name": None,
+                        "external_2": None,
+                        "external_2_name": None,
+                        "stats": {
+                            "days_count": 0,
+                            "days_with_actual": 0,
+                            "sfml_avg_accuracy": None,
+                            "external_1_avg_accuracy": None,
+                            "external_2_avg_accuracy": None,
+                            "best_forecast": None,
+                        },
+                    },
+                    "message": "No forecast comparison data available yet",
+                })
+
+            chart_data = await reader.async_get_chart_data(days=days)
+
+            return web.json_response({
+                "success": True,
+                "data": chart_data,
+            })
+
+        except Exception as err:
+            _LOGGER.error("Error getting forecast comparison data: %s", err, exc_info=True)
             return web.json_response({
                 "success": False,
                 "error": str(err),

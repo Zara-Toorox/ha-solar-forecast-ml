@@ -1,4 +1,4 @@
-"""SFML Stats integration for Home Assistant. @zara
+"""SFML Stats integration for Home Assistant.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -31,14 +31,21 @@ from .const import (
     VERSION,
     CONF_SENSOR_SMARTMETER_IMPORT_KWH,
     CONF_WEATHER_ENTITY,
+    CONF_FORECAST_ENTITY_1,
+    CONF_FORECAST_ENTITY_2,
     DAILY_AGGREGATION_HOUR,
     DAILY_AGGREGATION_MINUTE,
     DAILY_AGGREGATION_SECOND,
+    FORECAST_MORNING_HOUR,
+    FORECAST_MORNING_MINUTE,
+    FORECAST_EVENING_HOUR,
+    FORECAST_EVENING_MINUTE,
 )
 from .storage import DataValidator
 from .api import async_setup_views, async_setup_websocket
 from .services.daily_aggregator import DailyEnergyAggregator
 from .services.billing_calculator import BillingCalculator
+from .services.forecast_comparison_collector import ForecastComparisonCollector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +53,7 @@ PLATFORMS: list[Platform] = []
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the SFML Stats component. @zara"""
+    """Set up the SFML Stats component."""
     _LOGGER.info("Initializing %s v%s", NAME, VERSION)
 
     hass.data.setdefault(DOMAIN, {})
@@ -59,7 +66,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Migrate old entry to new version. @zara"""
+    """Migrate old entry to new version."""
     _LOGGER.info(
         "Migrating SFML Stats from version %s to %s",
         config_entry.version, 2
@@ -78,7 +85,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up SFML Stats from a config entry. @zara"""
+    """Set up SFML Stats from a config entry."""
     _LOGGER.info("Setting up %s (Entry: %s)", NAME, entry.entry_id)
 
     validator = DataValidator(hass)
@@ -142,6 +149,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error("Failed to initialize weather collector: %s", err)
             # Weather collector is optional
 
+    # Initialize Forecast Comparison Collector if external forecasts are configured
+    forecast_comparison_collector = None
+    forecast_entity_1 = entry_config.get(CONF_FORECAST_ENTITY_1)
+    forecast_entity_2 = entry_config.get(CONF_FORECAST_ENTITY_2)
+    if forecast_entity_1 or forecast_entity_2:
+        try:
+            forecast_comparison_collector = ForecastComparisonCollector(hass, config_path)
+            _LOGGER.info("Forecast comparison collector initialized")
+        except Exception as err:
+            _LOGGER.error("Failed to initialize forecast comparison collector: %s", err)
+
     hass.data[DOMAIN][entry.entry_id] = {
         "validator": validator,
         "config": entry_config,
@@ -149,12 +167,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "billing_calculator": billing_calculator,
         "power_sources_collector": power_sources_collector,
         "weather_collector": weather_collector,
+        "forecast_comparison_collector": forecast_comparison_collector,
     }
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     async def _daily_aggregation_job(now: datetime) -> None:
-        """Run daily aggregation job. @zara"""
+        """Run daily aggregation job."""
         _LOGGER.info("Starting scheduled daily energy aggregation")
         try:
             await aggregator.async_aggregate_daily()
@@ -176,6 +195,53 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DAILY_AGGREGATION_MINUTE,
     )
 
+    # Schedule Forecast Comparison Jobs if collector is initialized
+    if forecast_comparison_collector:
+        async def _forecast_morning_job(now: datetime) -> None:
+            """Collect morning forecast values."""
+            _LOGGER.info("Starting scheduled morning forecast collection")
+            try:
+                await forecast_comparison_collector.async_collect_morning_forecasts()
+            except Exception as err:
+                _LOGGER.error("Morning forecast collection failed: %s", err)
+
+        async def _forecast_evening_job(now: datetime) -> None:
+            """Collect evening actual production."""
+            _LOGGER.info("Starting scheduled evening actual collection")
+            try:
+                await forecast_comparison_collector.async_collect_evening_actual()
+            except Exception as err:
+                _LOGGER.error("Evening actual collection failed: %s", err)
+
+        cancel_morning_forecast = async_track_time_change(
+            hass,
+            _forecast_morning_job,
+            hour=FORECAST_MORNING_HOUR,
+            minute=FORECAST_MORNING_MINUTE,
+            second=0,
+        )
+        cancel_evening_forecast = async_track_time_change(
+            hass,
+            _forecast_evening_job,
+            hour=FORECAST_EVENING_HOUR,
+            minute=FORECAST_EVENING_MINUTE,
+            second=0,
+        )
+        hass.data[DOMAIN][entry.entry_id]["cancel_morning_forecast"] = cancel_morning_forecast
+        hass.data[DOMAIN][entry.entry_id]["cancel_evening_forecast"] = cancel_evening_forecast
+
+        _LOGGER.info(
+            "Forecast comparison jobs scheduled: Morning %02d:%02d, Evening %02d:%02d",
+            FORECAST_MORNING_HOUR, FORECAST_MORNING_MINUTE,
+            FORECAST_EVENING_HOUR, FORECAST_EVENING_MINUTE,
+        )
+
+        # Collect historical data on first setup
+        hass.async_create_background_task(
+            forecast_comparison_collector.async_collect_historical(days=7),
+            f"{DOMAIN}_forecast_historical",
+        )
+
     smartmeter_import_kwh = entry.data.get(CONF_SENSOR_SMARTMETER_IMPORT_KWH)
 
     if smartmeter_import_kwh:
@@ -189,7 +255,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Run initial aggregation as background task to not block startup
     async def _initial_aggregation() -> None:
-        """Run initial aggregation in background. @zara"""
+        """Run initial aggregation in background."""
         try:
             await aggregator.async_aggregate_daily()
         except Exception as err:
@@ -210,7 +276,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry. @zara"""
+    """Unload a config entry."""
     _LOGGER.info("Unloading %s (Entry: %s)", NAME, entry.entry_id)
 
     if entry.entry_id not in hass.data.get(DOMAIN, {}):
@@ -219,13 +285,28 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry_data = hass.data[DOMAIN][entry.entry_id]
 
-    # Cancel scheduled job
+    # Cancel scheduled jobs
     if "cancel_daily_job" in entry_data:
         try:
             entry_data["cancel_daily_job"]()
             _LOGGER.debug("Daily aggregation job cancelled")
         except Exception as err:
             _LOGGER.warning("Error cancelling daily job: %s", err)
+
+    # Cancel forecast comparison jobs
+    if "cancel_morning_forecast" in entry_data:
+        try:
+            entry_data["cancel_morning_forecast"]()
+            _LOGGER.debug("Morning forecast job cancelled")
+        except Exception as err:
+            _LOGGER.warning("Error cancelling morning forecast job: %s", err)
+
+    if "cancel_evening_forecast" in entry_data:
+        try:
+            entry_data["cancel_evening_forecast"]()
+            _LOGGER.debug("Evening forecast job cancelled")
+        except Exception as err:
+            _LOGGER.warning("Error cancelling evening forecast job: %s", err)
 
     # Stop power sources collector
     if "power_sources_collector" in entry_data and entry_data["power_sources_collector"]:
@@ -253,13 +334,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry. @zara"""
+    """Reload config entry."""
     await async_unload_entry(hass, entry)
     await async_setup_entry(hass, entry)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update - refresh cached config without full reload. @zara"""
+    """Handle options update - refresh cached config without full reload."""
     _LOGGER.info("Config entry updated, refreshing cached configuration")
 
     if entry.entry_id not in hass.data.get(DOMAIN, {}):

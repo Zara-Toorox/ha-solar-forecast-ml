@@ -1,4 +1,4 @@
-"""Config flow for SFML Stats integration. @zara
+"""Config flow for SFML Stats integration.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -96,7 +96,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _is_raspberry_pi() -> bool:
-    """Check if the system is running on a Raspberry Pi. @zara"""
+    """Check if the system is running on a Raspberry Pi."""
     try:
         machine = platform.machine().lower()
         if machine in ('armv7l', 'aarch64', 'armv6l'):
@@ -118,7 +118,7 @@ def _is_raspberry_pi() -> bool:
 
 
 def _is_proxmox() -> bool:
-    """Check if the system is running on Proxmox VE. @zara"""
+    """Check if the system is running on Proxmox VE."""
     try:
         proxmox_indicators = [
             '/etc/pve',
@@ -151,7 +151,7 @@ def _is_proxmox() -> bool:
 
 
 def get_entity_selector(domain: str = "sensor") -> selector.EntitySelector:
-    """Create an entity selector for the specified domain. @zara"""
+    """Create an entity selector for the specified domain."""
     return selector.EntitySelector(
         selector.EntitySelectorConfig(
             domain=domain,
@@ -161,7 +161,7 @@ def get_entity_selector(domain: str = "sensor") -> selector.EntitySelector:
 
 
 def get_entity_selector_optional() -> selector.Selector:
-    """Create a text selector that allows clearing/removing the entity. @zara
+    """Create a text selector that allows clearing/removing the entity.
 
     Uses a text selector to allow empty values.
     This solves the issue where users cannot delete wrongly configured entities.
@@ -174,19 +174,19 @@ def get_entity_selector_optional() -> selector.Selector:
 
 
 class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for SFML Stats. @zara"""
+    """Handle a config flow for SFML Stats."""
 
     VERSION = 2
 
     def __init__(self) -> None:
-        """Initialize the config flow. @zara"""
+        """Initialize the config flow."""
         self._data: dict[str, Any] = {}
 
     async def async_step_user(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle the initial step - Basic Settings. @zara"""
+        """Handle the initial step - Basic Settings."""
         errors: dict[str, str] = {}
 
         if self._async_current_entries():
@@ -226,7 +226,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 2 - Energy Flow Sensors. @zara"""
+        """Handle step 2 - Energy Flow Sensors."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -252,7 +252,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 3 - Battery Sensors. @zara"""
+        """Handle step 3 - Battery Sensors."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -275,7 +275,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 4 - Statistics Sensors. @zara"""
+        """Handle step 4 - Statistics Sensors."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -300,7 +300,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 5 - Panel Sensors (optional). @zara"""
+        """Handle step 5 - Panel Sensors (optional)."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -330,7 +330,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 6 - Billing / Energy Balance Configuration. @zara"""
+        """Handle step 6 - Billing / Energy Balance Configuration."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -395,7 +395,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle step 7 - Panel Group Names (override Solar Forecast ML names). @zara"""
+        """Handle step 7 - Panel Group Names (override Solar Forecast ML names)."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -438,15 +438,15 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> SFMLStatsOptionsFlow:
-        """Get the options flow for this handler. @zara"""
+        """Get the options flow for this handler."""
         return SFMLStatsOptionsFlow(config_entry)
 
 
 class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for SFML Stats. @zara"""
+    """Handle options flow for SFML Stats."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow. @zara"""
+        """Initialize options flow."""
         self._config_entry = config_entry
 
     def _process_sensor_input(
@@ -454,18 +454,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         user_input: dict[str, Any],
         sensor_keys: list[str],
     ) -> dict[str, Any]:
-        """Process sensor input and update config entry data. @zara
-
-        Helper method to reduce code duplication in sensor configuration steps.
-        Removes keys with empty values and updates keys with new values.
-
-        Args:
-            user_input: User input from form.
-            sensor_keys: List of configuration keys to process.
-
-        Returns:
-            Updated configuration data.
-        """
+        """Process sensor input and update config entry data."""
         new_data = {**self._config_entry.data}
         for key in sensor_keys:
             value = user_input.get(key)
@@ -479,16 +468,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         sensor_keys: list[str],
     ) -> vol.Schema:
-        """Build schema for sensor configuration form. @zara
-
-        Helper method to build consistent sensor configuration schemas.
-
-        Args:
-            sensor_keys: List of configuration keys for the schema.
-
-        Returns:
-            Voluptuous schema for the form.
-        """
+        """Build schema for sensor configuration form."""
         current = self._config_entry.data
         schema_dict = {}
         for key in sensor_keys:
@@ -501,7 +481,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage the options - Menu. @zara"""
+        """Manage the options - Menu."""
         return self.async_show_menu(
             step_id="init",
             menu_options=["general", "energy_flow", "battery", "statistics", "panels", "billing", "panel_group_names"],
@@ -511,7 +491,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage general options. @zara"""
+        """Manage general options."""
         if user_input is not None:
             new_data = {**self._config_entry.data, **user_input}
             self.hass.config_entries.async_update_entry(
@@ -550,7 +530,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage energy flow sensor options. @zara"""
+        """Manage energy flow sensor options."""
         energy_flow_keys = [
             CONF_SENSOR_SOLAR_POWER, CONF_SENSOR_SOLAR_TO_HOUSE,
             CONF_SENSOR_SOLAR_TO_BATTERY, CONF_SENSOR_GRID_TO_HOUSE,
@@ -585,7 +565,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage battery sensor options. @zara"""
+        """Manage battery sensor options."""
         battery_keys = [
             CONF_SENSOR_BATTERY_SOC, CONF_SENSOR_BATTERY_POWER,
             CONF_SENSOR_BATTERY_TO_HOUSE, CONF_SENSOR_BATTERY_TO_GRID,
@@ -619,7 +599,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage statistics sensor options. @zara"""
+        """Manage statistics sensor options."""
         statistics_keys = [
             CONF_SENSOR_SOLAR_YIELD_DAILY, CONF_SENSOR_GRID_IMPORT_DAILY,
             CONF_SENSOR_GRID_IMPORT_YEARLY, CONF_SENSOR_BATTERY_CHARGE_SOLAR_DAILY,
@@ -654,7 +634,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage panel sensor options. @zara"""
+        """Manage panel sensor options."""
         panel_keys = [
             CONF_PANEL1_NAME, CONF_SENSOR_PANEL1_POWER, CONF_SENSOR_PANEL1_MAX_TODAY,
             CONF_PANEL2_NAME, CONF_SENSOR_PANEL2_POWER, CONF_SENSOR_PANEL2_MAX_TODAY,
@@ -706,7 +686,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage billing and energy balance options. @zara"""
+        """Manage billing and energy balance options."""
         if user_input is not None:
             new_data = {**self._config_entry.data}
             new_data.update(user_input)
@@ -776,7 +756,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage panel group name mappings (override Solar Forecast ML names). @zara"""
+        """Manage panel group name mappings (override Solar Forecast ML names)."""
         if user_input is not None:
             names_mapping = {}
             raw_input = user_input.get("panel_group_names_input", "").strip()

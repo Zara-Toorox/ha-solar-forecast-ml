@@ -1,4 +1,4 @@
-# Solar Forecast ML V12.8.6 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
+# Solar Forecast ML V12.8.8 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
 
 [![Version](https://img.shields.io/badge/version-12.8.6-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
@@ -18,7 +18,7 @@ Experience an adaptive hybrid AI ecosystem powered by three proprietary, locally
 
 Solar Forecast ML is not just another forecasting tool—it is a sophisticated AI Solar Companion for Home Assistant that doesn't just deliver data, but actively learns and evolves with your home.
 
-With Version 12.8.6 "Sarpeidon," solar optimization enters a new dimension:
+With Version 12.8.8 "Sarpeidon," solar optimization enters a new dimension:
 
 **Triple-AI Core Architecture:** Three specialized, locally-deployed AI models collaborate to synchronize energy generation, weather dynamics, and system behavior—all without a single external server request.
 
@@ -42,7 +42,7 @@ With Version 12.8.6 "Sarpeidon," solar optimization enters a new dimension:
 
 ---
 
-## Features in V12.8.6 "Sarpeidon"
+## Features in V12.8.8 "Sarpeidon"
 
 ### 5-Weather-Expert Blending
 - **Multi-Source Weather Data** - Combines 5 independent weather services for optimal accuracy

@@ -1,4 +1,4 @@
-"""Clothing recommendation engine based on weather data. @zara
+"""Clothing recommendation engine based on weather data.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -78,23 +78,7 @@ CLOTHING_OPTIONS = {
 
 
 def get_recommendation(weather_data: dict[str, Any], forecast_hours: list[dict] | None = None) -> ClothingRecommendation:
-    """Generate clothing recommendation based on weather data.
-
-    Args:
-        weather_data: Current weather conditions with keys:
-            - temperature: Current temp in °C
-            - humidity: Humidity in %
-            - wind_speed: Wind speed in m/s or km/h
-            - precipitation: Precipitation in mm
-            - cloud_cover: Cloud cover in %
-            - pressure: Pressure in hPa
-            - uv_index: UV index (optional)
-            - radiation: Solar radiation W/m² (optional)
-        forecast_hours: List of hourly forecasts for the day (optional)
-
-    Returns:
-        ClothingRecommendation with all clothing items and text descriptions
-    """
+    """Generate clothing recommendation based on weather data."""
     temp = weather_data.get("temperature", 15)
     humidity = weather_data.get("humidity", 50)
     wind_speed = weather_data.get("wind_speed", 0)

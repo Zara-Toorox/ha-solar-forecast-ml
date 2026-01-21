@@ -1,4 +1,4 @@
-"""Billing calculator for energy balance using Recorder data. @zara
+"""Billing calculator for energy balance using Recorder data.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -52,7 +52,7 @@ _LOG_BUFFER: list[str] = []
 
 
 def _log(msg: str, *args, level: str = "info") -> None:
-    """Log to HA logger and buffer for file. @zara"""
+    """Log to HA logger and buffer for file."""
     formatted = msg % args if args else msg
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_line = f"{timestamp} | {level.upper():<8} | {formatted}"
@@ -66,7 +66,7 @@ def _log(msg: str, *args, level: str = "info") -> None:
 
 
 class BillingCalculator:
-    """Calculate energy balance using Riemann sum from watt sensors. @zara"""
+    """Calculate energy balance using Riemann sum from watt sensors."""
 
     def __init__(
         self,
@@ -74,7 +74,7 @@ class BillingCalculator:
         config_path: Path,
         entry_data: dict[str, Any] | None = None,
     ) -> None:
-        """Initialize the calculator. @zara"""
+        """Initialize the calculator."""
         self._hass = hass
         self._config_path = config_path
         self._entry_data = entry_data
@@ -84,14 +84,14 @@ class BillingCalculator:
         self._cache_ttl_seconds = 60
 
     def update_config(self, new_config: dict[str, Any]) -> None:
-        """Update cached configuration and invalidate billing cache. @zara"""
+        """Update cached configuration and invalidate billing cache."""
         self._entry_data = new_config
         self._billing_cache = None
         self._cache_timestamp = None
         _log("BillingCalculator config updated, cache invalidated")
 
     def _get_config(self) -> dict[str, Any]:
-        """Get current configuration. @zara"""
+        """Get current configuration."""
         if self._entry_data:
             return self._entry_data
 
@@ -106,7 +106,7 @@ class BillingCalculator:
         return {}
 
     def _get_sensor_value(self, entity_id: str | None) -> float | None:
-        """Read current value from a sensor. @zara"""
+        """Read current value from a sensor."""
         if not entity_id:
             return None
 
@@ -120,7 +120,7 @@ class BillingCalculator:
             return None
 
     def _get_billing_start_date(self, config: dict[str, Any]) -> date:
-        """Calculate start date of current billing period. @zara"""
+        """Calculate start date of current billing period."""
         import calendar
 
         billing_start_day = config.get(CONF_BILLING_START_DAY, 1)
@@ -153,7 +153,7 @@ class BillingCalculator:
         entity_id: str,
         start_date: date,
     ) -> tuple[float, int]:
-        """Calculate kWh from watt sensor using left Riemann sum. @zara"""
+        """Calculate kWh from watt sensor using left Riemann sum."""
         if not entity_id:
             return 0.0, 0
 
@@ -241,7 +241,7 @@ class BillingCalculator:
             return 0.0, 0
 
     async def _flush_logs(self) -> None:
-        """Write buffered logs to file. @zara"""
+        """Write buffered logs to file."""
         global _LOG_BUFFER
         if _LOG_BUFFER:
             try:
@@ -254,11 +254,11 @@ class BillingCalculator:
                 pass
 
     async def async_ensure_baselines(self) -> dict[str, Any]:
-        """Compatibility stub - no longer needed. @zara"""
+        """Compatibility stub - no longer needed."""
         return {}
 
     async def async_calculate_billing(self) -> dict[str, Any]:
-        """Calculate current energy balance with caching. @zara"""
+        """Calculate current energy balance with caching."""
         if self._billing_cache is not None and self._cache_timestamp is not None:
             cache_age = (datetime.now() - self._cache_timestamp).total_seconds()
             if cache_age < self._cache_ttl_seconds:
@@ -482,5 +482,5 @@ class BillingCalculator:
         return result
 
     async def async_reset_baselines(self) -> bool:
-        """Compatibility stub - no longer needed. @zara"""
+        """Compatibility stub - no longer needed."""
         return True

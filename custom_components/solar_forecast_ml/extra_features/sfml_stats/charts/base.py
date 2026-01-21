@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 from .styles import ChartStyles
-from ..const import CHART_DPI, SFML_STATS_CHARTS
+from ..const import CHART_DPI
 
 if TYPE_CHECKING:
     import matplotlib.patches as mpatches
@@ -60,7 +60,7 @@ class BaseChart(ABC):
     @property
     def export_path(self) -> Path:
         """Gibt den Export-Pfad für Charts zurück."""
-        return self._validator.get_export_path(SFML_STATS_CHARTS)
+        return self._validator.get_export_path("charts")
 
     @abstractmethod
     async def generate(self, **kwargs: Any) -> "Figure":

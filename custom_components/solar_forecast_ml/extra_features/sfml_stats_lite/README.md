@@ -6,9 +6,9 @@
 
 <a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee ' /></a>
 
-**Comprehensive Energy Monitoring Dashboard for Home Assistant**
+**Energy Monitoring Dashboard for Home Assistant**
 
-A powerful dashboard that visualizes solar production, battery storage, grid consumption, and energy costs in real-time. Designed to work seamlessly with [Solar Forecast ML](https://github.com/Zara-Toorox/ha-solar-forecast-ml) and [Grid Price Monitor](https://github.com/Zara-Toorox/ha-solar-forecast-ml/tree/main/custom_components/solar_forecast_ml/extra_features/grid_price_monitor) for the ultimate energy management experience.
+Dashboard zur Visualisierung von Solarproduktion, Batteriespeicher, Netzverbrauch und Energiekosten. Funktioniert mit [Solar Forecast ML](https://github.com/Zara-Toorox/ha-solar-forecast-ml) und [Grid Price Monitor](https://github.com/Zara-Toorox/ha-solar-forecast-ml/tree/main/custom_components/solar_forecast_ml/extra_features/grid_price_monitor).
 
 ---
 

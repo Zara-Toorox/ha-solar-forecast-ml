@@ -11,5 +11,11 @@
 from .daily_aggregator import DailyEnergyAggregator
 from .billing_calculator import BillingCalculator
 from .monthly_tariff_manager import MonthlyTariffManager
+from .forecast_comparison_collector import ForecastComparisonCollector
 
-__all__ = ["DailyEnergyAggregator", "BillingCalculator", "MonthlyTariffManager"]
+__all__ = [
+    "DailyEnergyAggregator",
+    "BillingCalculator",
+    "MonthlyTariffManager",
+    "ForecastComparisonCollector",
+]

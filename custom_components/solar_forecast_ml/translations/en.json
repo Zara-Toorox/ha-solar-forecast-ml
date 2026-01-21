@@ -34,23 +34,23 @@
         }
       },
       "panel_groups": {
-        "title": "Configure Panel Groups (optional)",
-        "description": "⚠️ ONLY FILL IN if you have panels/strings with different orientations or tilt angles!\nOtherwise leave empty.\n\n⚠️ SYSTEM REQUIREMENTS:\n• Native x64 Home Assistant: Recommended (unlimited groups)\n• Proxmox VM: Max. 2 groups recommended\n• SD card systems (RPi): NOT recommended (high I/O load)\n\nFormat per group: Power(Wp)/Azimuth(°)/Tilt(°)/[Energy-Sensor]\nGroups can be entered comma-separated or on separate lines.\n\nExample:\n1425/180/9/sensor.pv1_kwh_day, 870/180/47/sensor.pv2_kwh_day\n\nAzimuth: 0°=North, 90°=East, 180°=South, 270°=West\nTilt: 0°=horizontal, 90°=vertical\n\nEnergy sensor (optional): Daily kWh sensor that resets at midnight.",
+        "title": "Configure Panel Groups (Required)",
+        "description": "⚠️ REQUIRED: At least 1 panel group needed (max. 4)\n\nFormat: Power(Wp)/Azimuth(°)/Tilt(°)/Daily-kWh-Sensor\n\nExample south-facing:\n5000/180/30/sensor.pv_energy_today\n\nExample east-west:\n2500/90/15/sensor.pv_east_today, 2500/270/15/sensor.pv_west_today\n\nAzimuth: 0°=North, 90°=East, 180°=South, 270°=West\nTilt: 0°=horizontal, 90°=vertical\n\nDaily-kWh-Sensor: Required for correct group learning (must reset at midnight)",
         "data": {
           "panel_groups_input": "Panel Groups"
         },
         "data_description": {
-          "panel_groups_input": "Format: Power/Azimuth/Tilt/[Daily-kWh-Sensor] - comma or newline separated"
+          "panel_groups_input": "Format: Power/Azimuth/Tilt/Daily-kWh-Sensor - comma or newline separated"
         }
       },
       "reconfigure_panel_groups": {
-        "title": "Reconfigure Panel Groups",
-        "description": "⚠️ ONLY FILL IN if you have panels/strings with different orientations or tilt angles!\nOtherwise leave empty.\n\n⚠️ SYSTEM REQUIREMENTS:\n• Native x64 Home Assistant: Recommended (unlimited groups)\n• Proxmox VM: Max. 2 groups recommended\n• SD card systems (RPi): NOT recommended (high I/O load)\n\nFormat: Power(Wp)/Azimuth(°)/Tilt(°)/[Energy-Sensor]\nComma-separated or one per line.\n\nEnergy sensor: Daily kWh sensor (resets at midnight)\n\nLeave empty for simple capacity calculation.",
+        "title": "Reconfigure Panel Groups (Required)",
+        "description": "⚠️ REQUIRED: At least 1 panel group needed (max. 4)\n\nFormat: Power(Wp)/Azimuth(°)/Tilt(°)/Daily-kWh-Sensor\n\nExample: 5000/180/30/sensor.pv_energy_today\nOr: 2500/90/15/sensor.pv_east, 2500/270/15/sensor.pv_west\n\nDaily-kWh-Sensor: Required for correct group learning",
         "data": {
           "panel_groups_input": "Panel Groups"
         },
         "data_description": {
-          "panel_groups_input": "Format: Power/Azimuth/Tilt/[Daily-kWh-Sensor] - comma or newline separated"
+          "panel_groups_input": "Format: Power/Azimuth/Tilt/Daily-kWh-Sensor - comma or newline separated"
         }
       },
       "reconfigure": {
@@ -96,7 +96,9 @@
       "already_configured": "Weather entity already in use",
       "sensor_not_found": "Sensor entity not found",
       "invalid_sensor_state": "Sensor state invalid or unavailable",
-      "invalid_panel_format": "Invalid format. Please use: Power/Azimuth/Tilt (e.g., 1200/180/30)"
+      "invalid_panel_format": "Invalid format. Please use: Power/Azimuth/Tilt (e.g., 1200/180/30)",
+      "panel_groups_required": "At least 1 panel group required. Format: Power/Azimuth/Tilt/Sensor (e.g., 5000/180/30/sensor.pv_today)",
+      "too_many_panel_groups": "Maximum 4 panel groups allowed"
     },
     "abort": {
       "already_configured": "Integration already configured",

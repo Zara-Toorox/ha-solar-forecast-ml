@@ -1,4 +1,4 @@
-"""Daily energy aggregator for SFML Stats. @zara
+"""Daily energy aggregator for SFML Stats.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -52,17 +52,17 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DailyEnergyAggregator:
-    """Aggregate and store daily energy values. @zara"""
+    """Aggregate and store daily energy values."""
 
     def __init__(self, hass: HomeAssistant, config_path: Path) -> None:
-        """Initialize the aggregator. @zara"""
+        """Initialize the aggregator."""
         self._hass = hass
         self._config_path = config_path
         self._data_path = config_path / SFML_STATS_DATA
         self._history_file = self._data_path / DAILY_ENERGY_HISTORY
 
     def _get_config(self) -> dict[str, Any]:
-        """Get current configuration. @zara"""
+        """Get current configuration."""
         entries = self._hass.data.get(DOMAIN, {})
         for entry_id, entry_data in entries.items():
             if isinstance(entry_data, dict) and "config" in entry_data:
@@ -74,7 +74,7 @@ class DailyEnergyAggregator:
         return {}
 
     def _get_sensor_value(self, entity_id: str | None) -> float | None:
-        """Read current value from a sensor. @zara"""
+        """Read current value from a sensor."""
         if not entity_id:
             return None
 
@@ -88,7 +88,7 @@ class DailyEnergyAggregator:
             return None
 
     async def _load_history(self) -> dict[str, Any]:
-        """Load existing history file. @zara"""
+        """Load existing history file."""
         if not self._history_file.exists():
             return {"days": {}, "last_updated": None}
 
@@ -101,7 +101,7 @@ class DailyEnergyAggregator:
             return {"days": {}, "last_updated": None}
 
     async def _save_history(self, history: dict[str, Any]) -> bool:
-        """Save history file. @zara"""
+        """Save history file."""
         self._data_path.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -113,7 +113,7 @@ class DailyEnergyAggregator:
             return False
 
     async def async_aggregate_daily(self) -> bool:
-        """Aggregate daily values and save them. @zara"""
+        """Aggregate daily values and save them."""
         config = self._get_config()
         today_str = date.today().isoformat()
 
@@ -172,7 +172,7 @@ class DailyEnergyAggregator:
         return success
 
     async def _merge_from_daily_stats(self, today_str: str, daily_data: dict[str, Any]) -> None:
-        """Merge data from energy_sources_daily_stats.json. @zara"""
+        """Merge data from energy_sources_daily_stats.json."""
         daily_stats_file = self._data_path / "energy_sources_daily_stats.json"
 
         if not daily_stats_file.exists():
@@ -219,7 +219,7 @@ class DailyEnergyAggregator:
         start_date: date,
         end_date: date,
     ) -> dict[str, Any]:
-        """Get aggregated data for a billing period. @zara"""
+        """Get aggregated data for a billing period."""
         history = await self._load_history()
 
         result = {

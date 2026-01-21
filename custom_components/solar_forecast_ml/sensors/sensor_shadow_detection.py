@@ -264,7 +264,7 @@ class ShadowTodaySensor(CoordinatorEntity, SensorEntity):
             valid_predictions = _filter_valid_shadow_predictions(today_predictions)
 
             if not valid_predictions:
-                self._cached_analysis = {"status": "no_data", "shadow_hours": 0}
+                self._cached_analysis = {"status": "no_data", "shadow_hours": 0, "hourly_breakdown": []}
                 self._cache_date = today
                 return self._cached_analysis
 
@@ -379,7 +379,7 @@ class ShadowTodaySensor(CoordinatorEntity, SensorEntity):
 
         except Exception as e:
             _LOGGER.error(f"Error calculating shadow today analysis: {e}")
-            self._cached_analysis = {"status": "error", "error": str(e), "shadow_hours": 0}
+            self._cached_analysis = {"status": "error", "error": str(e), "shadow_hours": 0, "hourly_breakdown": []}
             self._cache_date = today
             return self._cached_analysis
 

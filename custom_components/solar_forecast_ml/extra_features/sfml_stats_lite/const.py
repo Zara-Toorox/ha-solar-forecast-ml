@@ -1,4 +1,4 @@
-"""Constants for SFML Stats integration. @zara
+"""Constants for SFML Stats integration.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -22,7 +22,7 @@ from typing import Final
 
 DOMAIN: Final = "sfml_stats_lite"
 NAME: Final = "SFML Stats Lite"
-VERSION: Final = "2.8.0"
+VERSION: Final = "6.2.0"
 
 SOLAR_FORECAST_ML_BASE: Final = Path("solar_forecast_ml")
 SOLAR_FORECAST_ML_STATS: Final = SOLAR_FORECAST_ML_BASE / "stats"
@@ -246,3 +246,32 @@ FILE_RETRY_DELAY_SECONDS: Final = 0.1
 DAILY_AGGREGATION_HOUR: Final = 23
 DAILY_AGGREGATION_MINUTE: Final = 55
 DAILY_AGGREGATION_SECOND: Final = 0
+
+# =============================================================================
+# Forecast Comparison Constants
+# =============================================================================
+
+# External forecasts history file
+EXTERNAL_FORECASTS_HISTORY: Final = "external_forecasts_history.json"
+
+# Retention period for forecast comparison data (days)
+FORECAST_COMPARISON_RETENTION_DAYS: Final = 90
+
+# Default chart days for forecast comparison
+FORECAST_COMPARISON_CHART_DAYS: Final = 7
+
+# Forecast collection schedule
+FORECAST_MORNING_HOUR: Final = 8
+FORECAST_MORNING_MINUTE: Final = 0
+FORECAST_EVENING_HOUR: Final = 23
+FORECAST_EVENING_MINUTE: Final = 50
+
+# Configuration keys for external forecast entities
+CONF_FORECAST_ENTITY_1: Final = "forecast_entity_1"
+CONF_FORECAST_ENTITY_2: Final = "forecast_entity_2"
+CONF_FORECAST_ENTITY_1_NAME: Final = "forecast_entity_1_name"
+CONF_FORECAST_ENTITY_2_NAME: Final = "forecast_entity_2_name"
+
+# Default names for external forecasts
+DEFAULT_FORECAST_ENTITY_1_NAME: Final = "Solcast"
+DEFAULT_FORECAST_ENTITY_2_NAME: Final = "Forecast.Solar"

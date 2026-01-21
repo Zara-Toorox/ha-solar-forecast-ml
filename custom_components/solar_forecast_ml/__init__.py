@@ -256,16 +256,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Failed to setup Solar Forecast coordinator")
         return False
 
-    # First refresh with timeout to prevent blocking HA startup if network/APIs unavailable
-    import asyncio
-    try:
-        async with asyncio.timeout(60):
-            await coordinator.async_config_entry_first_refresh()
-    except asyncio.TimeoutError:
-        _LOGGER.warning(
-            "First data refresh timed out after 60s - continuing with cached/default data. "
-            "This may happen if network or weather APIs are temporarily unavailable."
-        )
+    # CRITICAL FIX V12.8.7: First refresh runs in background to not block HA startup
+    # This prevents the "Waiting for integrations to complete setup" warning
+    async def _delayed_first_refresh():
+        """Run first data refresh in background after HA startup."""
+        import asyncio
+        try:
+            # Small delay to let HA finish startup
+            await asyncio.sleep(5)
+            async with asyncio.timeout(60):
+                await coordinator.async_config_entry_first_refresh()
+            _LOGGER.info("First data refresh completed successfully")
+        except asyncio.TimeoutError:
+            _LOGGER.debug(
+                "First data refresh timed out after 60s - using cached data (normal during startup)"
+            )
+        except Exception as e:
+            _LOGGER.debug(f"First data refresh deferred: {e} - using cached data")
+
+    hass.async_create_task(
+        _delayed_first_refresh(),
+        name="solar_forecast_ml_first_refresh"
+    )
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
@@ -329,7 +341,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.warning(f"Failed to show startup notification: {e}", exc_info=True)
 
-    mode_str = "ML Mode (Full Features)" if dependencies_ok else "Fallback Mode (Rule-Based)"
+    mode_str = "Hybrid-KI (Full Features)" if dependencies_ok else "Fallback Mode (Rule-Based)"
 
     # Auto-sync extra features on SFML update (version-based, not every start)
     try:

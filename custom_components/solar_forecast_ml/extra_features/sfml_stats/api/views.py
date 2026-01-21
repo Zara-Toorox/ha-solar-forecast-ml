@@ -240,6 +240,10 @@ async def async_setup_views(hass: HomeAssistant) -> None:
     # Background Image for Dashboard
     hass.http.register_view(BackgroundImageView())
 
+    # Forecast Comparison
+    hass.http.register_view(ForecastComparisonView())
+    hass.http.register_view(ForecastComparisonChartView())
+
     _LOGGER.info("SFML Stats API views registered")
 
 
@@ -483,21 +487,46 @@ class StaticFilesView(HomeAssistantView):
 
     @local_only
     async def get(self, request: Request, filename: str) -> Response:
-        """Return a static file. @zara"""
+        """Return a static file. @zara
+
+        Supports files from:
+        - frontend/dist/assets/  (images, fonts)
+        - frontend/dist/css/     (stylesheets)
+        - frontend/dist/js/      (javascript modules)
+        """
         frontend_path = None
+
+        # Determine the subdirectory based on file type
+        if filename.startswith("css/") or filename.endswith(".css"):
+            subdir = "css"
+            # Remove css/ prefix if present
+            clean_filename = filename[4:] if filename.startswith("css/") else filename
+        elif filename.startswith("js/") or filename.endswith(".js"):
+            subdir = "js"
+            # Remove js/ prefix if present
+            clean_filename = filename[3:] if filename.startswith("js/") else filename
+        else:
+            subdir = "assets"
+            clean_filename = filename
 
         # Try via hass.config.path() first (works in Docker)
         if HASS is not None:
-            frontend_path = Path(HASS.config.path()) / "custom_components" / "sfml_stats" / "frontend" / "dist" / "assets" / filename
+            frontend_path = Path(HASS.config.path()) / "custom_components" / "sfml_stats" / "frontend" / "dist" / subdir / clean_filename
             if not frontend_path.exists():
-                frontend_path = None
+                # Fallback to assets folder for backward compatibility
+                frontend_path = Path(HASS.config.path()) / "custom_components" / "sfml_stats" / "frontend" / "dist" / "assets" / filename
+                if not frontend_path.exists():
+                    frontend_path = None
 
         # Fallback via __file__
         if frontend_path is None:
-            frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "assets" / filename
+            frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / subdir / clean_filename
+            if not frontend_path.exists():
+                # Fallback to assets folder
+                frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "assets" / filename
 
         if not frontend_path.exists():
-            _LOGGER.warning("Static file not found: %s", filename)
+            _LOGGER.warning("Static file not found: %s (tried %s)", filename, frontend_path)
             return web.Response(status=404, text="Not found")
 
         content_type = "application/octet-stream"
@@ -951,15 +980,23 @@ def _read_panel_group_sensor(entity_id: str) -> float | None:
 def _get_sensor_value(entity_id: str | None) -> float | None:
     """Read current value from a sensor. @zara"""
     if not entity_id or not HASS:
+        _LOGGER.debug("_get_sensor_value: entity_id=%s, HASS=%s", entity_id, HASS is not None)
         return None
 
     state = HASS.states.get(entity_id)
-    if state is None or state.state in ("unknown", "unavailable"):
+    if state is None:
+        _LOGGER.debug("_get_sensor_value: Sensor %s not found in HA states", entity_id)
+        return None
+    if state.state in ("unknown", "unavailable"):
+        _LOGGER.debug("_get_sensor_value: Sensor %s has state: %s", entity_id, state.state)
         return None
 
     try:
-        return float(state.state)
-    except (ValueError, TypeError):
+        value = float(state.state)
+        _LOGGER.debug("_get_sensor_value: %s = %s", entity_id, value)
+        return value
+    except (ValueError, TypeError) as e:
+        _LOGGER.debug("_get_sensor_value: Cannot convert %s value '%s' to float: %s", entity_id, state.state, e)
         return None
 
 
@@ -1008,10 +1045,23 @@ class EnergyFlowView(HomeAssistantView):
         """Return current energy flow data. @zara"""
         config = _get_config()
 
+        # DEBUG: Log configured sensor keys
+        _LOGGER.info(
+            "EnergyFlowView: solar_to_house config key = %s, solar_to_battery config key = %s",
+            config.get(CONF_SENSOR_SOLAR_TO_HOUSE),
+            config.get(CONF_SENSOR_SOLAR_TO_BATTERY),
+        )
+
         # Solar kann NIEMALS negativ sein - korrigiere negative Werte
         solar_power = _get_sensor_value(config.get(CONF_SENSOR_SOLAR_POWER))
         solar_to_house = _get_sensor_value(config.get(CONF_SENSOR_SOLAR_TO_HOUSE))
         solar_to_battery = _get_sensor_value(config.get(CONF_SENSOR_SOLAR_TO_BATTERY))
+
+        # DEBUG: Log sensor values
+        _LOGGER.info(
+            "EnergyFlowView: solar_power = %s, solar_to_house = %s, solar_to_battery = %s",
+            solar_power, solar_to_house, solar_to_battery,
+        )
         if solar_power is not None and solar_power < 0:
             solar_power = 0.0
         if solar_to_house is not None and solar_to_house < 0:
@@ -1088,6 +1138,13 @@ class EnergyFlowView(HomeAssistantView):
             "current_price": await self._get_current_price(),
             "feed_in_tariff": config.get(CONF_FEED_IN_TARIFF, DEFAULT_FEED_IN_TARIFF),
         }
+
+        # DEBUG: Log final result flows
+        _LOGGER.info(
+            "EnergyFlowView FINAL: solar_to_house = %s, solar_to_battery = %s",
+            result["flows"]["solar_to_house"],
+            result["flows"]["solar_to_battery"],
+        )
 
         return web.json_response(result)
 
@@ -2956,3 +3013,162 @@ class BackgroundImageView(HomeAssistantView):
         except Exception as err:
             _LOGGER.error("Error serving background image: %s", err)
             return web.Response(status=500, text=str(err))
+
+
+class ForecastComparisonView(HomeAssistantView):
+    """View to get forecast comparison data for the last 7 days. @zara
+
+    GET /api/sfml_stats/forecast_comparison
+    Optional query params: ?days=7
+
+    Returns JSON with comparison data for charting.
+    """
+
+    url = "/api/sfml_stats/forecast_comparison"
+    name = "api:sfml_stats:forecast_comparison"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: web.Request) -> web.Response:
+        """Return forecast comparison data as JSON."""
+        try:
+            from ..readers.forecast_comparison_reader import ForecastComparisonReader
+
+            # Parse optional days parameter
+            days = int(request.query.get("days", "7"))
+            days = min(max(days, 1), 30)  # Clamp between 1 and 30
+
+            if HASS is None:
+                return web.json_response({
+                    "success": False,
+                    "error": "Home Assistant not initialized"
+                }, status=500)
+
+            config_path = Path(HASS.config.path())
+            reader = ForecastComparisonReader(config_path)
+
+            if not reader.is_available:
+                return web.json_response({
+                    "success": False,
+                    "error": "No forecast comparison data available yet",
+                    "hint": "Data is collected daily at 23:50"
+                }, status=404)
+
+            chart_data = await reader.async_get_chart_data(days=days)
+
+            return web.json_response({
+                "success": True,
+                "data": chart_data,
+            })
+
+        except Exception as err:
+            _LOGGER.error("Error getting forecast comparison data: %s", err)
+            return web.json_response({
+                "success": False,
+                "error": str(err)
+            }, status=500)
+
+
+class ForecastComparisonChartView(HomeAssistantView):
+    """View to generate and return forecast comparison chart as PNG. @zara
+
+    GET/POST /api/sfml_stats/forecast_comparison_chart
+    Optional JSON body: {"days": 7}
+
+    Returns PNG image.
+    """
+
+    url = "/api/sfml_stats/forecast_comparison_chart"
+    name = "api:sfml_stats:forecast_comparison_chart"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: web.Request) -> web.Response:
+        """Generate and return forecast comparison chart as PNG."""
+        try:
+            from ..charts.forecast_comparison import ForecastComparisonChart
+            from ..storage import DataValidator
+
+            # Parse optional days parameter
+            days = int(request.query.get("days", "7"))
+            days = min(max(days, 1), 30)  # Clamp between 1 and 30
+
+            if HASS is None:
+                return web.json_response({
+                    "success": False,
+                    "error": "Home Assistant not initialized"
+                }, status=500)
+
+            # Get validator from HASS data
+            validator = None
+            entries = HASS.data.get(DOMAIN, {})
+            for entry_id, entry_data in entries.items():
+                if isinstance(entry_data, dict) and "validator" in entry_data:
+                    validator = entry_data["validator"]
+                    break
+
+            if validator is None:
+                return web.json_response({
+                    "success": False,
+                    "error": "DataValidator not initialized"
+                }, status=500)
+
+            _LOGGER.info("Generating forecast comparison chart (%d days)", days)
+
+            # Create chart and generate
+            chart = ForecastComparisonChart(validator)
+            fig = await chart.generate(days=days)
+
+            # Render to PNG bytes
+            import io
+            from concurrent.futures import ThreadPoolExecutor
+
+            def _render_to_bytes():
+                buf = io.BytesIO()
+                fig.savefig(
+                    buf,
+                    format="png",
+                    dpi=150,
+                    bbox_inches="tight",
+                    facecolor=chart.styles.background,
+                    edgecolor="none",
+                )
+                import matplotlib.pyplot as plt
+                plt.close(fig)
+                buf.seek(0)
+                return buf.getvalue()
+
+            loop = asyncio.get_running_loop()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                png_bytes = await loop.run_in_executor(executor, _render_to_bytes)
+
+            return web.Response(
+                body=png_bytes,
+                content_type="image/png",
+                headers={
+                    "Content-Disposition": "inline; filename=forecast_comparison.png",
+                    "Cache-Control": "no-cache",
+                }
+            )
+
+        except Exception as err:
+            _LOGGER.error("Error generating forecast comparison chart: %s", err)
+            return web.json_response({
+                "success": False,
+                "error": str(err)
+            }, status=500)
+
+    @local_only
+    async def post(self, request: web.Request) -> web.Response:
+        """Handle POST request (same as GET)."""
+        try:
+            data = await request.json()
+            days = data.get("days", 7)
+        except Exception:
+            days = 7
+
+        # Create mock request with days parameter
+        class MockRequest:
+            query = {"days": str(days)}
+
+        return await self.get(MockRequest())

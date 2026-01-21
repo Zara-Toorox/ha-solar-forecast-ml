@@ -360,12 +360,17 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             panel_groups_str = user_input.get("panel_groups_input", "").strip()
 
-            if panel_groups_str:
+            # V12.9.1: Panel groups are now REQUIRED (min 1, max 4)
+            if not panel_groups_str:
+                errors["panel_groups_input"] = "panel_groups_required"
+            else:
                 # Parse the panel groups
                 panel_groups = _parse_panel_groups(panel_groups_str)
 
                 if not panel_groups:
                     errors["panel_groups_input"] = "invalid_panel_format"
+                elif len(panel_groups) > 4:
+                    errors["panel_groups_input"] = "too_many_panel_groups"
                 else:
                     # Validate energy sensors if configured
                     sensor_errors = await self._validate_panel_group_sensors(panel_groups)
@@ -390,8 +395,9 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         existing_groups = self._user_input.get(CONF_PANEL_GROUPS, [])
         default_value = _format_panel_groups(existing_groups) if existing_groups else ""
 
+        # V12.9.1: Panel groups are now REQUIRED
         schema = vol.Schema({
-            vol.Optional("panel_groups_input", default=default_value): selector.TextSelector(
+            vol.Required("panel_groups_input", default=default_value): selector.TextSelector(
                 selector.TextSelectorConfig(
                     multiline=True,
                     type=selector.TextSelectorType.TEXT,
@@ -577,11 +583,16 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             panel_groups_str = user_input.get("panel_groups_input", "").strip()
 
-            if panel_groups_str:
+            # V12.9.1: Panel groups are now REQUIRED (min 1, max 4)
+            if not panel_groups_str:
+                errors["panel_groups_input"] = "panel_groups_required"
+            else:
                 panel_groups = _parse_panel_groups(panel_groups_str)
 
                 if not panel_groups:
                     errors["panel_groups_input"] = "invalid_panel_format"
+                elif len(panel_groups) > 4:
+                    errors["panel_groups_input"] = "too_many_panel_groups"
                 else:
                     # Validate energy sensors if configured
                     sensor_errors = await self._validate_panel_group_sensors(panel_groups)
@@ -591,10 +602,6 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._user_input[CONF_PANEL_GROUPS] = panel_groups
                         total_capacity = _calculate_total_capacity_from_groups(panel_groups)
                         self._user_input[CONF_SOLAR_CAPACITY] = total_capacity
-            else:
-                # Remove panel groups if empty (use simple capacity mode)
-                if CONF_PANEL_GROUPS in self._user_input:
-                    del self._user_input[CONF_PANEL_GROUPS]
 
             if not errors:
                 return self.async_update_reload_and_abort(
@@ -605,8 +612,9 @@ class SolarForecastMLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         existing_groups = self._user_input.get(CONF_PANEL_GROUPS, [])
         default_value = _format_panel_groups(existing_groups) if existing_groups else ""
 
+        # V12.9.1: Panel groups are now REQUIRED
         schema = vol.Schema({
-            vol.Optional("panel_groups_input", default=default_value): selector.TextSelector(
+            vol.Required("panel_groups_input", default=default_value): selector.TextSelector(
                 selector.TextSelectorConfig(
                     multiline=True,
                     type=selector.TextSelectorType.TEXT,

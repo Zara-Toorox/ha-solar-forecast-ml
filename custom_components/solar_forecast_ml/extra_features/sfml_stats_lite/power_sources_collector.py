@@ -1,4 +1,4 @@
-"""Power Sources Data Collector for SFML Stats. @zara
+"""Power Sources Data Collector for SFML Stats.
 
 Collects power flow data every few minutes for the Power Sources chart.
 
@@ -44,10 +44,10 @@ MAX_DATA_AGE_DAYS = 7
 
 
 class PowerSourcesCollector:
-    """Collects power sources data periodically. @zara"""
+    """Collects power sources data periodically."""
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any], data_path: Path) -> None:
-        """Initialize the collector. @zara"""
+        """Initialize the collector."""
         self.hass = hass
         self.config = config
         self.data_path = data_path
@@ -57,7 +57,7 @@ class PowerSourcesCollector:
         self._running = False
 
     async def start(self) -> None:
-        """Start the data collection task. @zara"""
+        """Start the data collection task."""
         if self._running:
             return
 
@@ -69,7 +69,7 @@ class PowerSourcesCollector:
         _LOGGER.info("Power Sources Collector started")
 
     async def _ensure_data_files(self) -> None:
-        """Ensure data directory and files exist on first installation. @zara"""
+        """Ensure data directory and files exist on first installation."""
         self.data_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize power_sources_history.json if not exists
@@ -96,7 +96,7 @@ class PowerSourcesCollector:
             _LOGGER.info("Created energy_sources_daily_stats.json")
 
     async def _save_json(self, filepath: Path, data: dict[str, Any]) -> None:
-        """Save data to a JSON file. @zara"""
+        """Save data to a JSON file."""
         try:
             async with aiofiles.open(filepath, 'w') as f:
                 await f.write(json.dumps(data, indent=2))
@@ -104,7 +104,7 @@ class PowerSourcesCollector:
             _LOGGER.error("Error saving %s: %s", filepath, e)
 
     async def stop(self) -> None:
-        """Stop the data collection task. @zara"""
+        """Stop the data collection task."""
         self._running = False
         if self._task:
             self._task.cancel()
@@ -115,7 +115,7 @@ class PowerSourcesCollector:
         _LOGGER.info("Power Sources Collector stopped")
 
     async def _collection_loop(self) -> None:
-        """Main collection loop. @zara"""
+        """Main collection loop."""
         while self._running:
             try:
                 await self._collect_data()
@@ -126,7 +126,7 @@ class PowerSourcesCollector:
             await asyncio.sleep(COLLECTION_INTERVAL)
 
     async def _collect_data(self) -> None:
-        """Collect current power values. @zara"""
+        """Collect current power values."""
         now = datetime.now(timezone.utc)
 
         # Get sensor values
@@ -188,7 +188,7 @@ class PowerSourcesCollector:
         await self._update_daily_stats(now, data_point)
 
     def _get_sensor_value(self, config_key: str) -> float | None:
-        """Get sensor value from Home Assistant. @zara"""
+        """Get sensor value from Home Assistant."""
         entity_id = self.config.get(config_key)
         if not entity_id:
             return None
@@ -203,7 +203,7 @@ class PowerSourcesCollector:
             return None
 
     async def _load_data(self) -> dict[str, Any]:
-        """Load existing data from file. @zara"""
+        """Load existing data from file."""
         if not self.data_file.exists():
             return {
                 "version": 1,
@@ -228,7 +228,7 @@ class PowerSourcesCollector:
             }
 
     async def _save_data(self, data: dict[str, Any]) -> None:
-        """Save data to file. @zara"""
+        """Save data to file."""
         self.data_path.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -238,7 +238,7 @@ class PowerSourcesCollector:
             _LOGGER.error("Error saving power sources data: %s", e)
 
     async def get_history(self, hours: int = 24) -> list[dict[str, Any]]:
-        """Get historical data for the specified number of hours. @zara"""
+        """Get historical data for the specified number of hours."""
         data = await self._load_data()
 
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -251,7 +251,7 @@ class PowerSourcesCollector:
         return sorted(filtered, key=lambda x: x["timestamp"])
 
     async def _update_daily_stats(self, now: datetime, data_point: dict[str, Any]) -> None:
-        """Update daily statistics with current data point. @zara"""
+        """Update daily statistics with current data point."""
         # Get today's date string (local time)
         local_now = now.astimezone()
         today_str = local_now.strftime("%Y-%m-%d")
@@ -331,7 +331,7 @@ class PowerSourcesCollector:
         await self._save_json(self.daily_stats_file, daily_stats)
 
     def _create_empty_day_stats(self, date_str: str) -> dict[str, Any]:
-        """Create empty statistics structure for a new day. @zara"""
+        """Create empty statistics structure for a new day."""
         return {
             "date": date_str,
             "solar_total_kwh": 0.0,
@@ -354,7 +354,7 @@ class PowerSourcesCollector:
         }
 
     async def _load_daily_stats(self) -> dict[str, Any]:
-        """Load daily statistics from file. @zara"""
+        """Load daily statistics from file."""
         if not self.daily_stats_file.exists():
             return {
                 "version": 1,
@@ -377,7 +377,7 @@ class PowerSourcesCollector:
             }
 
     async def get_daily_stats(self, days: int = 7) -> dict[str, Any]:
-        """Get daily statistics for the specified number of days. @zara"""
+        """Get daily statistics for the specified number of days."""
         daily_stats = await self._load_daily_stats()
 
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")

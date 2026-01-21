@@ -1,4 +1,4 @@
-"""Data validator for SFML Stats. @zara
+"""Data validator for SFML Stats.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -40,10 +40,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DataValidator:
-    """Validates and creates required directory structures. @zara"""
+    """Validates and creates required directory structures."""
 
     def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the data validator. @zara"""
+        """Initialize the data validator."""
         self._hass = hass
         self._config_path = Path(hass.config.path())
         self._initialized = False
@@ -51,26 +51,26 @@ class DataValidator:
 
     @property
     def config_path(self) -> Path:
-        """Return the Home Assistant config path. @zara"""
+        """Return the Home Assistant config path."""
         return self._config_path
 
     @property
     def export_base_path(self) -> Path:
-        """Return the SFML Stats export base path. @zara"""
+        """Return the SFML Stats export base path."""
         return self._config_path / SFML_STATS_BASE
 
     @property
     def is_initialized(self) -> bool:
-        """Check if the validator has been initialized. @zara"""
+        """Check if the validator has been initialized."""
         return self._initialized
 
     @property
     def source_status(self) -> dict[str, bool]:
-        """Return the status of source integrations. @zara"""
+        """Return the status of source integrations."""
         return self._source_status.copy()
 
     async def async_initialize(self) -> bool:
-        """Initialize the directory structure. @zara"""
+        """Initialize the directory structure."""
         _LOGGER.info("Initializing SFML Stats directory structure")
 
         try:
@@ -90,7 +90,7 @@ class DataValidator:
             return False
 
     async def _validate_sources(self) -> None:
-        """Validate availability of source integrations. @zara"""
+        """Validate availability of source integrations."""
         sources = {
             "solar_forecast_ml": {
                 "base": SOLAR_FORECAST_ML_BASE,
@@ -129,7 +129,7 @@ class DataValidator:
                 )
 
     async def _create_export_directories(self) -> None:
-        """Create all export directories. @zara"""
+        """Create all export directories."""
         for directory in EXPORT_DIRECTORIES:
             dir_path = self._config_path / directory
             dir_exists = await self._hass.async_add_executor_job(dir_path.exists)
@@ -142,7 +142,7 @@ class DataValidator:
                 _LOGGER.debug("Directory already exists: %s", dir_path)
 
     async def _create_gitignore(self) -> None:
-        """Create a .gitignore in the export folder. @zara"""
+        """Create a .gitignore in the export folder."""
         gitignore_path = self.export_base_path / ".gitignore"
 
         gitignore_exists = await self._hass.async_add_executor_job(gitignore_path.exists)
@@ -159,7 +159,7 @@ class DataValidator:
             _LOGGER.debug(".gitignore created: %s", gitignore_path)
 
     def get_source_path(self, source: str, subpath: str | Path = "") -> Path | None:
-        """Return the path to a source file. @zara"""
+        """Return the path to a source file."""
         if not self._source_status.get(source, False):
             return None
 
@@ -175,11 +175,11 @@ class DataValidator:
         return self._config_path / base / subpath
 
     def get_export_path(self, subpath: str | Path = "") -> Path:
-        """Return the path to an export file. @zara"""
+        """Return the path to an export file."""
         return self.export_base_path / subpath
 
     async def async_validate_file_readable(self, file_path: Path) -> bool:
-        """Check if a file is readable. @zara"""
+        """Check if a file is readable."""
         try:
             exists = await self._hass.async_add_executor_job(file_path.exists)
             if not exists:
@@ -190,7 +190,7 @@ class DataValidator:
             return False
 
     async def async_get_directory_tree(self) -> dict:
-        """Return the current directory structure as a dict. @zara"""
+        """Return the current directory structure as a dict."""
         tree = {
             "export_base": str(self.export_base_path),
             "initialized": self._initialized,
@@ -210,7 +210,7 @@ class DataValidator:
             if dir_exists:
                 try:
                     def get_files(p: Path) -> list[str]:
-                        """Helper for blocking file operations. @zara"""
+                        """Helper for blocking file operations."""
                         return [f.name for f in p.glob("*") if f.is_file()]
 
                     file_names = await self._hass.async_add_executor_job(
@@ -223,7 +223,7 @@ class DataValidator:
         return tree
 
     def __repr__(self) -> str:
-        """Return string representation of the validator. @zara"""
+        """Return string representation of the validator."""
         return (
             f"DataValidator("
             f"config_path={self._config_path}, "

@@ -15,7 +15,7 @@ from typing import Final
 
 DOMAIN: Final = "sfml_stats"
 NAME: Final = "SFML Stats"
-VERSION: Final = "6.2.0"
+VERSION: Final = "6.4.2"
 
 SOLAR_FORECAST_ML_BASE: Final = Path("solar_forecast_ml")
 SOLAR_FORECAST_ML_STATS: Final = SOLAR_FORECAST_ML_BASE / "stats"
@@ -306,3 +306,35 @@ GRID_FEE_FACTOR_HIGH: Final = 1.0
 GRID_FEE_FACTOR_MEDIUM: Final = 1.3
 GRID_FEE_FACTOR_LOW: Final = 1.6
 GRID_FEE_FACTOR_VERY_LOW: Final = 2.0
+
+# =============================================================================
+# Forecast Comparison Feature Constants
+# =============================================================================
+
+# External forecast entities (optional)
+CONF_FORECAST_ENTITY_1: Final = "forecast_entity_1"
+CONF_FORECAST_ENTITY_2: Final = "forecast_entity_2"
+CONF_FORECAST_ENTITY_1_NAME: Final = "forecast_entity_1_name"
+CONF_FORECAST_ENTITY_2_NAME: Final = "forecast_entity_2_name"
+
+DEFAULT_FORECAST_ENTITY_1_NAME: Final = "Externe Prognose 1"
+DEFAULT_FORECAST_ENTITY_2_NAME: Final = "Externe Prognose 2"
+
+# Data file for external forecasts history
+EXTERNAL_FORECASTS_HISTORY: Final = "external_forecasts_history.json"
+
+# Forecast comparison settings
+FORECAST_COMPARISON_RETENTION_DAYS: Final = 30
+FORECAST_COMPARISON_CHART_DAYS: Final = 7
+
+# Scheduled job times for forecast comparison
+# Morning: Collect forecast values for today (before they change during the day)
+FORECAST_MORNING_HOUR: Final = 8
+FORECAST_MORNING_MINUTE: Final = 0
+# Evening: Collect actual production for the day (after day is complete)
+FORECAST_EVENING_HOUR: Final = 23
+FORECAST_EVENING_MINUTE: Final = 50
+
+# Chart generation time (after data collection)
+FORECAST_CHART_HOUR: Final = 0
+FORECAST_CHART_MINUTE: Final = 5

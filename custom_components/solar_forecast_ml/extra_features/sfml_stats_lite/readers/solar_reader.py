@@ -1,4 +1,4 @@
-"""Solar data reader for SFML Stats. @zara
+"""Solar data reader for SFML Stats.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -39,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class DailySummary:
-    """Daily solar production summary. @zara"""
+    """Daily solar production summary."""
 
     date: date
     day_of_week: int
@@ -71,7 +71,7 @@ class DailySummary:
 
 @dataclass
 class HourlyPrediction:
-    """Hourly prediction data. @zara"""
+    """Hourly prediction data."""
 
     target_datetime: datetime
     target_hour: int
@@ -96,7 +96,7 @@ class HourlyPrediction:
 
 @dataclass
 class ModelState:
-    """ML model state. @zara"""
+    """ML model state."""
 
     model_loaded: bool
     algorithm_used: str
@@ -110,21 +110,21 @@ class ModelState:
 
 
 class SolarDataReader:
-    """Reads and parses data from Solar Forecast ML. @zara"""
+    """Reads and parses data from Solar Forecast ML."""
 
     def __init__(self, config_path: Path) -> None:
-        """Initialize the solar data reader. @zara"""
+        """Initialize the solar data reader."""
         self._config_path = config_path
         self._stats_path = config_path / SOLAR_FORECAST_ML_STATS
         self._ai_path = config_path / SOLAR_FORECAST_ML_AI
 
     @property
     def is_available(self) -> bool:
-        """Check if Solar Forecast ML data is available. @zara"""
+        """Check if Solar Forecast ML data is available."""
         return self._stats_path.exists() and self._ai_path.exists()
 
     async def _read_json_file(self, file_path: Path) -> dict | None:
-        """Read a JSON file asynchronously. @zara"""
+        """Read a JSON file asynchronously."""
         if not file_path.exists():
             _LOGGER.debug("File not found: %s", file_path)
             return None
@@ -146,7 +146,7 @@ class SolarDataReader:
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> list[DailySummary]:
-        """Read the daily summaries. @zara"""
+        """Read the daily summaries."""
         file_path = self._stats_path / SOLAR_DAILY_SUMMARIES
         data = await self._read_json_file(file_path)
 
@@ -211,7 +211,7 @@ class SolarDataReader:
         target_date: date | None = None,
         include_no_production: bool = False,
     ) -> list[HourlyPrediction]:
-        """Read the hourly predictions. @zara"""
+        """Read the hourly predictions."""
         file_path = self._stats_path / SOLAR_HOURLY_PREDICTIONS
         data = await self._read_json_file(file_path)
 
@@ -263,7 +263,7 @@ class SolarDataReader:
         return predictions
 
     async def async_get_model_state(self) -> ModelState | None:
-        """Read the current ML model state from ai/learned_weights.json. @zara"""
+        """Read the current ML model state from ai/learned_weights.json."""
         weights_path = self._ai_path / SOLAR_LEARNED_WEIGHTS
         weights_data = await self._read_json_file(weights_path)
 
@@ -298,7 +298,7 @@ class SolarDataReader:
             return None
 
     async def async_get_weekly_stats(self, year: int, week: int) -> dict[str, Any]:
-        """Calculate statistics for a specific calendar week. @zara"""
+        """Calculate statistics for a specific calendar week."""
         all_summaries = await self.async_get_daily_summaries()
 
         week_summaries = [
@@ -346,7 +346,7 @@ class SolarDataReader:
         }
 
     async def async_get_monthly_stats(self, year: int, month: int) -> dict[str, Any]:
-        """Calculate statistics for a specific month. @zara"""
+        """Calculate statistics for a specific month."""
         all_summaries = await self.async_get_daily_summaries()
 
         month_summaries = [

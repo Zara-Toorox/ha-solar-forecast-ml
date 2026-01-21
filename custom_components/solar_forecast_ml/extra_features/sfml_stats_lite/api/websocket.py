@@ -1,4 +1,4 @@
-"""WebSocket API for realtime updates. @zara
+"""WebSocket API for realtime updates.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -36,7 +36,7 @@ _subscriptions: dict[str, set] = {}
 
 
 def _get_config_paths(hass: HomeAssistant) -> tuple[Path, Path]:
-    """Get config paths dynamically from Home Assistant. @zara"""
+    """Get config paths dynamically from Home Assistant."""
     config_path = Path(hass.config.path())
     solar_path = config_path / "solar_forecast_ml"
     grid_path = config_path / "grid_price_monitor"
@@ -44,7 +44,7 @@ def _get_config_paths(hass: HomeAssistant) -> tuple[Path, Path]:
 
 
 async def async_setup_websocket(hass: HomeAssistant) -> None:
-    """Register WebSocket commands. @zara"""
+    """Register WebSocket commands."""
     websocket_api.async_register_command(hass, websocket_subscribe_updates)
     websocket_api.async_register_command(hass, websocket_get_dashboard_data)
     _LOGGER.info("SFML Stats WebSocket commands registered")
@@ -62,7 +62,7 @@ async def websocket_subscribe_updates(
     connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Subscribe to realtime updates. @zara"""
+    """Subscribe to realtime updates."""
     msg_id = msg["id"]
     interval = msg.get("interval", 30)
 
@@ -71,7 +71,7 @@ async def websocket_subscribe_updates(
     connection.send_result(msg_id, {"subscribed": True, "interval": interval})
 
     async def send_updates():
-        """Send periodic updates. @zara"""
+        """Send periodic updates."""
         while True:
             try:
                 data = await _get_realtime_data(hass)
@@ -112,7 +112,7 @@ async def websocket_get_dashboard_data(
     connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Get all dashboard data at once. @zara"""
+    """Get all dashboard data at once."""
     solar_path, grid_path = _get_config_paths(hass)
 
     result = {
@@ -167,7 +167,7 @@ async def websocket_get_dashboard_data(
 
 
 async def _get_realtime_data(hass: HomeAssistant) -> dict:
-    """Collect realtime data for WebSocket updates. @zara"""
+    """Collect realtime data for WebSocket updates."""
     solar_path, grid_path = _get_config_paths(hass)
 
     data = {
