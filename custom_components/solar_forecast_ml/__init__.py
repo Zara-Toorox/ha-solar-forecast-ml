@@ -43,6 +43,146 @@ from .core.core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def _migrate_remove_default_panel_group(data_dir: Path) -> bool:
+    """V13.1 Migration: Remove obsolete 'Default' panel group from all JSON files.
+
+    Since V13, panel groups must be explicitly named. Pre-V13 installations may
+    still have a 'Default' group that can contaminate forecasts and calibration.
+
+    This migration runs synchronously before async startup to ensure clean data.
+
+    Files cleaned:
+    - physics/learning_config.json (group_calibration)
+    - physics/calibration_history.json (history entries)
+    - stats/hourly_predictions.json (panel_group_predictions)
+    - stats/daily_forecasts.json (panel_groups)
+    - stats/retrospective_forecast.json (panel_group_predictions)
+
+    Returns:
+        True if any changes were made, False if already clean.
+    """
+    import json
+    from datetime import datetime
+
+    changes_made = False
+
+    # 1. learning_config.json - group_calibration
+    learning_config_file = data_dir / "physics" / "learning_config.json"
+    if learning_config_file.exists():
+        try:
+            with open(learning_config_file, "r", encoding="utf-8") as f:
+                learning_config = json.load(f)
+
+            if "Default" in learning_config.get("group_calibration", {}):
+                del learning_config["group_calibration"]["Default"]
+                learning_config["updated_at"] = datetime.now().isoformat()
+                with open(learning_config_file, "w", encoding="utf-8") as f:
+                    json.dump(learning_config, f, indent=2, ensure_ascii=False)
+                _LOGGER.info("V13.1 Migration: Removed 'Default' from learning_config.json")
+                changes_made = True
+        except Exception as e:
+            _LOGGER.warning(f"V13.1 Migration: Could not clean learning_config.json: {e}")
+
+    # 2. calibration_history.json - history entries
+    calibration_history_file = data_dir / "physics" / "calibration_history.json"
+    if calibration_history_file.exists():
+        try:
+            with open(calibration_history_file, "r", encoding="utf-8") as f:
+                calibration_history = json.load(f)
+
+            history_cleaned = 0
+            for entry in calibration_history.get("history", []):
+                if "Default" in entry.get("groups", {}):
+                    del entry["groups"]["Default"]
+                    history_cleaned += 1
+
+            if history_cleaned > 0:
+                calibration_history["updated_at"] = datetime.now().isoformat()
+                with open(calibration_history_file, "w", encoding="utf-8") as f:
+                    json.dump(calibration_history, f, indent=2, ensure_ascii=False)
+                _LOGGER.info(f"V13.1 Migration: Removed 'Default' from {history_cleaned} calibration_history entries")
+                changes_made = True
+        except Exception as e:
+            _LOGGER.warning(f"V13.1 Migration: Could not clean calibration_history.json: {e}")
+
+    # 3. hourly_predictions.json - panel_group_predictions
+    hourly_predictions_file = data_dir / "stats" / "hourly_predictions.json"
+    if hourly_predictions_file.exists():
+        try:
+            with open(hourly_predictions_file, "r", encoding="utf-8") as f:
+                hourly_predictions = json.load(f)
+
+            predictions_cleaned = 0
+            for pred in hourly_predictions.get("predictions", []):
+                panel_groups = pred.get("panel_group_predictions") or {}
+                if panel_groups and "Default" in panel_groups:
+                    del pred["panel_group_predictions"]["Default"]
+                    predictions_cleaned += 1
+
+            if predictions_cleaned > 0:
+                with open(hourly_predictions_file, "w", encoding="utf-8") as f:
+                    json.dump(hourly_predictions, f, indent=2, ensure_ascii=False)
+                _LOGGER.info(f"V13.1 Migration: Removed 'Default' from {predictions_cleaned} hourly predictions")
+                changes_made = True
+        except Exception as e:
+            _LOGGER.warning(f"V13.1 Migration: Could not clean hourly_predictions.json: {e}")
+
+    # 4. daily_forecasts.json - panel_groups in today and history
+    daily_forecasts_file = data_dir / "stats" / "daily_forecasts.json"
+    if daily_forecasts_file.exists():
+        try:
+            with open(daily_forecasts_file, "r", encoding="utf-8") as f:
+                daily_forecasts = json.load(f)
+
+            daily_cleaned = False
+
+            if "Default" in daily_forecasts.get("today", {}).get("panel_groups", {}):
+                del daily_forecasts["today"]["panel_groups"]["Default"]
+                daily_cleaned = True
+
+            for entry in daily_forecasts.get("history", []):
+                if "Default" in entry.get("panel_groups", {}):
+                    del entry["panel_groups"]["Default"]
+                    daily_cleaned = True
+
+            if daily_cleaned:
+                with open(daily_forecasts_file, "w", encoding="utf-8") as f:
+                    json.dump(daily_forecasts, f, indent=2, ensure_ascii=False)
+                _LOGGER.info("V13.1 Migration: Removed 'Default' from daily_forecasts.json")
+                changes_made = True
+        except Exception as e:
+            _LOGGER.warning(f"V13.1 Migration: Could not clean daily_forecasts.json: {e}")
+
+    # 5. retrospective_forecast.json - panel_group_predictions
+    retro_file = data_dir / "stats" / "retrospective_forecast.json"
+    if retro_file.exists():
+        try:
+            with open(retro_file, "r", encoding="utf-8") as f:
+                retro = json.load(f)
+
+            retro_cleaned = 0
+            for pred in retro.get("hourly_predictions", []):
+                panel_groups = pred.get("panel_group_predictions") or {}
+                if panel_groups and "Default" in panel_groups:
+                    del pred["panel_group_predictions"]["Default"]
+                    retro_cleaned += 1
+
+            if retro_cleaned > 0:
+                with open(retro_file, "w", encoding="utf-8") as f:
+                    json.dump(retro, f, indent=2, ensure_ascii=False)
+                _LOGGER.info(f"V13.1 Migration: Removed 'Default' from {retro_cleaned} retrospective predictions")
+                changes_made = True
+        except Exception as e:
+            _LOGGER.warning(f"V13.1 Migration: Could not clean retrospective_forecast.json: {e}")
+
+    if changes_made:
+        _LOGGER.info("V13.1 Migration: 'Default' panel group cleanup completed")
+    else:
+        _LOGGER.debug("V13.1 Migration: No 'Default' panel group found - data already clean")
+
+    return changes_made
+
 _log_queue_listener: QueueListener | None = None
 _log_queue_handler: QueueHandler | None = None
 _logging_initialized: bool = False
@@ -196,6 +336,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.async_add_executor_job(lambda: data_dir.mkdir(parents=True, exist_ok=True))
     except Exception as e:
         _LOGGER.error(f"Failed to create data directory: {e}", exc_info=True)
+
+    # V13.1 Migration: Remove obsolete 'Default' panel group
+    # Runs every startup to ensure clean data (idempotent, fast if nothing to do)
+    try:
+        await hass.async_add_executor_job(_migrate_remove_default_panel_group, data_dir)
+    except Exception as e:
+        _LOGGER.warning(f"V13.1 Migration failed (non-critical): {e}")
 
     if not flag_file.exists():
         _LOGGER.warning("=" * 70)

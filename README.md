@@ -1,6 +1,6 @@
-# Solar Forecast ML V13.0.0 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
+# Solar Forecast ML V13.1.0 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
 
-[![Version](https://img.shields.io/badge/version-13.0.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-13.1.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 
@@ -42,7 +42,7 @@ With Version 12.8.8 "Sarpeidon," solar optimization enters a new dimension:
 
 ---
 
-## Features in V13.0.0 "Sarpeidon"
+## Features in V13.1.0 "Sarpeidon"
 
 ### 5-Weather-Expert Blending
 - **Multi-Source Weather Data** - Combines 5 independent weather services for optimal accuracy

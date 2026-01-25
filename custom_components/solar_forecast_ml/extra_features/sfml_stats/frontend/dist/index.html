@@ -11,6 +11,9 @@
     <!-- Vue 3 -->
     <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
 
+    <!-- SortableJS for drag & drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
     <!-- External CSS (modularized) -->
     <link rel="stylesheet" href="/api/sfml_stats/assets/css/main.css">
 </head>
@@ -18,25 +21,37 @@
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
 
+    <!-- Hold-to-Drag Progress Indicator (Mobile) -->
+    <div id="drag-hold-indicator" class="drag-hold-indicator">
+        <svg viewBox="0 0 44 44">
+            <circle class="progress-ring-bg" cx="22" cy="22" r="20"/>
+            <circle class="progress-ring-fill" cx="22" cy="22" r="20"/>
+        </svg>
+        <span class="hold-icon">✥</span>
+    </div>
+
     <div id="app">
         <header class="header">
             <h1>SFML Hybrid-AI Dashboard by Zara</h1>
             <div class="header-controls">
-                <button @click="toggleDashboardStyle" class="style-toggle" :class="dashboardStyle === '3d' ? 'active-3d' : 'active-2d'" :title="dashboardStyle === '3d' ? 'Zu 2D wechseln' : 'Zu 3D wechseln'">
-                    <span class="style-toggle-icon">{{ dashboardStyle === '3d' ? '🎲' : '⬜' }}</span>
-                    <span>{{ dashboardStyle === '3d' ? '3D' : '2D' }}</span>
+                <button @click="toggleDashboardStyle" class="style-toggle" :class="{'active-3d': dashboardStyle === '3d', 'active-2d': dashboardStyle === '2d', 'active-list': dashboardStyle === 'list'}" :title="dashboardStyle === '3d' ? 'Zu 2D wechseln' : dashboardStyle === '2d' ? 'Zur Liste wechseln' : 'Zu 3D wechseln'">
+                    <span class="style-toggle-icon">{{ getDashboardStyleIcon() }}</span>
+                    <span>{{ getDashboardStyleLabel() }}</span>
                 </button>
                 <button @click="toggleTheme" class="theme-toggle" :title="isDarkTheme ? 'Zu Hell wechseln' : 'Zu Dunkel wechseln'">
                     {{ isDarkTheme ? '☀️' : '🌙' }}
+                </button>
+                <button @click="resetSectionOrder" class="reset-order-btn" title="Sortierung zurücksetzen">
+                    ↺
                 </button>
                 <span><span class="status-dot"></span>Live</span>
                 <span style="color: var(--text-muted)">{{ lastUpdate }}</span>
             </div>
         </header>
 
-        <main class="main-content">
+        <main class="main-content sortable-sections" ref="sortableContainer">
             <!-- Top Row: Weather Groups, Forecast, Yield, Price -->
-            <section class="top-row">
+            <section class="top-row sortable-item" data-section="weather">
                 <!-- Gruppe 1: IST + KI-Korrigiert -->
                 <div class="widget-group-container">
                     <span class="widget-group-label">🛰️ Sensoren-Array</span>
@@ -115,13 +130,13 @@
             </section>
 
             <!-- Energy Flow Diagram -->
-            <section class="energy-flow-container">
+            <section class="energy-flow-container collapsible-section sortable-item" data-section="energyMatrix">
                 <div class="energy-flow-header">
                     <div>
                         <div class="energy-flow-title">⚡ Energie-Matrix</div>
                         <div class="energy-flow-subtitle">Echtzeit-Leistungsverteilung • Warp-Kern Status</div>
                     </div>
-                    <div style="text-align: right; display: flex; gap: 1.5rem; align-items: flex-start;">
+                    <div class="energy-flow-stats">
                         <!-- Prognose heute -->
                         <div>
                             <div style="font-size: 0.7rem; color: var(--text-muted);">📊 Prognose heute</div>
@@ -147,10 +162,13 @@
                             <div style="font-size: 0.7rem; color: var(--text-dark);">{{ bestHour.prediction_kwh?.toFixed(2) || '—' }} kWh</div>
                         </div>
                     </div>
+                    <button class="section-collapse-btn" @click="toggleSection('energyFlow')" :title="isSectionCollapsed('energyFlow') ? 'Ausklappen' : 'Einklappen'">
+                        {{ isSectionCollapsed('energyFlow') ? '+' : '−' }}
+                    </button>
                 </div>
 
                 <!-- ========== ISOMETRIC 3D ENERGY FLOW DIAGRAM ========== -->
-                <svg v-if="dashboardStyle === '3d'" class="isometric-energy-flow" viewBox="0 0 900 520" preserveAspectRatio="xMidYMid meet">
+                <svg v-show="!isSectionCollapsed('energyFlow') && dashboardStyle === '3d'" class="isometric-energy-flow" viewBox="0 0 900 520" preserveAspectRatio="xMidYMid meet">
                     <!-- ========== DAY/NIGHT SKY EFFECTS ========== -->
 
                     <!-- NIGHT MODE: Twinkling Stars -->
@@ -182,9 +200,15 @@
                         <circle cx="720" cy="80" r="0.7" fill="#8080ff" class="star star-twinkle-2"/>
                         <circle cx="820" cy="45" r="0.8" fill="#8080ff" class="star star-twinkle-3"/>
 
-                        <!-- Moon -->
-                        <circle cx="780" cy="60" r="25" fill="#f5f5dc" opacity="0.9" filter="url(#glowCyan)"/>
-                        <circle cx="790" cy="55" r="22" fill="#0d1117"/>
+                        <!-- Moon (Crescent) - Glow layer -->
+                        <path d="M780,30 A30,30 0 1,1 780,90 A22,22 0 1,0 780,30 Z"
+                              fill="#fffacd" opacity="0.3" filter="url(#glowCyan)"/>
+                        <!-- Moon (Crescent) - Main body -->
+                        <path d="M780,35 A25,25 0 1,1 780,85 A18,18 0 1,0 780,35 Z"
+                              fill="#fffacd" opacity="1"/>
+                        <!-- Moon highlights -->
+                        <path d="M780,40 A23,23 0 0,1 780,80 A16,16 0 0,0 780,40 Z"
+                              fill="#fff" opacity="0.3"/>
                     </g>
 
                     <!-- DAY MODE: Sun with rays -->
@@ -602,11 +626,82 @@
                         </circle>
                     </g>
 
-                    <!-- Grid power label - left of grid tower -->
-                    <text x="680" y="450" fill="#8b5cf6" font-size="18" font-weight="bold" text-anchor="end" filter="url(#glowPurple)">
+                    <!-- Grid power label - right of grid tower -->
+                    <text x="830" y="450" fill="#8b5cf6" font-size="18" font-weight="bold" text-anchor="start" filter="url(#glowPurple)">
                         {{ getGridPower() }} W
                     </text>
-                    <text x="680" y="468" fill="#94a3b8" font-size="12" text-anchor="end">{{ getGridLabel() }}</text>
+                    <text x="830" y="468" fill="#94a3b8" font-size="12" text-anchor="start">{{ getGridLabel() }}</text>
+
+                    <!-- ========== CONSUMERS (Wärmepumpe, Heizstab, Wallbox) - Below House ========== -->
+                    <g v-if="energyFlow.consumers && (energyFlow.consumers.heatpump || energyFlow.consumers.heatingrod || energyFlow.consumers.wallbox)" class="iso-consumers iso-element-clickable" @click="openConsumerModal" transform="translate(450, 280)" style="cursor: pointer;">
+
+                        <!-- Consumer Platform (subtle) -->
+                        <ellipse cx="0" cy="85" rx="160" ry="25" fill="rgba(0, 212, 255, 0.05)" stroke="#00d4ff" stroke-width="0.5" opacity="0.5"/>
+
+                        <!-- Wärmepumpe (Heat Pump) - Left -->
+                        <g v-if="energyFlow.consumers.heatpump" transform="translate(-100, 20)" class="consumer-item">
+                            <!-- Outer glow ring -->
+                            <circle cx="30" cy="30" r="32" fill="none" stroke="#ff6b6b" stroke-width="1" opacity="0.3" filter="url(#glowCyan)"/>
+                            <!-- Main ring -->
+                            <circle cx="30" cy="30" r="28" fill="rgba(255, 107, 107, 0.1)" stroke="#ff6b6b" stroke-width="2"/>
+                            <!-- Inner circle -->
+                            <circle cx="30" cy="30" r="20" fill="rgba(13, 17, 23, 0.8)" stroke="#ff6b6b" stroke-width="1"/>
+                            <!-- Icon -->
+                            <text x="30" y="36" fill="#ff6b6b" font-size="18" text-anchor="middle">🔥</text>
+                            <!-- Power value -->
+                            <text x="30" y="75" fill="#ff6b6b" font-size="12" font-weight="bold" text-anchor="middle" filter="url(#glowCyan)">
+                                {{ energyFlow.consumers.heatpump.power?.toFixed(0) || '0' }} W
+                            </text>
+                            <!-- Label -->
+                            <text x="30" y="90" fill="#94a3b8" font-size="9" text-anchor="middle">Wärmepumpe</text>
+                        </g>
+
+                        <!-- Heizstab (Heating Rod) - Center -->
+                        <g v-if="energyFlow.consumers.heatingrod" transform="translate(-30, 20)" class="consumer-item">
+                            <!-- Outer glow ring -->
+                            <circle cx="30" cy="30" r="32" fill="none" stroke="#fbbf24" stroke-width="1" opacity="0.3" filter="url(#glowYellow)"/>
+                            <!-- Main ring -->
+                            <circle cx="30" cy="30" r="28" fill="rgba(251, 191, 36, 0.1)" stroke="#fbbf24" stroke-width="2"/>
+                            <!-- Inner circle -->
+                            <circle cx="30" cy="30" r="20" fill="rgba(13, 17, 23, 0.8)" stroke="#fbbf24" stroke-width="1"/>
+                            <!-- Icon -->
+                            <text x="30" y="36" fill="#fbbf24" font-size="18" text-anchor="middle">🌡️</text>
+                            <!-- Power value -->
+                            <text x="30" y="75" fill="#fbbf24" font-size="12" font-weight="bold" text-anchor="middle" filter="url(#glowYellow)">
+                                {{ energyFlow.consumers.heatingrod.power?.toFixed(0) || '0' }} W
+                            </text>
+                            <!-- Label -->
+                            <text x="30" y="90" fill="#94a3b8" font-size="9" text-anchor="middle">Heizstab</text>
+                        </g>
+
+                        <!-- Wallbox (EV Charger) - Right -->
+                        <g v-if="energyFlow.consumers.wallbox" transform="translate(40, 20)" class="consumer-item">
+                            <!-- Outer glow ring -->
+                            <circle cx="30" cy="30" r="32" fill="none" :stroke="energyFlow.consumers.wallbox.state === 'charging' ? '#22c55e' : '#64748b'" stroke-width="1" opacity="0.3" filter="url(#glowGreen)"/>
+                            <!-- Main ring -->
+                            <circle cx="30" cy="30" r="28" :fill="energyFlow.consumers.wallbox.state === 'charging' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(100, 116, 139, 0.1)'" :stroke="energyFlow.consumers.wallbox.state === 'charging' ? '#22c55e' : '#64748b'" stroke-width="2"/>
+                            <!-- Inner circle -->
+                            <circle cx="30" cy="30" r="20" fill="rgba(13, 17, 23, 0.8)" :stroke="energyFlow.consumers.wallbox.state === 'charging' ? '#22c55e' : '#64748b'" stroke-width="1"/>
+                            <!-- Icon -->
+                            <text x="30" y="36" :fill="energyFlow.consumers.wallbox.state === 'charging' ? '#22c55e' : '#64748b'" font-size="18" text-anchor="middle">🚗</text>
+                            <!-- Charging indicator -->
+                            <text v-if="energyFlow.consumers.wallbox.state === 'charging'" x="42" y="18" fill="#22c55e" font-size="10">⚡</text>
+                            <!-- Power value -->
+                            <text x="30" y="75" :fill="energyFlow.consumers.wallbox.state === 'charging' ? '#22c55e' : '#64748b'" font-size="12" font-weight="bold" text-anchor="middle" filter="url(#glowGreen)">
+                                {{ energyFlow.consumers.wallbox.power?.toFixed(0) || '0' }} W
+                            </text>
+                            <!-- Label -->
+                            <text x="30" y="90" fill="#94a3b8" font-size="9" text-anchor="middle">Wallbox</text>
+                        </g>
+
+                        <!-- Total consumption display -->
+                        <g transform="translate(-40, 105)">
+                            <rect x="0" y="0" width="80" height="22" rx="4" fill="rgba(0, 212, 255, 0.1)" stroke="#00d4ff" stroke-width="1"/>
+                            <text x="40" y="15" fill="#00d4ff" font-size="11" font-weight="bold" text-anchor="middle">
+                                Σ {{ ((energyFlow.consumers.heatpump?.power || 0) + (energyFlow.consumers.heatingrod?.power || 0) + (energyFlow.consumers.wallbox?.power || 0)).toFixed(0) }} W
+                            </text>
+                        </g>
+                    </g>
 
                     <!-- ========== ANIMATED FLOW LINES (Cyberpunk Style) ========== -->
 
@@ -637,7 +732,16 @@
 
                     <!-- Grid to Battery flow -->
                     <g v-if="hasBattery && energyFlow.flows.grid_to_battery > 0">
-                        <path d="M710,420 Q500,480 320,460" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-dasharray="8,4" class="flow-line-animated-reverse flow-glow-purple"/>
+                        <path d="M735,455 Q460,500 190,440" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-dasharray="8,4" class="flow-line-animated-reverse flow-glow-purple"/>
+                    </g>
+
+                    <!-- House to Consumers flow - from house down to consumers -->
+                    <g v-if="energyFlow.consumers && (energyFlow.consumers.heatpump?.power > 0 || energyFlow.consumers.heatingrod?.power > 0 || energyFlow.consumers.wallbox?.power > 0)">
+                        <path d="M450,220 L450,280" fill="none" stroke="#00d4ff" stroke-width="3" class="flow-line-animated flow-glow-cyan" stroke-linecap="round"/>
+                        <!-- Branching lines to each consumer -->
+                        <path d="M450,280 Q400,300 380,320" fill="none" stroke="#00d4ff" stroke-width="2" class="flow-line-animated flow-glow-cyan" stroke-linecap="round" opacity="0.7"/>
+                        <path d="M450,280 L450,320" fill="none" stroke="#00d4ff" stroke-width="2" class="flow-line-animated flow-glow-cyan" stroke-linecap="round" opacity="0.7"/>
+                        <path d="M450,280 Q500,300 520,320" fill="none" stroke="#00d4ff" stroke-width="2" class="flow-line-animated flow-glow-cyan" stroke-linecap="round" opacity="0.7"/>
                     </g>
 
                     <!-- ========== FLOW LABELS (rendered last to be on top) ========== -->
@@ -673,27 +777,9 @@
                 </svg>
 
                 <!-- ========== CLASSIC 2D ENERGY FLOW DIAGRAM ========== -->
-                <svg v-if="dashboardStyle === '2d'" class="energy-flow-svg" viewBox="0 0 500 320" preserveAspectRatio="xMidYMid meet">
+                <svg v-show="!isSectionCollapsed('energyFlow') && dashboardStyle === '2d'" class="energy-flow-svg" viewBox="0 0 500 370" preserveAspectRatio="xMidYMid meet">
                     <!-- Definitions -->
                     <defs>
-                        <!-- Gradients -->
-                        <linearGradient id="gradSolarHome2d" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="#ffdd00"/>
-                            <stop offset="100%" stop-color="#00ffff"/>
-                        </linearGradient>
-                        <linearGradient id="gradSolarBattery2d" x1="100%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="#ffdd00"/>
-                            <stop offset="100%" stop-color="#22c55e"/>
-                        </linearGradient>
-                        <linearGradient id="gradBatteryHome2d" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#22c55e"/>
-                            <stop offset="100%" stop-color="#00ffff"/>
-                        </linearGradient>
-                        <linearGradient id="gradGridHome2d" x1="100%" y1="0%" x2="0%" y2="0%">
-                            <stop offset="0%" stop-color="#8b5cf6"/>
-                            <stop offset="100%" stop-color="#00ffff"/>
-                        </linearGradient>
-
                         <!-- Glow Filters -->
                         <filter id="glow2dYellow" x="-50%" y="-50%" width="200%" height="200%">
                             <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -713,242 +799,335 @@
                         </filter>
                     </defs>
 
-                    <!-- Node Positions: Solar(250,50), Battery(80,190), Home(250,190), Grid(420,190) -->
+                    <!-- LAYOUT: Solar(70,45), Home(250,95), Consumers(250,215), Battery(70,280), Grid(430,280) -->
 
                     <!-- ========== FLOW LINES ========== -->
-                    <!-- Solar to Home (vertical) -->
-                    <path d="M250,90 L250,150"
+                    <!-- Solar to Home (diagonal right-down) -->
+                    <path d="M105,55 L215,85"
                           stroke="#ffdd00" stroke-width="3" stroke-linecap="round" fill="none"
                           :opacity="energyFlow.flows.solar_to_house > 0 ? 1 : 0"/>
 
-                    <!-- Solar to Battery (diagonal) -->
-                    <path v-if="hasBattery" d="M215,75 L115,155"
-                          stroke="#ffdd00" stroke-width="3" stroke-linecap="round" fill="none"
+                    <!-- Solar to Battery (vertical down) -->
+                    <path v-if="hasBattery" d="M70,80 L70,245"
+                          stroke="#ffdd00" stroke-width="2" stroke-linecap="round" fill="none"
                           :opacity="energyFlow.flows.solar_to_battery > 0 ? 1 : 0"/>
 
-                    <!-- Battery to Home (horizontal) -->
-                    <path v-if="hasBattery" d="M120,190 L210,190"
+                    <!-- Battery to Home (diagonal up-right) -->
+                    <path v-if="hasBattery" d="M105,265 L215,110"
                           stroke="#22c55e" stroke-width="3" stroke-linecap="round" fill="none"
                           :opacity="energyFlow.flows.battery_to_house > 0 ? 1 : 0"/>
 
-                    <!-- Grid to Home (horizontal) - dashed when active -->
-                    <path d="M378,190 L292,190"
+                    <!-- Grid to Home (curved arc) - Grid TOP center to Home right center -->
+                    <path d="M430,248 Q480,160 285,95"
                           stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" fill="none" stroke-dasharray="5,5"
                           :opacity="energyFlow.flows.grid_to_house > 0 ? 1 : 0"/>
 
-                    <!-- Grid to Battery (curved path below) -->
-                    <path v-if="hasBattery" d="M380,220 Q250,340 120,220"
+                    <!-- Home to Grid (Export - curved arc) - Home right center to Grid TOP center -->
+                    <path d="M285,95 Q480,160 430,248"
+                          stroke="#00ffff" stroke-width="3" stroke-linecap="round" fill="none"
+                          :opacity="energyFlow.flows.house_to_grid > 0 ? 1 : 0"/>
+
+                    <!-- Grid to Battery (curved arc below) -->
+                    <path v-if="hasBattery" d="M395,280 Q250,340 105,280"
                           stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" fill="none" stroke-dasharray="5,5"
                           :opacity="energyFlow.flows.grid_to_battery > 0 ? 1 : 0"/>
 
-                    <!-- Home to Grid (Export) -->
-                    <path d="M290,180 L380,180"
-                          stroke="#00ffff" stroke-width="3" stroke-linecap="round" fill="none"
-                          :opacity="energyFlow.flows.house_to_grid > 0 ? 1 : 0"/>
+                    <!-- Home to Consumers (vertical down) -->
+                    <path v-if="energyFlow.consumers && (energyFlow.consumers.heatpump || energyFlow.consumers.heatingrod || energyFlow.consumers.wallbox)"
+                          d="M250,130 L250,199"
+                          stroke="#00d4ff" stroke-width="2" stroke-linecap="round" fill="none"
+                          :opacity="(energyFlow.consumers.heatpump?.power || 0) + (energyFlow.consumers.heatingrod?.power || 0) + (energyFlow.consumers.wallbox?.power || 0) > 0 ? 1 : 0.3"/>
 
                     <!-- ========== ANIMATED PARTICLES ========== -->
                     <!-- Solar to Home -->
                     <circle v-if="energyFlow.flows.solar_to_house > 0" r="5" fill="#ffdd00" filter="url(#glow2dYellow)">
-                        <animateMotion dur="1.2s" repeatCount="indefinite" path="M250,90 L250,150"/>
+                        <animateMotion dur="1.2s" repeatCount="indefinite" path="M105,55 L215,85"/>
                     </circle>
 
                     <!-- Solar to Battery -->
-                    <circle v-if="hasBattery && energyFlow.flows.solar_to_battery > 0" r="5" fill="#ffdd00" filter="url(#glow2dYellow)">
-                        <animateMotion dur="1.5s" repeatCount="indefinite" path="M215,75 L115,155"/>
+                    <circle v-if="hasBattery && energyFlow.flows.solar_to_battery > 0" r="4" fill="#ffdd00" filter="url(#glow2dYellow)">
+                        <animateMotion dur="1.5s" repeatCount="indefinite" path="M70,80 L70,245"/>
                     </circle>
 
                     <!-- Battery to Home -->
                     <circle v-if="hasBattery && energyFlow.flows.battery_to_house > 0" r="5" fill="#22c55e" filter="url(#glow2dGreen)">
-                        <animateMotion dur="1.3s" repeatCount="indefinite" path="M120,190 L210,190"/>
+                        <animateMotion dur="1.3s" repeatCount="indefinite" path="M105,265 L215,110"/>
                     </circle>
 
                     <!-- Grid to Home -->
                     <circle v-if="energyFlow.flows.grid_to_house > 0" r="5" fill="#8b5cf6" filter="url(#glow2dPurple)">
-                        <animateMotion dur="1.3s" repeatCount="indefinite" path="M380,190 L290,190"/>
+                        <animateMotion dur="1.5s" repeatCount="indefinite" path="M430,248 Q480,160 285,95"/>
                     </circle>
 
                     <!-- Home to Grid -->
                     <circle v-if="energyFlow.flows.house_to_grid > 0" r="5" fill="#00ffff" filter="url(#glow2dCyan)">
-                        <animateMotion dur="1.3s" repeatCount="indefinite" path="M290,180 L380,180"/>
+                        <animateMotion dur="1.5s" repeatCount="indefinite" path="M285,95 Q480,160 430,248"/>
                     </circle>
 
                     <!-- Grid to Battery -->
                     <circle v-if="hasBattery && energyFlow.flows.grid_to_battery > 0" r="4" fill="#8b5cf6" filter="url(#glow2dPurple)">
-                        <animateMotion dur="2.5s" repeatCount="indefinite" path="M380,220 Q250,340 120,220"/>
+                        <animateMotion dur="2s" repeatCount="indefinite" path="M395,280 Q250,340 105,280"/>
                     </circle>
 
                     <!-- ========== FLOW LABELS ========== -->
                     <!-- Solar to Home Label -->
-                    <text v-if="energyFlow.flows.solar_to_house > 0" x="270" y="125"
-                          fill="#ffdd00" font-size="11" font-weight="bold" text-anchor="start">
+                    <text v-if="energyFlow.flows.solar_to_house > 0" x="155" y="60"
+                          fill="#ffdd00" font-size="10" font-weight="bold" text-anchor="middle">
                         {{ energyFlow.flows.solar_to_house?.toFixed(0) }} W
                     </text>
 
                     <!-- Solar to Battery Label -->
-                    <text v-if="hasBattery && energyFlow.flows.solar_to_battery > 0" x="150" y="105"
-                          fill="#ffdd00" font-size="11" font-weight="bold" text-anchor="middle">
+                    <text v-if="hasBattery && energyFlow.flows.solar_to_battery > 0" x="50" y="165"
+                          fill="#ffdd00" font-size="10" font-weight="bold" text-anchor="middle">
                         {{ energyFlow.flows.solar_to_battery?.toFixed(0) }} W
                     </text>
 
                     <!-- Battery to Home Label -->
-                    <text v-if="hasBattery && energyFlow.flows.battery_to_house > 0" x="165" y="182"
-                          fill="#22c55e" font-size="11" font-weight="bold" text-anchor="middle">
+                    <text v-if="hasBattery && energyFlow.flows.battery_to_house > 0" x="155" y="185"
+                          fill="#22c55e" font-size="10" font-weight="bold" text-anchor="middle">
                         {{ energyFlow.flows.battery_to_house?.toFixed(0) }} W
                     </text>
 
-                    <!-- Grid to Home Label -->
-                    <text v-if="energyFlow.flows.grid_to_house > 0" x="335" y="182"
-                          fill="#8b5cf6" font-size="11" font-weight="bold" text-anchor="middle">
+                    <!-- Grid to Home Label (on curved arc) -->
+                    <text v-if="energyFlow.flows.grid_to_house > 0" x="380" y="185"
+                          fill="#8b5cf6" font-size="10" font-weight="bold" text-anchor="middle">
                         {{ energyFlow.flows.grid_to_house?.toFixed(0) }} W
                     </text>
 
-                    <!-- Grid to Battery Label -->
-                    <text v-if="energyFlow.flows.grid_to_battery > 0" x="250" y="300"
-                          fill="#8b5cf6" font-size="10" font-weight="bold" text-anchor="middle">
-                        {{ energyFlow.flows.grid_to_battery?.toFixed(0) }} W
-                    </text>
-
-                    <!-- Home to Grid (Export) Label -->
-                    <text v-if="energyFlow.flows.house_to_grid > 0" x="335" y="173"
-                          fill="#00ffff" font-size="11" font-weight="bold" text-anchor="middle">
+                    <!-- Home to Grid (Export) Label (on curved arc) -->
+                    <text v-if="energyFlow.flows.house_to_grid > 0" x="380" y="170"
+                          fill="#00ffff" font-size="10" font-weight="bold" text-anchor="middle">
                         {{ energyFlow.flows.house_to_grid?.toFixed(0) }} W
                     </text>
 
-                    <!-- ========== SOLAR NODE (center top) - Realistic Sun ========== -->
+                    <!-- Grid to Battery Label (on curved arc) -->
+                    <text v-if="hasBattery && energyFlow.flows.grid_to_battery > 0" x="250" y="330"
+                          fill="#8b5cf6" font-size="9" font-weight="bold" text-anchor="middle">
+                        {{ energyFlow.flows.grid_to_battery?.toFixed(0) }} W
+                    </text>
+
+                    <!-- ========== SOLAR NODE (left top) ========== -->
                     <g class="node-glow-solar node-clickable" :class="{ active: energyFlow.flows.solar_power > 0 }" @click="openSolarModal">
-                        <circle cx="250" cy="50" r="38" fill="rgba(251, 191, 36, 0.15)" stroke="#ffdd00" stroke-width="2"/>
-                        <!-- Sun SVG Icon -->
-                        <g transform="translate(250, 50)">
-                            <!-- Sun core -->
-                            <circle r="12" fill="#ffdd00"/>
-                            <!-- Sun rays -->
-                            <g stroke="#ffdd00" stroke-width="2.5" stroke-linecap="round">
-                                <line x1="0" y1="-18" x2="0" y2="-24"/>
-                                <line x1="0" y1="18" x2="0" y2="24"/>
-                                <line x1="-18" y1="0" x2="-24" y2="0"/>
-                                <line x1="18" y1="0" x2="24" y2="0"/>
-                                <line x1="-13" y1="-13" x2="-17" y2="-17"/>
-                                <line x1="13" y1="-13" x2="17" y2="-17"/>
-                                <line x1="-13" y1="13" x2="-17" y2="17"/>
-                                <line x1="13" y1="13" x2="17" y2="17"/>
+                        <circle cx="70" cy="45" r="32" fill="rgba(251, 191, 36, 0.15)" stroke="#ffdd00" stroke-width="2"/>
+                        <g transform="translate(70, 45)">
+                            <circle r="10" fill="#ffdd00"/>
+                            <g stroke="#ffdd00" stroke-width="2" stroke-linecap="round">
+                                <line x1="0" y1="-15" x2="0" y2="-20"/>
+                                <line x1="0" y1="15" x2="0" y2="20"/>
+                                <line x1="-15" y1="0" x2="-20" y2="0"/>
+                                <line x1="15" y1="0" x2="20" y2="0"/>
+                                <line x1="-11" y1="-11" x2="-14" y2="-14"/>
+                                <line x1="11" y1="-11" x2="14" y2="-14"/>
+                                <line x1="-11" y1="11" x2="-14" y2="14"/>
+                                <line x1="11" y1="11" x2="14" y2="14"/>
                             </g>
                         </g>
                     </g>
-                    <!-- Total Solar Power Display (right of sun) -->
-                    <text x="300" y="55" fill="#ffdd00" font-size="18" font-weight="bold" text-anchor="start"
-                          style="filter: drop-shadow(0 0 10px rgba(255, 221, 0, 0.9));">
+                    <text x="70" y="90" fill="#ffdd00" font-size="12" font-weight="bold" text-anchor="middle">
                         {{ energyFlow.flows.solar_power?.toFixed(0) || '0' }} W
                     </text>
 
-                    <!-- ========== BATTERY NODE (left) - Realistic Battery ========== -->
-                    <g v-if="hasBattery" class="node-glow-battery node-clickable" :class="{ active: energyFlow.battery.power !== 0 }" @click="openBatteryModal">
-                        <circle cx="80" cy="190" r="38" fill="rgba(34, 197, 94, 0.15)" stroke="#22c55e" stroke-width="2"/>
-                        <!-- SOC Ring -->
-                        <circle v-if="energyFlow.battery.soc !== null" cx="80" cy="190" r="42" fill="none"
-                                stroke="rgba(34,197,94,0.2)" stroke-width="4"/>
-                        <circle v-if="energyFlow.battery.soc !== null" cx="80" cy="190" r="42" fill="none"
-                                stroke="#22c55e" stroke-width="4"
-                                :stroke-dasharray="263.9"
-                                :stroke-dashoffset="263.9 - (263.9 * (energyFlow.battery.soc || 0) / 100)"
-                                stroke-linecap="round"
-                                transform="rotate(-90 80 190)"/>
-                        <!-- Battery SVG Icon -->
-                        <g transform="translate(80, 190)">
-                            <!-- Battery body -->
-                            <rect x="-14" y="-18" width="28" height="36" rx="3" fill="none" stroke="#22c55e" stroke-width="2"/>
-                            <!-- Battery top (positive terminal) -->
-                            <rect x="-6" y="-22" width="12" height="4" rx="1" fill="#22c55e"/>
-                            <!-- Battery level (dynamic based on SOC) -->
-                            <rect x="-11" y="15" width="22" :height="Math.max(0, (energyFlow.battery.soc || 0) / 100 * 30)"
-                                  :transform="'translate(0, ' + (-((energyFlow.battery.soc || 0) / 100 * 30)) + ')'"
-                                  fill="#22c55e" opacity="0.6" rx="1"/>
-                            <!-- Battery segments -->
-                            <line x1="-11" y1="-5" x2="11" y2="-5" stroke="#22c55e" stroke-width="1" opacity="0.4"/>
-                            <line x1="-11" y1="5" x2="11" y2="5" stroke="#22c55e" stroke-width="1" opacity="0.4"/>
-                        </g>
-                    </g>
-                    <text v-if="hasBattery" x="80" y="250" fill="#22c55e" font-size="14" font-weight="bold" text-anchor="middle"
-                          style="filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.7));">
-                        {{ energyFlow.battery.soc?.toFixed(0) || '—' }} %
-                    </text>
-                    <text v-if="hasBattery" x="80" y="265" fill="#94a3b8" font-size="10" text-anchor="middle">Batterie</text>
-                    <text v-if="hasBattery && energyFlow.battery.power" x="80" y="280" fill="#64748b" font-size="9" text-anchor="middle">
-                        {{ energyFlow.battery.power > 0 ? '+' : '' }}{{ energyFlow.battery.power?.toFixed(0) }} W
-                    </text>
-
-                    <!-- ========== HOME NODE (center) - Realistic House ========== -->
+                    <!-- ========== HOME NODE (center - higher) ========== -->
                     <g class="node-glow-home node-clickable" :class="{ active: energyFlow.home.consumption > 0 }" @click="openHouseModal">
-                        <circle cx="250" cy="190" r="38" fill="rgba(0, 255, 255, 0.15)" stroke="#00ffff" stroke-width="2"/>
-                        <!-- House SVG Icon -->
-                        <g transform="translate(250, 190)">
-                            <!-- Roof -->
-                            <path d="M-22,0 L0,-20 L22,0" fill="none" stroke="#00ffff" stroke-width="2.5" stroke-linejoin="round"/>
-                            <!-- House body -->
-                            <rect x="-18" y="0" width="36" height="22" fill="none" stroke="#00ffff" stroke-width="2"/>
-                            <!-- Door -->
-                            <rect x="-5" y="8" width="10" height="14" fill="rgba(0, 255, 255, 0.3)" stroke="#00ffff" stroke-width="1.5"/>
-                            <!-- Window left -->
-                            <rect x="-15" y="4" width="7" height="7" fill="rgba(0, 255, 255, 0.2)" stroke="#00ffff" stroke-width="1"/>
-                            <!-- Window right -->
-                            <rect x="8" y="4" width="7" height="7" fill="rgba(0, 255, 255, 0.2)" stroke="#00ffff" stroke-width="1"/>
+                        <circle cx="250" cy="95" r="35" fill="rgba(0, 255, 255, 0.15)" stroke="#00ffff" stroke-width="2"/>
+                        <g transform="translate(250, 95)">
+                            <path d="M-18,0 L0,-16 L18,0" fill="none" stroke="#00ffff" stroke-width="2" stroke-linejoin="round"/>
+                            <rect x="-14" y="0" width="28" height="18" fill="none" stroke="#00ffff" stroke-width="1.5"/>
+                            <rect x="-4" y="6" width="8" height="12" fill="rgba(0, 255, 255, 0.3)" stroke="#00ffff" stroke-width="1"/>
+                            <rect x="-12" y="3" width="6" height="6" fill="rgba(0, 255, 255, 0.2)" stroke="#00ffff" stroke-width="0.8"/>
+                            <rect x="6" y="3" width="6" height="6" fill="rgba(0, 255, 255, 0.2)" stroke="#00ffff" stroke-width="0.8"/>
                         </g>
                     </g>
-                    <text x="250" y="250" fill="#00ffff" font-size="14" font-weight="bold" text-anchor="middle"
-                          style="filter: drop-shadow(0 0 6px rgba(0, 255, 255, 0.7));">
+                    <text x="310" y="75" fill="#00ffff" font-size="12" font-weight="bold" text-anchor="start">
                         {{ energyFlow.home.consumption?.toFixed(0) || '—' }} W
                     </text>
-                    <text x="250" y="265" fill="#94a3b8" font-size="10" text-anchor="middle">Verbrauch</text>
+                    <text x="310" y="88" fill="#94a3b8" font-size="9" text-anchor="start">Verbrauch</text>
 
-                    <!-- ========== GRID NODE (right) - Power Pole ========== -->
-                    <g class="node-glow-grid node-clickable" :class="{ active: (energyFlow.flows.grid_to_house > 0 || energyFlow.flows.house_to_grid > 0) }" @click="openGridModal">
-                        <circle cx="420" cy="190" r="38" fill="rgba(139, 92, 246, 0.15)" stroke="#8b5cf6" stroke-width="2"/>
-                        <!-- Power Pole SVG Icon -->
-                        <g transform="translate(420, 190)">
-                            <!-- Main pole -->
-                            <line x1="0" y1="-22" x2="0" y2="22" stroke="#8b5cf6" stroke-width="3"/>
-                            <!-- Top cross arm -->
-                            <line x1="-18" y1="-18" x2="18" y2="-18" stroke="#8b5cf6" stroke-width="2.5"/>
-                            <!-- Middle cross arm -->
-                            <line x1="-14" y1="-8" x2="14" y2="-8" stroke="#8b5cf6" stroke-width="2"/>
-                            <!-- Insulators on top arm -->
-                            <circle cx="-15" cy="-18" r="3" fill="#8b5cf6" opacity="0.6"/>
-                            <circle cx="15" cy="-18" r="3" fill="#8b5cf6" opacity="0.6"/>
-                            <circle cx="0" cy="-18" r="3" fill="#8b5cf6" opacity="0.6"/>
-                            <!-- Insulators on middle arm -->
-                            <circle cx="-11" cy="-8" r="2.5" fill="#8b5cf6" opacity="0.5"/>
-                            <circle cx="11" cy="-8" r="2.5" fill="#8b5cf6" opacity="0.5"/>
-                            <!-- Power lines going out (decorative) -->
-                            <path d="M-15,-18 Q-25,-14 -25,-8" fill="none" stroke="#8b5cf6" stroke-width="1" opacity="0.5"/>
-                            <path d="M15,-18 Q25,-14 25,-8" fill="none" stroke="#8b5cf6" stroke-width="1" opacity="0.5"/>
+                    <!-- ========== BATTERY NODE (left bottom - deeper) ========== -->
+                    <g v-if="hasBattery" class="node-glow-battery node-clickable" :class="{ active: energyFlow.battery.power !== 0 }" @click="openBatteryModal">
+                        <circle cx="70" cy="280" r="32" fill="rgba(34, 197, 94, 0.15)" stroke="#22c55e" stroke-width="2"/>
+                        <circle v-if="energyFlow.battery.soc !== null" cx="70" cy="280" r="36" fill="none"
+                                stroke="rgba(34,197,94,0.2)" stroke-width="3"/>
+                        <circle v-if="energyFlow.battery.soc !== null" cx="70" cy="280" r="36" fill="none"
+                                stroke="#22c55e" stroke-width="3"
+                                :stroke-dasharray="226.2"
+                                :stroke-dashoffset="226.2 - (226.2 * (energyFlow.battery.soc || 0) / 100)"
+                                stroke-linecap="round"
+                                transform="rotate(-90 70 280)"/>
+                        <g transform="translate(70, 280)">
+                            <rect x="-10" y="-14" width="20" height="28" rx="2" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+                            <rect x="-4" y="-17" width="8" height="3" rx="1" fill="#22c55e"/>
+                            <rect x="-7" y="11" width="14" :height="Math.max(0, (energyFlow.battery.soc || 0) / 100 * 22)"
+                                  :transform="'translate(0, ' + (-((energyFlow.battery.soc || 0) / 100 * 22)) + ')'"
+                                  fill="#22c55e" opacity="0.5" rx="1"/>
                         </g>
                     </g>
-                    <text x="420" y="250" fill="#8b5cf6" font-size="14" font-weight="bold" text-anchor="middle"
-                          style="filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.7));">
+                    <text v-if="hasBattery" x="70" y="325" fill="#22c55e" font-size="12" font-weight="bold" text-anchor="middle">
+                        {{ energyFlow.battery.soc?.toFixed(0) || '—' }} %
+                    </text>
+                    <text v-if="hasBattery" x="70" y="338" fill="#94a3b8" font-size="9" text-anchor="middle">Batterie</text>
+
+                    <!-- ========== GRID NODE (right bottom - deeper, same height as battery) ========== -->
+                    <g class="node-glow-grid node-clickable" :class="{ active: (energyFlow.flows.grid_to_house > 0 || energyFlow.flows.house_to_grid > 0) }" @click="openGridModal">
+                        <circle cx="430" cy="280" r="32" fill="rgba(139, 92, 246, 0.15)" stroke="#8b5cf6" stroke-width="2"/>
+                        <g transform="translate(430, 280)">
+                            <line x1="0" y1="-18" x2="0" y2="18" stroke="#8b5cf6" stroke-width="2.5"/>
+                            <line x1="-14" y1="-14" x2="14" y2="-14" stroke="#8b5cf6" stroke-width="2"/>
+                            <line x1="-10" y1="-6" x2="10" y2="-6" stroke="#8b5cf6" stroke-width="1.5"/>
+                            <circle cx="-12" cy="-14" r="2.5" fill="#8b5cf6" opacity="0.6"/>
+                            <circle cx="12" cy="-14" r="2.5" fill="#8b5cf6" opacity="0.6"/>
+                            <circle cx="0" cy="-14" r="2.5" fill="#8b5cf6" opacity="0.6"/>
+                        </g>
+                    </g>
+                    <text x="430" y="325" fill="#8b5cf6" font-size="12" font-weight="bold" text-anchor="middle">
                         {{ getGridPower() }} W
                     </text>
-                    <text x="420" y="265" fill="#94a3b8" font-size="10" text-anchor="middle">{{ getGridLabel() }}</text>
-                    <text x="420" y="280" fill="#64748b" font-size="9" text-anchor="middle">
-                        {{ currentPrice.total_price?.toFixed(2) || '—' }} ct/kWh
+                    <text x="430" y="338" fill="#94a3b8" font-size="9" text-anchor="middle">{{ getGridLabel() }}</text>
+                    <text x="430" y="350" fill="#64748b" font-size="8" text-anchor="middle">
+                        {{ currentPrice.total_price?.toFixed(2) || '—' }} ct
                     </text>
+
+                    <!-- ========== CONSUMERS (2D) - Above Battery/Grid line ========== -->
+                    <g v-if="energyFlow.consumers && (energyFlow.consumers.heatpump || energyFlow.consumers.heatingrod || energyFlow.consumers.wallbox)" class="consumers-2d iso-element-clickable" @click="openConsumerModal" transform="translate(250, 215)" style="cursor: pointer;">
+
+                        <!-- Wärmepumpe (left) - Simple circle -->
+                        <g v-if="energyFlow.consumers.heatpump" transform="translate(-35, 0)">
+                            <circle r="16" fill="rgba(255, 107, 107, 0.15)" stroke="#ff6b6b" stroke-width="2"/>
+                            <text y="4" fill="#ff6b6b" font-size="12" text-anchor="middle">🔥</text>
+                        </g>
+                        <text v-if="energyFlow.consumers.heatpump" x="-35" y="26" fill="#ff6b6b" font-size="8" font-weight="bold" text-anchor="middle">
+                            {{ (energyFlow.consumers.heatpump.power || 0).toFixed(0) }}W
+                        </text>
+
+                        <!-- Heizstab (center) - Simple circle -->
+                        <g v-if="energyFlow.consumers.heatingrod" transform="translate(0, 0)">
+                            <circle r="16" fill="rgba(251, 191, 36, 0.15)" stroke="#fbbf24" stroke-width="2"/>
+                            <text y="4" fill="#fbbf24" font-size="12" text-anchor="middle">🌡️</text>
+                        </g>
+                        <text v-if="energyFlow.consumers.heatingrod" x="0" y="26" fill="#fbbf24" font-size="8" font-weight="bold" text-anchor="middle">
+                            {{ (energyFlow.consumers.heatingrod.power || 0).toFixed(0) }}W
+                        </text>
+
+                        <!-- Wallbox (right) - Simple circle -->
+                        <g v-if="energyFlow.consumers.wallbox" transform="translate(35, 0)">
+                            <circle r="16" :fill="energyFlow.consumers.wallbox.state === 'charging' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(100, 116, 139, 0.15)'" :stroke="energyFlow.consumers.wallbox.state === 'charging' ? '#22c55e' : '#64748b'" stroke-width="2"/>
+                            <text y="4" :fill="energyFlow.consumers.wallbox.state === 'charging' ? '#22c55e' : '#64748b'" font-size="12" text-anchor="middle">🚗</text>
+                        </g>
+                        <text v-if="energyFlow.consumers.wallbox" x="35" y="26" :fill="energyFlow.consumers.wallbox.state === 'charging' ? '#22c55e' : '#64748b'" font-size="8" font-weight="bold" text-anchor="middle">
+                            {{ (energyFlow.consumers.wallbox.power || 0).toFixed(0) }}W
+                        </text>
+
+                        <!-- Total -->
+                        <text y="42" fill="#00d4ff" font-size="9" font-weight="bold" text-anchor="middle">
+                            Σ {{ ((energyFlow.consumers.heatpump?.power || 0) + (energyFlow.consumers.heatingrod?.power || 0) + (energyFlow.consumers.wallbox?.power || 0)).toFixed(0) }}W
+                        </text>
+                    </g>
                 </svg>
+
+                <!-- ========== LIST VIEW (Kompakte Listenansicht) ========== -->
+                <div v-show="!isSectionCollapsed('energyFlow') && dashboardStyle === 'list'" class="energy-list-view">
+                    <div class="energy-list-grid">
+                        <!-- Solar -->
+                        <div class="energy-list-card" @click="openSolarModal" style="cursor: pointer; border-color: #ffdd00;">
+                            <div class="energy-list-icon">☀️</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Solar-Produktion</div>
+                                <div class="energy-list-value" style="color: #ffdd00;">{{ energyFlow.flows.solar_power?.toFixed(0) || '0' }} W</div>
+                                <div class="energy-list-sub">Heute: {{ energyFlow.statistics.solar_yield_daily?.toFixed(2) || '0' }} kWh</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.flows.solar_to_house > 0">→ Haus: {{ energyFlow.flows.solar_to_house?.toFixed(0) }} W</div>
+                                <div v-if="hasBattery && energyFlow.flows.solar_to_battery > 0">→ Akku: {{ energyFlow.flows.solar_to_battery?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+
+                        <!-- Batterie -->
+                        <div v-if="hasBattery" class="energy-list-card" @click="openBatteryModal" style="cursor: pointer; border-color: #22c55e;">
+                            <div class="energy-list-icon">🔋</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Batterie</div>
+                                <div class="energy-list-value" style="color: #22c55e;">{{ energyFlow.battery.soc?.toFixed(0) || '—' }}%</div>
+                                <div class="energy-list-sub">{{ energyFlow.battery.power?.toFixed(0) || '0' }} W</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.flows.battery_to_house > 0" style="color: #22c55e;">→ Haus: {{ energyFlow.flows.battery_to_house?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.flows.solar_to_battery > 0" style="color: #ffdd00;">← Solar: {{ energyFlow.flows.solar_to_battery?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+
+                        <!-- Haus -->
+                        <div class="energy-list-card" @click="openHouseModal" style="cursor: pointer; border-color: #00d4ff;">
+                            <div class="energy-list-icon">🏠</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Hausverbrauch</div>
+                                <div class="energy-list-value" style="color: #00d4ff;">{{ energyFlow.home.consumption?.toFixed(0) || '0' }} W</div>
+                                <div class="energy-list-sub">Netz heute: {{ energyFlow.statistics.grid_import_daily?.toFixed(2) || '0' }} kWh</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.flows.solar_to_house > 0" style="color: #ffdd00;">← Solar: {{ energyFlow.flows.solar_to_house?.toFixed(0) }} W</div>
+                                <div v-if="hasBattery && energyFlow.flows.battery_to_house > 0" style="color: #22c55e;">← Akku: {{ energyFlow.flows.battery_to_house?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.flows.grid_to_house > 0" style="color: #8b5cf6;">← Netz: {{ energyFlow.flows.grid_to_house?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+
+                        <!-- Netz -->
+                        <div class="energy-list-card" @click="openGridModal" style="cursor: pointer; border-color: #8b5cf6;">
+                            <div class="energy-list-icon">⚡</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Stromnetz</div>
+                                <div class="energy-list-value" :style="{color: energyFlow.flows.house_to_grid > 0 ? '#00ffff' : '#8b5cf6'}">
+                                    {{ energyFlow.flows.house_to_grid > 0 ? '-' : '' }}{{ Math.abs(energyFlow.flows.grid_to_house - energyFlow.flows.house_to_grid)?.toFixed(0) || '0' }} W
+                                </div>
+                                <div class="energy-list-sub">{{ energyFlow.flows.house_to_grid > 0 ? 'Einspeisung' : 'Bezug' }}</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.flows.grid_to_house > 0" style="color: #8b5cf6;">Import: {{ energyFlow.flows.grid_to_house?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.flows.house_to_grid > 0" style="color: #00ffff;">Export: {{ energyFlow.flows.house_to_grid?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+
+                        <!-- Verbraucher (falls vorhanden) -->
+                        <div v-if="energyFlow.consumers && (energyFlow.consumers.heatpump || energyFlow.consumers.heatingrod || energyFlow.consumers.wallbox)"
+                             class="energy-list-card" @click="openConsumerModal" style="cursor: pointer; border-color: #ec4899;">
+                            <div class="energy-list-icon">🔌</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Verbraucher</div>
+                                <div class="energy-list-value" style="color: #ec4899;">
+                                    {{ ((energyFlow.consumers.heatpump?.power || 0) + (energyFlow.consumers.heatingrod?.power || 0) + (energyFlow.consumers.wallbox?.power || 0)).toFixed(0) }} W
+                                </div>
+                                <div class="energy-list-sub">Gesamtverbrauch</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.consumers.heatpump?.power > 0">WP: {{ energyFlow.consumers.heatpump.power?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.consumers.heatingrod?.power > 0">Heizstab: {{ energyFlow.consumers.heatingrod.power?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.consumers.wallbox?.power > 0">Wallbox: {{ energyFlow.consumers.wallbox.power?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Solar Power Live Card - Header klickbar für Modal -->
-            <section class="power-sources-card">
-                <div class="power-sources-header" @click="openPowerSourcesModal" style="cursor: pointer;">
-                    <div class="power-sources-title">
-                        <span>☀️</span>
-                        <span>Deflektorschild-Kollektor</span>
-                        <span v-if="energyFlow.flows.solar_power !== null" style="margin-left: 12px; font-size: 1.3rem; color: #FFB74D;">{{ Math.round(energyFlow.flows.solar_power || 0) }} W</span>
-                        <span v-if="stats.peaks.today?.power_w" style="margin-left: 16px; font-size: 0.85rem; color: #94a3b8;">
-                            Peak: <span style="color: #4ade80;">{{ Math.round(stats.peaks.today.power_w) }} W</span>
-                            <span v-if="stats.peaks.today?.at" style="color: #64748b;"> ({{ formatTime(stats.peaks.today.at) }})</span>
-                        </span>
+            <section class="power-sources-card collapsible-section sortable-item" data-section="powerSources">
+                <div class="section-header-inline">
+                    <div class="power-sources-header" @click="openPowerSourcesModal" style="cursor: pointer; flex: 1;">
+                        <div class="power-sources-title">
+                            <span>☀️</span>
+                            <span>Deflektorschild-Kollektor</span>
+                            <span v-if="energyFlow.flows.solar_power !== null" style="margin-left: 12px; font-size: 1.3rem; color: #FFB74D;">{{ Math.round(energyFlow.flows.solar_power || 0) }} W</span>
+                            <span v-if="stats.peaks.today?.power_w" style="margin-left: 16px; font-size: 0.85rem; color: #94a3b8;">
+                                Peak: <span style="color: #4ade80;">{{ Math.round(stats.peaks.today.power_w) }} W</span>
+                                <span v-if="stats.peaks.today?.at" style="color: #64748b;"> ({{ formatTime(stats.peaks.today.at) }})</span>
+                            </span>
+                        </div>
+                        <div class="power-sources-subtitle">Klicken für Kollektor-Diagnostik • Live-Daten</div>
                     </div>
-                    <div class="power-sources-subtitle">Klicken für Kollektor-Diagnostik • Live-Daten</div>
+                    <button class="section-collapse-btn" @click.stop="toggleSection('powerSources')" :title="isSectionCollapsed('powerSources') ? 'Ausklappen' : 'Einklappen'">
+                        {{ isSectionCollapsed('powerSources') ? '+' : '−' }}
+                    </button>
                 </div>
-                <div class="power-sources-chart-container" ref="powerSourcesPreviewChart"></div>
-                <div class="power-sources-legend">
+                <div v-show="!isSectionCollapsed('powerSources')" class="power-sources-chart-container" ref="powerSourcesPreviewChart"></div>
+                <div v-show="!isSectionCollapsed('powerSources')" class="power-sources-legend">
                     <div class="power-sources-legend-item">
                         <div class="power-sources-legend-dot solar"></div>
                         <span>PV-Leistung</span>
@@ -956,7 +1135,7 @@
                 </div>
 
                 <!-- Panel Grid - Individuelle PV-Panels -->
-                <div class="panel-grid" v-if="energyFlow.panels && energyFlow.panels.length > 0">
+                <div v-show="!isSectionCollapsed('powerSources')" class="panel-grid" v-if="energyFlow.panels && energyFlow.panels.length > 0">
                     <div class="panel-card" v-for="panel in energyFlow.panels" :key="panel.id">
                         <div class="panel-card-header">
                             <!-- Solar Panel SVG Icon -->
@@ -977,7 +1156,7 @@
             </section>
 
             <!-- Prognose-Übersicht: Heute, Morgen, Übermorgen -->
-            <section class="forecast-overview-container">
+            <section class="forecast-overview-container collapsible-section sortable-item" data-section="forecast">
                 <div class="forecast-overview-header">
                     <div style="flex: 1;">
                         <div class="forecast-overview-title">📡 Langstrecken-Scanner</div>
@@ -987,8 +1166,11 @@
                         <span>📊</span>
                         <span>7-Tage Vergleich</span>
                     </button>
+                    <button class="section-collapse-btn" @click="toggleSection('forecast')" :title="isSectionCollapsed('forecast') ? 'Ausklappen' : 'Einklappen'">
+                        {{ isSectionCollapsed('forecast') ? '+' : '−' }}
+                    </button>
                 </div>
-                <div class="forecast-days-grid">
+                <div v-show="!isSectionCollapsed('forecast')" class="forecast-days-grid">
                     <!-- Heute -->
                     <div class="forecast-day-card today">
                         <div class="forecast-day-header">
@@ -1048,7 +1230,7 @@
             </section>
 
             <!-- Tagesproduktion Chart (direkt unter Energiefluss) -->
-            <section class="chart-card" style="margin-bottom: var(--spacing-lg);">
+            <section class="chart-card sortable-item" data-section="todayProduction" style="margin-bottom: var(--spacing-lg);">
                 <div class="chart-header" @click="openProductionTodayModal" style="cursor: pointer;">
                     <div class="chart-title">📅 Tages-Energieertrag (Echtzeit-Scan)</div>
                     <div class="chart-stats">
@@ -1063,28 +1245,43 @@
             </section>
 
             <!-- Panel-Gruppen Produktion (Prognose vs IST pro Gruppe) -->
-            <section class="top-row" style="margin-bottom: var(--spacing-lg);" v-if="panelGroups.available">
-                <template v-for="(group, groupName) in panelGroups.groups" :key="groupName">
-                    <div class="chart-card" style="flex: 1; min-width: 300px;">
-                        <div class="chart-header" @click="openPanelGroupModal(groupName)" style="cursor: pointer;">
-                            <div class="chart-title">☀️ {{ groupName }}</div>
-                            <div class="chart-stats">
-                                <span class="chart-stat" style="color: #00ff88;">IST: {{ group.actual_total_kwh?.toFixed(3) || '0.000' }} kWh</span>
-                                <span class="chart-stat" style="color: #8b5cf6;">Prognose: {{ group.prediction_total_kwh?.toFixed(3) || '0.000' }} kWh</span>
-                                <span class="chart-stat" :style="{color: (group.accuracy_percent || 0) >= 80 ? '#00ff88' : (group.accuracy_percent || 0) >= 50 ? '#ffdd00' : '#ef4444'}">
-                                    {{ group.accuracy_percent?.toFixed(0) || '—' }}%
-                                </span>
+            <section class="collapsible-section sortable-item" data-section="panelGroups" style="margin-bottom: var(--spacing-lg);" v-if="panelGroups.available">
+                <div class="section-header" @click="toggleSection('panelGroups')">
+                    <span class="section-title">☀️ Panel-Gruppen</span>
+                    <span class="section-toggle">{{ isSectionCollapsed('panelGroups') ? '+' : '−' }}</span>
+                </div>
+                <!-- Validierungswarnung -->
+                <div v-if="!panelGroupsValidation.valid && !isSectionCollapsed('panelGroups')" class="validation-warning">
+                    ⚠️ Abweichung: Gruppen-Summe ({{ panelGroupsValidation.groupSum }} kWh) vs. Tagesertrag ({{ panelGroupsValidation.solarDaily }} kWh) = {{ panelGroupsValidation.deviation }}%
+                </div>
+                <div class="top-row" v-show="!isSectionCollapsed('panelGroups')">
+                    <template v-for="(group, groupName) in panelGroups.groups" :key="groupName">
+                        <div class="chart-card panel-group-chart">
+                            <div class="chart-header" @click="openPanelGroupModal(groupName)" style="cursor: pointer;">
+                                <div class="chart-title">☀️ {{ groupName }}</div>
+                                <div class="chart-stats">
+                                    <span class="chart-stat" style="color: #00ff88;">IST: {{ group.actual_total_kwh?.toFixed(3) || '0.000' }} kWh</span>
+                                    <span class="chart-stat" style="color: #8b5cf6;">Prognose: {{ group.prediction_total_kwh?.toFixed(3) || '0.000' }} kWh</span>
+                                    <span class="chart-stat" :style="{color: (group.accuracy_percent || 0) >= 80 ? '#00ff88' : (group.accuracy_percent || 0) >= 50 ? '#ffdd00' : '#ef4444'}">
+                                        {{ group.accuracy_percent?.toFixed(0) || '—' }}%
+                                    </span>
+                                </div>
                             </div>
+                            <div class="chart-container" :ref="el => panelGroupChartRefs[groupName] = el" style="height: 200px;"></div>
                         </div>
-                        <div class="chart-container" :ref="el => panelGroupChartRefs[groupName] = el" style="height: 200px;"></div>
-                    </div>
-                </template>
+                    </template>
+                </div>
             </section>
 
             <!-- Live Energy Flow Widgets - Stil wie Wetter -->
-            <section class="top-row" style="margin-bottom: var(--spacing-lg);">
-                <!-- Gruppe 1: Solar Live -->
-                <div class="widget-group-container">
+            <section class="collapsible-section sortable-item" data-section="liveWidgets" style="margin-bottom: var(--spacing-lg);">
+                <div class="section-header" @click="toggleSection('liveWidgets')">
+                    <span class="section-title">⚡ Live Energie-Widgets</span>
+                    <span class="section-toggle">{{ isSectionCollapsed('liveWidgets') ? '+' : '−' }}</span>
+                </div>
+                <div v-show="!isSectionCollapsed('liveWidgets')" class="top-row">
+                    <!-- Gruppe 1: Solar Live -->
+                    <div class="widget-group-container">
                     <span class="widget-group-label">☀️ Fusionsreaktor</span>
                     <!-- Solar → Haus -->
                     <div class="weather-widget" style="border-color: #ffdd00;">
@@ -1148,9 +1345,7 @@
                         </div>
                     </div>
                 </div>
-            </section>
 
-            <section class="top-row" style="margin-bottom: var(--spacing-lg);">
                 <!-- Gruppe 3: Netz Live -->
                 <div class="widget-group-container">
                     <span class="widget-group-label">⚡ Energienetz</span>
@@ -1217,10 +1412,11 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- Ende v-show liveWidgets -->
             </section>
 
             <!-- ========== ENERGIE-BILANZ WIDGET (JAHRESBILANZ) ========== -->
-            <section class="energy-balance-container">
+            <section class="energy-balance-container collapsible-section sortable-item" data-section="energyBalance">
                 <div class="energy-balance-header">
                     <div class="energy-balance-title">
                         <span>💰</span> Sternenflotten-Abrechnung
@@ -1235,21 +1431,26 @@
                             </span>
                             <span v-else>📅 Missions-Zeitraum</span>
                         </div>
+                        <button class="section-collapse-btn" @click="toggleSection('energyBalance')" :title="isSectionCollapsed('energyBalance') ? 'Ausklappen' : 'Einklappen'">
+                            {{ isSectionCollapsed('energyBalance') ? '+' : '−' }}
+                        </button>
                     </div>
                 </div>
 
-                <!-- Fortschrittsbalken für Abrechnungszeitraum -->
-                <div style="margin-bottom: var(--spacing-md);">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">
-                        <span>Tag {{ energyBalance.daysElapsed }} von {{ energyBalance.daysTotal }}</span>
-                        <span>{{ energyBalance.periodProgress?.toFixed(0) || 0 }}% des Abrechnungsjahres</span>
+                <!-- Einklappbarer Inhalt -->
+                <div v-show="!isSectionCollapsed('energyBalance')">
+                    <!-- Fortschrittsbalken für Abrechnungszeitraum -->
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">
+                            <span>Tag {{ energyBalance.daysElapsed }} von {{ energyBalance.daysTotal }}</span>
+                            <span>{{ energyBalance.periodProgress?.toFixed(0) || 0 }}% des Abrechnungsjahres</span>
+                        </div>
+                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                            <div :style="{width: energyBalance.periodProgress + '%', height: '100%', background: 'linear-gradient(90deg, #00ff88, #00ffff)', borderRadius: '3px', transition: 'width 0.5s'}"></div>
+                        </div>
                     </div>
-                    <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                        <div :style="{width: energyBalance.periodProgress + '%', height: '100%', background: 'linear-gradient(90deg, #00ff88, #00ffff)', borderRadius: '3px', transition: 'width 0.5s'}"></div>
-                    </div>
-                </div>
 
-                <!-- ===== BLOCK 1: HAUSHALT ===== -->
+                    <!-- ===== BLOCK 1: HAUSHALT ===== -->
                 <div style="margin-bottom: var(--spacing-md);">
                     <div style="font-size: 0.9rem; font-weight: 600; color: var(--neon-cyan); margin-bottom: var(--spacing-sm); display: flex; align-items: center; gap: 8px;">
                         <span>🏠</span> Gesamtverbrauch Haushalt
@@ -1415,21 +1616,25 @@
                     </div>
                 </div>
 
-                <!-- Hinweis zur Konfiguration -->
-                <div v-if="!energyBalance.periodStart" style="margin-top: var(--spacing-md); padding: var(--spacing-sm); background: rgba(139, 92, 246, 0.1); border-radius: var(--radius-sm); font-size: 0.75rem; color: var(--text-muted); text-align: center;">
-                    💡 Konfiguriere deinen Abrechnungszeitraum in den Integrationseinstellungen unter "Stromrechnung & Abrechnung"
-                </div>
+                    <!-- Hinweis zur Konfiguration -->
+                    <div v-if="!energyBalance.periodStart" style="margin-top: var(--spacing-md); padding: var(--spacing-sm); background: rgba(139, 92, 246, 0.1); border-radius: var(--radius-sm); font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+                        💡 Konfiguriere deinen Abrechnungszeitraum in den Integrationseinstellungen unter "Stromrechnung & Abrechnung"
+                    </div>
+                </div><!-- Ende v-show energyBalance -->
             </section>
 
             <!-- Statistics Cards - Sortiert: Heute > Woche > Monat > Jahr -->
-            <section class="stats-container">
+            <section class="stats-container collapsible-section sortable-item" data-section="stats">
                 <div class="stats-container-header">
                     <div>
                         <div class="stats-container-title">⚙️ Maschinenraum</div>
                         <div class="stats-container-subtitle">Energie-Systeme & Astronomische Sensoren</div>
                     </div>
+                    <button class="section-collapse-btn" @click="toggleSection('stats')" :title="isSectionCollapsed('stats') ? 'Ausklappen' : 'Einklappen'">
+                        {{ isSectionCollapsed('stats') ? '+' : '−' }}
+                    </button>
                 </div>
-                <div class="stats-grid">
+                <div v-show="!isSectionCollapsed('stats')" class="stats-grid">
 
                 <!-- ========== HEUTE ========== -->
                 <div class="stat-card peak">
@@ -1545,32 +1750,40 @@
             </section>
 
             <!-- KPIs -->
-            <section class="kpi-grid">
-                <div class="kpi-card solar">
+            <section class="kpi-grid collapsible-section sortable-item" data-section="kpis">
+                <div class="section-header" @click="toggleSection('kpis')" style="grid-column: 1 / -1;">
+                    <span class="section-title">📊 Wochen-KPIs</span>
+                    <span class="section-toggle">{{ isSectionCollapsed('kpis') ? '+' : '−' }}</span>
+                </div>
+                <div v-show="!isSectionCollapsed('kpis')" class="kpi-card solar">
                     <div class="kpi-value">{{ kpis.weekProduction?.toFixed(2) || '—' }}</div>
                     <div class="kpi-label">kWh diese Woche</div>
                 </div>
-                <div class="kpi-card accuracy">
+                <div v-show="!isSectionCollapsed('kpis')" class="kpi-card accuracy">
                     <div class="kpi-value">{{ kpis.avgAccuracy?.toFixed(0) || '—' }}%</div>
                     <div class="kpi-label">Ø Genauigkeit</div>
                 </div>
-                <div class="kpi-card price">
+                <div v-show="!isSectionCollapsed('kpis')" class="kpi-card price">
                     <div class="kpi-value">{{ kpis.priceMin?.toFixed(0) || '—' }}-{{ kpis.priceMax?.toFixed(0) || '—' }}</div>
                     <div class="kpi-label">ct/kWh Spanne</div>
                 </div>
-                <div class="kpi-card forecast">
+                <div v-show="!isSectionCollapsed('kpis')" class="kpi-card forecast">
                     <div class="kpi-value">{{ kpis.forecastWeek?.toFixed(1) || '—' }}</div>
                     <div class="kpi-label">kWh Prognose</div>
                 </div>
             </section>
 
             <!-- Charts -->
-            <section class="charts-grid">
-                <div class="chart-card">
+            <section class="charts-grid collapsible-section sortable-item" data-section="mainCharts">
+                <div class="section-header" @click="toggleSection('mainCharts')" style="grid-column: 1 / -1;">
+                    <span class="section-title">📈 Haupt-Charts</span>
+                    <span class="section-toggle">{{ isSectionCollapsed('mainCharts') ? '+' : '−' }}</span>
+                </div>
+                <div v-show="!isSectionCollapsed('mainCharts')" class="chart-card">
                     <div class="chart-title">Produktion vs. Vorhersage</div>
                     <div class="chart-container" ref="productionChart"></div>
                 </div>
-                <div class="chart-card">
+                <div v-show="!isSectionCollapsed('mainCharts')" class="chart-card">
                     <div class="chart-header">
                         <div class="chart-title">📊 Prognose-Abweichung (0 = Treffer)</div>
                         <div class="chart-stats">
@@ -1580,7 +1793,7 @@
                     </div>
                     <div class="chart-container" ref="accuracyChart"></div>
                 </div>
-                <div class="chart-card">
+                <div v-show="!isSectionCollapsed('mainCharts')" class="chart-card">
                     <div class="chart-header">
                         <div class="chart-title">Strompreise Heute vs. Morgen (Endpreis)</div>
                         <div class="chart-stats">
@@ -1590,15 +1803,19 @@
                     </div>
                     <div class="chart-container" ref="priceChart"></div>
                 </div>
-                <div class="chart-card full-width">
+                <div v-show="!isSectionCollapsed('mainCharts')" class="chart-card full-width">
                     <div class="chart-title">Wochenverlauf</div>
                     <div class="chart-container tall" ref="timelineChart"></div>
                 </div>
             </section>
 
             <!-- Erweiterte Analyse-Charts -->
-            <section class="charts-grid" style="margin-top: var(--spacing-lg);">
-                <div class="chart-card full-width">
+            <section class="charts-grid collapsible-section sortable-item" data-section="extendedCharts" style="margin-top: var(--spacing-lg);">
+                <div class="section-header" @click="toggleSection('charts')" style="grid-column: 1 / -1;">
+                    <span class="section-title">📊 Erweiterte Analyse-Charts</span>
+                    <span class="section-toggle">{{ isSectionCollapsed('charts') ? '+' : '−' }}</span>
+                </div>
+                <div v-show="!isSectionCollapsed('charts')" class="chart-card full-width">
                     <div class="chart-header">
                         <div class="chart-title">📈 Langzeit-Trend (30 Tage)</div>
                         <div class="chart-stats">
@@ -1608,7 +1825,7 @@
                     </div>
                     <div class="chart-container tall" ref="trendChart"></div>
                 </div>
-                <div class="chart-card full-width">
+                <div v-show="!isSectionCollapsed('charts')" class="chart-card full-width">
                     <div class="chart-header">
                         <div class="chart-title">📅 Monats-Vergleich</div>
                         <div class="chart-stats">
@@ -1707,8 +1924,8 @@
                             <div id="solar-accuracy-chart" style="height: 350px;"></div>
                         </div>
 
-                        <!-- Panel Group Performance -->
-                        <div class="modal-chart-container" v-if="panelGroups.available">
+                        <!-- Panel Group Performance (nur bei mehr als 1 Gruppe anzeigen) -->
+                        <div class="modal-chart-container" v-if="panelGroups.available && !hasSinglePanelGroup">
                             <div class="modal-chart-title">
                                 <span>⚡</span>
                                 <span>Panel-Gruppen Performance</span>
@@ -2015,6 +2232,129 @@
                             </div>
                             <div id="grid-pattern-chart" style="height: 350px;"></div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== CONSUMER ANALYTICS MODAL (Wärmepumpe, Heizstab, Wallbox) ===== -->
+        <div v-if="consumerModal.isOpen" class="modal-overlay" @click.self="closeConsumerModal">
+            <div class="modal-container consumer-modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <span>🔌</span>
+                        <span>Verbraucher Analytics</span>
+                    </h2>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button class="modal-close" @click="closeConsumerModal">×</button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <!-- Consumer Cards Grid -->
+                    <div class="modal-stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <!-- Wärmepumpe -->
+                        <div class="modal-stat-card" v-if="energyFlow.consumers?.heatpump?.configured" style="border-left: 3px solid #ff6b6b;">
+                            <div class="modal-stat-value" style="color: #ff6b6b; font-size: 1.1em;">🌡️ Wärmepumpe</div>
+                            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">Leistung:</span>
+                                    <span style="color: #f0f6fc;">{{ consumerModal.stats.heatpump.power?.toFixed(0) || 0 }} W</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">Heute:</span>
+                                    <span style="color: #f0f6fc;">{{ consumerModal.stats.heatpump.daily_kwh?.toFixed(2) || 0 }} kWh</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">COP:</span>
+                                    <span style="color: #22c55e;">{{ consumerModal.stats.heatpump.cop?.toFixed(1) || 3.5 }}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">Wärme:</span>
+                                    <span style="color: #fbbf24;">{{ (consumerModal.stats.heatpump.daily_kwh * consumerModal.stats.heatpump.cop)?.toFixed(2) || 0 }} kWh</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
+                                    <span class="modal-stat-label">Kosten:</span>
+                                    <span style="color: #f87171;">{{ consumerModal.stats.heatpump.cost_today?.toFixed(2) || 0 }} €</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-stat-card" v-else style="opacity: 0.5; border-left: 3px solid #4a5568;">
+                            <div class="modal-stat-value" style="color: #94a3b8;">🌡️ Wärmepumpe</div>
+                            <div class="modal-stat-label" style="margin-top: 8px;">Nicht konfiguriert</div>
+                        </div>
+
+                        <!-- Heizstab -->
+                        <div class="modal-stat-card" v-if="energyFlow.consumers?.heatingrod?.configured" style="border-left: 3px solid #fbbf24;">
+                            <div class="modal-stat-value" style="color: #fbbf24; font-size: 1.1em;">🔥 Heizstab</div>
+                            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">Leistung:</span>
+                                    <span style="color: #f0f6fc;">{{ consumerModal.stats.heatingrod.power?.toFixed(0) || 0 }} W</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">Heute:</span>
+                                    <span style="color: #f0f6fc;">{{ consumerModal.stats.heatingrod.daily_kwh?.toFixed(2) || 0 }} kWh</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
+                                    <span class="modal-stat-label">Kosten:</span>
+                                    <span style="color: #f87171;">{{ consumerModal.stats.heatingrod.cost_today?.toFixed(2) || 0 }} €</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-stat-card" v-else style="opacity: 0.5; border-left: 3px solid #4a5568;">
+                            <div class="modal-stat-value" style="color: #94a3b8;">🔥 Heizstab</div>
+                            <div class="modal-stat-label" style="margin-top: 8px;">Nicht konfiguriert</div>
+                        </div>
+
+                        <!-- Wallbox -->
+                        <div class="modal-stat-card" v-if="energyFlow.consumers?.wallbox?.configured" style="border-left: 3px solid #22c55e;">
+                            <div class="modal-stat-value" style="color: #22c55e; font-size: 1.1em;">🚗 Wallbox</div>
+                            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">Leistung:</span>
+                                    <span style="color: #f0f6fc;">{{ consumerModal.stats.wallbox.power?.toFixed(0) || 0 }} W</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">Heute:</span>
+                                    <span style="color: #f0f6fc;">{{ consumerModal.stats.wallbox.daily_kwh?.toFixed(2) || 0 }} kWh</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span class="modal-stat-label">Status:</span>
+                                    <span :style="{ color: consumerModal.stats.wallbox.state === 'charging' ? '#22c55e' : '#94a3b8' }">
+                                        {{ consumerModal.stats.wallbox.state === 'charging' ? '⚡ Lädt' : '💤 Bereit' }}
+                                    </span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
+                                    <span class="modal-stat-label">Kosten:</span>
+                                    <span style="color: #f87171;">{{ consumerModal.stats.wallbox.cost_today?.toFixed(2) || 0 }} €</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-stat-card" v-else style="opacity: 0.5; border-left: 3px solid #4a5568;">
+                            <div class="modal-stat-value" style="color: #94a3b8;">🚗 Wallbox</div>
+                            <div class="modal-stat-label" style="margin-top: 8px;">Nicht konfiguriert</div>
+                        </div>
+                    </div>
+
+                    <!-- Totals Row -->
+                    <div class="modal-stats-grid" style="grid-template-columns: repeat(2, 1fr); margin-top: 16px;">
+                        <div class="modal-stat-card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05));">
+                            <div class="modal-stat-value" style="color: #22c55e;">{{ consumerModal.stats.total_daily_kwh?.toFixed(2) || 0 }} kWh</div>
+                            <div class="modal-stat-label">Verbraucher gesamt heute</div>
+                        </div>
+                        <div class="modal-stat-card" style="background: linear-gradient(135deg, rgba(248, 113, 113, 0.15), rgba(248, 113, 113, 0.05));">
+                            <div class="modal-stat-value" style="color: #f87171;">{{ consumerModal.stats.total_cost_today?.toFixed(2) || 0 }} €</div>
+                            <div class="modal-stat-label">Gesamtkosten heute</div>
+                        </div>
+                    </div>
+
+                    <!-- Bar Chart -->
+                    <div class="modal-chart-container" style="margin-top: 20px;">
+                        <div class="modal-chart-title">
+                            <span>📊</span>
+                            <span>Verbrauch heute (kWh)</span>
+                        </div>
+                        <div id="consumerBarChart" style="height: 280px;"></div>
                     </div>
                 </div>
             </div>
@@ -2855,12 +3195,239 @@
                     document.documentElement.classList.add('light-theme');
                 }
 
-                // Dashboard Style Toggle (2D/3D)
+                // Dashboard Style Toggle (2D/3D/List)
                 const dashboardStyle = ref(localStorage.getItem('sfml-dashboard-style') || '3d');
+                const dashboardStyles = ['3d', '2d', 'list'];
 
                 function toggleDashboardStyle() {
-                    dashboardStyle.value = dashboardStyle.value === '3d' ? '2d' : '3d';
+                    const currentIndex = dashboardStyles.indexOf(dashboardStyle.value);
+                    const nextIndex = (currentIndex + 1) % dashboardStyles.length;
+                    dashboardStyle.value = dashboardStyles[nextIndex];
                     localStorage.setItem('sfml-dashboard-style', dashboardStyle.value);
+                }
+
+                function getDashboardStyleIcon() {
+                    if (dashboardStyle.value === '3d') return '🎲';
+                    if (dashboardStyle.value === '2d') return '⬜';
+                    return '📋';
+                }
+
+                function getDashboardStyleLabel() {
+                    if (dashboardStyle.value === '3d') return '3D';
+                    if (dashboardStyle.value === '2d') return '2D';
+                    return 'Liste';
+                }
+
+                // Collapsible Sections
+                const collapsedSections = reactive(
+                    JSON.parse(localStorage.getItem('sfml-collapsed-sections') || '{}')
+                );
+
+                function toggleSection(sectionName) {
+                    collapsedSections[sectionName] = !collapsedSections[sectionName];
+                    localStorage.setItem('sfml-collapsed-sections', JSON.stringify(collapsedSections));
+                }
+
+                function isSectionCollapsed(sectionName) {
+                    return !!collapsedSections[sectionName];
+                }
+
+                // Section Sorting with SortableJS
+                const sortableContainer = ref(null);
+                let sortableInstance = null;
+                const defaultSectionOrder = [
+                    'weather', 'energyMatrix', 'powerSources', 'forecast', 'todayProduction',
+                    'panelGroups', 'liveWidgets', 'energyBalance', 'stats', 'kpis', 'mainCharts', 'extendedCharts'
+                ];
+
+                function initSortable() {
+                    if (!sortableContainer.value || sortableInstance) return;
+
+                    sortableInstance = Sortable.create(sortableContainer.value, {
+                        animation: 150,
+                        handle: '.section-header, .energy-flow-header, .power-sources-header, .forecast-overview-header, .chart-header, .energy-balance-header, .stats-container-header',
+                        draggable: '.sortable-item',
+                        ghostClass: 'sortable-ghost',
+                        chosenClass: 'sortable-chosen',
+                        dragClass: 'sortable-drag',
+                        delay: 2000,              // 2 Sekunden gedrückt halten
+                        delayOnTouchOnly: true,   // Nur auf Touch-Geräten (Tablet/Handy)
+                        touchStartThreshold: 5,   // Kleine Bewegung erlaubt während Delay
+                        onEnd: saveSectionOrder
+                    });
+
+                    // Restore saved order
+                    restoreSectionOrder();
+                }
+
+                // Storage Helper (localStorage + Cookie Fallback für HA Companion App)
+                function storageSet(key, value) {
+                    const data = JSON.stringify(value);
+                    try {
+                        localStorage.setItem(key, data);
+                        // Verify it was saved
+                        if (localStorage.getItem(key) === data) {
+                            return true;
+                        }
+                    } catch (e) {
+                        console.warn('localStorage failed:', e);
+                    }
+                    // Fallback: Cookie (365 Tage)
+                    try {
+                        const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+                        document.cookie = `${key}=${encodeURIComponent(data)}; expires=${expires}; path=/; SameSite=Lax`;
+                        console.log('Saved to cookie:', key);
+                        return true;
+                    } catch (e) {
+                        console.error('Cookie fallback failed:', e);
+                        return false;
+                    }
+                }
+
+                function storageGet(key) {
+                    // Try localStorage first
+                    try {
+                        const data = localStorage.getItem(key);
+                        if (data) {
+                            return JSON.parse(data);
+                        }
+                    } catch (e) {
+                        console.warn('localStorage read failed:', e);
+                    }
+                    // Fallback: Cookie
+                    try {
+                        const cookies = document.cookie.split(';');
+                        for (const cookie of cookies) {
+                            const [name, ...valueParts] = cookie.trim().split('=');
+                            if (name === key) {
+                                const value = decodeURIComponent(valueParts.join('='));
+                                return JSON.parse(value);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Cookie read failed:', e);
+                    }
+                    return null;
+                }
+
+                function storageRemove(key) {
+                    try {
+                        localStorage.removeItem(key);
+                    } catch (e) {}
+                    // Also remove cookie
+                    document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+                }
+
+                function saveSectionOrder() {
+                    if (!sortableContainer.value) return;
+                    const items = sortableContainer.value.querySelectorAll('.sortable-item[data-section]');
+                    const order = [...items].map(el => el.dataset.section);
+                    if (storageSet('sfml-section-order', order)) {
+                        console.log('Section order saved:', order);
+                    }
+                }
+
+                function restoreSectionOrder() {
+                    const savedOrder = storageGet('sfml-section-order') || [];
+                    if (!savedOrder.length || !sortableContainer.value) return;
+
+                    const container = sortableContainer.value;
+                    const items = [...container.querySelectorAll('.sortable-item[data-section]')];
+
+                    savedOrder.forEach(sectionId => {
+                        const item = items.find(el => el.dataset.section === sectionId);
+                        if (item) {
+                            container.appendChild(item);
+                        }
+                    });
+                    console.log('Section order restored:', savedOrder);
+                }
+
+                function resetSectionOrder() {
+                    storageRemove('sfml-section-order');
+                    if (!sortableContainer.value) return;
+
+                    const container = sortableContainer.value;
+                    defaultSectionOrder.forEach(sectionId => {
+                        const item = container.querySelector(`.sortable-item[data-section="${sectionId}"]`);
+                        if (item) {
+                            container.appendChild(item);
+                        }
+                    });
+                    Toast.success('Sektions-Reihenfolge zurückgesetzt', 'Layout');
+                }
+
+                // Hold-to-Drag Visual Feedback (Mobile)
+                const dragHoldIndicator = document.getElementById('drag-hold-indicator');
+                let holdTimeout = null;
+                let currentTouchTarget = null;
+
+                function initDragHoldFeedback() {
+                    if (!sortableContainer.value) return;
+
+                    const handles = sortableContainer.value.querySelectorAll(
+                        '.section-header, .energy-flow-header, .power-sources-header, ' +
+                        '.forecast-overview-header, .chart-header, .energy-balance-header, .stats-container-header'
+                    );
+
+                    handles.forEach(handle => {
+                        handle.addEventListener('touchstart', onDragHoldStart, { passive: true });
+                        handle.addEventListener('touchend', onDragHoldEnd);
+                        handle.addEventListener('touchcancel', onDragHoldEnd);
+                        handle.addEventListener('touchmove', onDragHoldMove, { passive: true });
+                    });
+                }
+
+                function onDragHoldStart(e) {
+                    if (!e.touches || e.touches.length === 0) return;
+
+                    const touch = e.touches[0];
+                    currentTouchTarget = e.target;
+
+                    // Position indicator at touch point
+                    dragHoldIndicator.style.left = touch.clientX + 'px';
+                    dragHoldIndicator.style.top = touch.clientY + 'px';
+                    dragHoldIndicator.classList.remove('complete');
+                    dragHoldIndicator.classList.add('active');
+
+                    // After 2 seconds, show completion effect
+                    holdTimeout = setTimeout(() => {
+                        dragHoldIndicator.classList.remove('active');
+                        dragHoldIndicator.classList.add('complete');
+                        // Haptic feedback if available
+                        if (navigator.vibrate) {
+                            navigator.vibrate(50);
+                        }
+                        setTimeout(() => {
+                            dragHoldIndicator.classList.remove('complete');
+                        }, 300);
+                    }, 2000);
+                }
+
+                function onDragHoldEnd() {
+                    if (holdTimeout) {
+                        clearTimeout(holdTimeout);
+                        holdTimeout = null;
+                    }
+                    dragHoldIndicator.classList.remove('active');
+                    currentTouchTarget = null;
+                }
+
+                function onDragHoldMove(e) {
+                    if (!e.touches || e.touches.length === 0 || !dragHoldIndicator.classList.contains('active')) return;
+
+                    const touch = e.touches[0];
+                    const startX = parseFloat(dragHoldIndicator.style.left);
+                    const startY = parseFloat(dragHoldIndicator.style.top);
+                    const moveDistance = Math.sqrt(
+                        Math.pow(touch.clientX - startX, 2) +
+                        Math.pow(touch.clientY - startY, 2)
+                    );
+
+                    // Cancel if moved more than 20px (scrolling)
+                    if (moveDistance > 20) {
+                        onDragHoldEnd();
+                    }
                 }
 
                 // Load dashboard settings from API on init
@@ -2929,7 +3496,8 @@
                     battery: { soc: null, power: null },
                     home: { consumption: null },
                     statistics: { solar_yield_daily: null, grid_import_daily: null, grid_import_yearly: null, battery_charge_solar_daily: null, battery_charge_grid_daily: null, price_total: null },
-                    panels: []  // Individual PV panels [{id, name, power, max_today}, ...]
+                    panels: [],  // Individual PV panels [{id, name, power, max_today}, ...]
+                    consumers: { heatpump: null, heatingrod: null, wallbox: null }  // Consumer sensors (WP, Heizstab, Wallbox)
                 });
 
                 // Production Time & Sun Times
@@ -2953,6 +3521,21 @@
                 const panelGroups = reactive({
                     available: false,
                     groups: {}
+                });
+
+                // Panel Groups Validation (Summe vs. solar_yield_daily)
+                const panelGroupsValidation = computed(() => {
+                    if (!panelGroups.available || !panelGroups.groups) return { valid: true, deviation: 0 };
+                    const groupSum = Object.values(panelGroups.groups).reduce((sum, g) => sum + (g.actual_total_kwh || 0), 0);
+                    const solarDaily = energyFlow.statistics?.solar_yield_daily || 0;
+                    if (solarDaily === 0 || groupSum === 0) return { valid: true, deviation: 0, groupSum, solarDaily };
+                    const deviation = Math.abs(groupSum - solarDaily) / solarDaily * 100;
+                    return { valid: deviation <= 10, deviation: deviation.toFixed(1), groupSum: groupSum.toFixed(3), solarDaily: solarDaily.toFixed(3) };
+                });
+
+                // Check if only one panel group exists (to avoid duplicate charts)
+                const hasSinglePanelGroup = computed(() => {
+                    return panelGroups.available && Object.keys(panelGroups.groups).length === 1;
                 });
 
                 // Panel Group Modal
@@ -3117,6 +3700,21 @@
                 const gridPriceChart = ref(null);
                 const gridMoneyChart = ref(null);
                 const gridPatternChart = ref(null);
+
+                // Consumer Analytics Modal (Wärmepumpe, Heizstab, Wallbox)
+                const consumerModal = reactive({
+                    isOpen: false,
+                    activeTab: 'today',
+                    stats: {
+                        heatpump: { power: 0, daily_kwh: 0, cop: 3.5, cost_today: 0 },
+                        heatingrod: { power: 0, daily_kwh: 0, cost_today: 0 },
+                        wallbox: { power: 0, daily_kwh: 0, state: 'idle', cost_today: 0 },
+                        total_daily_kwh: 0,
+                        total_cost_today: 0
+                    },
+                    billingData: null  // From billing API
+                });
+                const consumerBarChart = ref(null);
 
                 // Weather Analytics Modal
                 const weatherModal = reactive({
@@ -3912,7 +4510,7 @@
                                     export_kwh: exportKwh,
                                     avg_price_ct: avgPrice,
                                     costs_eur: (importKwh * avgPrice) / 100,
-                                    revenue_eur: (exportKwh * 8) / 100 // Assume 8ct feed-in tariff
+                                    revenue_eur: (exportKwh * (energyFlow.feed_in_tariff || 8.1)) / 100
                                 });
                             }
                         }
@@ -4422,6 +5020,123 @@
                     } catch (error) {
                         console.error('Error loading custom range:', error);
                     }
+                }
+
+                // ===== CONSUMER ANALYTICS MODAL FUNCTIONS =====
+                function openConsumerModal() {
+                    console.log('Opening Consumer Analytics Modal...');
+                    consumerModal.isOpen = true;
+                    // Update stats from current energyFlow data
+                    if (energyFlow.consumers) {
+                        const hp = energyFlow.consumers.heatpump;
+                        const hr = energyFlow.consumers.heatingrod;
+                        const wb = energyFlow.consumers.wallbox;
+
+                        consumerModal.stats.heatpump = {
+                            power: hp?.power || 0,
+                            daily_kwh: hp?.daily_kwh || 0,
+                            cop: hp?.cop || 3.5,
+                            cost_today: 0  // Will be calculated from billing data
+                        };
+                        consumerModal.stats.heatingrod = {
+                            power: hr?.power || 0,
+                            daily_kwh: hr?.daily_kwh || 0,
+                            cost_today: 0
+                        };
+                        consumerModal.stats.wallbox = {
+                            power: wb?.power || 0,
+                            daily_kwh: wb?.daily_kwh || 0,
+                            state: wb?.state || 'idle',
+                            cost_today: 0
+                        };
+                        consumerModal.stats.total_daily_kwh =
+                            (hp?.daily_kwh || 0) + (hr?.daily_kwh || 0) + (wb?.daily_kwh || 0);
+                    }
+                    // Fetch billing data for costs
+                    fetchConsumerBillingData();
+                    setTimeout(() => {
+                        initConsumerChart();
+                    }, 300);
+                }
+
+                function closeConsumerModal() {
+                    consumerModal.isOpen = false;
+                    if (consumerBarChart.value) consumerBarChart.value.dispose();
+                    consumerBarChart.value = null;
+                }
+
+                async function fetchConsumerBillingData() {
+                    try {
+                        const response = await fetch('/api/sfml_stats/billing');
+                        if (!response.ok) return;
+                        const data = await response.json();
+                        if (data.success && data.consumers) {
+                            consumerModal.billingData = data.consumers;
+                            consumerModal.stats.heatpump.cost_today = data.consumers.heatpump?.cost_eur || 0;
+                            consumerModal.stats.heatingrod.cost_today = data.consumers.heatingrod?.cost_eur || 0;
+                            consumerModal.stats.wallbox.cost_today = data.consumers.wallbox?.cost_eur || 0;
+                            consumerModal.stats.total_cost_today = data.consumers.total_cost_eur || 0;
+                        }
+                    } catch (error) {
+                        console.error('Error fetching consumer billing data:', error);
+                    }
+                }
+
+                function initConsumerChart() {
+                    const chartDom = document.getElementById('consumerBarChart');
+                    if (!chartDom) return;
+
+                    if (consumerBarChart.value) consumerBarChart.value.dispose();
+                    consumerBarChart.value = echarts.init(chartDom);
+
+                    const hp = consumerModal.stats.heatpump;
+                    const hr = consumerModal.stats.heatingrod;
+                    const wb = consumerModal.stats.wallbox;
+
+                    const option = {
+                        backgroundColor: 'transparent',
+                        tooltip: {
+                            trigger: 'axis',
+                            formatter: '{b}: {c} kWh'
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '4%',
+                            bottom: '3%',
+                            top: '10%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: ['Wärmepumpe', 'Heizstab', 'Wallbox'],
+                            axisLabel: { color: '#94a3b8' },
+                            axisLine: { lineStyle: { color: '#30363d' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: 'kWh',
+                            axisLabel: { color: '#94a3b8' },
+                            axisLine: { lineStyle: { color: '#30363d' } },
+                            splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: [
+                                { value: hp.daily_kwh, itemStyle: { color: '#ff6b6b' } },
+                                { value: hr.daily_kwh, itemStyle: { color: '#fbbf24' } },
+                                { value: wb.daily_kwh, itemStyle: { color: '#22c55e' } }
+                            ],
+                            barWidth: '50%',
+                            label: {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c} kWh',
+                                color: '#f0f6fc'
+                            }
+                        }]
+                    };
+
+                    consumerBarChart.value.setOption(option);
                 }
 
                 // ===== WEATHER ANALYTICS MODAL FUNCTIONS =====
@@ -5806,12 +6521,22 @@
                             Object.assign(energyFlow.home, energyFlowData.home);
                             Object.assign(energyFlow.statistics, energyFlowData.statistics);
 
+                            // Feed-in tariff from config
+                            if (energyFlowData.feed_in_tariff !== undefined) {
+                                energyFlow.feed_in_tariff = energyFlowData.feed_in_tariff;
+                            }
+
                             // Check if battery is configured (has valid SOC value)
                             hasBattery.value = energyFlowData.battery?.soc !== null && energyFlowData.battery?.soc !== undefined;
 
                             // Panel data
                             if (energyFlowData.panels) {
                                 energyFlow.panels = energyFlowData.panels;
+                            }
+
+                            // Consumer data (Wärmepumpe, Heizstab, Wallbox)
+                            if (energyFlowData.consumers) {
+                                energyFlow.consumers = energyFlowData.consumers;
                             }
 
                             // HA Weather Integration
@@ -6927,6 +7652,11 @@
                     setTimeout(() => updatePowerSourcesPreviewChart(), 1500);
                     interval = setInterval(fetchData, 30000);
                     window.addEventListener('resize', () => Object.values(charts).forEach(c => c?.resize()));
+                    // Initialize SortableJS for section reordering
+                    setTimeout(() => {
+                        initSortable();
+                        initDragHoldFeedback();
+                    }, 500);
                 });
                 onUnmounted(() => {
                     clearInterval(interval);
@@ -6935,6 +7665,10 @@
 
                 return {
                     lastUpdate, isDarkTheme, toggleTheme, dashboardStyle, toggleDashboardStyle, hasBattery, isNightTime,
+                    getDashboardStyleIcon, getDashboardStyleLabel,
+                    collapsedSections, toggleSection, isSectionCollapsed,
+                    sortableContainer, resetSectionOrder,
+                    panelGroupsValidation, hasSinglePanelGroup,
                     weather, weatherCorrected, weatherHA, weatherIcon, weatherCondition, weatherHAIcon, live, forecast, kpis,
                     productionChart, priceChart, timelineChart, todayProductionChart, accuracyChart,
                     trendChart, monthlyChart,
@@ -6949,6 +7683,7 @@
                     batteryModal, openBatteryModal, closeBatteryModal, exportBatteryAnalytics,
                     houseModal, openHouseModal, closeHouseModal, exportHouseAnalytics,
                     gridModal, openGridModal, closeGridModal, exportGridAnalytics,
+                    consumerModal, openConsumerModal, closeConsumerModal,
                     weatherModal, openWeatherModal, closeWeatherModal, exportWeatherAnalytics,
                     powerSourcesModal, openPowerSourcesModal, closePowerSourcesModal, exportPowerSourcesAnalytics, changePowerSourcesTab, loadPowerSourcesCustomRange,
                     clothingModal, openClothingModal, closeClothingModal,

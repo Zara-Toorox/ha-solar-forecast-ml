@@ -24,6 +24,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_ADAPTIVE_FORECAST_MODE,
     CONF_DIAGNOSTIC,
     CONF_ENABLE_TINY_LSTM,
     CONF_HOURLY,
@@ -52,12 +53,15 @@ from .const import (
     CONF_TOTAL_CONSUMPTION_TODAY,
     CONF_UPDATE_INTERVAL,
     CONF_WIND_SENSOR,
+    CONF_WINTER_MODE,
+    DEFAULT_ADAPTIVE_FORECAST_MODE,
     DEFAULT_ENABLE_TINY_LSTM,
     DEFAULT_INVERTER_MAX_POWER,
     DEFAULT_ML_ALGORITHM,
     DEFAULT_PANEL_AZIMUTH,
     DEFAULT_PANEL_TILT,
     DEFAULT_SOLAR_CAPACITY,
+    DEFAULT_WINTER_MODE,
     DOMAIN,
 )
 
@@ -669,6 +673,8 @@ class SolarForecastMLOptionsFlow(OptionsFlow):
                 CONF_ML_ALGORITHM,
                 CONF_ENABLE_TINY_LSTM,
                 CONF_PIRATE_WEATHER_API_KEY,
+                CONF_ADAPTIVE_FORECAST_MODE,
+                CONF_WINTER_MODE,
             ]
             updated_options = {
                 **self.config_entry.options,
@@ -747,6 +753,16 @@ class SolarForecastMLOptionsFlow(OptionsFlow):
                 vol.Optional(
                     CONF_ENABLE_TINY_LSTM,
                     default=current_options.get(CONF_ENABLE_TINY_LSTM, DEFAULT_ENABLE_TINY_LSTM),
+                ): bool,
+                # Adaptive Forecast Mode - autonome Mittags-Korrektur
+                vol.Optional(
+                    CONF_ADAPTIVE_FORECAST_MODE,
+                    default=current_options.get(CONF_ADAPTIVE_FORECAST_MODE, DEFAULT_ADAPTIVE_FORECAST_MODE),
+                ): bool,
+                # V13.1: Winter Mode - verbesserte Algorithmen für niedrige Sonnenstände
+                vol.Optional(
+                    CONF_WINTER_MODE,
+                    default=current_options.get(CONF_WINTER_MODE, DEFAULT_WINTER_MODE),
                 ): bool,
                 # Weather Expert API Keys
                 vol.Optional(

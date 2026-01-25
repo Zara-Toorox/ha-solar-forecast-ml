@@ -21,7 +21,9 @@ from ..const import (
     SERVICE_BORG_ASSIMILATION_REVERSE,
     SERVICE_BUILD_ASTRONOMY_CACHE,
     SERVICE_INSTALL_EXTRA_FEATURES,
+    SERVICE_REPAIR_CALIBRATION,
     SERVICE_RESCUE_CALIBRATION,
+    SERVICE_WINTER_BUCKET_CORRECTION,
     SERVICE_RUN_WEATHER_CORRECTION,
     SERVICE_REFRESH_OPEN_METEO_CACHE,
     SERVICE_REFRESH_MULTI_WEATHER,
@@ -185,6 +187,16 @@ class ServiceRegistry:
                 name=SERVICE_RESCUE_CALIBRATION,
                 handler=self._handle_rescue_calibration,
                 description="Emergency rescue calibration for severely miscalibrated systems (DEVELOPER ONLY)",
+            ),
+            ServiceDefinition(
+                name=SERVICE_REPAIR_CALIBRATION,
+                handler=self._handle_repair_calibration,
+                description="Analyze and repair extreme calibration factors (DEVELOPER ONLY)",
+            ),
+            ServiceDefinition(
+                name=SERVICE_WINTER_BUCKET_CORRECTION,
+                handler=self._handle_winter_bucket_correction,
+                description="V13.1: Winter Bucket Correction - DEVELOPER ONLY - Kann KI nachhaltig schädigen!",
             ),
         ]
 
@@ -1387,6 +1399,583 @@ class ServiceRegistry:
                     "title": title,
                     "message": body,
                     "notification_id": "solar_forecast_ml_rescue_calibration",
+                },
+            )
+        except Exception as notify_err:
+            _LOGGER.debug(f"Could not send notification: {notify_err}")
+
+    async def _handle_repair_calibration(self, call: ServiceCall) -> None:
+        """Handle repair_calibration service - Analyze and repair extreme bucket factors @zara
+
+        ╔══════════════════════════════════════════════════════════════════════════╗
+        ║ 🚨 NUR AUF ANWEISUNG DES ENTWICKLERS AUSFÜHREN!                         ║
+        ║ DO NOT RUN WITHOUT EXPLICIT DEVELOPER INSTRUCTION!                       ║
+        ╚══════════════════════════════════════════════════════════════════════════╝
+
+        This service analyzes learning_config.json for extreme bucket factors that
+        may have been learned from contaminated data (e.g., Snow/Frost samples).
+
+        Parameters:
+            max_allowed_factor: float - Factors above this are flagged (default: 4.0)
+            max_global_ratio: float - Bucket factors > global × ratio are flagged (default: 2.0)
+            target_factor: float - Value to set for corrected factors (default: 3.0)
+            dry_run: bool - If True, only analyze (default: True)
+        """
+        import shutil
+        from datetime import datetime
+        from pathlib import Path
+
+        max_allowed_factor = call.data.get("max_allowed_factor", 4.0)
+        max_global_ratio = call.data.get("max_global_ratio", 2.0)
+        target_factor = call.data.get("target_factor", 3.0)
+        dry_run = call.data.get("dry_run", True)
+
+        _LOGGER.warning("=" * 80)
+        _LOGGER.warning("🔧 SERVICE: repair_calibration")
+        _LOGGER.warning("⚠️  NUR AUF ANWEISUNG DES ENTWICKLERS AUSFÜHREN!")
+        _LOGGER.warning("⚠️  DO NOT RUN WITHOUT EXPLICIT DEVELOPER INSTRUCTION!")
+        _LOGGER.warning("=" * 80)
+        _LOGGER.info(f"Parameters: max_factor={max_allowed_factor}, max_ratio={max_global_ratio}, "
+                     f"target={target_factor}, dry_run={dry_run}")
+
+        try:
+            data_dir = self.coordinator.data_manager.data_dir
+            physics_dir = data_dir / "physics"
+            learning_config_file = physics_dir / "learning_config.json"
+
+            # Check if file exists
+            if not learning_config_file.exists():
+                _LOGGER.error(f"learning_config.json not found at {learning_config_file}")
+                await self._send_repair_notification(
+                    success=False,
+                    dry_run=dry_run,
+                    message="learning_config.json nicht gefunden.",
+                    outliers=[],
+                )
+                return
+
+            # Load learning_config.json
+            def _load_config():
+                with open(learning_config_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+
+            config = await self.hass.async_add_executor_job(_load_config)
+
+            # Analyze calibration data
+            calibration_data = config.get("calibration", {})
+            outliers = []
+
+            _LOGGER.info("=" * 60)
+            _LOGGER.info("ANALYZING CALIBRATION FACTORS")
+            _LOGGER.info("=" * 60)
+
+            for group_name, group_data in calibration_data.items():
+                global_factor = group_data.get("global_factor", 1.0)
+                bucket_factors = group_data.get("bucket_factors", {})
+
+                _LOGGER.info(f"\n📊 Group: {group_name} (global_factor: {global_factor:.2f})")
+
+                # Check global factor
+                if global_factor > max_allowed_factor:
+                    outlier = {
+                        "group": group_name,
+                        "bucket": "GLOBAL",
+                        "factor": global_factor,
+                        "reason": f"global_factor > {max_allowed_factor}",
+                        "type": "global",
+                    }
+                    outliers.append(outlier)
+                    _LOGGER.warning(f"  ⚠️  GLOBAL factor {global_factor:.2f} > {max_allowed_factor}")
+
+                # Check each bucket
+                for bucket_name, bucket_data in bucket_factors.items():
+                    b_global = bucket_data.get("global_factor", 1.0)
+                    b_hourly = bucket_data.get("hourly_factors", {})
+                    sample_count = bucket_data.get("sample_count", 0)
+
+                    # Check bucket global factor
+                    is_outlier = False
+                    reason = ""
+
+                    if b_global > max_allowed_factor:
+                        is_outlier = True
+                        reason = f"factor {b_global:.2f} > max {max_allowed_factor}"
+                    elif global_factor > 0.5 and b_global > (global_factor * max_global_ratio):
+                        is_outlier = True
+                        reason = f"factor {b_global:.2f} > {max_global_ratio}× global ({global_factor:.2f})"
+
+                    if is_outlier:
+                        outlier = {
+                            "group": group_name,
+                            "bucket": bucket_name,
+                            "factor": b_global,
+                            "reason": reason,
+                            "type": "bucket_global",
+                            "samples": sample_count,
+                        }
+                        outliers.append(outlier)
+                        _LOGGER.warning(f"  ⚠️  {bucket_name}: {b_global:.2f} - {reason} (samples: {sample_count})")
+                    else:
+                        _LOGGER.debug(f"  ✓ {bucket_name}: {b_global:.2f} OK (samples: {sample_count})")
+
+                    # Check hourly factors within bucket
+                    for hour_str, h_factor in b_hourly.items():
+                        h_is_outlier = False
+                        h_reason = ""
+
+                        if h_factor > max_allowed_factor:
+                            h_is_outlier = True
+                            h_reason = f"hourly factor {h_factor:.2f} > max {max_allowed_factor}"
+                        elif b_global > 0.5 and h_factor > (b_global * max_global_ratio):
+                            h_is_outlier = True
+                            h_reason = f"hourly {h_factor:.2f} > {max_global_ratio}× bucket ({b_global:.2f})"
+
+                        if h_is_outlier:
+                            outlier = {
+                                "group": group_name,
+                                "bucket": bucket_name,
+                                "hour": int(hour_str),
+                                "factor": h_factor,
+                                "reason": h_reason,
+                                "type": "hourly",
+                            }
+                            outliers.append(outlier)
+                            _LOGGER.warning(f"    ⚠️  Hour {hour_str}: {h_factor:.2f} - {h_reason}")
+
+            # Summary
+            _LOGGER.info("\n" + "=" * 60)
+            _LOGGER.info(f"ANALYSIS COMPLETE: {len(outliers)} outliers found")
+            _LOGGER.info("=" * 60)
+
+            if not outliers:
+                _LOGGER.info("✅ No outliers found - calibration looks healthy!")
+                await self._send_repair_notification(
+                    success=True,
+                    dry_run=dry_run,
+                    message="Keine Ausreißer gefunden - Kalibrierung ist gesund!",
+                    outliers=[],
+                )
+                return
+
+            # If dry_run, just report
+            if dry_run:
+                _LOGGER.info("\n🔍 DRY RUN - No changes made")
+                _LOGGER.info("To apply fixes, run with dry_run=false")
+                await self._send_repair_notification(
+                    success=True,
+                    dry_run=True,
+                    message=f"{len(outliers)} Ausreißer gefunden (dry_run - keine Änderungen)",
+                    outliers=outliers,
+                    target_factor=target_factor,
+                )
+                return
+
+            # ================================================================
+            # APPLY CORRECTIONS
+            # ================================================================
+            _LOGGER.info("\n🔧 APPLYING CORRECTIONS...")
+
+            # Step 1: Create backup
+            backups_dir = data_dir / "backups" / "repair_calibration"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = backups_dir / f"learning_config_backup_{timestamp}.json"
+
+            def _create_backup():
+                backups_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(learning_config_file, backup_file)
+                return backup_file
+
+            backup_path = await self.hass.async_add_executor_job(_create_backup)
+            _LOGGER.info(f"✓ Backup created: {backup_path}")
+
+            # Step 2: Apply corrections
+            corrections_made = 0
+
+            for outlier in outliers:
+                group = outlier["group"]
+                bucket = outlier.get("bucket")
+                hour = outlier.get("hour")
+                old_factor = outlier["factor"]
+
+                if outlier["type"] == "global":
+                    # Correct group global factor
+                    if group in calibration_data:
+                        calibration_data[group]["global_factor"] = target_factor
+                        corrections_made += 1
+                        _LOGGER.info(f"  ✓ {group} global: {old_factor:.2f} → {target_factor:.2f}")
+
+                elif outlier["type"] == "bucket_global":
+                    # Correct bucket global factor
+                    if (group in calibration_data and
+                        bucket in calibration_data[group].get("bucket_factors", {})):
+                        calibration_data[group]["bucket_factors"][bucket]["global_factor"] = target_factor
+                        corrections_made += 1
+                        _LOGGER.info(f"  ✓ {group}/{bucket}: {old_factor:.2f} → {target_factor:.2f}")
+
+                elif outlier["type"] == "hourly":
+                    # Correct hourly factor
+                    if (group in calibration_data and
+                        bucket in calibration_data[group].get("bucket_factors", {}) and
+                        str(hour) in calibration_data[group]["bucket_factors"][bucket].get("hourly_factors", {})):
+                        calibration_data[group]["bucket_factors"][bucket]["hourly_factors"][str(hour)] = target_factor
+                        corrections_made += 1
+                        _LOGGER.info(f"  ✓ {group}/{bucket}/h{hour}: {old_factor:.2f} → {target_factor:.2f}")
+
+            # Step 3: Save corrected config
+            config["calibration"] = calibration_data
+
+            # Add repair metadata
+            if "metadata" not in config:
+                config["metadata"] = {}
+            config["metadata"]["last_repair"] = {
+                "timestamp": datetime.now().isoformat(),
+                "corrections_made": corrections_made,
+                "target_factor": target_factor,
+                "backup_file": str(backup_file),
+            }
+
+            def _save_config():
+                with open(learning_config_file, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False)
+
+            await self.hass.async_add_executor_job(_save_config)
+
+            _LOGGER.info("\n" + "=" * 60)
+            _LOGGER.info(f"✅ REPAIR COMPLETE: {corrections_made} corrections applied")
+            _LOGGER.info(f"Backup: {backup_path}")
+            _LOGGER.info("⚠️  WICHTIG: Home Assistant neustarten!")
+            _LOGGER.info("=" * 60)
+
+            await self._send_repair_notification(
+                success=True,
+                dry_run=False,
+                message=f"{corrections_made} Korrekturen angewendet",
+                outliers=outliers,
+                target_factor=target_factor,
+                backup_path=str(backup_path),
+            )
+
+        except Exception as e:
+            _LOGGER.error(f"Error in repair_calibration: {e}", exc_info=True)
+            await self._send_repair_notification(
+                success=False,
+                dry_run=dry_run,
+                message=f"Fehler: {e}",
+                outliers=[],
+            )
+
+    async def _send_repair_notification(
+        self,
+        success: bool,
+        dry_run: bool,
+        message: str,
+        outliers: list,
+        target_factor: float = 3.0,
+        backup_path: str = None,
+    ) -> None:
+        """Send notification about repair_calibration result @zara"""
+        try:
+            if success and not outliers:
+                title = "✅ Calibration Repair - Keine Probleme"
+                body = f"**Ergebnis:** {message}\n\nAlle Kalibrierungsfaktoren sind im normalen Bereich."
+
+            elif success and dry_run:
+                title = "🔍 Calibration Repair - Analyse (dry_run)"
+                outlier_list = "\n".join(
+                    f"- {o['group']}/{o.get('bucket', 'GLOBAL')}"
+                    f"{'/h' + str(o['hour']) if o.get('hour') else ''}: "
+                    f"{o['factor']:.2f} ({o['reason']})"
+                    for o in outliers[:10]  # Limit to 10
+                )
+                if len(outliers) > 10:
+                    outlier_list += f"\n... und {len(outliers) - 10} weitere"
+
+                body = (
+                    f"**{len(outliers)} Ausreißer gefunden:**\n\n"
+                    f"{outlier_list}\n\n"
+                    f"**Vorgeschlagene Korrektur:** Alle auf {target_factor:.1f} setzen\n\n"
+                    f"⚠️ Um Korrekturen anzuwenden, Service mit `dry_run: false` ausführen."
+                )
+
+            elif success:
+                title = "✅ Calibration Repair - Korrekturen angewendet"
+                body = (
+                    f"**Ergebnis:** {message}\n\n"
+                    f"**Ziel-Faktor:** {target_factor:.1f}\n"
+                    f"**Backup:** `{backup_path}`\n\n"
+                    f"⚠️ **WICHTIG:** Home Assistant neustarten um Änderungen zu aktivieren!"
+                )
+
+            else:
+                title = "⚠️ Calibration Repair - Fehler"
+                body = f"**Status:** {message}"
+
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": title,
+                    "message": body,
+                    "notification_id": "solar_forecast_ml_repair_calibration",
+                },
+            )
+        except Exception as notify_err:
+            _LOGGER.debug(f"Could not send notification: {notify_err}")
+
+    async def _handle_winter_bucket_correction(self, call: ServiceCall) -> None:
+        """Handle winter_bucket_correction_v13 service - V13.1 Winter-Fix @zara
+
+        ╔══════════════════════════════════════════════════════════════════════════╗
+        ║ ⚠️ WARNUNG: NUR AUF ANWEISUNG DES ENTWICKLERS AUSFÜHREN!               ║
+        ║ Falsche Anwendung kann die KI-Kalibrierung nachhaltig schädigen!        ║
+        ╚══════════════════════════════════════════════════════════════════════════╝
+
+        This service reduces the confidence of all bucket factors to allow faster
+        learning with the new winter-corrected cloud factor formula.
+
+        The FACTOR VALUES are preserved - only the confidence is reduced.
+        This allows the system to quickly adapt while keeping the general
+        direction of the calibration.
+
+        Parameters:
+            target_confidence: float - Target confidence value (default: 0.5)
+            dry_run: bool - If True, only analyze (default: True)
+        """
+        import shutil
+        from datetime import datetime
+
+        target_confidence = call.data.get("target_confidence", 0.5)
+        dry_run = call.data.get("dry_run", True)
+
+        _LOGGER.info("=" * 80)
+        _LOGGER.info("🌨️ SERVICE: winter_bucket_correction_v13 (DEVELOPER ONLY)")
+        _LOGGER.info("⚠️ WARNUNG: Dieser Service kann die KI nachhaltig schädigen!")
+        _LOGGER.info("=" * 80)
+        _LOGGER.info(f"Target confidence: {target_confidence}")
+        _LOGGER.info(f"Dry run: {dry_run}")
+
+        try:
+            data_dir = self.coordinator.data_manager.data_dir
+            physics_dir = data_dir / "physics"
+            learning_config_file = physics_dir / "learning_config.json"
+
+            # Check if file exists
+            if not learning_config_file.exists():
+                _LOGGER.error(f"learning_config.json not found at {learning_config_file}")
+                await self._send_winter_bucket_correction_notification(
+                    success=False,
+                    dry_run=dry_run,
+                    message="learning_config.json nicht gefunden.",
+                    buckets_affected=0,
+                )
+                return
+
+            # Load learning_config.json
+            def _load_config():
+                with open(learning_config_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+
+            config = await self.hass.async_add_executor_job(_load_config)
+
+            # Analyze and collect statistics
+            group_calibration = config.get("group_calibration", {})
+            buckets_affected = 0
+            confidence_changes = []
+
+            _LOGGER.info("=" * 60)
+            _LOGGER.info("ANALYZING BUCKET CONFIDENCE VALUES")
+            _LOGGER.info("=" * 60)
+
+            for group_name, group_data in group_calibration.items():
+                bucket_factors = group_data.get("bucket_factors", {})
+
+                _LOGGER.info(f"\n📊 Group: {group_name}")
+
+                for bucket_name, bucket_data in bucket_factors.items():
+                    current_confidence = bucket_data.get("confidence", 1.0)
+                    current_factor = bucket_data.get("factor", 1.0)
+                    sample_count = bucket_data.get("sample_count", 0)
+
+                    if current_confidence > target_confidence:
+                        buckets_affected += 1
+                        confidence_changes.append({
+                            "group": group_name,
+                            "bucket": bucket_name,
+                            "old_confidence": current_confidence,
+                            "new_confidence": target_confidence,
+                            "factor": current_factor,
+                            "samples": sample_count,
+                        })
+                        _LOGGER.info(
+                            f"  ↓ {bucket_name}: conf {current_confidence:.2f} → {target_confidence:.2f} "
+                            f"(factor={current_factor:.2f}, samples={sample_count})"
+                        )
+                    else:
+                        _LOGGER.debug(
+                            f"  ✓ {bucket_name}: conf {current_confidence:.2f} ≤ {target_confidence:.2f} (OK)"
+                        )
+
+            # Summary
+            _LOGGER.info("\n" + "=" * 60)
+            _LOGGER.info(f"ANALYSIS COMPLETE: {buckets_affected} buckets would be affected")
+            _LOGGER.info("=" * 60)
+
+            if buckets_affected == 0:
+                _LOGGER.info("✅ All bucket confidences are already at or below target!")
+                await self._send_winter_bucket_correction_notification(
+                    success=True,
+                    dry_run=dry_run,
+                    message="Alle Bucket-Konfidenzen sind bereits ≤ Zielwert.",
+                    buckets_affected=0,
+                    target_confidence=target_confidence,
+                )
+                return
+
+            # If dry_run, just report
+            if dry_run:
+                _LOGGER.info("\n🔍 DRY RUN - No changes made")
+                _LOGGER.info("To apply changes, run with dry_run=false")
+                await self._send_winter_bucket_correction_notification(
+                    success=True,
+                    dry_run=True,
+                    message=f"{buckets_affected} Buckets würden zurückgesetzt (dry_run)",
+                    buckets_affected=buckets_affected,
+                    target_confidence=target_confidence,
+                    changes=confidence_changes[:10],
+                )
+                return
+
+            # ================================================================
+            # APPLY CONFIDENCE RESET
+            # ================================================================
+            _LOGGER.info("\n🔧 APPLYING CONFIDENCE RESET...")
+
+            # Step 1: Create backup
+            backups_dir = data_dir / "backups" / "confidence_reset"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = backups_dir / f"learning_config_backup_{timestamp}.json"
+
+            def _create_backup():
+                backups_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(learning_config_file, backup_file)
+                return backup_file
+
+            backup_path = await self.hass.async_add_executor_job(_create_backup)
+            _LOGGER.info(f"✓ Backup created: {backup_path}")
+
+            # Step 2: Apply confidence reset
+            reset_count = 0
+
+            for group_name, group_data in group_calibration.items():
+                bucket_factors = group_data.get("bucket_factors", {})
+
+                for bucket_name, bucket_data in bucket_factors.items():
+                    current_confidence = bucket_data.get("confidence", 1.0)
+
+                    if current_confidence > target_confidence:
+                        bucket_data["confidence"] = target_confidence
+                        reset_count += 1
+
+            # Step 3: Update metadata
+            config["group_calibration"] = group_calibration
+
+            if "metadata" not in config:
+                config["metadata"] = {}
+            config["metadata"]["confidence_reset"] = {
+                "timestamp": datetime.now().isoformat(),
+                "target_confidence": target_confidence,
+                "buckets_reset": reset_count,
+                "reason": "V13.1 Winter-Fix: Enable faster learning with new cloud factor formula",
+                "backup_file": str(backup_file),
+            }
+
+            # Step 4: Save config
+            def _save_config():
+                with open(learning_config_file, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False)
+
+            await self.hass.async_add_executor_job(_save_config)
+
+            _LOGGER.info("\n" + "=" * 60)
+            _LOGGER.info(f"✅ CONFIDENCE RESET COMPLETE: {reset_count} buckets updated")
+            _LOGGER.info(f"Backup: {backup_path}")
+            _LOGGER.info("Das System wird jetzt schneller mit der neuen Formel lernen.")
+            _LOGGER.info("=" * 60)
+
+            await self._send_winter_bucket_correction_notification(
+                success=True,
+                dry_run=False,
+                message=f"{reset_count} Bucket-Konfidenzen zurückgesetzt",
+                buckets_affected=reset_count,
+                target_confidence=target_confidence,
+                backup_path=str(backup_path),
+            )
+
+        except Exception as e:
+            _LOGGER.error(f"Error in winter_bucket_correction_v13: {e}", exc_info=True)
+            await self._send_winter_bucket_correction_notification(
+                success=False,
+                dry_run=dry_run,
+                message=f"Fehler: {e}",
+                buckets_affected=0,
+            )
+
+    async def _send_winter_bucket_correction_notification(
+        self,
+        success: bool,
+        dry_run: bool,
+        message: str,
+        buckets_affected: int,
+        target_confidence: float = 0.5,
+        changes: list = None,
+        backup_path: str = None,
+    ) -> None:
+        """Send notification about Winter Bucket Correction result @zara"""
+        try:
+            if success and buckets_affected == 0:
+                title = "✅ Winter Bucket Correction V13 - Nicht nötig"
+                body = f"**Ergebnis:** {message}\n\nAlle Bucket-Konfidenzen sind bereits niedrig genug."
+
+            elif success and dry_run:
+                title = "🔍 Winter Bucket Correction V13 - Analyse (dry_run)"
+                changes_list = ""
+                if changes:
+                    changes_list = "\n".join(
+                        f"- {c['group']}/{c['bucket']}: {c['old_confidence']:.2f} → {c['new_confidence']:.2f}"
+                        for c in changes[:5]
+                    )
+                    if len(changes) > 5:
+                        changes_list += f"\n... und {len(changes) - 5} weitere"
+
+                body = (
+                    f"**{buckets_affected} Buckets würden korrigiert:**\n\n"
+                    f"{changes_list}\n\n"
+                    f"**Ziel-Konfidenz:** {target_confidence:.1f}\n\n"
+                    f"⚠️ Um Änderungen anzuwenden, Service mit `dry_run: false` ausführen.\n"
+                    f"⚠️ NUR AUF ANWEISUNG DES ENTWICKLERS AUSFÜHREN!"
+                )
+
+            elif success:
+                title = "✅ Winter Bucket Correction V13 - Abgeschlossen"
+                body = (
+                    f"**Ergebnis:** {message}\n\n"
+                    f"**Ziel-Konfidenz:** {target_confidence:.1f}\n"
+                    f"**Backup:** `{backup_path}`\n\n"
+                    f"Das System wird jetzt schneller mit der neuen Winter-Formel lernen.\n"
+                    f"Die Faktor-WERTE wurden beibehalten - nur die Konfidenz wurde reduziert."
+                )
+
+            else:
+                title = "⚠️ Winter Bucket Correction V13 - Fehler"
+                body = f"**Status:** {message}"
+
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": title,
+                    "message": body,
+                    "notification_id": "solar_forecast_ml_winter_bucket_correction",
                 },
             )
         except Exception as notify_err:

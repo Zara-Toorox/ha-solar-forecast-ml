@@ -9,7 +9,7 @@
       },
       "sensors": {
         "title": "Sensor Configuration",
-        "description": "Configure all sensor mappings. Leave empty if not available.\n\nUse Watt sensors for live power, kWh sensors for daily statistics.",
+        "description": "Configure all sensor mappings. Leave empty if not available.\n\n**Required units:**\n- Power: Watt (W)\n- Energy: kWh (with daily reset)\n- SOC: Percent (0-100)\n- Price: ct/kWh",
         "data": {
           "sensor_solar_power": "Solar Power (W)",
           "sensor_solar_to_house": "Solar to House (W)",
@@ -33,26 +33,26 @@
           "weather_entity": "Weather Entity"
         },
         "data_description": {
-          "sensor_solar_power": "Total PV power in Watts",
-          "sensor_solar_to_house": "Solar power flowing directly to house",
-          "sensor_solar_to_battery": "Solar power charging battery",
-          "sensor_solar_yield_daily": "PV production TODAY in kWh",
-          "sensor_grid_to_house": "Grid import for house consumption",
-          "sensor_grid_to_battery": "Grid import for battery charging",
-          "sensor_house_to_grid": "Export to grid in Watts",
-          "sensor_grid_import_daily": "Grid import TODAY in kWh",
-          "sensor_grid_import_yearly": "Grid import this calendar year",
-          "sensor_smartmeter_import": "Import power from smartmeter",
-          "sensor_smartmeter_export": "Export power from smartmeter",
-          "sensor_battery_soc": "State of charge in PERCENT (0-100)",
-          "sensor_battery_power": "Charge/discharge power in Watts",
-          "sensor_battery_to_house": "Discharge power to house",
-          "sensor_battery_to_grid": "Battery export to grid",
-          "sensor_battery_charge_solar_daily": "Solar charging TODAY in kWh",
-          "sensor_battery_charge_grid_daily": "Grid charging TODAY in kWh",
-          "sensor_home_consumption": "TOTAL home consumption in Watts",
-          "sensor_price_total": "Electricity price in ct/kWh",
-          "weather_entity": "HA Weather integration"
+          "sensor_solar_power": "Total PV power in Watt (W). Current value from inverter.",
+          "sensor_solar_to_house": "Solar direct consumption in Watt (W). Power flowing directly to house.",
+          "sensor_solar_to_battery": "Solar battery charging in Watt (W). Power charging the battery.",
+          "sensor_solar_yield_daily": "Daily yield in kWh. Use utility_meter with daily reset.",
+          "sensor_grid_to_house": "Grid import house in Watt (W). Power drawn from grid.",
+          "sensor_grid_to_battery": "Grid import battery in Watt (W). Grid power for battery charging.",
+          "sensor_house_to_grid": "Grid export in Watt (W). Surplus power fed to grid.",
+          "sensor_grid_import_daily": "Daily grid import in kWh. Use utility_meter with daily reset.",
+          "sensor_grid_import_yearly": "Yearly grid import in kWh. Total import this calendar year.",
+          "sensor_smartmeter_import": "Smartmeter import in Watt (W). Current import from meter.",
+          "sensor_smartmeter_export": "Smartmeter export in Watt (W). Current export at meter.",
+          "sensor_battery_soc": "State of charge in percent (0-100%). Battery SOC.",
+          "sensor_battery_power": "Battery power in Watt (W). Positive=charging, Negative=discharging.",
+          "sensor_battery_to_house": "Battery discharge in Watt (W). Power going to house.",
+          "sensor_battery_to_grid": "Battery export in Watt (W). Power going to grid.",
+          "sensor_battery_charge_solar_daily": "Solar charging today in kWh. Use utility_meter with daily reset.",
+          "sensor_battery_charge_grid_daily": "Grid charging today in kWh. Use utility_meter with daily reset.",
+          "sensor_home_consumption": "Total home consumption in Watt (W). All consumers combined.",
+          "sensor_price_total": "Current electricity price in ct/kWh. From Tibber, Octopus, etc.",
+          "weather_entity": "Home Assistant weather integration (weather.xxx)."
         }
       },
       "helpers": {
@@ -73,8 +73,7 @@
           "theme": "Color Theme",
           "billing_start_month": "Billing Start Month",
           "billing_start_day": "Billing Start Day",
-          "billing_price_mode": "Price Mode",
-          "billing_fixed_price": "Fixed Price (ct/kWh)",
+          "billing_fixed_price": "Fallback Price (ct/kWh)",
           "feed_in_tariff": "Feed-in Tariff (ct/kWh)"
         },
         "data_description": {
@@ -82,8 +81,7 @@
           "theme": "Dark or Light theme for charts",
           "billing_start_month": "Month when your billing year starts",
           "billing_start_day": "Day when your billing year starts",
-          "billing_price_mode": "Dynamic (spot price) or Fixed price",
-          "billing_fixed_price": "Your electricity price in cents per kWh",
+          "billing_fixed_price": "Used when Grid Price Monitor does not provide a price",
           "feed_in_tariff": "Feed-in tariff in cents per kWh"
         }
       }
@@ -108,13 +106,14 @@
         },
         "menu_options": {
           "sensors": "Sensors",
+          "consumers": "Consumers (Heat Pump, Heating Rod, Wallbox)",
           "settings": "Settings",
           "advanced": "Advanced"
         }
       },
       "sensors": {
         "title": "All Sensors",
-        "description": "Configure all sensor mappings.\n\nUse Watt sensors for live power, kWh sensors for daily statistics.",
+        "description": "Configure all sensor mappings.\n\n**Required units:**\n- Power: Watt (W)\n- Energy: kWh (with daily reset)\n- SOC: Percent (0-100)\n- Price: ct/kWh",
         "data": {
           "sensor_solar_power": "Solar Power (W)",
           "sensor_solar_to_house": "Solar to House (W)",
@@ -138,26 +137,50 @@
           "weather_entity": "Weather Entity"
         },
         "data_description": {
-          "sensor_solar_power": "Total PV power in Watts",
-          "sensor_solar_to_house": "Solar power flowing directly to house",
-          "sensor_solar_to_battery": "Solar power charging battery",
-          "sensor_solar_yield_daily": "PV production TODAY in kWh",
-          "sensor_grid_to_house": "Grid import for house consumption",
-          "sensor_grid_to_battery": "Grid import for battery charging",
-          "sensor_house_to_grid": "Export to grid in Watts",
-          "sensor_grid_import_daily": "Grid import TODAY in kWh",
-          "sensor_grid_import_yearly": "Grid import this calendar year",
-          "sensor_smartmeter_import": "Import power from smartmeter",
-          "sensor_smartmeter_export": "Export power from smartmeter",
-          "sensor_battery_soc": "State of charge in PERCENT (0-100)",
-          "sensor_battery_power": "Charge/discharge power in Watts",
-          "sensor_battery_to_house": "Discharge power to house",
-          "sensor_battery_to_grid": "Battery export to grid",
-          "sensor_battery_charge_solar_daily": "Solar charging TODAY in kWh",
-          "sensor_battery_charge_grid_daily": "Grid charging TODAY in kWh",
-          "sensor_home_consumption": "TOTAL home consumption in Watts",
-          "sensor_price_total": "Electricity price in ct/kWh",
-          "weather_entity": "HA Weather integration"
+          "sensor_solar_power": "Total PV power in Watt (W). Current value from inverter.",
+          "sensor_solar_to_house": "Solar direct consumption in Watt (W). Power flowing directly to house.",
+          "sensor_solar_to_battery": "Solar battery charging in Watt (W). Power charging the battery.",
+          "sensor_solar_yield_daily": "Daily yield in kWh. Use utility_meter with daily reset.",
+          "sensor_grid_to_house": "Grid import house in Watt (W). Power drawn from grid.",
+          "sensor_grid_to_battery": "Grid import battery in Watt (W). Grid power for battery charging.",
+          "sensor_house_to_grid": "Grid export in Watt (W). Surplus power fed to grid.",
+          "sensor_grid_import_daily": "Daily grid import in kWh. Use utility_meter with daily reset.",
+          "sensor_grid_import_yearly": "Yearly grid import in kWh. Total import this calendar year.",
+          "sensor_smartmeter_import": "Smartmeter import in Watt (W). Current import from meter.",
+          "sensor_smartmeter_export": "Smartmeter export in Watt (W). Current export at meter.",
+          "sensor_battery_soc": "State of charge in percent (0-100%). Battery SOC.",
+          "sensor_battery_power": "Battery power in Watt (W). Positive=charging, Negative=discharging.",
+          "sensor_battery_to_house": "Battery discharge in Watt (W). Power going to house.",
+          "sensor_battery_to_grid": "Battery export in Watt (W). Power going to grid.",
+          "sensor_battery_charge_solar_daily": "Solar charging today in kWh. Use utility_meter with daily reset.",
+          "sensor_battery_charge_grid_daily": "Grid charging today in kWh. Use utility_meter with daily reset.",
+          "sensor_home_consumption": "Total home consumption in Watt (W). All consumers combined.",
+          "sensor_price_total": "Current electricity price in ct/kWh. From Tibber, Octopus, etc.",
+          "weather_entity": "Home Assistant weather integration (weather.xxx)."
+        }
+      },
+      "consumers": {
+        "title": "Consumer Sensors (Optional)",
+        "description": "Configure sensors for additional consumers.\n\nThese are OPTIONAL - only configure if you have these devices.\n\n**Required units:**\n- Power: Watt (W)\n- Energy: kWh (with daily reset)\n- COP: Decimal number (e.g. 3.5)\n- State: Text (charging/idle)",
+        "data": {
+          "sensor_heatpump_power": "Heat Pump Power (W)",
+          "sensor_heatpump_daily": "Heat Pump Today (kWh)",
+          "sensor_heatpump_cop": "Heat Pump COP",
+          "sensor_heatingrod_power": "Heating Rod Power (W)",
+          "sensor_heatingrod_daily": "Heating Rod Today (kWh)",
+          "sensor_wallbox_power": "Wallbox Power (W)",
+          "sensor_wallbox_daily": "Wallbox Today (kWh)",
+          "sensor_wallbox_state": "Wallbox State"
+        },
+        "data_description": {
+          "sensor_heatpump_power": "Current HP power in Watt (W). Live consumption of heat pump.",
+          "sensor_heatpump_daily": "HP daily consumption in kWh. Use utility_meter with daily reset.",
+          "sensor_heatpump_cop": "COP sensor as decimal (e.g. 3.5). Fallback: 3.5 if empty.",
+          "sensor_heatingrod_power": "Current heating rod power in Watt (W). Live consumption.",
+          "sensor_heatingrod_daily": "Heating rod daily in kWh. Use utility_meter with daily reset.",
+          "sensor_wallbox_power": "Current charging power in Watt (W). Live power of wallbox.",
+          "sensor_wallbox_daily": "Wallbox daily consumption in kWh. Use utility_meter with daily reset.",
+          "sensor_wallbox_state": "State sensor with text: 'charging' = active, 'idle' = ready."
         }
       },
       "settings": {
@@ -170,8 +193,7 @@
           "theme": "Color Theme",
           "billing_start_month": "Billing Start Month",
           "billing_start_day": "Billing Start Day",
-          "billing_price_mode": "Price Mode",
-          "billing_fixed_price": "Fixed Price (ct/kWh)",
+          "billing_fixed_price": "Fallback Price (ct/kWh)",
           "feed_in_tariff": "Feed-in Tariff (ct/kWh)"
         },
         "data_description": {
@@ -181,8 +203,7 @@
           "theme": "Dark or Light theme for the charts",
           "billing_start_month": "Month when your billing year starts",
           "billing_start_day": "Day when your billing year starts",
-          "billing_price_mode": "Dynamic (spot price) or Fixed price",
-          "billing_fixed_price": "Your electricity price in cents per kWh",
+          "billing_fixed_price": "Used when Grid Price Monitor does not provide a price",
           "feed_in_tariff": "Feed-in tariff in cents per kWh"
         }
       },
@@ -200,16 +221,26 @@
       },
       "panels": {
         "title": "PV Panel Sensors",
-        "description": "Configure up to 4 individual PV panels.",
+        "description": "Configure up to 4 individual PV panels/strings.\n\n**Required unit:** Watt (W)",
         "data": {
           "panel1_name": "Panel 1 Name",
-          "sensor_panel1_power": "Panel 1 Live Power",
+          "sensor_panel1_power": "Panel 1 Power (W)",
           "panel2_name": "Panel 2 Name",
-          "sensor_panel2_power": "Panel 2 Live Power",
+          "sensor_panel2_power": "Panel 2 Power (W)",
           "panel3_name": "Panel 3 Name",
-          "sensor_panel3_power": "Panel 3 Live Power",
+          "sensor_panel3_power": "Panel 3 Power (W)",
           "panel4_name": "Panel 4 Name",
-          "sensor_panel4_power": "Panel 4 Live Power"
+          "sensor_panel4_power": "Panel 4 Power (W)"
+        },
+        "data_description": {
+          "panel1_name": "Display name for panel/string 1 (e.g. 'South', 'East').",
+          "sensor_panel1_power": "Live power in Watt (W). Current value from inverter.",
+          "panel2_name": "Display name for panel/string 2.",
+          "sensor_panel2_power": "Live power in Watt (W). Current value from inverter.",
+          "panel3_name": "Display name for panel/string 3.",
+          "sensor_panel3_power": "Live power in Watt (W). Current value from inverter.",
+          "panel4_name": "Display name for panel/string 4.",
+          "sensor_panel4_power": "Live power in Watt (W). Current value from inverter."
         }
       },
       "panel_group_names": {
@@ -217,22 +248,25 @@
         "description": "Format: OriginalName=NewName (comma separated)\n\nExample: {example}",
         "data": {
           "panel_group_names_input": "Name Mapping"
+        },
+        "data_description": {
+          "panel_group_names_input": "Rename panel groups. Format: Old=New,Old2=New2"
         }
       },
       "forecast_comparison": {
         "title": "Forecast Comparison",
-        "description": "Configure up to 2 external forecast entities for the 7-day comparison chart.\n\nEntities should provide daily forecast values in kWh (e.g., Solcast, Forecast.Solar).",
+        "description": "Configure up to 2 external forecast entities for the 7-day comparison chart.\n\n**Required unit:** kWh (daily forecast)",
         "data": {
-          "forecast_entity_1": "External Forecast 1 (Entity ID)",
+          "forecast_entity_1": "Forecast 1 (Entity ID)",
           "forecast_entity_1_name": "Name for Forecast 1",
-          "forecast_entity_2": "External Forecast 2 (Entity ID)",
+          "forecast_entity_2": "Forecast 2 (Entity ID)",
           "forecast_entity_2_name": "Name for Forecast 2"
         },
         "data_description": {
-          "forecast_entity_1": "e.g. sensor.solcast_forecast_today",
-          "forecast_entity_1_name": "Display name in chart (e.g. Solcast)",
-          "forecast_entity_2": "e.g. sensor.forecast_solar_energy_today",
-          "forecast_entity_2_name": "Display name in chart (e.g. Forecast.Solar)"
+          "forecast_entity_1": "Sensor with daily forecast in kWh (e.g. sensor.solcast_forecast_today).",
+          "forecast_entity_1_name": "Display name in chart (e.g. 'Solcast').",
+          "forecast_entity_2": "Sensor with daily forecast in kWh (e.g. sensor.forecast_solar_energy_today).",
+          "forecast_entity_2_name": "Display name in chart (e.g. 'Forecast.Solar')."
         }
       }
     }

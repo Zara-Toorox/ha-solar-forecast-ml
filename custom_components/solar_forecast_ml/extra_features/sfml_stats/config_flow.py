@@ -79,14 +79,10 @@ from .const import (
     DEFAULT_PANEL4_NAME,
     CONF_BILLING_START_DAY,
     CONF_BILLING_START_MONTH,
-    CONF_BILLING_PRICE_MODE,
     CONF_BILLING_FIXED_PRICE,
     CONF_FEED_IN_TARIFF,
-    PRICE_MODE_FIXED,
-    PRICE_MODE_DYNAMIC,
     DEFAULT_BILLING_START_DAY,
     DEFAULT_BILLING_START_MONTH,
-    DEFAULT_BILLING_PRICE_MODE,
     DEFAULT_BILLING_FIXED_PRICE,
     DEFAULT_FEED_IN_TARIFF,
     CONF_PANEL_GROUP_NAMES,
@@ -96,6 +92,15 @@ from .const import (
     CONF_FORECAST_ENTITY_2_NAME,
     DEFAULT_FORECAST_ENTITY_1_NAME,
     DEFAULT_FORECAST_ENTITY_2_NAME,
+    # Consumer sensors (Wärmepumpe, Heizstab, Wallbox)
+    CONF_SENSOR_HEATPUMP_POWER,
+    CONF_SENSOR_HEATPUMP_DAILY,
+    CONF_SENSOR_HEATPUMP_COP,
+    CONF_SENSOR_HEATINGROD_POWER,
+    CONF_SENSOR_HEATINGROD_DAILY,
+    CONF_SENSOR_WALLBOX_POWER,
+    CONF_SENSOR_WALLBOX_DAILY,
+    CONF_SENSOR_WALLBOX_STATE,
 )
 from .sensor_helpers import check_and_suggest_helpers
 
@@ -141,6 +146,21 @@ ALL_SENSOR_KEYS = [
     # === ANDERE (2) ===
     CONF_SENSOR_PRICE_TOTAL,
     CONF_WEATHER_ENTITY,
+]
+
+# Consumer sensor keys - Optional (Wärmepumpe, Heizstab, Wallbox)
+CONSUMER_SENSOR_KEYS = [
+    # === WÄRMEPUMPE (3) ===
+    CONF_SENSOR_HEATPUMP_POWER,
+    CONF_SENSOR_HEATPUMP_DAILY,
+    CONF_SENSOR_HEATPUMP_COP,
+    # === HEIZSTAB (2) ===
+    CONF_SENSOR_HEATINGROD_POWER,
+    CONF_SENSOR_HEATINGROD_DAILY,
+    # === WALLBOX (3) ===
+    CONF_SENSOR_WALLBOX_POWER,
+    CONF_SENSOR_WALLBOX_DAILY,
+    CONF_SENSOR_WALLBOX_STATE,
 ]
 
 
@@ -370,13 +390,6 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=DEFAULT_BILLING_START_DAY,
                 ): vol.In(days),
                 vol.Required(
-                    CONF_BILLING_PRICE_MODE,
-                    default=DEFAULT_BILLING_PRICE_MODE,
-                ): vol.In({
-                    PRICE_MODE_DYNAMIC: "Dynamisch (Börsenpreis)",
-                    PRICE_MODE_FIXED: "Festpreis",
-                }),
-                vol.Optional(
                     CONF_BILLING_FIXED_PRICE,
                     default=DEFAULT_BILLING_FIXED_PRICE,
                 ): selector.NumberSelector(
@@ -388,7 +401,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
-                vol.Optional(
+                vol.Required(
                     CONF_FEED_IN_TARIFF,
                     default=DEFAULT_FEED_IN_TARIFF,
                 ): selector.NumberSelector(
@@ -445,13 +458,19 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         sensor_keys: list[str],
     ) -> vol.Schema:
-        """Build schema for sensor configuration form. @zara"""
+        """Build schema for sensor configuration form. @zara
+
+        WICHTIG: Verwende suggested_value statt default!
+        Mit default= wird beim Löschen eines Feldes der alte Wert verwendet.
+        Mit suggested_value= wird das Feld vorausgefüllt, aber Löschen funktioniert.
+        """
         current = self._config_entry.data
         schema_dict = {}
         for key in sensor_keys:
-            schema_dict[vol.Optional(key, default=current.get(key, ""))] = (
-                get_entity_selector_optional()
-            )
+            schema_dict[vol.Optional(
+                key,
+                description={"suggested_value": current.get(key, "")}
+            )] = get_entity_selector_optional()
         return vol.Schema(schema_dict)
 
     async def async_step_init(
@@ -463,6 +482,8 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
             next_step = user_input.get("menu_choice")
             if next_step == "sensors":
                 return await self.async_step_sensors()
+            elif next_step == "consumers":
+                return await self.async_step_consumers()
             elif next_step == "settings":
                 return await self.async_step_settings()
             elif next_step == "advanced":
@@ -473,6 +494,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema({
                 vol.Required("menu_choice", default="sensors"): vol.In({
                     "sensors": "Sensoren",
+                    "consumers": "Verbraucher (WP, Heizstab, Wallbox)",
                     "settings": "Einstellungen",
                     "advanced": "Erweitert",
                 }),
@@ -494,6 +516,23 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="sensors",
             data_schema=self._build_sensor_schema(ALL_SENSOR_KEYS),
+        )
+
+    async def async_step_consumers(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage consumer sensor options (Wärmepumpe, Heizstab, Wallbox). @zara"""
+        if user_input is not None:
+            new_data = self._process_sensor_input(user_input, CONSUMER_SENSOR_KEYS)
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="consumers",
+            data_schema=self._build_sensor_schema(CONSUMER_SENSOR_KEYS),
         )
 
     async def async_step_settings(
@@ -549,13 +588,6 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                     default=current.get(CONF_BILLING_START_DAY, DEFAULT_BILLING_START_DAY),
                 ): vol.In(days),
                 vol.Required(
-                    CONF_BILLING_PRICE_MODE,
-                    default=current.get(CONF_BILLING_PRICE_MODE, DEFAULT_BILLING_PRICE_MODE),
-                ): vol.In({
-                    PRICE_MODE_DYNAMIC: "Dynamisch (Börsenpreis)",
-                    PRICE_MODE_FIXED: "Festpreis",
-                }),
-                vol.Optional(
                     CONF_BILLING_FIXED_PRICE,
                     default=current.get(CONF_BILLING_FIXED_PRICE, DEFAULT_BILLING_FIXED_PRICE),
                 ): selector.NumberSelector(
@@ -567,7 +599,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
-                vol.Optional(
+                vol.Required(
                     CONF_FEED_IN_TARIFF,
                     default=current.get(CONF_FEED_IN_TARIFF, DEFAULT_FEED_IN_TARIFF),
                 ): selector.NumberSelector(
@@ -638,13 +670,13 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
             step_id="panels",
             data_schema=vol.Schema({
                 vol.Optional(CONF_PANEL1_NAME, default=current.get(CONF_PANEL1_NAME, DEFAULT_PANEL1_NAME)): str,
-                vol.Optional(CONF_SENSOR_PANEL1_POWER, default=current.get(CONF_SENSOR_PANEL1_POWER, "")): get_entity_selector_optional(),
+                vol.Optional(CONF_SENSOR_PANEL1_POWER, description={"suggested_value": current.get(CONF_SENSOR_PANEL1_POWER, "")}): get_entity_selector_optional(),
                 vol.Optional(CONF_PANEL2_NAME, default=current.get(CONF_PANEL2_NAME, DEFAULT_PANEL2_NAME)): str,
-                vol.Optional(CONF_SENSOR_PANEL2_POWER, default=current.get(CONF_SENSOR_PANEL2_POWER, "")): get_entity_selector_optional(),
+                vol.Optional(CONF_SENSOR_PANEL2_POWER, description={"suggested_value": current.get(CONF_SENSOR_PANEL2_POWER, "")}): get_entity_selector_optional(),
                 vol.Optional(CONF_PANEL3_NAME, default=current.get(CONF_PANEL3_NAME, DEFAULT_PANEL3_NAME)): str,
-                vol.Optional(CONF_SENSOR_PANEL3_POWER, default=current.get(CONF_SENSOR_PANEL3_POWER, "")): get_entity_selector_optional(),
+                vol.Optional(CONF_SENSOR_PANEL3_POWER, description={"suggested_value": current.get(CONF_SENSOR_PANEL3_POWER, "")}): get_entity_selector_optional(),
                 vol.Optional(CONF_PANEL4_NAME, default=current.get(CONF_PANEL4_NAME, DEFAULT_PANEL4_NAME)): str,
-                vol.Optional(CONF_SENSOR_PANEL4_POWER, default=current.get(CONF_SENSOR_PANEL4_POWER, "")): get_entity_selector_optional(),
+                vol.Optional(CONF_SENSOR_PANEL4_POWER, description={"suggested_value": current.get(CONF_SENSOR_PANEL4_POWER, "")}): get_entity_selector_optional(),
             }),
         )
 
@@ -727,7 +759,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema({
                 vol.Optional(
                     CONF_FORECAST_ENTITY_1,
-                    default=current.get(CONF_FORECAST_ENTITY_1, ""),
+                    description={"suggested_value": current.get(CONF_FORECAST_ENTITY_1, "")},
                 ): get_entity_selector_optional(),
                 vol.Optional(
                     CONF_FORECAST_ENTITY_1_NAME,
@@ -735,7 +767,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                 ): str,
                 vol.Optional(
                     CONF_FORECAST_ENTITY_2,
-                    default=current.get(CONF_FORECAST_ENTITY_2, ""),
+                    description={"suggested_value": current.get(CONF_FORECAST_ENTITY_2, "")},
                 ): get_entity_selector_optional(),
                 vol.Optional(
                     CONF_FORECAST_ENTITY_2_NAME,

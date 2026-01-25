@@ -826,6 +826,232 @@ rescue_calibration:
 
   fields: {}
 
+repair_calibration:
+  name: "🔧 Repair Calibration Factors (DEVELOPER ONLY)"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨🚨🚨 WARNUNG / WARNING 🚨🚨🚨                                          ║
+    ║                                                                          ║
+    ║ NUR AUF ANWEISUNG DES ENTWICKLERS AUSFÜHREN!                            ║
+    ║ DO NOT RUN WITHOUT EXPLICIT DEVELOPER INSTRUCTION!                       ║
+    ║                                                                          ║
+    ║ Dieser Service analysiert und repariert extreme Kalibrierungsfaktoren.  ║
+    ║ Falsche Anwendung kann zu dauerhaft schlechten Prognosen führen!        ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🔧 REPAIR CALIBRATION - Analysiert und korrigiert extreme Bucket-Faktoren
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🎯 WANN WIRD DIESER SERVICE BENÖTIGT?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Wenn der PhysicsCalibrator aus kontaminierten Daten (z.B. Snow/Frost-Samples)
+    extreme Korrekturfaktoren gelernt hat, die zu Über- oder Unterschätzungen führen.
+
+    Symptome:
+    - Bucket-Faktor > 4 (z.B. fair_low_sun = 6.3 statt realistisch 2-4)
+    - Konsistente Überschätzung der Prognose
+    - Faktoren die > 2× dem globalen Faktor entsprechen
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🔧 WAS MACHT DIESER SERVICE?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    1. Lädt learning_config.json und analysiert alle Bucket-Faktoren
+    2. Identifiziert Ausreißer basierend auf konfigurierbaren Schwellwerten:
+       - Faktoren > max_allowed_factor (Standard: 4.0)
+       - Faktoren > global_factor × max_global_ratio (Standard: 2.0)
+    3. Erstellt detaillierten Bericht aller gefundenen Probleme
+    4. Optional: Korrigiert Faktoren auf target_factor (Standard: 3.0)
+    5. IMMER: Erstellt Backup vor Änderungen
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📊 MODI
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    dry_run: true (Standard)
+      - Nur Analyse, keine Änderungen
+      - Zeigt was korrigiert WÜRDE
+      - Sicher zum Ausprobieren
+
+    dry_run: false
+      - Erstellt Backup
+      - Korrigiert alle Ausreißer auf target_factor
+      - Speichert geänderte learning_config.json
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📁 BETROFFENE DATEIEN
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Liest:  /config/solar_forecast_ml/physics/learning_config.json
+    Backup: /config/solar_forecast_ml/backups/repair_calibration/backup_YYYYMMDD_HHMMSS/
+    Ändert: learning_config.json (nur wenn dry_run=false)
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ⚠️ WICHTIGE HINWEISE
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - Manche Systeme haben LEGITIME hohe Faktoren (Verschattung, besondere Ausrichtung)
+    - Prüfen Sie den Bericht genau bevor Sie dry_run=false setzen
+    - Nach Korrektur: Home Assistant neustarten!
+    - Das System lernt weiter - Faktoren werden sich wieder anpassen
+
+  fields:
+    max_allowed_factor:
+      name: "Maximaler erlaubter Faktor"
+      description: >
+        Faktoren über diesem Wert werden als Ausreißer markiert.
+        Standard: 4.0 (realistische Faktoren liegen meist bei 1.5-3.5)
+      required: false
+      default: 4.0
+      example: 4.0
+      selector:
+        number:
+          min: 2.0
+          max: 10.0
+          step: 0.5
+          mode: box
+    max_global_ratio:
+      name: "Max. Verhältnis zum Global-Faktor"
+      description: >
+        Bucket-Faktoren die mehr als X-mal so hoch wie der globale Faktor
+        der Gruppe sind, werden als Ausreißer markiert.
+        Standard: 2.0 (z.B. global=2.0 → max erlaubt=4.0)
+      required: false
+      default: 2.0
+      example: 2.0
+      selector:
+        number:
+          min: 1.5
+          max: 5.0
+          step: 0.5
+          mode: box
+    target_factor:
+      name: "Ziel-Faktor für Korrekturen"
+      description: >
+        Ausreißer werden auf diesen Wert korrigiert.
+        Standard: 3.0 (konservativer Mittelwert)
+      required: false
+      default: 3.0
+      example: 3.0
+      selector:
+        number:
+          min: 1.0
+          max: 5.0
+          step: 0.5
+          mode: box
+    dry_run:
+      name: "Nur Analyse (dry_run)"
+      description: >
+        true = Nur analysieren, nichts ändern (EMPFOHLEN für ersten Durchlauf)
+        false = Backup erstellen und Faktoren korrigieren
+      required: false
+      default: true
+      example: true
+      selector:
+        boolean:
+
+winter_bucket_correction_v13:
+  name: "🌨️ Winter Bucket Correction V13 (DEVELOPER ONLY)"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨🚨🚨 WARNUNG / WARNING 🚨🚨🚨                                          ║
+    ║                                                                          ║
+    ║ NUR AUF ANWEISUNG DES ENTWICKLERS AUSFÜHREN!                            ║
+    ║ DO NOT RUN WITHOUT EXPLICIT DEVELOPER INSTRUCTION!                       ║
+    ║                                                                          ║
+    ║ Falsche Anwendung kann die KI-Kalibrierung nachhaltig schädigen und     ║
+    ║ zu dauerhaft schlechten Prognosen führen!                               ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    🌨️ WINTER BUCKET CORRECTION V13 - Korrigiert Bucket-Konfidenz für V13.1
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🎯 HINTERGRUND
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    V13.1 führt eine neue, physikalisch korrektere Cloud-Faktor-Berechnung ein.
+    Die alten Bucket-Faktoren wurden mit der falschen (zu optimistischen) Formel
+    kalibriert. Dieser Service reduziert die KONFIDENZ (nicht die Faktor-Werte!),
+    damit das System schneller mit der neuen Formel neu lernen kann.
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🔧 WAS MACHT DIESER SERVICE?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    1. Lädt learning_config.json
+    2. Reduziert die `confidence` aller Bucket-Faktoren auf den angegebenen Wert
+    3. BEHÄLT die Faktor-WERTE bei (keine Löschung der Kalibrierung!)
+    4. Erstellt IMMER ein Backup vor der Änderung
+    5. Das System lernt dann schneller mit neuen Daten
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📊 BEISPIEL
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    VOR dem Reset:
+    - fair_low_sun: factor=2.5, confidence=0.95, samples=150
+
+    NACH dem Reset (target_confidence=0.5):
+    - fair_low_sun: factor=2.5, confidence=0.50, samples=150
+
+    → Der Faktor 2.5 bleibt erhalten als Startpunkt
+    → Die niedrigere Konfidenz erlaubt schnellere Anpassung
+    → Neue Samples haben mehr Gewicht beim Lernen
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ⚠️ RISIKEN BEI FALSCHER ANWENDUNG
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - Bestehende, gut funktionierende Kalibrierung wird geschwächt
+    - System braucht mehrere Tage um sich neu zu kalibrieren
+    - Bei neuen Installationen kann es die Lernphase verlängern
+    - Mehrfache Anwendung kann zu instabilen Prognosen führen
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ WANN IST DIESER SERVICE SINNVOLL?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NUR nach Rücksprache mit dem Entwickler, wenn:
+    - Das System bereits länger mit V12.x kalibriert war
+    - Die Winter-Prognosen stark daneben lagen (>50% Abweichung)
+    - Der Entwickler dies explizit empfohlen hat
+
+    ❌ NICHT verwenden bei:
+    - Neuen Installationen (< 14 Tage alt)
+    - Bereits gut funktionierenden Prognosen
+    - Ohne Rücksprache mit dem Entwickler
+
+  fields:
+    target_confidence:
+      name: "Ziel-Konfidenz"
+      description: >
+        Alle Bucket-Konfidenzen werden auf diesen Wert gesetzt.
+        - 0.5 (Standard): Erlaubt moderate Anpassung, behält bisherige Richtung
+        - 0.3: Aggressivere Anpassung, schnelleres Neulernen
+        - 0.7: Konservativ, weniger Änderung
+        ⚠️ Niedrigere Werte = aggressiveres Neulernen = höheres Risiko!
+      required: false
+      default: 0.5
+      example: 0.5
+      selector:
+        number:
+          min: 0.1
+          max: 0.9
+          step: 0.1
+          mode: slider
+    dry_run:
+      name: "Nur Analyse (dry_run)"
+      description: >
+        true = Nur analysieren, zeigt was geändert würde (EMPFOHLEN!)
+        false = Backup erstellen und Konfidenzen zurücksetzen
+        ⚠️ IMMER zuerst mit dry_run=true testen!
+      required: false
+      default: true
+      example: true
+      selector:
+        boolean:
+
 install_extra_features:
   name: "📦 Install Extra Features"
   description: >

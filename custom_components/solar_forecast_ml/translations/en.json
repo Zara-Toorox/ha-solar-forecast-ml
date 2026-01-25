@@ -121,7 +121,9 @@
           "notify_learning": "Training Notifications",
           "notify_successful_learning": "Success Notifications",
           "ml_algorithm": "Mode",
-          "enable_tiny_lstm": "Enable / Disable AI"
+          "enable_tiny_lstm": "Enable / Disable AI",
+          "adaptive_forecast_mode": "Adaptive Forecast",
+          "winter_mode": "Winter Mode"
         },
         "data_description": {
           "update_interval": "Forecast update interval (300-86400s, default: 3600)",
@@ -132,7 +134,9 @@
           "notify_learning": "Notify on training start",
           "notify_successful_learning": "Notify on training success",
           "ml_algorithm": "Choose algorithm: 'Automatic' lets system decide based on available data (recommended). 'Ridge' is fast and stable. 'Neural Network' provides 5-10% better accuracy with 100+ samples.",
-          "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled."
+          "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled.",
+          "adaptive_forecast_mode": "When significant deviations (>35%) between morning forecast and actual production are detected, SFML automatically adjusts the afternoon forecast at 12:30. SFML autonomously decides whether a correction is beneficial - based on fresh weather data and objective criteria. Default: OFF",
+          "winter_mode": "Enhanced algorithms for low sun angles (Nov-Feb). When enabled, the effect of cloud cover on forecast is calculated more accurately, significantly improving winter accuracy. Default: ON"
         }
       }
     },

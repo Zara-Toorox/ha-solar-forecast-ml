@@ -15,7 +15,7 @@ from typing import Final
 
 DOMAIN: Final = "sfml_stats"
 NAME: Final = "SFML Stats"
-VERSION: Final = "6.4.4"
+VERSION: Final = "6.4.2"
 
 SOLAR_FORECAST_ML_BASE: Final = Path("solar_forecast_ml")
 SOLAR_FORECAST_ML_STATS: Final = SOLAR_FORECAST_ML_BASE / "stats"
@@ -249,6 +249,39 @@ PANEL_SENSORS: Final = [
     CONF_SENSOR_PANEL4_POWER,
     CONF_SENSOR_PANEL4_MAX_TODAY,
 ]
+
+# =============================================================================
+# Consumer Sensors (Wärmepumpe, Heizstab, Wallbox) - Optional
+# =============================================================================
+
+# Wärmepumpe (Heat Pump)
+CONF_SENSOR_HEATPUMP_POWER: Final = "sensor_heatpump_power"
+CONF_SENSOR_HEATPUMP_DAILY: Final = "sensor_heatpump_daily"
+CONF_SENSOR_HEATPUMP_COP: Final = "sensor_heatpump_cop"
+
+# Heizstab (Heating Rod)
+CONF_SENSOR_HEATINGROD_POWER: Final = "sensor_heatingrod_power"
+CONF_SENSOR_HEATINGROD_DAILY: Final = "sensor_heatingrod_daily"
+
+# Wallbox (EV Charger)
+CONF_SENSOR_WALLBOX_POWER: Final = "sensor_wallbox_power"
+CONF_SENSOR_WALLBOX_DAILY: Final = "sensor_wallbox_daily"
+CONF_SENSOR_WALLBOX_STATE: Final = "sensor_wallbox_state"
+
+# Consumer Sensor Lists
+CONSUMER_SENSORS: Final = [
+    CONF_SENSOR_HEATPUMP_POWER,
+    CONF_SENSOR_HEATPUMP_DAILY,
+    CONF_SENSOR_HEATPUMP_COP,
+    CONF_SENSOR_HEATINGROD_POWER,
+    CONF_SENSOR_HEATINGROD_DAILY,
+    CONF_SENSOR_WALLBOX_POWER,
+    CONF_SENSOR_WALLBOX_DAILY,
+    CONF_SENSOR_WALLBOX_STATE,
+]
+
+# Consumer default COP (if no COP sensor configured)
+DEFAULT_HEATPUMP_COP: Final = 3.5
 
 # =============================================================================
 # Performance & Caching Constants

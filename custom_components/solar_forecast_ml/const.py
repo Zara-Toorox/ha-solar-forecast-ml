@@ -13,12 +13,12 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "13.0.0"
-RELEASE_VERSION = "13.0.0"
+VERSION = "13.1.0"
+RELEASE_VERSION = "13.1.0"
 RELEASE_NAME = "Sarpeidon"
-SOFTWARE_VERSION = "13.0.0"
-INTEGRATION_MODEL = "V13.0.0"
-AI_VERSION = "13.0.0"
+SOFTWARE_VERSION = "13.1.0"
+INTEGRATION_MODEL = "V13.1.0"
+AI_VERSION = "13.1.0"
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -83,6 +83,29 @@ CONF_NOTIFY_FOG = "notify_fog"
 CONF_NOTIFY_WEATHER_ALERT = "notify_weather_alert"
 CONF_NOTIFY_SNOW_COVERED = "notify_snow_covered_panels"
 CONF_LEARNING_ENABLED = "learning_enabled"
+
+# Adaptive Forecast Mode Configuration
+CONF_ADAPTIVE_FORECAST_MODE = "adaptive_forecast_mode"
+DEFAULT_ADAPTIVE_FORECAST_MODE = False  # Default OFF - User muss explizit aktivieren
+
+# Adaptive Forecast Thresholds (nicht vom User konfigurierbar - SFML entscheidet autonom)
+ADAPTIVE_DEVIATION_THRESHOLD_PERCENT = 35  # Mindestabweichung in Prozent
+ADAPTIVE_DEVIATION_THRESHOLD_KWH = 0.3     # Absolute Mindestabweichung in kWh
+ADAPTIVE_MIN_REMAINING_HOURS = 4           # Mindestens 4h bis Sunset
+ADAPTIVE_CLOUD_COVER_DIFF_THRESHOLD = 25   # Prozentpunkte Cloud-Cover Differenz
+ADAPTIVE_CHECK_HOUR = 12                   # Uhrzeit für den Check (12:30)
+ADAPTIVE_CHECK_MINUTE = 30
+
+# V13.1: Winter Mode Configuration
+# Enables enhanced algorithms for low sun angles (Nov-Feb)
+CONF_WINTER_MODE = "winter_mode"
+DEFAULT_WINTER_MODE = True  # Default ON - aktiviert automatisch für bessere Winter-Prognosen
+
+# Winter Mode Constants (nicht vom User konfigurierbar)
+WINTER_MONTHS = [11, 12, 1, 2]  # November bis Februar
+WINTER_CLOUD_PENALTY_FACTOR = 1.25  # Clouds wirken 25% stärker im Winter
+WINTER_LOW_SUN_THRESHOLD = 25  # Grad - unter diesem Winkel greift Winter-Korrektur
+WINTER_MIN_BUCKET_SAMPLES = 5  # Mindest-Samples für Winter-Bucket-Faktoren
 
 CONF_ML_ALGORITHM = "ml_algorithm"
 CONF_ENABLE_TINY_LSTM = "enable_tiny_lstm"
@@ -203,6 +226,8 @@ SERVICE_BORG_ASSIMILATION_REVERSE = "borg_assimilation_reverse"
 
 # Physics Calibration Services
 SERVICE_RESCUE_CALIBRATION = "rescue_calibration"
+SERVICE_REPAIR_CALIBRATION = "repair_calibration"
+SERVICE_WINTER_BUCKET_CORRECTION = "winter_bucket_correction_v13"
 
 ICON_SOLAR = "mdi:solar-power"
 ICON_FORECAST = "mdi:weather-sunny"

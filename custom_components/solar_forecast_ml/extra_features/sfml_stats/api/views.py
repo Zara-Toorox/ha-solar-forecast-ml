@@ -132,6 +132,16 @@ from ..const import (
     DEFAULT_DASHBOARD_STYLE,
     CONF_THEME,
     DEFAULT_THEME,
+    # Consumer sensors (Wärmepumpe, Heizstab, Wallbox)
+    CONF_SENSOR_HEATPUMP_POWER,
+    CONF_SENSOR_HEATPUMP_DAILY,
+    CONF_SENSOR_HEATPUMP_COP,
+    CONF_SENSOR_HEATINGROD_POWER,
+    CONF_SENSOR_HEATINGROD_DAILY,
+    CONF_SENSOR_WALLBOX_POWER,
+    CONF_SENSOR_WALLBOX_DAILY,
+    CONF_SENSOR_WALLBOX_STATE,
+    DEFAULT_HEATPUMP_COP,
 )
 from ..utils import get_json_cache, read_json_safe
 
@@ -1140,6 +1150,7 @@ class EnergyFlowView(HomeAssistantView):
                 "weather_entity": config.get(CONF_WEATHER_ENTITY),
             },
             "panels": self._get_panel_data(config),
+            "consumers": self._get_consumer_data(config),
             "weather_ha": _get_weather_data(config.get(CONF_WEATHER_ENTITY)),
             "sun_position": await self._get_sun_position(),
             "current_price": await self._get_current_price(),
@@ -1259,6 +1270,57 @@ class EnergyFlowView(HomeAssistantView):
             })
 
         return panels
+
+    def _get_consumer_data(self, config: dict[str, Any]) -> dict[str, Any]:
+        """Read consumer data from configured sensors (WP, Heizstab, Wallbox). @zara"""
+        consumers = {
+            "heatpump": None,
+            "heatingrod": None,
+            "wallbox": None,
+        }
+
+        # Wärmepumpe (Heat Pump)
+        if config.get(CONF_SENSOR_HEATPUMP_POWER):
+            power = _get_sensor_value(config.get(CONF_SENSOR_HEATPUMP_POWER))
+            daily = _get_sensor_value(config.get(CONF_SENSOR_HEATPUMP_DAILY))
+            cop = _get_sensor_value(config.get(CONF_SENSOR_HEATPUMP_COP))
+
+            # Fallback to default COP if not configured
+            if cop is None:
+                cop = DEFAULT_HEATPUMP_COP
+
+            consumers["heatpump"] = {
+                "power": power,
+                "daily_kwh": daily,
+                "cop": cop,
+                "configured": True,
+            }
+
+        # Heizstab (Heating Rod)
+        if config.get(CONF_SENSOR_HEATINGROD_POWER):
+            power = _get_sensor_value(config.get(CONF_SENSOR_HEATINGROD_POWER))
+            daily = _get_sensor_value(config.get(CONF_SENSOR_HEATINGROD_DAILY))
+
+            consumers["heatingrod"] = {
+                "power": power,
+                "daily_kwh": daily,
+                "configured": True,
+            }
+
+        # Wallbox (EV Charger)
+        if config.get(CONF_SENSOR_WALLBOX_POWER):
+            power = _get_sensor_value(config.get(CONF_SENSOR_WALLBOX_POWER))
+            daily = _get_sensor_value(config.get(CONF_SENSOR_WALLBOX_DAILY))
+            state = _get_sensor_value(config.get(CONF_SENSOR_WALLBOX_STATE))
+
+            consumers["wallbox"] = {
+                "power": power,
+                "daily_kwh": daily,
+                "state": state,
+                "configured": True,
+            }
+
+        return consumers
 
 
 class StatisticsView(HomeAssistantView):

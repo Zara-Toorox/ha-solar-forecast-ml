@@ -40,6 +40,7 @@ NOTIFICATION_ID_FROST = "solar_forecast_ml_frost"
 NOTIFICATION_ID_FOG = "solar_forecast_ml_fog"
 NOTIFICATION_ID_WEATHER_ALERT = "solar_forecast_ml_weather_alert"
 NOTIFICATION_ID_SNOW_COVERED = "solar_forecast_ml_snow_covered"
+NOTIFICATION_ID_ADAPTIVE_CORRECTION = "solar_forecast_ml_adaptive_correction"
 
 class NotificationService:
     """Service for Persistent Notifications in Home Assistant"""
@@ -638,6 +639,75 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
     async def dismiss_snow_covered_notification(self) -> bool:
         """Remove snow covered notification @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_SNOW_COVERED)
+
+    async def show_adaptive_correction(
+        self,
+        original_kwh: float,
+        corrected_kwh: float,
+        reason: str,
+        hours_corrected: int,
+        am_actual: float = 0.0,
+        am_predicted: float = 0.0,
+    ) -> bool:
+        """Show notification when adaptive forecast correction was applied @zara
+
+        This notification informs the user that SFML has autonomously
+        corrected the afternoon forecast based on fresh weather data.
+        """
+        # Adaptive correction notifications are always shown (when the mode is enabled)
+        # No separate config option needed - the user opted in by enabling the mode
+
+        try:
+            # Calculate change percentage
+            if original_kwh > 0.1:
+                change_percent = ((corrected_kwh - original_kwh) / original_kwh) * 100
+                change_direction = "+" if change_percent > 0 else ""
+                change_text = f"{change_direction}{change_percent:.0f}%"
+            else:
+                change_text = "N/A"
+
+            # Calculate morning deviation
+            if am_predicted > 0.1:
+                am_deviation = ((am_actual - am_predicted) / am_predicted) * 100
+                am_deviation_text = f"{am_deviation:+.0f}%"
+            else:
+                am_deviation_text = "N/A"
+
+            message = f"""**Adaptive Prognose-Korrektur durchgeführt** ☀️
+
+**Grund:** {reason}
+
+**Vormittags-Analyse:**
+• IST-Produktion: {am_actual:.2f} kWh
+• Prognose war: {am_predicted:.2f} kWh
+• Abweichung: {am_deviation_text}
+
+**Korrektur:**
+• Ursprüngliche Tagesprognose: {original_kwh:.2f} kWh
+• Korrigierte Tagesprognose: {corrected_kwh:.2f} kWh ({change_text})
+• Neu berechnete Stunden: {hours_corrected}
+
+**Hinweis:**
+Die Nachmittagsprognose wurde basierend auf aktuelleren Wetterdaten
+neu berechnet. Die Vormittagswerte bleiben unverändert.
+
+*"Adaptation is the key to survival."* — Inspired by Star Trek 🖖"""
+
+            await self._safe_create_notification(
+                message=message,
+                title="☀️ Prognose automatisch angepasst",
+                notification_id=NOTIFICATION_ID_ADAPTIVE_CORRECTION,
+            )
+
+            return True
+
+        except Exception as e:
+            _LOGGER.error(f"[X] Error showing adaptive correction notification: {e}", exc_info=True)
+            return False
+
+    async def dismiss_adaptive_correction_notification(self) -> bool:
+        """Remove adaptive correction notification @zara"""
+        return await self._safe_dismiss_notification(NOTIFICATION_ID_ADAPTIVE_CORRECTION)
 
 async def create_notification_service(
     hass: HomeAssistant, entry: ConfigEntry
