@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import (
     CONF_FALLBACK_ENTITY,
     CONF_HUMIDITY_SENSOR,
+    CONF_LEARNING_BACKUP_PROTECTION,
     CONF_LUX_SENSOR,
     CONF_PRESSURE_SENSOR,
     CONF_RAIN_SENSOR,
@@ -33,6 +34,7 @@ from .const import (
     DAILY_UPDATE_HOUR,
     DAILY_VERIFICATION_HOUR,
     DATA_DIR,
+    DEFAULT_LEARNING_BACKUP_PROTECTION,
     DOMAIN,
     ML_MODEL_VERSION,
     UPDATE_INTERVAL,
@@ -51,6 +53,7 @@ from .production.production_scheduled_tasks import ScheduledTasksManager
 from .production.production_tracker import ProductionTimeCalculator
 from .sensors.sensor_data_collector import SensorDataCollector
 from .services.service_error_handler import ErrorHandlingService
+from .data.data_share_backup import ShareBackupManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -172,6 +175,13 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         # CRITICAL FIX V12.4.0: Store unsubscribe callbacks to prevent listener accumulation
         self._unsub_power_peak_listener: Optional[callable] = None
         self._unsub_weekly_retraining_listener: Optional[callable] = None
+        self._unsub_daily_backup_sync_listener: Optional[callable] = None
+
+        # V13.2: Learning Data Backup Protection
+        self.share_backup_manager: Optional[ShareBackupManager] = None
+        self._learning_backup_enabled: bool = entry.options.get(
+            CONF_LEARNING_BACKUP_PROTECTION, DEFAULT_LEARNING_BACKUP_PROTECTION
+        )
 
         _LOGGER.debug("SolarForecastMLCoordinator initialized")
 
@@ -284,6 +294,37 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 return False
 
             await self.data_manager.async_initialize()
+
+            # V13.2: Initialize ShareBackupManager for learning data protection
+            if self._learning_backup_enabled:
+                try:
+                    self.share_backup_manager = ShareBackupManager(
+                        hass=self.hass,
+                        data_dir=self.data_manager.data_dir,
+                    )
+                    _LOGGER.info("ShareBackupManager initialized - learning data protection enabled")
+
+                    # Schedule daily backup sync at 4:00 AM
+                    @callback
+                    def _scheduled_daily_backup_sync(now: datetime) -> None:
+                        """Daily backup sync to /share/ at 4:00 AM. @zara"""
+                        if self.share_backup_manager and self._learning_backup_enabled:
+                            asyncio.create_task(
+                                self.share_backup_manager.sync_to_share(),
+                                name="sfml_daily_backup_sync"
+                            )
+                            _LOGGER.info("Daily learning data backup sync triggered (4:00 AM)")
+
+                    self._unsub_daily_backup_sync_listener = async_track_time_change(
+                        self.hass, _scheduled_daily_backup_sync, hour=4, minute=0, second=0
+                    )
+                    _LOGGER.debug("Daily backup sync scheduled for 4:00 AM")
+
+                except Exception as e:
+                    _LOGGER.warning(f"Failed to initialize ShareBackupManager: {e}")
+                    self.share_backup_manager = None
+            else:
+                _LOGGER.debug("Learning data backup protection disabled by user")
 
             services_ok = await self._initialize_services()
             if not services_ok:
@@ -439,6 +480,15 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Weekly retraining listener removed")
                 except Exception as e:
                     _LOGGER.warning(f"Error removing weekly retraining listener: {e}")
+
+            # V13.2: Remove daily backup sync listener
+            if self._unsub_daily_backup_sync_listener is not None:
+                try:
+                    self._unsub_daily_backup_sync_listener()
+                    self._unsub_daily_backup_sync_listener = None
+                    _LOGGER.debug("Daily backup sync listener removed")
+                except Exception as e:
+                    _LOGGER.warning(f"Error removing daily backup sync listener: {e}")
 
         except Exception as e:
             _LOGGER.error(f"Error during coordinator shutdown: {e}")
@@ -920,6 +970,13 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         if accuracy is not None:
             self.model_accuracy = accuracy
         self.async_update_listeners()
+
+        # V13.2: Sync learning data to /share/ for backup protection
+        if self.share_backup_manager and self._learning_backup_enabled:
+            self.hass.async_create_task(
+                self.share_backup_manager.sync_to_share(),
+                name="sfml_share_backup_sync"
+            )
 
         if accuracy is not None:
             samples = self.ai_predictor.training_samples if self.ai_predictor else 0

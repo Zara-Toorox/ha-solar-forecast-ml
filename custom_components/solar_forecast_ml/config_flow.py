@@ -27,6 +27,7 @@ from .const import (
     CONF_ADAPTIVE_FORECAST_MODE,
     CONF_DIAGNOSTIC,
     CONF_ENABLE_TINY_LSTM,
+    CONF_HAS_BATTERY,
     CONF_HOURLY,
     CONF_HUMIDITY_SENSOR,
     CONF_INVERTER_MAX_POWER,
@@ -48,13 +49,18 @@ from .const import (
     CONF_RAIN_SENSOR,
     CONF_SOLAR_CAPACITY,
     CONF_SOLAR_RADIATION_SENSOR,
+    CONF_SOLAR_TO_BATTERY_SENSOR,
     CONF_SOLAR_YIELD_TODAY,
     CONF_TEMP_SENSOR,
     CONF_TOTAL_CONSUMPTION_TODAY,
     CONF_UPDATE_INTERVAL,
     CONF_WIND_SENSOR,
     CONF_WINTER_MODE,
+    CONF_ZERO_EXPORT_MODE,
+    CONF_LEARNING_BACKUP_PROTECTION,
     DEFAULT_ADAPTIVE_FORECAST_MODE,
+    DEFAULT_HAS_BATTERY,
+    DEFAULT_LEARNING_BACKUP_PROTECTION,
     DEFAULT_ENABLE_TINY_LSTM,
     DEFAULT_INVERTER_MAX_POWER,
     DEFAULT_ML_ALGORITHM,
@@ -62,6 +68,7 @@ from .const import (
     DEFAULT_PANEL_TILT,
     DEFAULT_SOLAR_CAPACITY,
     DEFAULT_WINTER_MODE,
+    DEFAULT_ZERO_EXPORT_MODE,
     DOMAIN,
 )
 
@@ -675,6 +682,11 @@ class SolarForecastMLOptionsFlow(OptionsFlow):
                 CONF_PIRATE_WEATHER_API_KEY,
                 CONF_ADAPTIVE_FORECAST_MODE,
                 CONF_WINTER_MODE,
+                CONF_LEARNING_BACKUP_PROTECTION,
+                # V13.2.0: MPPT Throttling Detection
+                CONF_ZERO_EXPORT_MODE,
+                CONF_HAS_BATTERY,
+                CONF_SOLAR_TO_BATTERY_SENSOR,
             ]
             updated_options = {
                 **self.config_entry.options,
@@ -764,6 +776,36 @@ class SolarForecastMLOptionsFlow(OptionsFlow):
                     CONF_WINTER_MODE,
                     default=current_options.get(CONF_WINTER_MODE, DEFAULT_WINTER_MODE),
                 ): bool,
+                # V13.2: Learning Backup Protection - schützt Lerndaten vor Backup-Restore
+                vol.Optional(
+                    CONF_LEARNING_BACKUP_PROTECTION,
+                    default=current_options.get(CONF_LEARNING_BACKUP_PROTECTION, DEFAULT_LEARNING_BACKUP_PROTECTION),
+                ): bool,
+                # =============================================================
+                # V13.2.0: MPPT Throttling Detection
+                # Verhindert ML-Training aus gedrosselten Produktionswerten
+                # =============================================================
+                # Toggle: Nulleinspeisung aktiv (z.B. Shelly Nulleinspeisung)
+                vol.Optional(
+                    CONF_ZERO_EXPORT_MODE,
+                    default=current_options.get(CONF_ZERO_EXPORT_MODE, DEFAULT_ZERO_EXPORT_MODE),
+                ): bool,
+                # Toggle: Akku im System vorhanden
+                vol.Optional(
+                    CONF_HAS_BATTERY,
+                    default=current_options.get(CONF_HAS_BATTERY, DEFAULT_HAS_BATTERY),
+                ): bool,
+                # Sensor: Solar-zu-Akku Leistung (nur wenn has_battery = true)
+                vol.Optional(
+                    CONF_SOLAR_TO_BATTERY_SENSOR,
+                    description={"suggested_value": current_options.get(CONF_SOLAR_TO_BATTERY_SENSOR, "")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=["sensor"],
+                        device_class=["power"],
+                        multiple=False,
+                    )
+                ),
                 # Weather Expert API Keys
                 vol.Optional(
                     CONF_PIRATE_WEATHER_API_KEY,

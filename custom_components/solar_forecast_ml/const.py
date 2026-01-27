@@ -13,12 +13,12 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "13.1.0"
-RELEASE_VERSION = "13.1.0"
+VERSION = "13.2.0"
+RELEASE_VERSION = "13.2.0"
 RELEASE_NAME = "Sarpeidon"
-SOFTWARE_VERSION = "13.1.0"
-INTEGRATION_MODEL = "V13.1.0"
-AI_VERSION = "13.1.0"
+SOFTWARE_VERSION = "13.2.0"
+INTEGRATION_MODEL = "V13.2.0"
+AI_VERSION = "13.2.0"
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -89,8 +89,9 @@ CONF_ADAPTIVE_FORECAST_MODE = "adaptive_forecast_mode"
 DEFAULT_ADAPTIVE_FORECAST_MODE = False  # Default OFF - User muss explizit aktivieren
 
 # Adaptive Forecast Thresholds (nicht vom User konfigurierbar - SFML entscheidet autonom)
-ADAPTIVE_DEVIATION_THRESHOLD_PERCENT = 35  # Mindestabweichung in Prozent
-ADAPTIVE_DEVIATION_THRESHOLD_KWH = 0.3     # Absolute Mindestabweichung in kWh
+ADAPTIVE_DEVIATION_THRESHOLD_PERCENT = 35      # Mindestabweichung in Prozent
+ADAPTIVE_DEVIATION_MIN_THRESHOLD_KWH = 0.10    # Absolutes Minimum (schützt vor Sensor-Rauschen)
+ADAPTIVE_DEVIATION_PERCENT_OF_FORECAST = 0.10  # 10% der Tagesprognose als dynamische Schwelle
 ADAPTIVE_MIN_REMAINING_HOURS = 4           # Mindestens 4h bis Sunset
 ADAPTIVE_CLOUD_COVER_DIFF_THRESHOLD = 25   # Prozentpunkte Cloud-Cover Differenz
 ADAPTIVE_CHECK_HOUR = 12                   # Uhrzeit für den Check (12:30)
@@ -106,6 +107,40 @@ WINTER_MONTHS = [11, 12, 1, 2]  # November bis Februar
 WINTER_CLOUD_PENALTY_FACTOR = 1.25  # Clouds wirken 25% stärker im Winter
 WINTER_LOW_SUN_THRESHOLD = 25  # Grad - unter diesem Winkel greift Winter-Korrektur
 WINTER_MIN_BUCKET_SAMPLES = 5  # Mindest-Samples für Winter-Bucket-Faktoren
+
+# V13.2: Learning Data Backup Protection
+# Protects learning data from loss during HA backup restore
+CONF_LEARNING_BACKUP_PROTECTION = "learning_backup_protection"
+DEFAULT_LEARNING_BACKUP_PROTECTION = True  # Default ON - protects by default
+
+# Share Backup Configuration (not user-configurable)
+SHARE_BACKUP_DIR = "/share/solar_forecast_ml_backup"
+SHARE_BACKUP_FRESHNESS_HOURS = 72  # 3 days threshold for stale data detection
+
+# =============================================================================
+# V13.2.0: MPPT Throttling Detection
+# Erkennt gedrosselte Produktion bei Nulleinspeisung / vollem Akku
+# Verhindert ML-Training aus kontaminierten Daten
+# =============================================================================
+
+# Config Options
+CONF_ZERO_EXPORT_MODE = "zero_export_mode"  # Toggle: Nulleinspeisung aktiv
+CONF_HAS_BATTERY = "has_battery"  # Toggle: Akku im System vorhanden
+CONF_SOLAR_TO_BATTERY_SENSOR = "solar_to_battery_sensor"  # Power Sensor: PV → Akku
+
+# Default Values
+DEFAULT_ZERO_EXPORT_MODE = False  # User muss explizit aktivieren
+DEFAULT_HAS_BATTERY = False  # User muss explizit aktivieren
+
+# Detection Thresholds (nicht vom User konfigurierbar)
+MPPT_THROTTLE_BATTERY_POWER_THRESHOLD = 50.0  # W - unter 50W gilt als "Akku voll"
+MPPT_THROTTLE_PRODUCTION_RATIO = 0.5  # actual/physics < 50% = gedrosselt
+MPPT_CLEAR_SKY_GHI_THRESHOLD = 400  # W/m² - gute Sonnenbedingungen
+MPPT_CLEAR_SKY_CLOUDS_MAX = 30  # % - maximal 30% Wolken für "klaren Himmel"
+
+# Throttle Reasons (für Logging und hourly_predictions.json)
+THROTTLE_REASON_FULL_BATTERY = "full_battery_zero_export"
+THROTTLE_REASON_ZERO_EXPORT = "zero_export_limited"
 
 CONF_ML_ALGORITHM = "ml_algorithm"
 CONF_ENABLE_TINY_LSTM = "enable_tiny_lstm"

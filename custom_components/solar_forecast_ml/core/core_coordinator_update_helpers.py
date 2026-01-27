@@ -172,7 +172,13 @@ class CoordinatorUpdateHelpers:
         )
 
     async def handle_startup_recovery(self) -> None:
-        """Handle startup recovery for missing forecasts @zara"""
+        """Handle startup recovery for missing forecasts @zara
+
+        V13.2: Added learning data freshness check and auto-restore from /share/
+        """
+        # V13.2: Check data freshness and restore from /share/ if needed
+        await self._check_and_restore_learning_data()
+
         today_forecast = await self.coordinator.data_manager.get_current_day_forecast()
         now_local = dt_util.now()
 
@@ -197,3 +203,74 @@ class CoordinatorUpdateHelpers:
                         f"Set forecast to current value: {forecast_value:.2f} kWh "
                         f"(not representative of morning prediction)"
                     )
+
+    async def _check_and_restore_learning_data(self) -> None:
+        """V13.2: Check learning data freshness and restore from /share/ if stale.
+
+        This protects against learning data loss when user restores an old HA backup.
+        The /share/ directory is not overwritten during standard HA backup restores.
+
+        @zara
+        """
+        # Check if feature is enabled and manager exists
+        if not getattr(self.coordinator, "share_backup_manager", None):
+            return
+
+        if not getattr(self.coordinator, "_learning_backup_enabled", False):
+            return
+
+        try:
+            share_backup_manager = self.coordinator.share_backup_manager
+
+            # Check if local data is fresh
+            is_fresh, age_hours = await share_backup_manager.check_data_freshness()
+
+            if is_fresh:
+                _LOGGER.debug("Learning data is fresh - no restore needed")
+                return
+
+            # Data is stale - attempt restore from /share/
+            _LOGGER.warning(
+                f"Learning data appears stale ({age_hours}h old) - "
+                "possible backup restore detected. Attempting recovery from /share/..."
+            )
+
+            restored = await share_backup_manager.restore_from_share()
+
+            if restored:
+                _LOGGER.info(
+                    "Learning data successfully restored from /share/ backup"
+                )
+                await self._notify_learning_data_restored(age_hours)
+            else:
+                _LOGGER.warning(
+                    "Could not restore learning data from /share/ - "
+                    "no valid backup found or restore failed"
+                )
+
+        except Exception as e:
+            _LOGGER.error(f"Error during learning data freshness check: {e}")
+
+    async def _notify_learning_data_restored(self, age_hours: int) -> None:
+        """Send notification to user about successful learning data restore.
+
+        @zara
+        """
+        try:
+            await self.coordinator.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "SFML: Lerndaten wiederhergestellt",
+                    "message": (
+                        f"Nach einem Backup-Restore wurden veraltete Lerndaten "
+                        f"({age_hours} Stunden alt) erkannt.\n\n"
+                        "Die Lerndaten wurden automatisch aus dem geschuetzten "
+                        "Speicher (/share/) wiederhergestellt.\n\n"
+                        "Ihr Lernfortschritt ist erhalten geblieben!"
+                    ),
+                    "notification_id": "solar_forecast_ml_learning_data_restored",
+                },
+            )
+        except Exception as e:
+            _LOGGER.warning(f"Could not send restore notification: {e}")

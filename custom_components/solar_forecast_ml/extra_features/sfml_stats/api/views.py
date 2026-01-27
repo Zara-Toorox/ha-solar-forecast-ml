@@ -220,6 +220,7 @@ async def async_setup_views(hass: HomeAssistant) -> None:
 
     hass.http.register_view(HealthCheckView())
     hass.http.register_view(DashboardView())
+    hass.http.register_view(LcarsDashboardView())
     hass.http.register_view(TariffDashboardView())
     hass.http.register_view(SolarDataView())
     hass.http.register_view(PriceDataView())
@@ -490,6 +491,82 @@ class DashboardView(HomeAssistantView):
         <h1>SFML Stats Dashboard</h1>
         <p>Frontend wird geladen...</p>
         <p style="color: #666;">Falls diese Meldung bleibt, wurde das Frontend noch nicht gebaut.</p>
+    </div>
+</body>
+</html>"""
+
+
+class LcarsDashboardView(HomeAssistantView):
+    """LCARS Star Trek style dashboard view. @zara"""
+
+    url = "/api/sfml_stats/lcars"
+    name = "api:sfml_stats:lcars"
+    requires_auth = False
+    cors_allowed = True
+
+    @local_only
+    async def get(self, request: Request) -> Response:
+        """Return the LCARS dashboard HTML page. @zara"""
+        frontend_path = None
+
+        # Try via hass.config.path() first (works in Docker)
+        if HASS is not None:
+            frontend_path = Path(HASS.config.path()) / "custom_components" / "sfml_stats" / "frontend" / "dist" / "index-lcars.html"
+            if not frontend_path.exists():
+                frontend_path = None
+
+        # Fallback via __file__
+        if frontend_path is None:
+            frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "index-lcars.html"
+
+        if not frontend_path.exists():
+            html_content = self._get_fallback_html()
+        else:
+            import aiofiles
+            async with aiofiles.open(frontend_path, "r", encoding="utf-8") as f:
+                html_content = await f.read()
+
+        return web.Response(
+            text=html_content,
+            content_type="text/html",
+            headers={
+                "X-Frame-Options": "SAMEORIGIN",
+                "Content-Security-Policy": "frame-ancestors 'self'",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+
+    def _get_fallback_html(self) -> str:
+        """Return fallback HTML when LCARS build is not present. @zara"""
+        return """<!DOCTYPE html>
+<html>
+<head>
+    <title>SFML Stats - LCARS</title>
+    <style>
+        body {
+            background: #000;
+            color: #FF9966;
+            font-family: 'Arial Narrow', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-transform: uppercase;
+        }
+        .message { text-align: center; }
+        h1 { color: #FF9966; letter-spacing: 0.2em; }
+        a { color: #9999FF; }
+    </style>
+</head>
+<body>
+    <div class="message">
+        <h1>LCARS Interface</h1>
+        <p>Frontend wird initialisiert...</p>
+        <p style="color: #666;">Falls diese Meldung bleibt, wurde das LCARS-Frontend noch nicht erstellt.</p>
+        <p><a href="/api/sfml_stats/dashboard">Zum Standard-Dashboard</a></p>
     </div>
 </body>
 </html>"""
@@ -927,24 +1004,19 @@ class RealtimeDataView(HomeAssistantView):
 def _get_config() -> dict[str, Any]:
     """Get current configuration from the first config entry. @zara"""
     if HASS is None:
-        _LOGGER.debug("_get_config: HASS is None")
         return {}
 
     entries = HASS.data.get(DOMAIN, {})
-    _LOGGER.debug("_get_config: entries=%s", entries)
 
     for entry_id, entry_data in entries.items():
         if isinstance(entry_data, dict) and "config" in entry_data:
-            _LOGGER.debug("_get_config: Found config in entry %s: %s", entry_id, entry_data["config"])
             return entry_data["config"]
 
     config_entries = HASS.config_entries.async_entries(DOMAIN)
     if config_entries:
         entry = config_entries[0]
-        _LOGGER.debug("_get_config: Fallback to ConfigEntry.data: %s", dict(entry.data))
         return dict(entry.data)
 
-    _LOGGER.debug("_get_config: No config found")
     return {}
 
 
@@ -997,23 +1069,15 @@ def _read_panel_group_sensor(entity_id: str) -> float | None:
 def _get_sensor_value(entity_id: str | None) -> float | None:
     """Read current value from a sensor. @zara"""
     if not entity_id or not HASS:
-        _LOGGER.debug("_get_sensor_value: entity_id=%s, HASS=%s", entity_id, HASS is not None)
         return None
 
     state = HASS.states.get(entity_id)
-    if state is None:
-        _LOGGER.debug("_get_sensor_value: Sensor %s not found in HA states", entity_id)
-        return None
-    if state.state in ("unknown", "unavailable"):
-        _LOGGER.debug("_get_sensor_value: Sensor %s has state: %s", entity_id, state.state)
+    if state is None or state.state in ("unknown", "unavailable"):
         return None
 
     try:
-        value = float(state.state)
-        _LOGGER.debug("_get_sensor_value: %s = %s", entity_id, value)
-        return value
-    except (ValueError, TypeError) as e:
-        _LOGGER.debug("_get_sensor_value: Cannot convert %s value '%s' to float: %s", entity_id, state.state, e)
+        return float(state.state)
+    except (ValueError, TypeError):
         return None
 
 
@@ -3123,11 +3187,22 @@ class ForecastComparisonView(HomeAssistantView):
                     "hint": "Data is collected daily at 23:50"
                 }, status=404)
 
-            chart_data = await reader.async_get_chart_data(days=days)
+            comparison_days = await reader.async_get_comparison_days(days=days)
+
+            # Transform to simple array format for frontend
+            data = []
+            for day in comparison_days:
+                if day.has_data:
+                    data.append({
+                        "date": day.date.strftime("%Y-%m-%d"),
+                        "forecast_kwh": day.sfml_forecast_kwh,
+                        "actual_kwh": day.actual_kwh,
+                        "accuracy_percent": day.sfml_accuracy_percent
+                    })
 
             return web.json_response({
                 "success": True,
-                "data": chart_data,
+                "data": data,
             })
 
         except Exception as err:

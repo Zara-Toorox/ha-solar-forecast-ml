@@ -120,7 +120,11 @@
           "notify_successful_learning": "Success Notifications",
           "ml_algorithm": "Mode",
           "enable_tiny_lstm": "Enable / Disable AI",
-          "pirate_weather_api_key": "Pirate Weather API Key"
+          "pirate_weather_api_key": "Pirate Weather API Key",
+          "learning_backup_protection": "Learning Data Protection",
+          "zero_export_mode": "Zero Export Mode (MPPT Detection)",
+          "has_battery": "Battery Storage System",
+          "solar_to_battery_sensor": "Solar-to-Battery Power Sensor"
         },
         "data_description": {
           "update_interval": "Forecast update interval (300-86400s, default: 3600)",
@@ -132,7 +136,11 @@
           "notify_successful_learning": "Notify on training success",
           "ml_algorithm": "Choose algorithm: 'Automatic' lets system decide based on available data (recommended). 'Ridge' is fast and stable. 'Neural Network' provides 5-10% better accuracy with 100+ samples.",
           "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled.",
-          "pirate_weather_api_key": "Optional: Free API key from https://pirate-weather.apiable.io/ - Enables NOAA GFS/HRRR weather model for improved cloud cover blending."
+          "pirate_weather_api_key": "Optional: Free API key from https://pirate-weather.apiable.io/ - Enables NOAA GFS/HRRR weather model for improved cloud cover blending.",
+          "learning_backup_protection": "Automatically syncs learning data to /share/ for protection against backup restore. When enabled, your learning progress survives HA backup restores. Default: ON",
+          "zero_export_mode": "MPPT THROTTLE DETECTION: Enable if you have a zero-export regulation (e.g. Shelly). This prevents ML from learning incorrect values when your inverter throttles due to no grid export being allowed. When active and production is much lower than expected on sunny days, the hour is excluded from training.",
+          "has_battery": "MPPT THROTTLE DETECTION: Enable if you have a battery storage system. When enabled, you must configure the Solar-to-Battery sensor below. This allows detection of throttling when the battery is full.",
+          "solar_to_battery_sensor": "MPPT THROTTLE DETECTION: Power sensor showing energy flow from PV to battery (in Watts). When this value drops below 50W during good weather conditions, the system assumes the battery is full and excludes the hour from ML training. Examples: sensor.pv_to_battery_power, sensor.battery_charging_power"
         }
       }
     },

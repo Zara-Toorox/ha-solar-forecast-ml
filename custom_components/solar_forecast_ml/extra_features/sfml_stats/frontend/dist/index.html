@@ -38,6 +38,10 @@
                     <span class="style-toggle-icon">{{ getDashboardStyleIcon() }}</span>
                     <span>{{ getDashboardStyleLabel() }}</span>
                 </button>
+                <button @click="goToLcars" class="lcars-toggle" title="LCARS Interface (Star Trek)">
+                    <span>🖖</span>
+                    <span>LCARS</span>
+                </button>
                 <button @click="toggleTheme" class="theme-toggle" :title="isDarkTheme ? 'Zu Hell wechseln' : 'Zu Dunkel wechseln'">
                     {{ isDarkTheme ? '☀️' : '🌙' }}
                 </button>
@@ -2946,6 +2950,11 @@
     </div>
 
     <script>
+        // Check if LCARS mode was last selected and redirect if needed
+        if (localStorage.getItem('sfml-dashboard-style') === 'lcars') {
+            window.location.href = '/api/sfml_stats/lcars';
+        }
+
         const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } = Vue;
 
         // ============================================================
@@ -3216,6 +3225,12 @@
                     if (dashboardStyle.value === '3d') return '3D';
                     if (dashboardStyle.value === '2d') return '2D';
                     return 'Liste';
+                }
+
+                // LCARS Navigation
+                function goToLcars() {
+                    localStorage.setItem('sfml-dashboard-style', 'lcars');
+                    window.location.href = '/api/sfml_stats/lcars';
                 }
 
                 // Collapsible Sections
@@ -7664,7 +7679,7 @@
                 });
 
                 return {
-                    lastUpdate, isDarkTheme, toggleTheme, dashboardStyle, toggleDashboardStyle, hasBattery, isNightTime,
+                    lastUpdate, isDarkTheme, toggleTheme, dashboardStyle, toggleDashboardStyle, goToLcars, hasBattery, isNightTime,
                     getDashboardStyleIcon, getDashboardStyleLabel,
                     collapsedSections, toggleSection, isSectionCollapsed,
                     sortableContainer, resetSectionOrder,

@@ -123,7 +123,11 @@
           "ml_algorithm": "Mode",
           "enable_tiny_lstm": "Enable / Disable AI",
           "adaptive_forecast_mode": "Adaptive Forecast",
-          "winter_mode": "Winter Mode"
+          "winter_mode": "Winter Mode",
+          "learning_backup_protection": "Learning Data Protection",
+          "zero_export_mode": "Zero Export Mode (MPPT Detection)",
+          "has_battery": "Battery Storage System",
+          "solar_to_battery_sensor": "Solar-to-Battery Power Sensor"
         },
         "data_description": {
           "update_interval": "Forecast update interval (300-86400s, default: 3600)",
@@ -136,7 +140,11 @@
           "ml_algorithm": "Choose algorithm: 'Automatic' lets system decide based on available data (recommended). 'Ridge' is fast and stable. 'Neural Network' provides 5-10% better accuracy with 100+ samples.",
           "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled.",
           "adaptive_forecast_mode": "When significant deviations (>35%) between morning forecast and actual production are detected, SFML automatically adjusts the afternoon forecast at 12:30. SFML autonomously decides whether a correction is beneficial - based on fresh weather data and objective criteria. Default: OFF",
-          "winter_mode": "Enhanced algorithms for low sun angles (Nov-Feb). When enabled, the effect of cloud cover on forecast is calculated more accurately, significantly improving winter accuracy. Default: ON"
+          "winter_mode": "Enhanced algorithms for low sun angles (Nov-Feb). When enabled, the effect of cloud cover on forecast is calculated more accurately, significantly improving winter accuracy. Default: ON",
+          "learning_backup_protection": "Automatically syncs learning data to /share/ for protection against backup restore. When enabled, your learning progress survives HA backup restores. Default: ON",
+          "zero_export_mode": "MPPT THROTTLE DETECTION: Enable if you have a zero-export regulation (e.g. Shelly).\n\nWHY IS THIS IMPORTANT?\nWith zero export, the inverter throttles production to household demand. ML would then learn: 'Sunshine = 200W' instead of 'Sunshine = 1000W (but throttled)'.\n\nWith this option enabled, throttled hours are excluded from ML training.\n\nOnly works during good weather conditions (sun, few clouds) AND when production is significantly below physics prediction.",
+          "has_battery": "MPPT THROTTLE DETECTION (Extension): Enable if you have a battery storage system.\n\nWHY IS THIS IMPORTANT?\nWhen the battery is full AND zero export is active, the MPPT throttles production. SFML detects this when the 'Solar-to-Battery' value drops below 50W.\n\nWhen enabled, you MUST configure the 'Solar-to-Battery Sensor' below!",
+          "solar_to_battery_sensor": "MPPT THROTTLE DETECTION (Sensor): Power sensor measuring energy flow from PV to battery (in Watts).\n\nEXAMPLES:\n- sensor.pv_to_battery_power\n- sensor.battery_charging_power\n- sensor.solar_battery_flow\n\nHOW DOES IT WORK?\nWhen this value drops below 50W during good weather, the battery is not accepting energy → Battery is full → MPPT throttles → Hour is excluded from training.\n\nOnly relevant when 'Battery Storage System' is enabled!"
         }
       }
     },

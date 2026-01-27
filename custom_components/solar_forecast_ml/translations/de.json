@@ -123,7 +123,11 @@
           "ml_algorithm": "Modus",
           "enable_tiny_lstm": "KI aktivieren / deaktivieren",
           "adaptive_forecast_mode": "Adaptive Prognose",
-          "winter_mode": "Winter-Modus"
+          "winter_mode": "Winter-Modus",
+          "learning_backup_protection": "Lerndaten-Schutz",
+          "zero_export_mode": "Nulleinspeisung aktiv",
+          "has_battery": "Batteriespeicher vorhanden",
+          "solar_to_battery_sensor": "Solar-zu-Akku Sensor"
         },
         "data_description": {
           "update_interval": "Prognose-Update-Intervall (300-86400s, Standard: 3600)",
@@ -136,7 +140,11 @@
           "ml_algorithm": "Wähle den Algorithmus: 'Automatisch' entscheidet basierend auf der Datenmenge (empfohlen). 'Ridge' ist schnell und stabil. 'Neuronales Netz' bietet 5-10% bessere Genauigkeit ab 100+ Samples.",
           "enable_tiny_lstm": "Erlaubt Nutzung des Neuronalen Netzes (benötigt 100+ Samples, 200+ MB RAM). Fällt automatisch auf Ridge zurück wenn Anforderungen nicht erfüllt. Empfehlung: Aktiviert lassen.",
           "adaptive_forecast_mode": "Bei starken Abweichungen (>35%) zwischen Vormittags-Prognose und IST-Produktion passt SFML die Nachmittagsprognose um 12:30 Uhr automatisch an. SFML entscheidet autonom ob eine Korrektur sinnvoll ist - basierend auf frischen Wetterdaten und objektiven Kriterien. Standard: AUS",
-          "winter_mode": "Verbesserte Algorithmen für niedrige Sonnenstände (Nov-Feb). Bei aktiviertem Winter-Modus wird der Einfluss von Bewölkung auf die Prognose genauer berechnet, was die Genauigkeit im Winter deutlich verbessert. Standard: AN"
+          "winter_mode": "Verbesserte Algorithmen für niedrige Sonnenstände (Nov-Feb). Bei aktiviertem Winter-Modus wird der Einfluss von Bewölkung auf die Prognose genauer berechnet, was die Genauigkeit im Winter deutlich verbessert. Standard: AN",
+          "learning_backup_protection": "Synchronisiert Lerndaten automatisch nach /share/ zum Schutz vor Backup-Restore. Bei aktivierter Option bleibt der Lernfortschritt auch nach einem HA Backup-Restore erhalten. Standard: AN",
+          "zero_export_mode": "⚡ MPPT-DROSSELERKENNUNG\n\nAktiviere diese Option wenn du eine Nulleinspeise-Regelung hast (z.B. Shelly).\n\n📌 WARUM IST DAS WICHTIG?\nBei Nulleinspeisung drosselt der Wechselrichter die Produktion auf den Hausbedarf. Das ML würde dann lernen: 'Sonnenschein = 200W' statt 'Sonnenschein = 1000W (aber gedrosselt)'.\n\n✅ Mit aktivierter Option werden gedrosselte Stunden vom ML-Training ausgeschlossen.\n\n⚠️ Funktioniert nur bei guten Wetterbedingungen (Sonne, wenig Wolken) UND wenn die Produktion deutlich unter der Physik-Vorhersage liegt.",
+          "has_battery": "⚡ MPPT-DROSSELERKENNUNG (Erweiterung)\n\nAktiviere diese Option wenn du einen Batteriespeicher hast.\n\n📌 WARUM IST DAS WICHTIG?\nWenn der Akku voll ist UND Nulleinspeisung aktiv ist, drosselt der MPPT die Produktion. SFML erkennt das wenn der 'Solar-zu-Akku' Wert unter 50W fällt.\n\n⚠️ Bei Aktivierung MUSS der 'Solar-zu-Akku Sensor' konfiguriert werden!",
+          "solar_to_battery_sensor": "⚡ MPPT-DROSSELERKENNUNG (Sensor)\n\nLeistungs-Sensor der den Energiefluss von PV zur Batterie misst (in Watt).\n\n📌 BEISPIELE:\n• sensor.pv_to_battery_power\n• sensor.battery_charging_power\n• sensor.solar_battery_flow\n\n🔍 WIE FUNKTIONIERT ES?\nWenn dieser Wert bei gutem Wetter unter 50W fällt, nimmt der Akku keine Energie mehr auf → Akku ist voll → MPPT drosselt → Stunde wird vom Training ausgeschlossen.\n\n⚠️ Nur relevant wenn 'Batteriespeicher vorhanden' aktiviert ist!"
         }
       }
     },

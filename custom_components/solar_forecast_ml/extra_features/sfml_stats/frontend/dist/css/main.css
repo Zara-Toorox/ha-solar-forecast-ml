@@ -167,6 +167,33 @@
     font-size: 1rem;
 }
 
+/* LCARS Toggle Button */
+.lcars-toggle {
+    background: linear-gradient(135deg, rgba(255, 153, 102, 0.15), rgba(153, 153, 255, 0.15));
+    border: 1px solid #FF9966;
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #FF9966;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.lcars-toggle:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(255, 153, 102, 0.5);
+    border-color: #FFCC99;
+    background: linear-gradient(135deg, rgba(255, 153, 102, 0.3), rgba(153, 153, 255, 0.3));
+}
+.lcars-toggle span:first-child {
+    font-size: 1rem;
+}
+
 /* ========== COLLAPSIBLE SECTIONS ========== */
 .collapsible-section {
     position: relative;
@@ -2845,6 +2872,15 @@ body {
     .style-toggle {
         padding: 0.25rem 0.5rem;
         font-size: 0.65rem;
+    }
+
+    .lcars-toggle {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.65rem;
+    }
+
+    .lcars-toggle span:last-child {
+        display: none;
     }
 
     .theme-toggle {

@@ -1,6 +1,6 @@
-# Solar Forecast ML V13.1.0 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
+# Solar Forecast ML V13.2.0 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
 
-[![Version](https://img.shields.io/badge/version-13.1.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-13.2.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 
@@ -18,7 +18,7 @@ Experience an adaptive hybrid AI ecosystem powered by three proprietary, locally
 
 Solar Forecast ML is not just another forecasting tool—it is a sophisticated AI Solar Companion for Home Assistant that doesn't just deliver data, but actively learns and evolves with your home.
 
-With Version 12.8.8 "Sarpeidon," solar optimization enters a new dimension:
+With Version 13.2.0 "Sarpeidon," solar optimization enters a new dimension:
 
 **Triple-AI Core Architecture:** Three specialized, locally-deployed AI models collaborate to synchronize energy generation, weather dynamics, and system behavior—all without a single external server request.
 
@@ -42,7 +42,19 @@ With Version 12.8.8 "Sarpeidon," solar optimization enters a new dimension:
 
 ---
 
-## Features in V13.1.0 "Sarpeidon"
+## Features in V13.2.0 "Sarpeidon"
+
+### MPPT Throttle Detection (NEW)
+- **Zero Export Detection** - Automatically detects when inverter throttles due to grid feed-in limits
+- **Battery Full Detection** - Identifies production limitations when battery is fully charged
+- **Learning Protection** - Throttled hours are automatically excluded from AI training
+- **Transparent Flagging** - Clear indication in hourly predictions with reason codes
+
+### Learning Data Protection (NEW)
+- **Automatic Backup** - Learning data is automatically backed up to /share/ directory
+- **Crash Recovery** - Seamless restoration of learned weights after system failures
+- **Migration Support** - Preserves learning progress during Home Assistant migrations
+- **Integrity Checks** - Validates backup data before restoration
 
 ### 5-Weather-Expert Blending
 - **Multi-Source Weather Data** - Combines 5 independent weather services for optimal accuracy
