@@ -886,7 +886,12 @@ class SummaryDataView(HomeAssistantView):
 
         prices = await _read_json_file(GRID_PATH / "data" / "price_history.json")
         if prices and "prices" in prices:
-            recent_prices = [p["price_net"] for p in prices["prices"][-48:] if p.get("price_net")]
+            # Support both "price_net" and "price" field names for compatibility
+            recent_prices = [
+                p.get("price_net") or p.get("price") or 0
+                for p in prices["prices"][-48:]
+                if p.get("price_net") or p.get("price")
+            ]
             if recent_prices:
                 result["kpis"]["price_current"] = recent_prices[-1] if recent_prices else 0
                 result["kpis"]["price_avg"] = sum(recent_prices) / len(recent_prices)
@@ -1241,9 +1246,11 @@ class EnergyFlowView(HomeAssistantView):
 
         for p in price_cache["prices"]:
             if p.get("date") == today_str and p.get("hour") == current_hour:
+                # Support both "price_net" and "price" field names for compatibility
+                net_price = p.get("price_net") or p.get("price")
                 return {
                     "total_price": p.get("total_price"),
-                    "net_price": p.get("price"),
+                    "net_price": net_price,
                     "hour": current_hour,
                 }
         return None
@@ -3187,22 +3194,13 @@ class ForecastComparisonView(HomeAssistantView):
                     "hint": "Data is collected daily at 23:50"
                 }, status=404)
 
-            comparison_days = await reader.async_get_comparison_days(days=days)
-
-            # Transform to simple array format for frontend
-            data = []
-            for day in comparison_days:
-                if day.has_data:
-                    data.append({
-                        "date": day.date.strftime("%Y-%m-%d"),
-                        "forecast_kwh": day.sfml_forecast_kwh,
-                        "actual_kwh": day.actual_kwh,
-                        "accuracy_percent": day.sfml_accuracy_percent
-                    })
+            # Use async_get_chart_data() which returns the correct format for frontend
+            # Format: {dates: [], actual: [], sfml: [], external_1: [], external_2: [], stats: {}}
+            chart_data = await reader.async_get_chart_data(days=days)
 
             return web.json_response({
                 "success": True,
-                "data": data,
+                "data": chart_data,
             })
 
         except Exception as err:

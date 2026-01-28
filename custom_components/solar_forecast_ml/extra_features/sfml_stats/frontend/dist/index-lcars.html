@@ -1121,11 +1121,6 @@
                             if (summary.kpis && summary.kpis.price_current !== undefined) {
                                 price.current = summary.kpis.price_current;
                             }
-
-                            // Forecast aus summary
-                            if (summary.today) {
-                                forecast.todayTotal = summary.today.forecast || 0;
-                            }
                         }
 
                         const flowRes = await fetch('/api/sfml_stats/energy_flow');
@@ -1174,6 +1169,50 @@
                             // Price from energy_flow (falls nicht in summary)
                             if (!price.current && flow.current_price) {
                                 price.current = flow.current_price.net_price || flow.current_price.total_price || 0;
+                            }
+                        }
+
+                        // Forecast-Daten aus /solar laden (wie im normalen Dashboard)
+                        const solarRes = await fetch('/api/sfml_stats/solar');
+                        if (solarRes.ok) {
+                            const solar = await solarRes.json();
+
+                            if (solar.success && solar.data) {
+                                // API returns "hourly" not "hourly_predictions"
+                                const hourly = solar.data.hourly || [];
+                                const now = new Date();
+                                const currentHour = now.getHours();
+                                const todayStr = now.toISOString().split('T')[0];
+
+                                // Filter predictions for today (6:00 - 20:00)
+                                const todayPreds = hourly.filter(h =>
+                                    h.target_date === todayStr &&
+                                    h.target_hour >= 6 &&
+                                    h.target_hour <= 20
+                                );
+
+                                // Calculate todayTotal from hourly predictions
+                                if (todayPreds.length > 0) {
+                                    forecast.todayTotal = todayPreds.reduce((sum, h) =>
+                                        sum + (h.prediction_kwh || 0), 0
+                                    );
+
+                                    // Calculate todayRemaining (hours after current hour)
+                                    forecast.todayRemaining = todayPreds
+                                        .filter(h => h.target_hour > currentHour)
+                                        .reduce((sum, h) => sum + (h.prediction_kwh || 0), 0);
+                                }
+
+                                // Fallback: Use corrected forecast from daily_forecasts if available
+                                const correctedForecast = solar.data.forecasts?.today?.prediction_kwh_display;
+                                if (correctedForecast && correctedForecast > 0) {
+                                    forecast.todayTotal = correctedForecast;
+                                }
+
+                                // Additional fallback: Use prediction_kwh from forecasts.today
+                                if (forecast.todayTotal === 0 && solar.data.forecasts?.today?.prediction_kwh) {
+                                    forecast.todayTotal = solar.data.forecasts.today.prediction_kwh;
+                                }
                             }
                         }
 

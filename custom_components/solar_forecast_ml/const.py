@@ -13,12 +13,12 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "13.2.0"
-RELEASE_VERSION = "13.2.0"
+VERSION = "13.2.2"
+RELEASE_VERSION = "13.2.2"
 RELEASE_NAME = "Sarpeidon"
-SOFTWARE_VERSION = "13.2.0"
-INTEGRATION_MODEL = "V13.2.0"
-AI_VERSION = "13.2.0"
+SOFTWARE_VERSION = "13.2.2"
+INTEGRATION_MODEL = "V13.2.2"
+AI_VERSION = "13.2.2"
 
 PLATFORMS = [Platform.SENSOR]
 
