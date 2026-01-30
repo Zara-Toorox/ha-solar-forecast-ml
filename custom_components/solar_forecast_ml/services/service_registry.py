@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 
 from ..const import (
     DOMAIN,
+    SERVICE_ANALYZE_FEATURE_IMPORTANCE,
     SERVICE_BORG_ASSIMILATION_REVERSE,
     SERVICE_BUILD_ASTRONOMY_CACHE,
     SERVICE_INSTALL_EXTRA_FEATURES,
@@ -111,6 +112,11 @@ class ServiceRegistry:
                 name=SERVICE_RUN_GRID_SEARCH,
                 handler=self._handle_run_grid_search,
                 description="Run Grid-Search hyperparameter optimization (only on capable hardware)",
+            ),
+            ServiceDefinition(
+                name=SERVICE_ANALYZE_FEATURE_IMPORTANCE,
+                handler=self._handle_analyze_feature_importance,
+                description="Analyze feature importance using Permutation Importance (developer only)",
             ),
 
             # Emergency Services
@@ -411,6 +417,114 @@ class ServiceRegistry:
 
         except Exception as e:
             _LOGGER.error(f"Error in run_grid_search: {e}", exc_info=True)
+
+    async def _handle_analyze_feature_importance(self, call: ServiceCall) -> None:
+        """Handle analyze_feature_importance service - Permutation Importance analysis @zara
+
+        This service analyzes which features help or hurt the AI model predictions.
+        Results are saved to ai/feature_importance.json for developer analysis.
+
+        Parameters:
+            num_permutations: int - Number of permutations per feature (default: 5)
+        """
+        _LOGGER.info("=" * 70)
+        _LOGGER.info("SERVICE: analyze_feature_importance")
+        _LOGGER.info("Permutation Importance analysis for TinyLSTM features")
+        _LOGGER.info("=" * 70)
+
+        try:
+            # Check AI predictor
+            if not self.coordinator.ai_predictor:
+                _LOGGER.error("AI predictor not available")
+                return
+
+            predictor = self.coordinator.ai_predictor
+
+            # Get num_permutations from service call
+            num_permutations = call.data.get("num_permutations", 5)
+            _LOGGER.info(f"Using {num_permutations} permutations per feature")
+
+            # Progress callback for logging
+            async def progress_callback(current, total, feature_name):
+                _LOGGER.debug(
+                    f"Feature Importance progress: {current}/{total} - {feature_name}"
+                )
+
+            # Run analysis
+            result = await predictor.analyze_feature_importance(
+                num_permutations=num_permutations,
+                progress_callback=progress_callback,
+            )
+
+            if result is None or not result.success:
+                error_msg = result.error_message if result else "Unknown error"
+                _LOGGER.error(f"Feature Importance analysis failed: {error_msg}")
+
+                # Send notification about failure
+                try:
+                    await self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": "❌ Feature Importance fehlgeschlagen",
+                            "message": (
+                                f"**Fehler:** {error_msg}\n\n"
+                                f"Mögliche Ursachen:\n"
+                                f"- Nicht genug Trainingsdaten (min. 10 Samples)\n"
+                                f"- AI-Modell nicht trainiert\n"
+                                f"- Systemfehler"
+                            ),
+                            "notification_id": "solar_forecast_ml_feature_importance",
+                        },
+                    )
+                except Exception:
+                    pass
+                return
+
+            # Log results
+            _LOGGER.info("=" * 70)
+            _LOGGER.info("FEATURE IMPORTANCE COMPLETE")
+            _LOGGER.info(f"  Baseline RMSE: {result.baseline_rmse:.4f} kWh")
+            _LOGGER.info(f"  Helpful features: {len(result.helpful_features)}")
+            _LOGGER.info(f"  Harmful features: {len(result.harmful_features)}")
+            _LOGGER.info(f"  Neutral features: {len(result.neutral_features)}")
+            _LOGGER.info(f"  Duration: {result.analysis_time_seconds:.1f}s")
+            _LOGGER.info("=" * 70)
+
+            # Build report for notification
+            helpful_list = "\n".join(
+                f"  - {f}: +{result.feature_importance[f]:.4f}"
+                for f in result.helpful_features[:5]
+            ) or "  (keine)"
+
+            harmful_list = "\n".join(
+                f"  - {f}: {result.feature_importance[f]:.4f}"
+                for f in result.harmful_features[:5]
+            ) or "  (keine)"
+
+            # Send notification
+            try:
+                await self.hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": "📊 Feature Importance Analyse abgeschlossen",
+                        "message": (
+                            f"**Baseline RMSE:** {result.baseline_rmse:.4f} kWh\n"
+                            f"**Analysierte Samples:** {result.num_samples}\n"
+                            f"**Dauer:** {result.analysis_time_seconds:.1f}s\n\n"
+                            f"**🟢 Hilfreiche Features ({len(result.helpful_features)}):**\n{helpful_list}\n\n"
+                            f"**🔴 Schädliche Features ({len(result.harmful_features)}):**\n{harmful_list}\n\n"
+                            f"**Details:** ai/feature_importance.json"
+                        ),
+                        "notification_id": "solar_forecast_ml_feature_importance",
+                    },
+                )
+            except Exception:
+                pass
+
+        except Exception as e:
+            _LOGGER.error(f"Error in analyze_feature_importance: {e}", exc_info=True)
 
     # =========================================================================
     # Emergency Services

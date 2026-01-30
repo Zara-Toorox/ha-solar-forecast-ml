@@ -13,12 +13,12 @@ from homeassistant.const import Platform
 
 DOMAIN = "solar_forecast_ml"
 NAME = "Solar Forecast ML"
-VERSION = "13.2.2"
-RELEASE_VERSION = "13.2.2"
+VERSION = "14.0.0"
+RELEASE_VERSION = "14.0.0"
 RELEASE_NAME = "Sarpeidon"
-SOFTWARE_VERSION = "13.2.2"
-INTEGRATION_MODEL = "V13.2.2"
-AI_VERSION = "13.2.2"
+SOFTWARE_VERSION = "14.0.0"
+INTEGRATION_MODEL = "V14.0.0"
+AI_VERSION = "14.0.0"
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -226,6 +226,7 @@ ATTR_FALLBACK_ACTIVE = "fallback_active"
 SERVICE_RETRAIN_AI_MODEL = "retrain_ai_model"
 SERVICE_RESET_AI_MODEL = "reset_ai_model"
 SERVICE_RUN_GRID_SEARCH = "run_grid_search"
+SERVICE_ANALYZE_FEATURE_IMPORTANCE = "analyze_feature_importance"
 
 # Grid-Search Configuration
 CONF_GRID_SEARCH_ENABLED = "grid_search_enabled"

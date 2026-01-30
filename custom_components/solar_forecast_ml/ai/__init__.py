@@ -7,7 +7,19 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
+# PyArmor Runtime - MUST be imported before any obfuscated modules
+import sys
+from pathlib import Path as _Path
+_runtime_path = str(_Path(__file__).parent.parent)
+if _runtime_path not in sys.path:
+    sys.path.insert(0, _runtime_path)
+try:
+    import pyarmor_runtime_009810  # noqa: F401
+except ImportError:
+    pass  # Runtime not present (development mode)
+
 from .ai_tiny_lstm import TinyLSTM
+from .ai_tiny_ridge import TinyRidge
 from .ai_feature_engineering import FeatureEngineer
 from .ai_seasonal import SeasonalAdjuster
 from .ai_dni_tracker import DniTracker
@@ -35,6 +47,7 @@ from .ai_grid_search import (
 
 __all__ = [
     "TinyLSTM",
+    "TinyRidge",
     "FeatureEngineer",
     "SeasonalAdjuster",
     "DniTracker",

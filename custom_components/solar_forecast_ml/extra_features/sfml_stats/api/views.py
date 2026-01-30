@@ -221,6 +221,8 @@ async def async_setup_views(hass: HomeAssistant) -> None:
     hass.http.register_view(HealthCheckView())
     hass.http.register_view(DashboardView())
     hass.http.register_view(LcarsDashboardView())
+    hass.http.register_view(HelpView())
+    hass.http.register_view(HelpSFMLView())
     hass.http.register_view(TariffDashboardView())
     hass.http.register_view(SolarDataView())
     hass.http.register_view(PriceDataView())
@@ -567,6 +569,156 @@ class LcarsDashboardView(HomeAssistantView):
         <p>Frontend wird initialisiert...</p>
         <p style="color: #666;">Falls diese Meldung bleibt, wurde das LCARS-Frontend noch nicht erstellt.</p>
         <p><a href="/api/sfml_stats/dashboard">Zum Standard-Dashboard</a></p>
+    </div>
+</body>
+</html>"""
+
+
+class HelpView(HomeAssistantView):
+    """Help page with sensor configuration documentation. @zara"""
+
+    url = "/api/sfml_stats/help"
+    name = "api:sfml_stats:help"
+    requires_auth = False
+    cors_allowed = True
+
+    @local_only
+    async def get(self, request: Request) -> Response:
+        """Return the help page HTML. @zara"""
+        frontend_path = None
+
+        # Try via hass.config.path() first (works in Docker)
+        if HASS is not None:
+            frontend_path = Path(HASS.config.path()) / "custom_components" / "sfml_stats" / "frontend" / "dist" / "help.html"
+            if not frontend_path.exists():
+                frontend_path = None
+
+        # Fallback via __file__
+        if frontend_path is None:
+            frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "help.html"
+
+        if not frontend_path.exists():
+            html_content = self._get_fallback_html()
+        else:
+            import aiofiles
+            async with aiofiles.open(frontend_path, "r", encoding="utf-8") as f:
+                html_content = await f.read()
+
+        return web.Response(
+            text=html_content,
+            content_type="text/html",
+            headers={
+                "X-Frame-Options": "SAMEORIGIN",
+                "Content-Security-Policy": "frame-ancestors 'self'",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+
+    def _get_fallback_html(self) -> str:
+        """Return fallback HTML when help page is not present. @zara"""
+        return """<!DOCTYPE html>
+<html>
+<head>
+    <title>SFML Stats - Help</title>
+    <style>
+        body {
+            background: #0a0a1a;
+            color: #fff;
+            font-family: system-ui;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .message { text-align: center; }
+        h1 { color: #00d4ff; }
+        a { color: #a855f7; }
+    </style>
+</head>
+<body>
+    <div class="message">
+        <h1>Sensor Configuration Help</h1>
+        <p>Help page is being loaded...</p>
+        <p style="color: #666;">If this message persists, the help page was not built yet.</p>
+        <p><a href="/api/sfml_stats/dashboard">Back to Dashboard</a></p>
+    </div>
+</body>
+</html>"""
+
+
+class HelpSFMLView(HomeAssistantView):
+    """Solar Forecast ML help page with sensor configuration documentation. @zara"""
+
+    url = "/api/sfml_stats/help-sfml"
+    name = "api:sfml_stats:help_sfml"
+    requires_auth = False
+    cors_allowed = True
+
+    @local_only
+    async def get(self, request: Request) -> Response:
+        """Return the SFML help page HTML. @zara"""
+        frontend_path = None
+
+        # Try via hass.config.path() first (works in Docker)
+        if HASS is not None:
+            frontend_path = Path(HASS.config.path()) / "custom_components" / "sfml_stats" / "frontend" / "dist" / "help-sfml.html"
+            if not frontend_path.exists():
+                frontend_path = None
+
+        # Fallback via __file__
+        if frontend_path is None:
+            frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "help-sfml.html"
+
+        if not frontend_path.exists():
+            html_content = self._get_fallback_html()
+        else:
+            import aiofiles
+            async with aiofiles.open(frontend_path, "r", encoding="utf-8") as f:
+                html_content = await f.read()
+
+        return web.Response(
+            text=html_content,
+            content_type="text/html",
+            headers={
+                "X-Frame-Options": "SAMEORIGIN",
+                "Content-Security-Policy": "frame-ancestors 'self'",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+
+    def _get_fallback_html(self) -> str:
+        """Return fallback HTML when SFML help page is not present. @zara"""
+        return """<!DOCTYPE html>
+<html>
+<head>
+    <title>Solar Forecast ML - Help</title>
+    <style>
+        body {
+            background: #0a0a1a;
+            color: #fff;
+            font-family: system-ui;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .message { text-align: center; }
+        h1 { color: #ff9500; }
+        a { color: #ffd60a; }
+    </style>
+</head>
+<body>
+    <div class="message">
+        <h1>☀️ Solar Forecast ML - Sensor Help</h1>
+        <p>Help page is being loaded...</p>
+        <p style="color: #666;">If this message persists, the help page was not built yet.</p>
+        <p><a href="/api/sfml_stats/dashboard">Back to Dashboard</a></p>
     </div>
 </body>
 </html>"""

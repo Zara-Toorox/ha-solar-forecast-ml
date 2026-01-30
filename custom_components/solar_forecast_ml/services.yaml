@@ -105,6 +105,99 @@ reset_ai_model:
     Alternative: Use retrain_ai_model service to keep model but retrain with latest data.
   fields: {}
 
+analyze_feature_importance:
+  name: "📊 Analyze Feature Importance (DEVELOPER ONLY)"
+  description: >
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║ 🚨 NUR FÜR ENTWICKLER ODER AUF ANWEISUNG / DEVELOPER ONLY               ║
+    ║ Dieser Service ist für Diagnose und Modellanalyse gedacht.              ║
+    ║ Die Ergebnisse sind nur für erfahrene Benutzer relevant.                ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    📊 FEATURE IMPORTANCE ANALYSIS - Identifiziert hilfreiche und schädliche Features
+
+    Analysiert welche der 20 Input-Features dem TinyLSTM-Modell helfen
+    oder schaden, basierend auf Permutation Importance.
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🔬 WAS MACHT DIESER SERVICE?
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    1. Berechnet Baseline-RMSE mit allen Features
+    2. Für jedes der 20 Features:
+       - Mischt die Feature-Werte zufällig (Permutation)
+       - Berechnet neuen RMSE mit gemischtem Feature
+       - Importance = (neuer RMSE - Baseline RMSE)
+    3. Kategorisiert Features:
+       - 🟢 HELPFUL (Importance > +0.01): Feature HILFT der Prognose
+       - 🔴 HARMFUL (Importance < -0.01): Feature SCHADET der Prognose
+       - ⚪ NEUTRAL (-0.01 bis +0.01): Feature hat kaum Einfluss
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📋 ANALYSIERTE FEATURES (20 total)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Base Features (17):
+    - hour_of_day, day_of_year, season_encoded
+    - weather_temp, weather_ghi, weather_wind, weather_humidity
+    - weather_rain, weather_clouds, weather_dni, dni_ratio
+    - sun_elevation_deg, theoretical_max_kwh, clear_sky_radiation
+    - production_yesterday, production_same_hour, elevation_normalized
+
+    Group Features (3 pro Panel-Gruppe):
+    - group_azimuth_normalized, group_tilt_normalized, group_capacity_normalized
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📁 ERGEBNIS-DATEI
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /config/solar_forecast_ml/ai/feature_importance.json
+
+    Enthält:
+    - feature_importance: Score für jedes Feature
+    - helpful_features: Liste der hilfreichen Features
+    - harmful_features: Liste der schädlichen Features
+    - neutral_features: Liste der neutralen Features
+    - baseline_rmse: RMSE ohne Permutation
+    - analysis_time_seconds: Dauer der Analyse
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ⚠️ WICHTIGE HINWEISE
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - Benötigt ein trainiertes AI-Modell (learned_weights.json)
+    - Benötigt mindestens 10 Validierungs-Samples
+    - Rechenintensiv: Kann mehrere Sekunden dauern
+    - Ergebnisse dienen nur der ANALYSE - keine automatischen Änderungen!
+    - Die Ergebnisse variieren je nach Datenmenge und Qualität
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🔧 FÜR ENTWICKLER
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Die Ergebnisse können genutzt werden um:
+    - Features mit negativem Impact zu identifizieren
+    - Feature Engineering für zukünftige Versionen zu verbessern
+    - Zu verstehen welche Wetterdaten am wichtigsten sind
+    - Debug-Informationen für Support-Anfragen zu sammeln
+
+    Processing time: ~5-30 Sekunden (abhängig von Sample-Anzahl)
+
+  fields:
+    num_permutations:
+      name: "Anzahl Permutationen"
+      description: >
+        Anzahl der Permutationen pro Feature (mehr = stabiler, aber langsamer).
+        Standard: 5 (guter Kompromiss zwischen Genauigkeit und Geschwindigkeit)
+      required: false
+      default: 5
+      example: 5
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
+
 # ============================================================================
 # EMERGENCY SERVICES - Manual Day-End Task Execution
 # ⚠️ DEVELOPER ONLY - Nur bei Systemfehlern und auf Anweisung verwenden!

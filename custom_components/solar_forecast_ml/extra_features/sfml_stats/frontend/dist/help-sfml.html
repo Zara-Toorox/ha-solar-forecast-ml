@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar Forecast ML - Sensor Configuration Help</title>
+
+    <!-- Vue 3 -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+
+    <style>
+        :root {
+            --bg-primary: #0a0a1a;
+            --bg-secondary: #0d1117;
+            --bg-card: #161b22;
+            --bg-card-hover: #1c2128;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --neon-cyan: #00d4ff;
+            --neon-green: #22c55e;
+            --neon-yellow: #ffd60a;
+            --neon-orange: #ff9500;
+            --neon-pink: #ff2e97;
+            --neon-purple: #8b5cf6;
+            --border-color: #30363d;
+            --glow-cyan: 0 0 20px rgba(0, 212, 255, 0.3);
+            --glow-green: 0 0 20px rgba(34, 197, 94, 0.3);
+            --glow-yellow: 0 0 20px rgba(255, 214, 10, 0.3);
+            --glow-orange: 0 0 20px rgba(255, 149, 0, 0.3);
+            --glow-pink: 0 0 20px rgba(255, 46, 151, 0.3);
+            --glow-purple: 0 0 20px rgba(139, 92, 246, 0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--neon-orange); }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+            border-bottom: 1px solid var(--border-color);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--neon-orange), var(--neon-yellow));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .lang-toggle {
+            display: flex;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .lang-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .lang-btn.active {
+            background: var(--neon-orange);
+            color: var(--bg-primary);
+            box-shadow: var(--glow-orange);
+        }
+
+        .back-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--glow-purple);
+        }
+
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        .intro {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(255, 149, 0, 0.1), rgba(255, 214, 10, 0.1));
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .intro h2 {
+            font-size: 1.8rem;
+            margin-bottom: 12px;
+            color: var(--neon-orange);
+        }
+
+        .intro p {
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Warning Boxes */
+        .warning-banner {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .warning-banner.dc {
+            background: rgba(255, 149, 0, 0.1);
+            border-color: rgba(255, 149, 0, 0.3);
+        }
+
+        .warning-banner.local {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .warning-icon {
+            font-size: 2rem;
+            flex-shrink: 0;
+        }
+
+        .warning-content h3 {
+            color: #ef4444;
+            margin-bottom: 8px;
+        }
+
+        .warning-banner.dc .warning-content h3 { color: var(--neon-orange); }
+        .warning-banner.local .warning-content h3 { color: var(--neon-purple); }
+
+        .warning-content p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Category Sections */
+        .category {
+            margin-bottom: 40px;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .category-icon { font-size: 2rem; }
+
+        .category-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .category-title.mandatory { color: var(--neon-orange); }
+        .category-title.optional { color: var(--neon-green); }
+        .category-title.guides { color: var(--neon-cyan); }
+
+        /* Sensor Grid */
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+        }
+
+        .sensor-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sensor-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sensor-card.mandatory::before { background: linear-gradient(90deg, var(--neon-orange), var(--neon-yellow)); }
+        .sensor-card.optional::before { background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan)); }
+        .sensor-card.guide::before { background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); }
+
+        .sensor-card:hover {
+            background: var(--bg-card-hover);
+            transform: translateY(-4px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .sensor-card:hover::before { opacity: 1; }
+
+        .sensor-card.mandatory:hover { border-color: var(--neon-orange); box-shadow: var(--glow-orange); }
+        .sensor-card.optional:hover { border-color: var(--neon-green); box-shadow: var(--glow-green); }
+        .sensor-card.guide:hover { border-color: var(--neon-cyan); box-shadow: var(--glow-cyan); }
+
+        .sensor-name {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sensor-key {
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.75rem;
+            color: var(--neon-cyan);
+            background: rgba(0, 212, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: inline-block;
+        }
+
+        .sensor-desc {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .sensor-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .sensor-badge.required {
+            background: rgba(255, 149, 0, 0.2);
+            color: var(--neon-orange);
+            border: 1px solid rgba(255, 149, 0, 0.3);
+        }
+
+        .sensor-badge.optional {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .sensor-badge.guide-badge {
+            background: rgba(0, 212, 255, 0.2);
+            color: var(--neon-cyan);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary);
+            z-index: 10;
+        }
+
+        .modal-header h3 {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px 12px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--bg-card);
+            color: var(--neon-pink);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-section {
+            margin-bottom: 24px;
+        }
+
+        .modal-section:last-child { margin-bottom: 0; }
+
+        .modal-section h4 {
+            font-size: 0.9rem;
+            color: var(--neon-cyan);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .modal-section p, .modal-section .content-text {
+            color: var(--text-secondary);
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+
+        .info-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: var(--text-muted); }
+        .info-value { color: var(--text-primary); font-weight: 500; }
+
+        .code-block {
+            background: #1a1a2e;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            color: var(--neon-green);
+            white-space: pre-wrap;
+        }
+
+        .entity-list {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            color: var(--text-secondary);
+        }
+
+        .tip-box {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .tip-box .tips-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+        }
+
+        .error-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .error-box .errors-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+        }
+
+        /* Guide Modal */
+        .guide-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border-color);
+            margin-top: 40px;
+        }
+
+        .footer a {
+            color: var(--neon-cyan);
+            text-decoration: none;
+        }
+
+        .footer a:hover { text-decoration: underline; }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 20px;
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .main-content { padding: 20px; }
+            .sensor-grid { grid-template-columns: 1fr; }
+
+            .modal {
+                margin: 10px;
+                max-height: calc(100vh - 20px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <h1>{{ t.title }}</h1>
+            <div class="header-controls">
+                <div class="lang-toggle">
+                    <button class="lang-btn" :class="{ active: lang === 'de' }" @click="lang = 'de'">DE</button>
+                    <button class="lang-btn" :class="{ active: lang === 'en' }" @click="lang = 'en'">EN</button>
+                </div>
+                <a href="/api/sfml_stats/dashboard" class="back-btn">
+                    <span>&#8592;</span>
+                    <span>{{ t.backToDashboard }}</span>
+                </a>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="intro">
+                <h2>{{ t.introTitle }}</h2>
+                <p>{{ t.introText }}</p>
+            </div>
+
+            <!-- DC Warning -->
+            <div class="warning-banner dc">
+                <span class="warning-icon">&#9889;</span>
+                <div class="warning-content">
+                    <h3>{{ t.dcWarning.title }}</h3>
+                    <p>{{ t.dcWarning.text }}</p>
+                </div>
+            </div>
+
+            <!-- Local Sensor Warning -->
+            <div class="warning-banner local">
+                <span class="warning-icon">&#128205;</span>
+                <div class="warning-content">
+                    <h3>{{ t.localWarning.title }}</h3>
+                    <p>{{ t.localWarning.text }}</p>
+                </div>
+            </div>
+
+            <!-- MANDATORY SENSORS -->
+            <section class="category">
+                <div class="category-header">
+                    <span class="category-icon">&#9888;</span>
+                    <h2 class="category-title mandatory">{{ t.categories.mandatory }}</h2>
+                </div>
+                <div class="sensor-grid">
+                    <div v-for="sensor in mandatorySensors" :key="sensor.key"
+                         class="sensor-card mandatory" @click="openModal(sensor, 'sensor')">
+                        <span class="sensor-badge required">{{ t.required }}</span>
+                        <div class="sensor-name">{{ sensor.icon }} {{ sensor.name[lang] }}</div>
+                        <div class="sensor-key">{{ sensor.key }}</div>
+                        <div class="sensor-desc">{{ sensor.shortDesc[lang] }}</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- OPTIONAL SENSORS -->
+            <section class="category">
+                <div class="category-header">
+                    <span class="category-icon">&#127775;</span>
+                    <h2 class="category-title optional">{{ t.categories.optional }}</h2>
+                </div>
+                <div class="sensor-grid">
+                    <div v-for="sensor in optionalSensors" :key="sensor.key"
+                         class="sensor-card optional" @click="openModal(sensor, 'sensor')">
+                        <span class="sensor-badge optional">{{ t.optional }}</span>
+                        <div class="sensor-name">{{ sensor.icon }} {{ sensor.name[lang] }}</div>
+                        <div class="sensor-key">{{ sensor.key }}</div>
+                        <div class="sensor-desc">{{ sensor.shortDesc[lang] }}</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GUIDES -->
+            <section class="category">
+                <div class="category-header">
+                    <span class="category-icon">&#128214;</span>
+                    <h2 class="category-title guides">{{ t.categories.guides }}</h2>
+                </div>
+                <div class="sensor-grid">
+                    <div v-for="guide in guides" :key="guide.key"
+                         class="sensor-card guide" @click="openModal(guide, 'guide')">
+                        <span class="sensor-badge guide-badge">{{ t.guide }}</span>
+                        <div class="sensor-name">{{ guide.icon }} {{ guide.name[lang] }}</div>
+                        <div class="sensor-desc">{{ guide.shortDesc[lang] }}</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Solar Forecast ML &copy; 2025 Zara-Toorox | <a href="/api/sfml_stats/help">SFML Stats Hilfe</a> | <a href="/api/sfml_stats/dashboard">{{ t.backToDashboard }}</a></p>
+        </footer>
+
+        <!-- SENSOR MODAL -->
+        <div v-if="selectedItem && modalType === 'sensor'" class="modal-overlay" @click.self="closeModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <div>
+                        <h3>{{ selectedItem.icon }} {{ selectedItem.name[lang] }}</h3>
+                        <div class="sensor-key">{{ selectedItem.key }}</div>
+                    </div>
+                    <button class="modal-close" @click="closeModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- What is it -->
+                    <div class="modal-section">
+                        <h4>&#128161; {{ t.modal.whatIs }}</h4>
+                        <p class="content-text">{{ selectedItem.what[lang] }}</p>
+                    </div>
+
+                    <!-- Why important -->
+                    <div class="modal-section">
+                        <h4>&#127919; {{ t.modal.whyImportant }}</h4>
+                        <p class="content-text">{{ selectedItem.why[lang] }}</p>
+                    </div>
+
+                    <!-- Technical Details -->
+                    <div class="modal-section">
+                        <h4>&#9881; {{ t.modal.technical }}</h4>
+                        <div class="info-box">
+                            <div class="info-row">
+                                <span class="info-label">{{ t.modal.unit }}</span>
+                                <span class="info-value">{{ selectedItem.unit[lang] }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">{{ t.modal.status }}</span>
+                                <span class="info-value" :style="{ color: selectedItem.mandatory ? 'var(--neon-orange)' : '#22c55e' }">
+                                    {{ selectedItem.mandatory ? t.required : t.optional }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Typical Entities -->
+                    <div class="modal-section">
+                        <h4>&#128221; {{ t.modal.entities }}</h4>
+                        <div class="entity-list">{{ selectedItem.entities[lang] }}</div>
+                    </div>
+
+                    <!-- Common Errors -->
+                    <div class="modal-section" v-if="selectedItem.errors">
+                        <h4>&#10060; {{ t.modal.errors }}</h4>
+                        <div class="error-box">
+                            <div class="errors-text">{{ selectedItem.errors[lang] }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Tips -->
+                    <div class="modal-section" v-if="selectedItem.tips">
+                        <h4>&#128161; {{ t.modal.tips }}</h4>
+                        <div class="tip-box">
+                            <div class="tips-text">{{ selectedItem.tips[lang] }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Example -->
+                    <div class="modal-section" v-if="selectedItem.example">
+                        <h4>&#128187; {{ t.modal.example }}</h4>
+                        <div class="code-block">{{ selectedItem.example[lang] }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GUIDE MODAL -->
+        <div v-if="selectedItem && modalType === 'guide'" class="modal-overlay" @click.self="closeModal">
+            <div class="modal" style="max-width: 900px;">
+                <div class="modal-header">
+                    <div>
+                        <h3>{{ selectedItem.icon }} {{ selectedItem.name[lang] }}</h3>
+                    </div>
+                    <button class="modal-close" @click="closeModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="guide-content">{{ selectedItem.content[lang] }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        createApp({
+            setup() {
+                const lang = ref('de');
+                const selectedItem = ref(null);
+                const modalType = ref(null);
+
+                const translations = {
+                    de: {
+                        title: 'Solar Forecast ML - Sensor Konfiguration',
+                        backToDashboard: 'Zum Dashboard',
+                        introTitle: 'Solar Forecast ML - KI Sensor Hilfe',
+                        introText: 'Die KI-basierte Solarprognose lernt aus deinen Sensordaten. Je besser die Sensoren konfiguriert sind, desto genauer werden die Vorhersagen!',
+                        required: 'PFLICHT',
+                        optional: 'OPTIONAL',
+                        guide: 'ANLEITUNG',
+                        categories: {
+                            mandatory: 'Pflicht-Sensoren',
+                            optional: 'Optionale Sensoren (nur lokale Hardware!)',
+                            guides: 'Anleitungen & Konfiguration'
+                        },
+                        dcWarning: {
+                            title: 'WICHTIG: Nur DC-Leistung (Gleichstrom) verwenden!',
+                            text: 'Die KI benoetigt die DC-Leistung DIREKT von den Solarpanels! NIEMALS die AC-Ausgangsleistung des Wechselrichters nutzen! DC = Eingang vom Dach, AC = Ausgang zum Netz (FALSCH!)'
+                        },
+                        localWarning: {
+                            title: 'WICHTIG: Nur LOKALE Sensoren verwenden!',
+                            text: 'Wetter-Apps und Online-Dienste liefern keine lokalen Daten! Nur echte Hardware-Sensoren an deinem Standort sind fuer die optionalen Wetter-Sensoren geeignet.'
+                        },
+                        modal: {
+                            whatIs: 'Was ist das?',
+                            whyImportant: 'Warum ist das wichtig?',
+                            technical: 'Technische Details',
+                            unit: 'Erwartete Einheit',
+                            status: 'Status',
+                            entities: 'Typische Entity-IDs',
+                            errors: 'Haeufige Fehler & Loesungen',
+                            tips: 'Profi-Tipps',
+                            example: 'YAML Beispiel'
+                        }
+                    },
+                    en: {
+                        title: 'Solar Forecast ML - Sensor Configuration',
+                        backToDashboard: 'Back to Dashboard',
+                        introTitle: 'Solar Forecast ML - AI Sensor Help',
+                        introText: 'The AI-based solar forecast learns from your sensor data. The better the sensors are configured, the more accurate the predictions will be!',
+                        required: 'REQUIRED',
+                        optional: 'OPTIONAL',
+                        guide: 'GUIDE',
+                        categories: {
+                            mandatory: 'Required Sensors',
+                            optional: 'Optional Sensors (local hardware only!)',
+                            guides: 'Guides & Configuration'
+                        },
+                        dcWarning: {
+                            title: 'IMPORTANT: Use DC power (direct current) only!',
+                            text: 'The AI needs DC power DIRECTLY from the solar panels! NEVER use the AC output power from the inverter! DC = Input from roof, AC = Output to grid (WRONG!)'
+                        },
+                        localWarning: {
+                            title: 'IMPORTANT: Use LOCAL sensors only!',
+                            text: 'Weather apps and online services do not provide local data! Only real hardware sensors at your location are suitable for optional weather sensors.'
+                        },
+                        modal: {
+                            whatIs: 'What is it?',
+                            whyImportant: 'Why is this important?',
+                            technical: 'Technical Details',
+                            unit: 'Expected Unit',
+                            status: 'Status',
+                            entities: 'Typical Entity IDs',
+                            errors: 'Common Mistakes & Solutions',
+                            tips: 'Pro Tips',
+                            example: 'YAML Example'
+                        }
+                    }
+                };
+
+                const t = computed(() => translations[lang.value]);
+
+                // ============================================================
+                // MANDATORY SENSORS
+                // ============================================================
+                const mandatorySensors = [
+                    {
+                        key: 'kwp',
+                        icon: '☀️',
+                        mandatory: true,
+                        name: { de: 'Anlagenleistung (kWp)', en: 'System Power (kWp)' },
+                        shortDesc: { de: 'Installierte Leistung deiner Solarpanels', en: 'Installed power of your solar panels' },
+                        what: {
+                            de: `Die Anlagenleistung in Kilowatt-Peak (kWp) ist die INSTALLIERTE Leistung deiner SOLARZELLEN - NICHT des Wechselrichters!
+
+kWp = Kilowatt-Peak = maximale Leistung unter Standardbedingungen
+
+Standard-Testbedingungen (STC):
+  • 1000 W/m² Sonneneinstrahlung
+  • 25°C Zelltemperatur
+  • AM 1.5 Spektrum
+
+⚠️ WICHTIG: Die kWp-Angabe findest du auf dem Datenblatt deiner SOLARPANELS - nicht auf dem Wechselrichter-Typenschild!`,
+                            en: `The system power in Kilowatt-Peak (kWp) is the INSTALLED power of your SOLAR PANELS - NOT the inverter!
+
+kWp = Kilowatt-Peak = maximum power under standard conditions
+
+Standard Test Conditions (STC):
+  • 1000 W/m² solar irradiance
+  • 25°C cell temperature
+  • AM 1.5 spectrum
+
+⚠️ IMPORTANT: Find kWp on your SOLAR PANEL datasheet - not on the inverter nameplate!`
+                        },
+                        why: {
+                            de: `Die KI nutzt die kWp-Angabe um zu berechnen, wieviel Energie deine Anlage maximal produzieren KANN.
+
+Damit kann sie:
+  • Die theoretische Maximalproduktion berechnen
+  • Die aktuelle Effizienz (Performance Ratio) ermitteln
+  • Verschattung und Verschmutzung erkennen
+  • Realistische Prognosen erstellen`,
+                            en: `The AI uses the kWp value to calculate how much energy your system CAN produce at maximum.
+
+This allows it to:
+  • Calculate theoretical maximum production
+  • Determine current efficiency (Performance Ratio)
+  • Detect shading and soiling
+  • Create realistic forecasts`
+                        },
+                        unit: { de: 'Kilowatt-Peak (kWp)', en: 'Kilowatt-Peak (kWp)' },
+                        entities: {
+                            de: `Dies ist KEIN Sensor aus Home Assistant!
+
+Du musst die kWp deiner Anlage MANUELL eingeben.
+Die Information findest du:
+
+  📄 Auf dem Datenblatt deiner Solarmodule
+  📄 Im Angebot/Rechnung deines Installateurs
+  📄 Im Einspeisevertrag mit dem Netzbetreiber
+  📄 Auf dem Typenschild der Module (Wp pro Modul)`,
+                            en: `This is NOT a sensor from Home Assistant!
+
+You need to enter your system's kWp MANUALLY.
+Find this information:
+
+  📄 On your solar module datasheet
+  📄 In the quote/invoice from your installer
+  📄 In the feed-in contract with grid operator
+  📄 On the module nameplate (Wp per module)`
+                        },
+                        errors: {
+                            de: `❌ FEHLER 1: Wechselrichter-Leistung statt Panel-Leistung
+   FALSCH: "Mein WR hat 10 kW" → Das ist die WR-Kapazitaet!
+   RICHTIG: Summe aller Solarpanel-Leistungen
+
+❌ FEHLER 2: Verwechslung kW und kWp
+   kW = aktuelle Leistung (variabel)
+   kWp = installierte Maximalleistung (fest)
+
+❌ FEHLER 3: Wp und kWp verwechselt
+   Ein Panel hat z.B. 400 Wp = 0.4 kWp
+   10 Panels × 400 Wp = 4000 Wp = 4.0 kWp`,
+                            en: `❌ MISTAKE 1: Inverter power instead of panel power
+   WRONG: "My inverter has 10 kW" → That's inverter capacity!
+   RIGHT: Sum of all solar panel powers
+
+❌ MISTAKE 2: Confusing kW and kWp
+   kW = current power (variable)
+   kWp = installed peak power (fixed)
+
+❌ MISTAKE 3: Confusing Wp and kWp
+   One panel has e.g. 400 Wp = 0.4 kWp
+   10 panels × 400 Wp = 4000 Wp = 4.0 kWp`
+                        },
+                        tips: {
+                            de: `💡 BERECHNUNG: Anzahl Module × Wp pro Modul ÷ 1000 = kWp
+   Beispiel: 25 Module × 400 Wp = 10.000 Wp = 10,0 kWp
+
+💡 Die kWp ist IMMER hoeher als die reale Produktion
+   (wegen Temperatur, Winkel, Wolken, Verluste)
+
+💡 Typische Jahresproduktion: ca. 950 kWh pro kWp
+   → 10 kWp Anlage ≈ 9.500 kWh/Jahr`,
+                            en: `💡 CALCULATION: Number of modules × Wp per module ÷ 1000 = kWp
+   Example: 25 modules × 400 Wp = 10,000 Wp = 10.0 kWp
+
+💡 kWp is ALWAYS higher than real production
+   (due to temperature, angle, clouds, losses)
+
+💡 Typical annual production: approx. 950 kWh per kWp
+   → 10 kWp system ≈ 9,500 kWh/year`
+                        },
+                        example: {
+                            de: `BEISPIEL-BERECHNUNG:
+
+Dachseite Sued:    15 Module × 410 Wp = 6.150 Wp
+Dachseite Ost:      8 Module × 410 Wp = 3.280 Wp
+────────────────────────────────────────────────
+GESAMT:            23 Module × 410 Wp = 9.430 Wp = 9,43 kWp
+
+Bei der Einrichtung von Solar Forecast gibst du ein:
+  Gesamtleistung: 9.43 kWp`,
+                            en: `EXAMPLE CALCULATION:
+
+Roof side South:   15 modules × 410 Wp = 6,150 Wp
+Roof side East:     8 modules × 410 Wp = 3,280 Wp
+────────────────────────────────────────────────
+TOTAL:             23 modules × 410 Wp = 9,430 Wp = 9.43 kWp
+
+When setting up Solar Forecast, enter:
+  Total power: 9.43 kWp`
+                        }
+                    },
+                    {
+                        key: 'power_sensor',
+                        icon: '⚡',
+                        mandatory: true,
+                        name: { de: 'Power Sensor (DC-Leistung)', en: 'Power Sensor (DC Power)' },
+                        shortDesc: { de: 'Aktuelle DC-Leistung in Watt', en: 'Current DC power in Watts' },
+                        what: {
+                            de: `Dein Power Sensor ist das Herzstueck der Solar Forecast KI!
+
+Er zeigt die AKTUELLE DC-Leistung deiner Solaranlage in Watt an.
+Der Wert aendert sich staendig - von 0W nachts bis zum Maximum bei strahlendem Sonnenschein.
+
+⚡ ZWINGEND ERFORDERLICH: DC-Leistung (Gleichstrom)!
+
+  DC-Leistung = Leistung direkt von den Solarpanels (VOR dem Wechselrichter)
+  AC-Leistung = Leistung am Ausgang des Wechselrichters (FALSCH!)
+
+Warum DC? Die KI muss wissen, was deine Panels wirklich produzieren.
+Die AC-Leistung ist durch Wechselrichterverluste verfaelscht (~3-5% weniger).`,
+                            en: `Your Power Sensor is the heart of the Solar Forecast AI!
+
+It shows the CURRENT DC power output of your solar system in Watts.
+The value constantly changes - from 0W at night to maximum during bright sunshine.
+
+⚡ MANDATORY: DC power (direct current)!
+
+  DC power = Power directly from solar panels (BEFORE the inverter)
+  AC power = Power at inverter output (WRONG!)
+
+Why DC? The AI needs to know what your panels really produce.
+AC power is distorted by inverter losses (~3-5% less).`
+                        },
+                        why: {
+                            de: `Ohne diesen Sensor kann die KI nicht lernen!
+
+Er ist die Grundlage fuer alle Vorhersagen. Je laenger die KI deine Anlage beobachtet, desto genauer werden die Prognosen.
+
+Die DC-Leistung zeigt das ECHTE Potential deiner Panels - unverfaelscht durch Wechselrichter-Verluste oder Batterie-Ladung.`,
+                            en: `Without this sensor, the AI cannot learn!
+
+It's the foundation for all predictions. The longer the AI observes your system, the more accurate the forecasts become.
+
+DC power shows the REAL potential of your panels - undistorted by inverter losses or battery charging.`
+                        },
+                        unit: { de: 'Watt (W) - DC/Gleichstrom', en: 'Watt (W) - DC/Direct Current' },
+                        entities: {
+                            de: `Fronius:       sensor.fronius_dc_power (NICHT ac_power!)
+SMA:           sensor.sma_pv_power / sensor.sma_dc_power
+Huawei:        sensor.inverter_input_power (DC-Eingang)
+Kostal:        sensor.kostal_dc_power / sensor.kostal_pv_power
+SolarEdge:     sensor.solaredge_dc_power
+Growatt:       sensor.growatt_pv_power / sensor.growatt_pv1_power
+Enphase:       sensor.envoy_current_power_production
+Hoymiles:      sensor.hoymiles_pv_power / sensor.hoymiles_dc_power
+Deye:          sensor.deye_pv_power / sensor.deye_dc_power
+Victron:       sensor.victron_pv_power
+
+⚠️ Suche nach: "dc", "pv", "solar", "panel" im Sensornamen
+⚠️ Vermeide: "ac", "output", "grid", "export" im Sensornamen`,
+                            en: `Fronius:       sensor.fronius_dc_power (NOT ac_power!)
+SMA:           sensor.sma_pv_power / sensor.sma_dc_power
+Huawei:        sensor.inverter_input_power (DC input)
+Kostal:        sensor.kostal_dc_power / sensor.kostal_pv_power
+SolarEdge:     sensor.solaredge_dc_power
+Growatt:       sensor.growatt_pv_power / sensor.growatt_pv1_power
+Enphase:       sensor.envoy_current_power_production
+Hoymiles:      sensor.hoymiles_pv_power / sensor.hoymiles_dc_power
+Deye:          sensor.deye_pv_power / sensor.deye_dc_power
+Victron:       sensor.victron_pv_power
+
+⚠️ Look for: "dc", "pv", "solar", "panel" in sensor name
+⚠️ Avoid: "ac", "output", "grid", "export" in sensor name`
+                        },
+                        errors: {
+                            de: `❌ FEHLER 1: AC-Leistung statt DC-Leistung!
+   FALSCH: sensor.inverter_ac_power (AC = Wechselstrom-Ausgang!)
+   FALSCH: sensor.grid_export_power (das ist Netzeinspeisung!)
+   RICHTIG: sensor.inverter_dc_power / sensor.pv_power
+
+❌ FEHLER 2: Falscher Sensor gewaehlt
+   FALSCH: sensor.solar_energy_today (das ist Energie, nicht Leistung!)
+   RICHTIG: sensor.solar_power (aktuelle Leistung in Watt)
+
+❌ FEHLER 3: Sensor zeigt kW statt W
+   Manche Wechselrichter liefern Kilowatt statt Watt.
+   Pruefe: Zeigt der Sensor bei Sonne 5.2 oder 5200?
+   Bei 5.2 → Template-Sensor erstellen (× 1000)`,
+                            en: `❌ MISTAKE 1: AC power instead of DC power!
+   WRONG: sensor.inverter_ac_power (AC = alternating current output!)
+   WRONG: sensor.grid_export_power (that's grid feed-in!)
+   RIGHT: sensor.inverter_dc_power / sensor.pv_power
+
+❌ MISTAKE 2: Wrong sensor selected
+   WRONG: sensor.solar_energy_today (that's energy, not power!)
+   RIGHT: sensor.solar_power (current power in Watts)
+
+❌ MISTAKE 3: Sensor shows kW instead of W
+   Some inverters provide Kilowatts instead of Watts.
+   Check: Does sensor show 5.2 or 5200 during sunshine?
+   If 5.2 → Create template sensor (× 1000)`
+                        },
+                        tips: {
+                            de: `💡 DC-Leistung erkennst du oft an "DC", "PV" oder "Panel" im Namen
+💡 Der Wert sollte bei Sonnenschein mehrere hundert bis tausend Watt zeigen
+💡 Nachts sollte der Wert 0 oder nahe 0 sein
+💡 Oeffne Entwicklerwerkzeuge → Zustaende und beobachte den Sensor live`,
+                            en: `💡 DC power often has "DC", "PV" or "Panel" in the sensor name
+💡 The value should show several hundred to thousand Watts during sunshine
+💡 At night, the value should be 0 or close to 0
+💡 Open Developer Tools → States and watch the sensor live`
+                        },
+                        example: {
+                            de: `Falls dein Wechselrichter kW statt W liefert:
+
+template:
+  - sensor:
+      - name: "Solar DC Power Watts"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.inverter_dc_power_kw') | float * 1000 }}"
+
+Falls du mehrere MPPT-Tracker hast, addiere sie:
+
+template:
+  - sensor:
+      - name: "Total DC Power"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {{ (states('sensor.pv1_power') | float(0)) +
+             (states('sensor.pv2_power') | float(0)) }}`,
+                            en: `If your inverter provides kW instead of W:
+
+template:
+  - sensor:
+      - name: "Solar DC Power Watts"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.inverter_dc_power_kw') | float * 1000 }}"
+
+If you have multiple MPPT trackers, add them:
+
+template:
+  - sensor:
+      - name: "Total DC Power"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {{ (states('sensor.pv1_power') | float(0)) +
+             (states('sensor.pv2_power') | float(0)) }}`
+                        }
+                    },
+                    {
+                        key: 'daily_yield',
+                        icon: '📊',
+                        mandatory: true,
+                        name: { de: 'Daily Yield (DC-Tagesertrag)', en: 'Daily Yield (DC Production)' },
+                        shortDesc: { de: 'Heutige DC-Produktion in kWh', en: 'Todays DC production in kWh' },
+                        what: {
+                            de: `Der Daily Yield Sensor zeigt die HEUTE produzierte DC-Energie in kWh.
+
+⚡ ZWINGEND ERFORDERLICH: DC-Energie (Gleichstrom)!
+
+Er akkumuliert ueber den Tag:
+  Morgens:  0 kWh
+  Mittags:  ~15 kWh
+  Abends:   ~25 kWh (je nach Anlage und Wetter)
+
+⚠️ WICHTIG: Der Sensor MUSS jeden Tag um Mitternacht auf 0 zuruecksetzen!`,
+                            en: `The Daily Yield Sensor shows the DC energy produced TODAY in kWh.
+
+⚡ MANDATORY: DC energy (direct current)!
+
+It accumulates throughout the day:
+  Morning:  0 kWh
+  Noon:     ~15 kWh
+  Evening:  ~25 kWh (depending on system and weather)
+
+⚠️ IMPORTANT: The sensor MUST reset to 0 every day at midnight!`
+                        },
+                        why: {
+                            de: `Die KI nutzt diesen Sensor um zu lernen, wieviel Energie deine Anlage an verschiedenen Tagen produziert.
+
+Der taegliche Reset ist essentiell - sonst kann die KI nicht zwischen einzelnen Tagen unterscheiden!
+
+DC-Energie zeigt die ECHTE Produktion deiner Panels - ohne Wechselrichter-Verluste.`,
+                            en: `The AI uses this sensor to learn how much energy your system produces on different days.
+
+The daily reset is essential - otherwise the AI cannot distinguish between individual days!
+
+DC energy shows the REAL production of your panels - without inverter losses.`
+                        },
+                        unit: { de: 'Kilowattstunden (kWh) - DC', en: 'Kilowatt-hours (kWh) - DC' },
+                        entities: {
+                            de: `Fronius:       sensor.fronius_energy_day (DC, nicht AC!)
+SMA:           sensor.sma_pv_gen_meter / sensor.sma_daily_yield
+Huawei:        sensor.inverter_daily_yield
+Kostal:        sensor.kostal_daily_energy
+SolarEdge:     sensor.solaredge_energy_today
+Growatt:       sensor.growatt_today_generate_energy
+Enphase:       sensor.envoy_today_energy_production
+Hoymiles:      sensor.hoymiles_today_production
+
+⚠️ Suche nach: "pv", "solar", "yield", "production" im Sensornamen
+⚠️ Vermeide: "ac", "grid", "export", "feed" im Sensornamen`,
+                            en: `Fronius:       sensor.fronius_energy_day (DC, not AC!)
+SMA:           sensor.sma_pv_gen_meter / sensor.sma_daily_yield
+Huawei:        sensor.inverter_daily_yield
+Kostal:        sensor.kostal_daily_energy
+SolarEdge:     sensor.solaredge_energy_today
+Growatt:       sensor.growatt_today_generate_energy
+Enphase:       sensor.envoy_today_energy_production
+Hoymiles:      sensor.hoymiles_today_production
+
+⚠️ Look for: "pv", "solar", "yield", "production" in sensor name
+⚠️ Avoid: "ac", "grid", "export", "feed" in sensor name`
+                        },
+                        errors: {
+                            de: `❌ FEHLER 1: AC-Energie statt DC-Energie!
+   FALSCH: sensor.grid_feed_in_today (das ist Netzeinspeisung!)
+   RICHTIG: sensor.pv_energy_today / sensor.dc_energy_today
+
+❌ FEHLER 2: Sensor setzt NICHT auf 0 zurueck
+   PROBLEM: Sensor zeigt z.B. 15000 kWh (Gesamtertrag)
+   LOESUNG: Utility Meter Helper nutzen (siehe Beispiel)
+
+❌ FEHLER 3: Leistung statt Energie gewaehlt
+   FALSCH: sensor.solar_power (Leistung in Watt!)
+   RICHTIG: sensor.solar_energy_today (Energie in kWh)`,
+                            en: `❌ MISTAKE 1: AC energy instead of DC energy!
+   WRONG: sensor.grid_feed_in_today (that's grid export!)
+   RIGHT: sensor.pv_energy_today / sensor.dc_energy_today
+
+❌ MISTAKE 2: Sensor does NOT reset to 0
+   PROBLEM: Sensor shows e.g. 15000 kWh (total yield)
+   SOLUTION: Use Utility Meter Helper (see example)
+
+❌ MISTAKE 3: Power instead of energy selected
+   WRONG: sensor.solar_power (power in Watts!)
+   RIGHT: sensor.solar_energy_today (energy in kWh)`
+                        },
+                        tips: {
+                            de: `💡 DC-Energie ist die Energie VOR dem Wechselrichter (vom Dach)
+💡 Pruefe um 00:05 Uhr ob der Sensor auf 0 steht
+💡 Vergleiche den Abendwert mit deiner Wechselrichter-App
+💡 Der Wert sollte NIEMALS negativ sein`,
+                            en: `💡 DC energy is the energy BEFORE the inverter (from the roof)
+💡 Check at 00:05 if the sensor is at 0
+💡 Compare the evening value with your inverter app
+💡 The value should NEVER be negative`
+                        },
+                        example: {
+                            de: `Utility Meter fuer taeglichen Reset (in configuration.yaml):
+
+utility_meter:
+  solar_daily_yield:
+    source: sensor.solar_total_dc_energy
+    cycle: daily
+    name: "Solar DC Tagesertrag"
+
+Wichtig: 'source' muss ein Sensor mit stetig steigendem DC-Wert sein!`,
+                            en: `Utility Meter for daily reset (in configuration.yaml):
+
+utility_meter:
+  solar_daily_yield:
+    source: sensor.solar_total_dc_energy
+    cycle: daily
+    name: "Solar DC Daily Yield"
+
+Important: 'source' must be a sensor with continuously increasing DC value!`
+                        }
+                    }
+                ];
+
+                // ============================================================
+                // OPTIONAL SENSORS
+                // ============================================================
+                const optionalSensors = [
+                    {
+                        key: 'temperature',
+                        icon: '🌡️',
+                        mandatory: false,
+                        name: { de: 'Temperatur Sensor', en: 'Temperature Sensor' },
+                        shortDesc: { de: 'LOKALE Aussentemperatur in °C', en: 'LOCAL outdoor temperature in °C' },
+                        what: {
+                            de: `Ein LOKALER Aussentemperatur-Sensor an deinem Standort.
+
+Die Temperatur beeinflusst die Effizienz deiner Solarpanels erheblich:
+  • Kaelter = hoehere Effizienz (Panels moegen Kaelte!)
+  • Waermer = niedrigere Effizienz (ca. -0.4% pro °C ueber 25°C)
+
+An einem heissen Sommertag kann die Produktion allein durch die Temperatur um 10-15% niedriger sein als an einem kuehlen Tag!`,
+                            en: `A LOCAL outdoor temperature sensor at your location.
+
+Temperature significantly affects your solar panel efficiency:
+  • Colder = higher efficiency (panels love cold!)
+  • Warmer = lower efficiency (approx. -0.4% per °C above 25°C)
+
+On a hot summer day, production can be 10-15% lower than on a cool day just because of temperature!`
+                        },
+                        why: {
+                            de: `Die KI kann mit diesem Sensor den Temperatur-Effekt auf deine Panels verstehen und in die Vorhersage einbeziehen.
+
+Besonders im Sommer macht das einen grossen Unterschied!`,
+                            en: `With this sensor, the AI can understand the temperature effect on your panels and include it in predictions.
+
+This makes a big difference, especially in summer!`
+                        },
+                        unit: { de: 'Grad Celsius (°C)', en: 'Degrees Celsius (°C)' },
+                        entities: {
+                            de: `Netatmo:       sensor.netatmo_outdoor_temperature
+Ecowitt:       sensor.ecowitt_outdoor_temperature
+Aqara:         sensor.aqara_weather_temperature
+Shelly H&T:    sensor.shelly_ht_temperature (outdoor montiert)
+Homematic:     sensor.hmip_outdoor_temperature
+Zigbee:        sensor.zigbee_outdoor_temp_sensor`,
+                            en: `Netatmo:       sensor.netatmo_outdoor_temperature
+Ecowitt:       sensor.ecowitt_outdoor_temperature
+Aqara:         sensor.aqara_weather_temperature
+Shelly H&T:    sensor.shelly_ht_temperature (mounted outdoor)
+Homematic:     sensor.hmip_outdoor_temperature
+Zigbee:        sensor.zigbee_outdoor_temp_sensor`
+                        },
+                        errors: {
+                            de: `❌ FEHLER 1: Innentemperatur statt Aussentemperatur
+   FALSCH: sensor.living_room_temperature
+   RICHTIG: sensor.outdoor_temperature
+
+❌ FEHLER 2: Wetter-App statt lokalem Sensor
+   FALSCH: sensor.openweathermap_temperature
+   RICHTIG: Nur echte Hardware-Sensoren!`,
+                            en: `❌ MISTAKE 1: Indoor temperature instead of outdoor
+   WRONG: sensor.living_room_temperature
+   RIGHT: sensor.outdoor_temperature
+
+❌ MISTAKE 2: Weather app instead of local sensor
+   WRONG: sensor.openweathermap_temperature
+   RIGHT: Only real hardware sensors!`
+                        },
+                        tips: {
+                            de: `💡 Platziere den Sensor im Schatten, nicht in der Sonne
+💡 Guenstige Zigbee/WiFi Sensoren (Aqara, Shelly) funktionieren gut`,
+                            en: `💡 Place the sensor in shade, not in direct sunlight
+💡 Cheap Zigbee/WiFi sensors (Aqara, Shelly) work well`
+                        },
+                        example: { de: 'Kein Template noetig - verwende den Sensor direkt!', en: 'No template needed - use the sensor directly!' }
+                    },
+                    {
+                        key: 'solar_radiation',
+                        icon: '☀️',
+                        mandatory: false,
+                        name: { de: 'Solarstrahlung (W/m²)', en: 'Solar Radiation (W/m²)' },
+                        shortDesc: { de: 'DER BESTE optionale Sensor!', en: 'THE BEST optional sensor!' },
+                        what: {
+                            de: `Ein LOKALER Solar Radiation Sensor - der BESTE optionale Sensor!
+
+Er misst direkt, wieviel Sonnenenergie auf eine Flaeche trifft:
+  • 0 W/m² = Nacht
+  • 200-400 W/m² = Bedeckt
+  • 600-800 W/m² = Leicht bewoelkt
+  • 800-1000 W/m² = Volle Sonne
+
+Besser als Lux, da direkt in Energie-Einheiten gemessen wird!`,
+                            en: `A LOCAL Solar Radiation Sensor - the BEST optional sensor!
+
+It directly measures how much solar energy hits a surface:
+  • 0 W/m² = Night
+  • 200-400 W/m² = Overcast
+  • 600-800 W/m² = Partly cloudy
+  • 800-1000 W/m² = Full sun
+
+Better than Lux because it's measured directly in energy units!`
+                        },
+                        why: {
+                            de: `Dieser Sensor misst GENAU das, was deine Panels empfangen!
+Die KI kann damit extrem genaue Vorhersagen treffen.`,
+                            en: `This sensor measures EXACTLY what your panels receive!
+The AI can make extremely accurate predictions with this.`
+                        },
+                        unit: { de: 'Watt pro Quadratmeter (W/m²)', en: 'Watts per square meter (W/m²)' },
+                        entities: {
+                            de: `Ecowitt:       sensor.ecowitt_solar_radiation
+Davis:         sensor.davis_solar_radiation
+Bresser:       sensor.bresser_uv_solar_radiation
+ESP/DIY:       sensor.esp_solar_radiation`,
+                            en: `Ecowitt:       sensor.ecowitt_solar_radiation
+Davis:         sensor.davis_solar_radiation
+Bresser:       sensor.bresser_uv_solar_radiation
+ESP/DIY:       sensor.esp_solar_radiation`
+                        },
+                        errors: {
+                            de: `❌ Sensor muss HORIZONTAL montiert sein
+❌ Sensor verschmutzt - regelmaessig reinigen`,
+                            en: `❌ Sensor must be mounted HORIZONTALLY
+❌ Sensor dirty - clean regularly`
+                        },
+                        tips: {
+                            de: `💡 DER beste optionale Sensor fuer Solar Forecast!
+💡 Ecowitt Wetterstationen haben diesen Sensor oft eingebaut
+💡 Prioritaet: Solar Radiation > Lux > kein Lichtsensor`,
+                            en: `💡 THE best optional sensor for Solar Forecast!
+💡 Ecowitt weather stations often have this sensor built in
+💡 Priority: Solar Radiation > Lux > no light sensor`
+                        },
+                        example: { de: 'Kein Template noetig - verwende den Sensor direkt!', en: 'No template needed - use the sensor directly!' }
+                    },
+                    {
+                        key: 'lux',
+                        icon: '💡',
+                        mandatory: false,
+                        name: { de: 'Lichtstaerke (Lux)', en: 'Illuminance (Lux)' },
+                        shortDesc: { de: 'LOKALE Helligkeit am Standort', en: 'LOCAL brightness at location' },
+                        what: {
+                            de: `Ein LOKALER Lux-Sensor misst die Helligkeit am Standort.
+
+Lux korreliert direkt mit der moeglichen Solarproduktion:
+  • 0 lux = Nacht
+  • 10.000 lux = Bedeckter Himmel
+  • 50.000 lux = Leicht bewoelkt
+  • 100.000+ lux = Volle Sonne
+
+Das ist einer der wertvollsten optionalen Sensoren!`,
+                            en: `A LOCAL lux sensor measures brightness at your location.
+
+Lux correlates directly with possible solar production:
+  • 0 lux = Night
+  • 10,000 lux = Overcast sky
+  • 50,000 lux = Partly cloudy
+  • 100,000+ lux = Full sun
+
+This is one of the most valuable optional sensors!`
+                        },
+                        why: {
+                            de: `Die KI kann mit einem Lux-Sensor die aktuelle Lichtsituation direkt messen - viel besser als Wetterdaten!
+Ein lokaler Lux-Sensor "sieht" auch lokale Wolken, Nebel oder Schatten.`,
+                            en: `With a lux sensor, the AI can directly measure the current light situation - much better than weather data!
+A local lux sensor also "sees" local clouds, fog, or shadows.`
+                        },
+                        unit: { de: 'Lux (lx)', en: 'Lux (lx)' },
+                        entities: {
+                            de: `Xiaomi/Aqara:  sensor.aqara_illuminance
+Philips Hue:   sensor.hue_outdoor_motion_illuminance
+Ecowitt:       sensor.ecowitt_solar_lux
+Homematic:     sensor.hmip_illuminance
+ESP/DIY:       sensor.bh1750_illuminance`,
+                            en: `Xiaomi/Aqara:  sensor.aqara_illuminance
+Philips Hue:   sensor.hue_outdoor_motion_illuminance
+Ecowitt:       sensor.ecowitt_solar_lux
+Homematic:     sensor.hmip_illuminance
+ESP/DIY:       sensor.bh1750_illuminance`
+                        },
+                        errors: {
+                            de: `❌ FEHLER 1: Indoor-Sensor statt Outdoor
+   Der Sensor MUSS draussen oder am Fenster mit freier Sicht sein!
+
+❌ FEHLER 2: Sensor im Schatten platziert
+   Der Sensor sollte moeglichst viel Himmel "sehen".`,
+                            en: `❌ MISTAKE 1: Indoor sensor instead of outdoor
+   The sensor MUST be outside or at a window with clear sky view!
+
+❌ MISTAKE 2: Sensor placed in shade
+   The sensor should "see" as much sky as possible.`
+                        },
+                        tips: {
+                            de: `💡 Wenn moeglich: Solar Radiation (W/m²) ist noch besser als Lux
+💡 Guenstige Zigbee-Sensoren (Aqara, Xiaomi) funktionieren gut
+💡 Platziere den Sensor mit freier Sicht zum Himmel`,
+                            en: `💡 If possible: Solar Radiation (W/m²) is even better than Lux
+💡 Cheap Zigbee sensors (Aqara, Xiaomi) work well
+💡 Place the sensor with clear view to the sky`
+                        },
+                        example: { de: 'Kein Template noetig - verwende den Sensor direkt!', en: 'No template needed - use the sensor directly!' }
+                    },
+                    {
+                        key: 'solar_to_battery',
+                        icon: '🔋',
+                        mandatory: false,
+                        name: { de: 'Solar → Batterie', en: 'Solar → Battery' },
+                        shortDesc: { de: 'Wichtig fuer Zero-Export Anlagen!', en: 'Important for Zero-Export systems!' },
+                        what: {
+                            de: `Dieser Sensor zeigt, wieviel Solarstrom DIREKT in die Batterie fliesst.
+
+⚡ WICHTIG fuer Zero-Export-Anlagen!
+
+Bei Zero-Export wird ueberschuessiger Strom nicht ins Netz eingespeist, sondern gedrosselt. Der Power-Sensor zeigt dann NICHT die echte potentielle Produktion!
+
+Mit diesem Sensor kann die KI berechnen:
+  Echte Produktion = Power + Solar-zu-Batterie
+
+So lernt die KI das WAHRE Potential deiner Anlage!`,
+                            en: `This sensor shows how much solar power flows DIRECTLY into the battery.
+
+⚡ IMPORTANT for Zero-Export systems!
+
+In Zero-Export, excess power is not fed to the grid, but throttled. The power sensor then does NOT show the real potential production!
+
+With this sensor, the AI can calculate:
+  Real Production = Power + Solar-to-Battery
+
+This way the AI learns the TRUE potential of your system!`
+                        },
+                        why: {
+                            de: `Ohne diesen Sensor unterschaetzt die KI bei Zero-Export-Anlagen die tatsaechliche Produktionskapazitaet erheblich!
+
+Die KI sieht nur die gedrosselte Leistung und denkt, das sei das Maximum.`,
+                            en: `Without this sensor, the AI significantly underestimates the actual production capacity of Zero-Export systems!
+
+The AI only sees the throttled power and thinks that's the maximum.`
+                        },
+                        unit: { de: 'Watt (W)', en: 'Watt (W)' },
+                        entities: {
+                            de: `Fronius:       sensor.fronius_power_battery_charge
+SMA:           sensor.sma_battery_charging_power
+Huawei:        sensor.battery_charge_power
+Kostal:        sensor.kostal_battery_charge_power
+SolarEdge:     sensor.solaredge_battery_power (positiv = laden)
+Growatt:       sensor.growatt_battery_charge_power
+Victron:       sensor.victron_battery_power`,
+                            en: `Fronius:       sensor.fronius_power_battery_charge
+SMA:           sensor.sma_battery_charging_power
+Huawei:        sensor.battery_charge_power
+Kostal:        sensor.kostal_battery_charge_power
+SolarEdge:     sensor.solaredge_battery_power (positive = charging)
+Growatt:       sensor.growatt_battery_charge_power
+Victron:       sensor.victron_battery_power`
+                        },
+                        errors: {
+                            de: `❌ FEHLER 1: Batterie-Entladung statt Ladung
+   FALSCH: sensor.battery_discharge_power
+   RICHTIG: sensor.battery_charge_power (Laden aus Solar)
+
+❌ FEHLER 2: Gesamte Batterieleistung statt nur Solar
+   Du brauchst NUR den Anteil, der von Solar kommt!`,
+                            en: `❌ MISTAKE 1: Battery discharge instead of charge
+   WRONG: sensor.battery_discharge_power
+   RIGHT: sensor.battery_charge_power (charging from solar)
+
+❌ MISTAKE 2: Total battery power instead of solar only
+   You need ONLY the part that comes from solar!`
+                        },
+                        tips: {
+                            de: `💡 Nur relevant wenn du eine Batterie UND Zero-Export hast
+💡 Bei Einspeisung ins Netz ist dieser Sensor weniger wichtig
+💡 Der Wert sollte bei Sonnenschein und voller Batterie = 0 sein`,
+                            en: `💡 Only relevant if you have a battery AND Zero-Export
+💡 With grid feed-in, this sensor is less important
+💡 Value should be 0 during sunshine when battery is full`
+                        },
+                        example: {
+                            de: `Falls dein Sensor negative Werte fuer Laden zeigt:
+
+template:
+  - sensor:
+      - name: "Solar zu Batterie"
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set val = states('sensor.battery_power') | float(0) %}
+          {{ val | abs if val < 0 else 0 }}`,
+                            en: `If your sensor shows negative values for charging:
+
+template:
+  - sensor:
+      - name: "Solar to Battery"
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set val = states('sensor.battery_power') | float(0) %}
+          {{ val | abs if val < 0 else 0 }}`
+                        }
+                    },
+                    {
+                        key: 'humidity',
+                        icon: '💧',
+                        mandatory: false,
+                        name: { de: 'Luftfeuchtigkeit', en: 'Humidity' },
+                        shortDesc: { de: 'LOKALE Luftfeuchtigkeit in %', en: 'LOCAL humidity in %' },
+                        what: {
+                            de: `Ein LOKALER Luftfeuchtigkeitssensor an deinem Standort.
+
+Hohe Luftfeuchtigkeit kann auf:
+  • Nebel und Dunst hindeuten
+  • Erhoehte Wolkenbildung
+  • Reduzierte Sonneneinstrahlung`,
+                            en: `A LOCAL humidity sensor at your location.
+
+High humidity can indicate:
+  • Fog and haze
+  • Increased cloud formation
+  • Reduced solar irradiance`
+                        },
+                        why: {
+                            de: `Zusammen mit Temperatur hilft Luftfeuchtigkeit der KI, lokale Wetterbedingungen besser zu verstehen - besonders bei Nebel oder Dunst am Morgen.`,
+                            en: `Together with temperature, humidity helps the AI better understand local weather conditions - especially for fog or haze in the morning.`
+                        },
+                        unit: { de: 'Prozent (%)', en: 'Percent (%)' },
+                        entities: {
+                            de: `Netatmo:       sensor.netatmo_outdoor_humidity
+Ecowitt:       sensor.ecowitt_outdoor_humidity
+Aqara:         sensor.aqara_weather_humidity
+Shelly H&T:    sensor.shelly_ht_humidity`,
+                            en: `Netatmo:       sensor.netatmo_outdoor_humidity
+Ecowitt:       sensor.ecowitt_outdoor_humidity
+Aqara:         sensor.aqara_weather_humidity
+Shelly H&T:    sensor.shelly_ht_humidity`
+                        },
+                        errors: {
+                            de: `❌ FEHLER: Wetter-App statt lokalem Sensor
+   FALSCH: sensor.openweathermap_humidity
+   RICHTIG: Nur echte Hardware-Sensoren!`,
+                            en: `❌ MISTAKE: Weather app instead of local sensor
+   WRONG: sensor.openweathermap_humidity
+   RIGHT: Only real hardware sensors!`
+                        },
+                        tips: {
+                            de: `💡 Meist zusammen mit Temperatursensor in einem Geraet
+💡 Werte ueber 90% deuten oft auf Nebel hin`,
+                            en: `💡 Usually combined with temperature sensor in one device
+💡 Values above 90% often indicate fog`
+                        },
+                        example: { de: 'Kein Template noetig!', en: 'No template needed!' }
+                    },
+                    {
+                        key: 'wind',
+                        icon: '💨',
+                        mandatory: false,
+                        name: { de: 'Windgeschwindigkeit', en: 'Wind Speed' },
+                        shortDesc: { de: 'LOKALER Windmesser', en: 'LOCAL wind meter' },
+                        what: {
+                            de: `Ein LOKALER Windmesser an deinem Standort.
+
+Wind beeinflusst die Solarproduktion:
+  • Kuehlt die Panels → hoehere Effizienz
+  • Kann Wolken schnell vorbeiziehen lassen`,
+                            en: `A LOCAL wind meter at your location.
+
+Wind affects solar production:
+  • Cools panels → higher efficiency
+  • Can move clouds quickly`
+                        },
+                        why: {
+                            de: `Die KI kann mit diesem Sensor den Kuehleffekt auf die Panels besser einschaetzen. An windigen Tagen koennen Panels trotz hoher Temperaturen effizienter arbeiten.`,
+                            en: `With this sensor, the AI can better estimate the cooling effect on panels. On windy days, panels can work more efficiently despite high temperatures.`
+                        },
+                        unit: { de: 'm/s oder km/h', en: 'm/s or km/h' },
+                        entities: {
+                            de: `Ecowitt:       sensor.ecowitt_wind_speed
+Netatmo:       sensor.netatmo_wind_strength
+Davis:         sensor.davis_wind_speed`,
+                            en: `Ecowitt:       sensor.ecowitt_wind_speed
+Netatmo:       sensor.netatmo_wind_strength
+Davis:         sensor.davis_wind_speed`
+                        },
+                        errors: {
+                            de: `❌ Windboeen statt Durchschnitt - nutze den Durchschnittswert!
+❌ Wetter-App statt lokalem Sensor`,
+                            en: `❌ Wind gusts instead of average - use the average value!
+❌ Weather app instead of local sensor`
+                        },
+                        tips: {
+                            de: `💡 Weniger wichtig als Temperatur und Lux
+💡 Windmesser sollte moeglichst frei stehen`,
+                            en: `💡 Less important than temperature and lux
+💡 Wind meter should be placed freely`
+                        },
+                        example: { de: 'Kein Template noetig!', en: 'No template needed!' }
+                    },
+                    {
+                        key: 'consumption',
+                        icon: '🏠',
+                        mandatory: false,
+                        name: { de: 'Hausverbrauch', en: 'House Consumption' },
+                        shortDesc: { de: 'Aktueller Stromverbrauch', en: 'Current power consumption' },
+                        what: {
+                            de: `Der Hausverbrauch-Sensor zeigt den aktuellen Stromverbrauch deines Haushalts.
+
+  Solarproduktion = Eigenverbrauch + Einspeisung + Batterieladen
+
+Mit diesem Sensor kann die KI verstehen, wie dein Verbrauchsmuster aussieht.`,
+                            en: `The house consumption sensor shows the current power consumption of your household.
+
+  Solar Production = Self-consumption + Grid Export + Battery
+
+With this sensor, the AI can understand your consumption patterns.`
+                        },
+                        why: {
+                            de: `Die KI kann mit diesem Sensor:
+  • Eigenverbrauchsquoten berechnen
+  • Optimale Zeiten fuer Grossverbraucher vorschlagen`,
+                            en: `With this sensor, the AI can:
+  • Calculate self-consumption rates
+  • Suggest optimal times for heavy loads`
+                        },
+                        unit: { de: 'Watt (W)', en: 'Watt (W)' },
+                        entities: {
+                            de: `Shelly EM/3EM: sensor.shelly_em_channel_power
+Fronius:       sensor.fronius_house_load
+SMA:           sensor.sma_house_consumption
+Huawei:        sensor.house_consumption_power`,
+                            en: `Shelly EM/3EM: sensor.shelly_em_channel_power
+Fronius:       sensor.fronius_house_load
+SMA:           sensor.sma_house_consumption
+Huawei:        sensor.house_consumption_power`
+                        },
+                        errors: {
+                            de: `❌ Nur einzelne Phasen statt Gesamtverbrauch
+   Bei 3-Phasen-Anschluss alle Phasen addieren!`,
+                            en: `❌ Single phases instead of total consumption
+   With 3-phase connection, add all phases!`
+                        },
+                        tips: {
+                            de: `💡 Shelly EM oder 3EM sind guenstige und genaue Loesungen
+💡 Typischer Grundverbrauch: 200-500W`,
+                            en: `💡 Shelly EM or 3EM are affordable and accurate solutions
+💡 Typical base load: 200-500W`
+                        },
+                        example: { de: 'Kein Template noetig!', en: 'No template needed!' }
+                    }
+                ];
+
+                // ============================================================
+                // GUIDES
+                // ============================================================
+                const guides = [
+                    {
+                        key: 'panel_groups',
+                        icon: '📐',
+                        name: { de: 'Panelgruppen einrichten', en: 'Setting up Panel Groups' },
+                        shortDesc: { de: 'Ost-West, verschiedene Neigungen etc.', en: 'East-West, different tilts etc.' },
+                        content: {
+                            de: `PANELGRUPPEN EINRICHTEN
+═══════════════════════════════════════════════════════════════
+
+Was sind Panelgruppen?
+──────────────────────
+Wenn deine Solarpanels in verschiedene Richtungen zeigen oder
+unterschiedliche Neigungen haben, musst du Panelgruppen anlegen.
+
+Die KI berechnet fuer jede Gruppe separat, wie die Sonneneinstrahlung ist.
+
+Wann brauchst du mehrere Gruppen?
+─────────────────────────────────
+• Panels auf verschiedenen Dachseiten (z.B. Ost + West)
+• Panels mit unterschiedlicher Neigung
+• Panels mit unterschiedlicher Leistung pro Seite
+
+MINDESTENS 1 PANEL-GRUPPE ERFORDERLICH (max. 4)
+
+═══════════════════════════════════════════════════════════════
+EINGABE-FORMAT:
+═══════════════════════════════════════════════════════════════
+
+  Leistung(Wp) / Azimut(°) / Neigung(°) / Tages-kWh-Sensor
+
+BEISPIELE:
+  Eine Gruppe:        5000/180/30/sensor.pv_energy_today
+  Zwei Gruppen:       2500/90/15/sensor.pv_ost, 2500/270/15/sensor.pv_west
+
+═══════════════════════════════════════════════════════════════
+PARAMETER ERKLAERUNG
+═══════════════════════════════════════════════════════════════
+
+1. LEISTUNG (Wp)
+   Die installierte Leistung dieser Gruppe in WATT-PEAK
+   ⚠️ In Wp eingeben, nicht kWp! (5 kWp = 5000 Wp)
+
+2. AZIMUT (°) - Himmelsrichtung
+   0° = Norden
+   90° = Osten
+   180° = Sueden
+   270° = Westen
+
+3. NEIGUNG (°)
+   0° = Flach (horizontal)
+   30-35° = Optimal fuer Deutschland
+   90° = Senkrecht (Fassade)
+
+4. TAGES-kWh-SENSOR (Pflicht fuer Gruppen-Learning!)
+   Ein Sensor, der die DC-Tagesproduktion dieser Gruppe zeigt.
+   MUSS um Mitternacht auf 0 zuruecksetzen!
+
+═══════════════════════════════════════════════════════════════
+BEISPIEL: Ost-West-Anlage
+═══════════════════════════════════════════════════════════════
+
+Du hast 5 kWp Ost und 5 kWp West, beide mit 20° Neigung.
+
+  Gruppe 1 (Ost):
+    Leistung: 5000 Wp
+    Azimut:   90° (Osten)
+    Neigung:  20°
+    Sensor:   sensor.pv_ost_daily_yield
+
+  Gruppe 2 (West):
+    Leistung: 5000 Wp
+    Azimut:   270° (Westen)
+    Neigung:  20°
+    Sensor:   sensor.pv_west_daily_yield
+
+PROFI-TIPPS:
+💡 Nutze Google Maps oder eine Kompass-App um den Azimut zu bestimmen
+💡 Die Neigung kannst du mit einer Wasserwaagen-App messen
+💡 Separate Energie-Sensoren pro Gruppe verbessern die Vorhersage deutlich`,
+                            en: `SETTING UP PANEL GROUPS
+═══════════════════════════════════════════════════════════════
+
+What are Panel Groups?
+──────────────────────
+If your solar panels face different directions or have different
+tilts, you need to create panel groups.
+
+The AI calculates solar irradiance separately for each group.
+
+When do you need multiple groups?
+─────────────────────────────────
+• Panels on different roof sides (e.g., East + West)
+• Panels with different tilts
+• Panels with different power per side
+
+AT LEAST 1 PANEL GROUP REQUIRED (max. 4)
+
+═══════════════════════════════════════════════════════════════
+INPUT FORMAT:
+═══════════════════════════════════════════════════════════════
+
+  Power(Wp) / Azimuth(°) / Tilt(°) / Daily-kWh-Sensor
+
+EXAMPLES:
+  One group:          5000/180/30/sensor.pv_energy_today
+  Two groups:         2500/90/15/sensor.pv_east, 2500/270/15/sensor.pv_west
+
+═══════════════════════════════════════════════════════════════
+PARAMETER EXPLANATION
+═══════════════════════════════════════════════════════════════
+
+1. POWER (Wp)
+   The installed power of this group in WATT-PEAK
+   ⚠️ Enter in Wp, not kWp! (5 kWp = 5000 Wp)
+
+2. AZIMUTH (°) - Compass direction
+   0° = North
+   90° = East
+   180° = South
+   270° = West
+
+3. TILT (°)
+   0° = Flat (horizontal)
+   30-35° = Optimal for mid-latitudes
+   90° = Vertical (facade)
+
+4. DAILY-kWh-SENSOR (Required for group learning!)
+   A sensor showing DC daily production of this group.
+   MUST reset to 0 at midnight!
+
+═══════════════════════════════════════════════════════════════
+EXAMPLE: East-West System
+═══════════════════════════════════════════════════════════════
+
+You have 5 kWp East and 5 kWp West, both with 20° tilt.
+
+  Group 1 (East):
+    Power:   5000 Wp
+    Azimuth: 90° (East)
+    Tilt:    20°
+    Sensor:  sensor.pv_east_daily_yield
+
+  Group 2 (West):
+    Power:   5000 Wp
+    Azimuth: 270° (West)
+    Tilt:    20°
+    Sensor:  sensor.pv_west_daily_yield
+
+PRO TIPS:
+💡 Use Google Maps or a compass app to determine azimuth
+💡 You can measure tilt with a level app on your phone
+💡 Separate energy sensors per group significantly improve predictions`
+                        }
+                    },
+                    {
+                        key: 'config_options',
+                        icon: '⚙️',
+                        name: { de: 'Konfigurations-Optionen', en: 'Configuration Options' },
+                        shortDesc: { de: 'KI-Algorithmus, Batterie, Zero-Export etc.', en: 'AI algorithm, battery, Zero-Export etc.' },
+                        content: {
+                            de: `KONFIGURATIONS-OPTIONEN
+═══════════════════════════════════════════════════════════════
+
+Einstellungen → Geraete & Dienste → Solar Forecast → Konfigurieren
+
+ALLGEMEINE OPTIONEN
+═══════════════════════════════════════════════════════════════
+
+UPDATE-INTERVALL
+  Wie oft die Integration Daten aktualisiert (in Sekunden)
+  Standard: 3600 (1 Stunde)
+  Minimum: 300 (5 Minuten)
+  💡 Niedrigere Werte = mehr Aktualitaet, aber mehr Systemlast
+
+DIAGNOSE-SENSOREN
+  Aktiviert zusaetzliche Sensoren fuer Debugging und Analyse:
+  • KI-Metriken (RMSE, Genauigkeit)
+  • Wetter-Trends
+  • System-Status Details
+  💡 Fuer normale Nutzung nicht erforderlich
+
+STUENDLICHE VORHERSAGE
+  Aktiviert einen Sensor mit stuendlicher Vorhersage
+  💡 Nuetzlich fuer Automatisierungen (z.B. Waschmaschine starten)
+
+KI-OPTIONEN
+═══════════════════════════════════════════════════════════════
+
+KI-ALGORITHMUS
+  • AUTO (empfohlen) - Waehlt automatisch den besten Algorithmus
+  • RIDGE - Schneller, weniger Ressourcen, gut fuer einfache Anlagen
+  • TINY LSTM - Genauer bei komplexen Wettermustern, braucht mehr Daten
+
+LERN-BACKUP
+  Sichert die gelernten KI-Daten in /share/
+  💡 Empfohlen fuer Docker/Container-Installationen
+
+BATTERIE & ZERO-EXPORT
+═══════════════════════════════════════════════════════════════
+
+HAT BATTERIE
+  Aktiviere wenn du einen Batteriespeicher hast
+
+ZERO-EXPORT MODUS
+  Aktiviere wenn deine Anlage NICHT ins Netz einspeist
+  Die KI braucht dann den "Solar-zu-Batterie" Sensor!
+  💡 Nur relevant wenn Einspeisung = 0 kW am Zaehler
+
+BENACHRICHTIGUNGEN
+═══════════════════════════════════════════════════════════════
+
+STARTUP-BENACHRICHTIGUNG
+  Zeigt eine Benachrichtigung wenn die Integration startet
+
+VORHERSAGE-BENACHRICHTIGUNG
+  Benachrichtigt bei wichtigen Vorhersage-Updates
+
+LERN-BENACHRICHTIGUNGEN
+  Benachrichtigt wenn die KI mit dem Lernen beginnt oder fertig ist
+  💡 Hilfreich um den Lernfortschritt zu verfolgen
+
+WETTER-API (OPTIONAL)
+═══════════════════════════════════════════════════════════════
+
+PIRATE WEATHER API KEY
+  Optional: API-Key fuer Pirate Weather
+  Kostenlos: https://pirateweather.net
+  💡 Nicht zwingend - Open-Meteo funktioniert sehr gut!`,
+                            en: `CONFIGURATION OPTIONS
+═══════════════════════════════════════════════════════════════
+
+Settings → Devices & Services → Solar Forecast → Configure
+
+GENERAL OPTIONS
+═══════════════════════════════════════════════════════════════
+
+UPDATE INTERVAL
+  How often the integration updates data (in seconds)
+  Default: 3600 (1 hour)
+  Minimum: 300 (5 minutes)
+  💡 Lower values = more current, but more system load
+
+DIAGNOSTIC SENSORS
+  Enables additional sensors for debugging and analysis:
+  • AI metrics (RMSE, accuracy)
+  • Weather trends
+  • System status details
+  💡 Not required for normal use
+
+HOURLY FORECAST
+  Enables a sensor with hourly forecast
+  💡 Useful for automations (e.g., start washing machine)
+
+AI OPTIONS
+═══════════════════════════════════════════════════════════════
+
+AI ALGORITHM
+  • AUTO (recommended) - Automatically chooses the best algorithm
+  • RIDGE - Faster, less resources, good for simple systems
+  • TINY LSTM - More accurate for complex weather patterns, needs more data
+
+LEARNING BACKUP
+  Backs up learned AI data to /share/
+  💡 Recommended for Docker/container installations
+
+BATTERY & ZERO-EXPORT
+═══════════════════════════════════════════════════════════════
+
+HAS BATTERY
+  Enable if you have a battery storage system
+
+ZERO-EXPORT MODE
+  Enable if your system does NOT feed into the grid
+  The AI needs the "Solar-to-Battery" sensor!
+  💡 Only relevant if grid export = 0 kW at meter
+
+NOTIFICATIONS
+═══════════════════════════════════════════════════════════════
+
+STARTUP NOTIFICATION
+  Shows a notification when the integration starts
+
+FORECAST NOTIFICATION
+  Notifies on important forecast updates
+
+LEARNING NOTIFICATIONS
+  Notifies when AI starts or finishes learning
+  💡 Helpful to track learning progress
+
+WEATHER API (OPTIONAL)
+═══════════════════════════════════════════════════════════════
+
+PIRATE WEATHER API KEY
+  Optional: API key for Pirate Weather
+  Free at: https://pirateweather.net
+  💡 Not required - Open-Meteo works great!`
+                        }
+                    },
+                    {
+                        key: 'reset',
+                        icon: '🔄',
+                        name: { de: 'Zuruecksetzen & Fehlerbehebung', en: 'Reset & Troubleshooting' },
+                        shortDesc: { de: 'KI-Daten loeschen, Neustart', en: 'Delete AI data, restart' },
+                        content: {
+                            de: `ZURUECKSETZEN & FEHLERBEHEBUNG
+═══════════════════════════════════════════════════════════════
+
+WANN IST EIN RESET SINNVOLL?
+═══════════════════════════════════════════════════════════════
+
+⚠️ Die KI hat mit falschen Sensordaten gelernt
+⚠️ Du hast die Panelkonfiguration grundlegend geaendert
+⚠️ Die Vorhersagen sind dauerhaft voellig falsch
+⚠️ Du siehst seltsame Werte oder Fehler in den Sensoren
+⚠️ Nach einem groesseren Update der Integration
+
+RESET DURCHFUEHREN - SCHRITT FUER SCHRITT
+═══════════════════════════════════════════════════════════════
+
+SCHRITT 1: Home Assistant stoppen
+─────────────────────────────────
+  Einstellungen → System → Neustart → Home Assistant stoppen
+
+  Oder ueber die Kommandozeile:
+  ha core stop
+
+SCHRITT 2: Datenordner loeschen
+─────────────────────────────────
+  Loesche den kompletten Ordner:
+
+    config/solar_forecast_ml/
+
+  So erreichst du den Ordner:
+
+  OPTION A: SMB/Samba Plugin (empfohlen)
+    1. Installiere das "Samba share" Add-on
+    2. Verbinde dich per Netzwerk: \\\\homeassistant\\config
+    3. Loesche den Ordner "solar_forecast_ml"
+
+  OPTION B: File Editor Add-on
+    1. Oeffne das File Editor Add-on
+    2. Navigiere zu /config/solar_forecast_ml/
+    3. Loesche alle Dateien und den Ordner
+
+  OPTION C: SSH/Terminal
+    rm -rf /config/solar_forecast_ml/
+
+SCHRITT 3: Home Assistant neustarten
+─────────────────────────────────────
+  Starte Home Assistant ueber den ROTEN Button:
+  Einstellungen → System → Neustart → Home Assistant neu starten
+
+  ⚠️ WICHTIG: Nutze den ROTEN Button (kompletter Neustart)!
+  NICHT den gelben Button (das ist nur Reload)!
+
+SCHRITT 4: Warten
+─────────────────
+  Nach dem Neustart: WARTE MINDESTENS 10 MINUTEN
+
+  Die Integration braucht Zeit um:
+  • Neue Datenstrukturen anzulegen
+  • Wetterdaten zu laden
+  • Ersten Lernzyklus zu starten
+
+ALTERNATIVE: Sanfter Reset
+═══════════════════════════════════════════════════════════════
+
+Falls nur die gelernten Gewichte zurueckgesetzt werden sollen:
+
+  Loesche NUR diese Dateien:
+    config/solar_forecast_ml/ai/learned_weights.json
+    config/solar_forecast_ml/ai/seasonal.json
+
+  Die historischen Daten bleiben erhalten und die KI
+  lernt schneller neu.`,
+                            en: `RESET & TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════
+
+WHEN IS A RESET USEFUL?
+═══════════════════════════════════════════════════════════════
+
+⚠️ The AI learned with wrong sensor data
+⚠️ You fundamentally changed panel configuration
+⚠️ Predictions are permanently completely wrong
+⚠️ You see strange values or errors in sensors
+⚠️ After a major integration update
+
+PERFORMING RESET - STEP BY STEP
+═══════════════════════════════════════════════════════════════
+
+STEP 1: Stop Home Assistant
+───────────────────────────
+  Settings → System → Restart → Stop Home Assistant
+
+  Or via command line:
+  ha core stop
+
+STEP 2: Delete data folder
+──────────────────────────
+  Delete the complete folder:
+
+    config/solar_forecast_ml/
+
+  How to access the folder:
+
+  OPTION A: SMB/Samba Plugin (recommended)
+    1. Install the "Samba share" add-on
+    2. Connect via network: \\\\homeassistant\\config
+    3. Delete the folder "solar_forecast_ml"
+
+  OPTION B: File Editor Add-on
+    1. Open the File Editor add-on
+    2. Navigate to /config/solar_forecast_ml/
+    3. Delete all files and the folder
+
+  OPTION C: SSH/Terminal
+    rm -rf /config/solar_forecast_ml/
+
+STEP 3: Restart Home Assistant
+──────────────────────────────
+  Restart Home Assistant using the RED button:
+  Settings → System → Restart → Restart Home Assistant
+
+  ⚠️ IMPORTANT: Use the RED button (complete restart)!
+  NOT the yellow button (that's just Reload)!
+
+STEP 4: Wait
+────────────
+  After restart: WAIT AT LEAST 10 MINUTES
+
+  The integration needs time to:
+  • Create new data structures
+  • Load weather data
+  • Start first learning cycle
+
+ALTERNATIVE: Soft Reset
+═══════════════════════════════════════════════════════════════
+
+If only learned weights should be reset:
+
+  Delete ONLY these files:
+    config/solar_forecast_ml/ai/learned_weights.json
+    config/solar_forecast_ml/ai/seasonal.json
+
+  Historical data remains and the AI
+  learns faster again.`
+                        }
+                    }
+                ];
+
+                const openModal = (item, type) => {
+                    selectedItem.value = item;
+                    modalType.value = type;
+                    document.body.style.overflow = 'hidden';
+                };
+
+                const closeModal = () => {
+                    selectedItem.value = null;
+                    modalType.value = null;
+                    document.body.style.overflow = '';
+                };
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && selectedItem.value) {
+                        closeModal();
+                    }
+                });
+
+                return {
+                    lang,
+                    t,
+                    selectedItem,
+                    modalType,
+                    mandatorySensors,
+                    optionalSensors,
+                    guides,
+                    openModal,
+                    closeModal
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

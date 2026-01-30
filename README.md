@@ -1,6 +1,6 @@
-# Solar Forecast ML V13.2.0 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
+# Solar Forecast ML V14.0.0 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
 
-[![Version](https://img.shields.io/badge/version-13.2.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-14.0.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 
@@ -18,7 +18,7 @@ Experience an adaptive hybrid AI ecosystem powered by three proprietary, locally
 
 Solar Forecast ML is not just another forecasting tool—it is a sophisticated AI Solar Companion for Home Assistant that doesn't just deliver data, but actively learns and evolves with your home.
 
-With Version 13.2.0 "Sarpeidon," solar optimization enters a new dimension:
+With Version 14.0.0 "Sarpeidon," solar optimization enters a new dimension:
 
 **Triple-AI Core Architecture:** Three specialized, locally-deployed AI models collaborate to synchronize energy generation, weather dynamics, and system behavior—all without a single external server request.
 
@@ -42,19 +42,57 @@ With Version 13.2.0 "Sarpeidon," solar optimization enters a new dimension:
 
 ---
 
-## Features in V13.2.0 "Sarpeidon"
+## Features in V14.0.0 "Sarpeidon"
 
 ### MPPT Throttle Detection (NEW)
-- **Zero Export Detection** - Automatically detects when inverter throttles due to grid feed-in limits
-- **Battery Full Detection** - Identifies production limitations when battery is fully charged
+- **Zero Export Detection** - Automatically detects when inverter throttles due to zero feed-in policy or grid export limits
+- **Battery Full Detection** - Identifies production limitations when battery is fully charged and curtailment kicks in
+- **Combined Detection** - Recognizes throttling from both zero feed-in AND full battery scenarios
 - **Learning Protection** - Throttled hours are automatically excluded from AI training
 - **Transparent Flagging** - Clear indication in hourly predictions with reason codes
 
 ### Learning Data Protection (NEW)
-- **Automatic Backup** - Learning data is automatically backed up to /share/ directory
+- **Automatic Backup** - Learning data is automatically backed up to /share/ directory at 4:00 AM
+- **Self-Healing** - Automatic detection and repair of corrupted data files
 - **Crash Recovery** - Seamless restoration of learned weights after system failures
 - **Migration Support** - Preserves learning progress during Home Assistant migrations
+- **Selective Restore Safe** - Learning progress survives selective HA backup restores
 - **Integrity Checks** - Validates backup data before restoration
+
+### AI-Ridge Physics Blending (NEW)
+- **Early Accuracy Boost** - AI-Ridge model blends with physics model when less than 50 samples available
+- **Faster Learning** - Delivers better predictions from day one instead of waiting for full AI training
+- **Smooth Transition** - Automatically shifts weight to pure AI as more data becomes available
+
+### Transformer AI Model (NEW)
+- **State-of-the-Art Architecture** - Hybrid AI expanded with Transformer model (same principle as ChatGPT, Gemini, Claude, Grok)
+- **Attention Mechanism** - Learns complex temporal patterns and long-range dependencies in solar production
+- **100% Local** - Runs entirely on your hardware without cloud dependencies
+
+### Feature Importance Analysis (NEW)
+- **Developer Tool** - Analyze which input features have the greatest impact on predictions
+- **Regression Coefficients** - View feature weights to understand model behavior
+- **Debugging Support** - Identify potential issues in your sensor data or configuration
+
+### Midday Forecast Correction (NEW)
+- **12:30 Validation Check** - Automatic forecast verification at midday
+- **5-Parameter Analysis** - Compares actual vs. predicted values across 5 key metrics
+- **Auto-Correction** - Adjusts remaining day forecast when significant deviations detected
+
+### Extended Grid Search (NEW)
+- **Hyperparameter Optimization** - Automated search for optimal AI model parameters
+- **Enhanced Model Tuning** - Finds best configuration for your specific installation
+- **Platform:** x86_64 only (not available on Proxmox and ARM)
+
+### SFML-STATS Support (NEW)
+- **Enhanced Dashboard Integration** - Improved data exchange with SFML-STATS companion
+- **Real-time Metrics** - Live AI model status and prediction confidence
+- **Extended API** - New endpoints for detailed forecast analytics
+
+### Zero Feed-in Option (NEW)
+- **Configurable Mode** - Enable for systems with zero grid export policy
+- **Adjusted Learning** - AI learns actual consumption patterns instead of max production
+- **Throttle Awareness** - Correctly interprets inverter limiting as expected behavior
 
 ### 5-Weather-Expert Blending
 - **Multi-Source Weather Data** - Combines 5 independent weather services for optimal accuracy
