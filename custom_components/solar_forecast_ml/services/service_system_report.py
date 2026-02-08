@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,14 +7,27 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
+# *****************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# Refactored: JSON replaced with DatabaseManager @zara
+# *****************************************************************************
+
+"""
+System report generator service for Solar Forecast ML.
+Generates monthly system reports in Markdown format.
+Uses DatabaseManager for all data operations.
+"""
+
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+import random
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
+
+from ..data.db_manager import DatabaseManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,29 +43,29 @@ SEASONS = {
 class SystemReportGenerator:
     """Generates monthly system reports in Markdown format. @zara"""
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, db_manager: Optional[DatabaseManager] = None):
         """Initialize the report generator. @zara"""
         self.data_dir = data_dir
         self.docs_dir = data_dir / "docs"
         self.report_file = self.docs_dir / "system_report.md"
+        self._db = db_manager
 
-        # Data file paths
-        self.seasonal_file = data_dir / "ai" / "seasonal.json"
-        self.forecasts_file = data_dir / "stats" / "daily_forecasts.json"
-        self.weights_file = data_dir / "ai" / "learned_weights.json"
+    def set_db_manager(self, db_manager: DatabaseManager) -> None:
+        """Set database manager after initialization. @zara"""
+        self._db = db_manager
 
     async def generate_report(self) -> bool:
         """Generate the system report. @zara"""
         try:
             _LOGGER.info("Generating monthly system report...")
 
-            # Load all data sources
-            seasonal_data = await self._load_json(self.seasonal_file)
-            forecasts_data = await self._load_json(self.forecasts_file)
-            weights_data = await self._load_json(self.weights_file)
+            # Load all data from database
+            geometry_data = await self._load_geometry_data()
+            statistics = await self._load_statistics()
+            history = await self._load_history()
 
             # Build report content
-            content = self._build_report(seasonal_data, forecasts_data, weights_data)
+            content = self._build_report(geometry_data, statistics, history)
 
             # Write report
             await self._write_report(content)
@@ -64,19 +77,108 @@ class SystemReportGenerator:
             _LOGGER.error(f"Failed to generate system report: {e}", exc_info=True)
             return False
 
-    async def _load_json(self, file_path: Path) -> dict:
-        """Load JSON file asynchronously. @zara"""
-        def _read_sync() -> dict:
-            if not file_path.exists():
-                return {}
-            with open(file_path, "r") as f:
-                return json.load(f)
+    async def _load_geometry_data(self) -> Dict[str, Any]:
+        """Load geometry/calibration data from database. @zara"""
+        if not self._db:
+            return {}
 
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, _read_sync)
+        try:
+            # Get learned geometry from coordinator_state
+            row = await self._db.fetchone(
+                """SELECT value FROM coordinator_state
+                   WHERE key = 'geometry_estimate'"""
+            )
+
+            if row and row[0]:
+                import json
+
+                return json.loads(row[0])
+
+            return {}
+
+        except Exception as e:
+            _LOGGER.error(f"Error loading geometry data: {e}")
+            return {}
+
+    async def _load_statistics(self) -> Dict[str, Any]:
+        """Load statistics from database. @zara"""
+        if not self._db:
+            return {}
+
+        try:
+            stats = {}
+
+            # Get all-time peak
+            row = await self._db.fetchone(
+                """SELECT MAX(actual_kwh), target_date, target_hour
+                   FROM hourly_predictions
+                   WHERE actual_kwh IS NOT NULL"""
+            )
+
+            if row and row[0]:
+                stats["all_time_peak"] = {
+                    "power_kwh": row[0],
+                    "date": row[1],
+                    "hour": row[2],
+                }
+
+            # Get total production
+            row = await self._db.fetchone(
+                """SELECT SUM(actual_kwh)
+                   FROM daily_forecasts
+                   WHERE actual_kwh IS NOT NULL"""
+            )
+
+            if row and row[0]:
+                stats["total_production_kwh"] = row[0]
+
+            # Get average accuracy
+            row = await self._db.fetchone(
+                """SELECT AVG(accuracy)
+                   FROM daily_forecasts
+                   WHERE accuracy IS NOT NULL AND accuracy > 0"""
+            )
+
+            if row and row[0]:
+                stats["avg_accuracy"] = row[0]
+
+            return stats
+
+        except Exception as e:
+            _LOGGER.error(f"Error loading statistics: {e}")
+            return {}
+
+    async def _load_history(self) -> List[Dict[str, Any]]:
+        """Load historical data from database. @zara"""
+        if not self._db:
+            return []
+
+        try:
+            rows = await self._db.fetchall(
+                """SELECT date, actual_kwh, forecast_kwh, accuracy
+                   FROM daily_forecasts
+                   WHERE actual_kwh IS NOT NULL AND actual_kwh > 0
+                   ORDER BY date DESC
+                   LIMIT 365"""
+            )
+
+            return [
+                {
+                    "date": row[0],
+                    "actual_kwh": row[1],
+                    "forecast_kwh": row[2],
+                    "accuracy": row[3],
+                }
+                for row in rows
+            ]
+
+        except Exception as e:
+            _LOGGER.error(f"Error loading history: {e}")
+            return []
 
     async def _write_report(self, content: str) -> None:
         """Write report to file asynchronously. @zara"""
+
         def _write_sync():
             self.docs_dir.mkdir(parents=True, exist_ok=True)
             with open(self.report_file, "w", encoding="utf-8") as f:
@@ -87,9 +189,9 @@ class SystemReportGenerator:
 
     def _build_report(
         self,
-        geometry_data: dict,
-        forecasts_data: dict,
-        weights_data: dict,
+        geometry_data: Dict[str, Any],
+        statistics: Dict[str, Any],
+        history: List[Dict[str, Any]],
     ) -> str:
         """Build the Markdown report content. @zara"""
         now = datetime.now()
@@ -97,9 +199,6 @@ class SystemReportGenerator:
         # Extract data
         estimate = geometry_data.get("estimate", {})
         metadata = geometry_data.get("metadata", {})
-        data_points = geometry_data.get("data_points", [])
-        statistics = forecasts_data.get("statistics", {})
-        history = forecasts_data.get("history", [])
 
         # System info
         capacity_kwp = metadata.get("system_capacity_kwp", 0)
@@ -113,13 +212,14 @@ class SystemReportGenerator:
         samples = estimate.get("sample_count", 0)
         rmse = estimate.get("error_metrics", {}).get("rmse_kwh", 0)
 
-        # Split system detection
-        is_split_system = self._detect_split_system(data_points)
-
         # Record peak
         all_time_peak = statistics.get("all_time_peak", {})
-        peak_power_kw = all_time_peak.get("power_w", 0) / 1000
+        peak_power_kwh = all_time_peak.get("power_kwh", 0)
         peak_date = all_time_peak.get("date", "N/A")
+
+        # Total production
+        total_production = statistics.get("total_production_kwh", 0)
+        avg_accuracy = statistics.get("avg_accuracy", 0)
 
         # Seasonal stats
         seasonal_stats = self._calculate_seasonal_stats(history)
@@ -134,24 +234,26 @@ class SystemReportGenerator:
             "",
             "---",
             "",
-            "## 🔧 Panel Geometry (learned)",
+            "## Panel Geometry (learned)",
             "",
-            "| Parameter | Learned | Configured | Δ |",
-            "|-----------|---------|------------|---|",
-            f"| Tilt | {learned_tilt:.1f}° | {configured_tilt:.1f}° | {learned_tilt - configured_tilt:+.1f}° |",
-            f"| Azimuth | {learned_azimuth:.1f}° | {configured_azimuth:.1f}° | {learned_azimuth - configured_azimuth:+.1f}° |",
+            "| Parameter | Learned | Configured | Delta |",
+            "|-----------|---------|------------|-------|",
+            f"| Tilt | {learned_tilt:.1f} deg | {configured_tilt:.1f} deg | {learned_tilt - configured_tilt:+.1f} deg |",
+            f"| Azimuth | {learned_azimuth:.1f} deg | {configured_azimuth:.1f} deg | {learned_azimuth - configured_azimuth:+.1f} deg |",
             "",
             f"**Orientation:** {orientation}",
             "",
-            f"**Split System:** {'Yes' if is_split_system else 'No'}",
-            "",
-            f"**Confidence:** {confidence:.0f}% · **Samples:** {samples} · **RMSE:** {rmse:.3f} kWh",
+            f"**Confidence:** {confidence:.0f}% | **Samples:** {samples} | **RMSE:** {rmse:.3f} kWh",
             "",
             "---",
             "",
-            "## ⚡ Performance",
+            "## Performance",
             "",
-            f"**Record Peak:** {peak_power_kw:.2f} kW ({peak_date})",
+            f"**Record Peak:** {peak_power_kwh:.2f} kWh ({peak_date})",
+            "",
+            f"**Total Production:** {total_production:.1f} kWh",
+            "",
+            f"**Average Accuracy:** {avg_accuracy:.1f}%",
             "",
             "### Seasonal Production",
             "",
@@ -177,29 +279,29 @@ class SystemReportGenerator:
         # Footer with Star Trek quote and greeting
         star_trek_quote = self._get_star_trek_quote()
 
-        lines.extend([
-            "",
-            "---",
-            "",
-            "## 🖖 Message from the Captain's Log",
-            "",
-            f"> *\"{star_trek_quote}\"*",
-            "",
-            "Live long and prosper! 🖖",
-            "",
-            "---",
-            "",
-            "*Report by Solar Forecast ML v10.2.0*",
-            "",
-            "*Created with ☀️ by [Zara-Toorox](https://github.com/Zara-Toorox)*",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "",
+                "## Message from the Captain's Log",
+                "",
+                f"> *\"{star_trek_quote}\"*",
+                "",
+                "Live long and prosper!",
+                "",
+                "---",
+                "",
+                "*Report by Solar Forecast ML*",
+                "",
+                "*Created with solar power by [Zara-Toorox](https://github.com/Zara-Toorox)*",
+            ]
+        )
 
         return "\n".join(lines)
 
     def _get_star_trek_quote(self) -> str:
         """Return a random Star Trek quote related to energy/sun/exploration. @zara"""
-        import random
-
         quotes = [
             "The sun is the source of all life. Even in the 24th century, we still look to the stars. - Captain Picard",
             "Infinite diversity in infinite combinations... including solar panel orientations. - Spock",
@@ -216,39 +318,6 @@ class SystemReportGenerator:
         ]
 
         return random.choice(quotes)
-
-    def _detect_split_system(self, data_points: list) -> bool:
-        """Detect if system has split orientation (e.g., East/West). @zara
-
-        A split system typically has panels facing two different directions,
-        resulting in two distinct azimuth clusters (e.g., ~90° and ~270°).
-        """
-        if len(data_points) < 10:
-            return False
-
-        azimuths = [p.get("sun_azimuth_deg", 180) for p in data_points]
-
-        # Check for bimodal distribution
-        # Split systems typically have morning (East, ~90-150°) and afternoon (West, ~210-270°) peaks
-        morning_count = sum(1 for a in azimuths if 90 <= a <= 150)
-        afternoon_count = sum(1 for a in azimuths if 210 <= a <= 270)
-
-        total = len(azimuths)
-
-        # If significant production in both morning AND afternoon ranges
-        # with similar proportions, it's likely a split system
-        if morning_count > 0 and afternoon_count > 0:
-            morning_ratio = morning_count / total
-            afternoon_ratio = afternoon_count / total
-
-            # Both should have at least 20% of samples
-            if morning_ratio > 0.2 and afternoon_ratio > 0.2:
-                # And similar proportions (within 2:1 ratio)
-                ratio = morning_ratio / afternoon_ratio if afternoon_ratio > 0 else 0
-                if 0.5 <= ratio <= 2.0:
-                    return True
-
-        return False
 
     def _azimuth_to_orientation(self, azimuth: float) -> str:
         """Convert azimuth angle to cardinal direction. @zara"""
@@ -273,7 +342,7 @@ class SystemReportGenerator:
 
         return "South"  # Default
 
-    def _calculate_seasonal_stats(self, history: list) -> dict:
+    def _calculate_seasonal_stats(self, history: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate production statistics per season. @zara"""
         stats = {
             "winter": {"days": 0, "total": 0, "best_day": 0, "values": []},
@@ -284,9 +353,7 @@ class SystemReportGenerator:
 
         for entry in history:
             date_str = entry.get("date", "")
-
-            # Get yield - check both formats
-            yield_kwh = entry.get("yield_kwh") or entry.get("actual_kwh") or 0
+            yield_kwh = entry.get("actual_kwh") or 0
 
             if not date_str or yield_kwh <= 0:
                 continue
@@ -314,10 +381,80 @@ class SystemReportGenerator:
         # Calculate averages
         for season in stats:
             if stats[season]["days"] > 0:
-                stats[season]["avg_daily"] = (
-                    stats[season]["total"] / stats[season]["days"]
-                )
+                stats[season]["avg_daily"] = stats[season]["total"] / stats[season]["days"]
             else:
                 stats[season]["avg_daily"] = 0
 
         return stats
+
+    async def get_quick_stats(self) -> Dict[str, Any]:
+        """Get quick statistics without generating full report. @zara"""
+        if not self._db:
+            return {}
+
+        try:
+            stats = {}
+
+            # Today's production
+            from ..core.core_helpers import SafeDateTimeUtil as dt_util
+
+            today = dt_util.now().date().isoformat()
+
+            row = await self._db.fetchone(
+                """SELECT SUM(actual_kwh)
+                   FROM hourly_predictions
+                   WHERE target_date = ? AND actual_kwh IS NOT NULL""",
+                (today,),
+            )
+
+            stats["today_actual_kwh"] = row[0] if row and row[0] else 0
+
+            # This week's production
+            week_start = (
+                dt_util.now().date() - dt_util.dt.timedelta(days=7)
+            ).isoformat()
+
+            row = await self._db.fetchone(
+                """SELECT SUM(actual_kwh)
+                   FROM daily_forecasts
+                   WHERE date >= ? AND actual_kwh IS NOT NULL""",
+                (week_start,),
+            )
+
+            stats["week_actual_kwh"] = row[0] if row and row[0] else 0
+
+            # This month's production
+            month_start = dt_util.now().date().replace(day=1).isoformat()
+
+            row = await self._db.fetchone(
+                """SELECT SUM(actual_kwh)
+                   FROM daily_forecasts
+                   WHERE date >= ? AND actual_kwh IS NOT NULL""",
+                (month_start,),
+            )
+
+            stats["month_actual_kwh"] = row[0] if row and row[0] else 0
+
+            # Average daily this month
+            row = await self._db.fetchone(
+                """SELECT AVG(actual_kwh), COUNT(*)
+                   FROM daily_forecasts
+                   WHERE date >= ? AND actual_kwh IS NOT NULL AND actual_kwh > 0""",
+                (month_start,),
+            )
+
+            stats["month_avg_daily_kwh"] = row[0] if row and row[0] else 0
+            stats["month_days_with_data"] = row[1] if row and row[1] else 0
+
+            return stats
+
+        except Exception as e:
+            _LOGGER.error(f"Error getting quick stats: {e}")
+            return {}
+
+
+async def create_system_report_generator(
+    data_dir: Path, db_manager: Optional[DatabaseManager] = None
+) -> SystemReportGenerator:
+    """Factory function to create SystemReportGenerator. @zara"""
+    return SystemReportGenerator(data_dir, db_manager)

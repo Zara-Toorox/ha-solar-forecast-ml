@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║           SFML WEATHER CONTROL SYSTEM - STARFLEET EDITION v1.0               ║
-║                    "The Final Frontier of Solar Forecasting"                  ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
+# ******************************************************************************
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
+# * This program is protected by a Proprietary Non-Commercial License.
+# 1. Personal and Educational use only.
+# 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
+# 3. Clear attribution to "Zara-Toorox" is required.
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
+# ******************************************************************************
 
-WARNUNG: Dieses System nutzt experimentelle Subraum-Wetter-Modifikation.
-         Nebenwirkungen können temporale Anomalien und spontane Tribble-Vermehrung sein.
-"""
+"""SFML Weather Control System - Starfleet Edition v16.0 @zara"""
 
 import random
 import time
@@ -15,20 +16,19 @@ import sys
 import os
 import platform
 
-# Sound-Frequenzen für verschiedene Effekte (macOS)
+# Sound effects @zara
 def play_beep(frequency=440, duration=0.1):
-    """Play a beep sound (works on macOS)."""
+    """Play beep sound @zara"""
     try:
-        if platform.system() == "Darwin":  # macOS
-            os.system(f'afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &')
+        if platform.system() == "Darwin":
+            os.system('afplay /System/Library/Sounds/Tink.aiff 2>/dev/null &')
         else:
-            # Fallback: Terminal bell
             print('\a', end='', flush=True)
     except:
         pass
 
 def play_success_sound():
-    """Play success fanfare."""
+    """Play success fanfare @zara"""
     try:
         if platform.system() == "Darwin":
             os.system('afplay /System/Library/Sounds/Glass.aiff 2>/dev/null &')
@@ -36,7 +36,7 @@ def play_success_sound():
         pass
 
 def play_warp_sound():
-    """Play warp drive sound (ascending tones)."""
+    """Play warp drive sound @zara"""
     try:
         if platform.system() == "Darwin":
             os.system('afplay /System/Library/Sounds/Submarine.aiff 2>/dev/null &')
@@ -44,7 +44,7 @@ def play_warp_sound():
         pass
 
 def play_alert_sound():
-    """Play alert/selection sound."""
+    """Play alert sound @zara"""
     try:
         if platform.system() == "Darwin":
             os.system('afplay /System/Library/Sounds/Pop.aiff 2>/dev/null &')
@@ -52,7 +52,7 @@ def play_alert_sound():
         pass
 
 def play_complete_sound():
-    """Play completion fanfare."""
+    """Play completion fanfare @zara"""
     try:
         if platform.system() == "Darwin":
             os.system('afplay /System/Library/Sounds/Hero.aiff 2>/dev/null &')
@@ -185,12 +185,12 @@ SUCCESS_ANIMATION = """
 
 
 def clear_screen():
-    """Clear the terminal screen."""
+    """Clear terminal @zara"""
     print("\033[2J\033[H", end="")
 
 
 def slow_print(text, delay=0.03):
-    """Print text character by character for dramatic effect."""
+    """Print text slowly @zara"""
     for char in text:
         sys.stdout.write(char)
         sys.stdout.flush()
@@ -199,14 +199,14 @@ def slow_print(text, delay=0.03):
 
 
 def computer_beep():
-    """Simulate LCARS computer beep."""
+    """LCARS computer beep @zara"""
     play_beep()
     print("[BEEP]", end=" ")
     time.sleep(0.2)
 
 
 def perform_ritual(weather_type):
-    """Perform the weather modification ritual."""
+    """Perform weather modification ritual @zara"""
     play_warp_sound()
     print(f"\n{'='*60}")
     print(">>> INITIALISIERE WETTER-KONTROLL-SEQUENZ... <<<")
@@ -218,7 +218,6 @@ def perform_ritual(weather_type):
     for step in rituals:
         computer_beep()
         slow_print(step, delay=0.02)
-        # Progress bar
         print("[", end="")
         for i in range(20):
             time.sleep(0.05)
@@ -230,11 +229,11 @@ def perform_ritual(weather_type):
 
 
 def do_dance():
-    """Perform a Star Trek themed dance."""
+    """Perform Star Trek dance @zara"""
     print("\n>>> AKTIVIERE RITUELLEN WETTER-TANZ (STERNENFLOTTEN-PROTOKOLL 47)... <<<\n")
     time.sleep(0.5)
 
-    for _ in range(2):  # 2 complete cycles
+    for _ in range(2):
         for frame in DANCE_FRAMES:
             clear_screen()
             print(STARFLEET_LOGO)
@@ -243,7 +242,6 @@ def do_dance():
             time.sleep(0.4)
 
     play_alert_sound()
-    # Final pose
     print("""
        \\\\//
         \\/
@@ -255,7 +253,7 @@ def do_dance():
 
 
 def show_success(weather_name, emoji):
-    """Show success message."""
+    """Show success message @zara"""
     play_complete_sound()
     print(SUCCESS_ANIMATION)
 
@@ -279,16 +277,15 @@ STATUS: WETTER {weather_name.upper()} WURDE ERFOLGREICH MODIFIZIERT! {emoji}
 
 
 def main():
-    """Main function to run the weather control system."""
+    """Main function @zara"""
     clear_screen()
 
-    # Startup sequence
     play_warp_sound()
     print(ENTERPRISE)
     time.sleep(0.5)
     print(STARFLEET_LOGO)
 
-    slow_print("SFML WETTER-KONTROLL-SYSTEM v1.0", delay=0.05)
+    slow_print("SFML WETTER-KONTROLL-SYSTEM v16.0", delay=0.05)
     slow_print("Sternenflotten-Autorisierung erforderlich...", delay=0.03)
     time.sleep(0.3)
     computer_beep()
@@ -322,13 +319,8 @@ def main():
         print(f"\nComputer: Verstanden. Initialisiere '{weather_name}' Protokoll...")
         time.sleep(0.5)
 
-        # Perform the ritual
         perform_ritual(weather_name)
-
-        # Do the dance
         do_dance()
-
-        # Show success
         show_success(weather_name, emoji)
 
         print(f"\n{'─'*60}")

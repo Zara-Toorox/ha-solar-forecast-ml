@@ -1,13 +1,13 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""File operations utilities for SFML Stats."""
+"""File operations utilities for SFML Stats. @zara"""
 from __future__ import annotations
 
 import asyncio
@@ -28,16 +28,7 @@ async def read_json_safe(
     retries: int = FILE_RETRY_COUNT,
     delay: float = FILE_RETRY_DELAY_SECONDS,
 ) -> dict[str, Any] | None:
-    """Read JSON file with retry logic. @zara
-
-    Args:
-        path: Path to the JSON file.
-        retries: Number of retry attempts.
-        delay: Base delay between retries (multiplied by attempt number).
-
-    Returns:
-        Parsed JSON data or None if file doesn't exist or parsing fails.
-    """
+    """Read JSON file with retry logic. @zara"""
     for attempt in range(retries):
         try:
             if not path.exists():
@@ -76,32 +67,16 @@ async def write_json_safe(
     retries: int = FILE_RETRY_COUNT,
     indent: int = 2,
 ) -> bool:
-    """Write JSON file atomically with retry. @zara
-
-    Uses atomic rename pattern: write to temp file, then rename.
-    This prevents partial writes from corrupting existing data.
-
-    Args:
-        path: Path to the JSON file.
-        data: Data to write.
-        retries: Number of retry attempts.
-        indent: JSON indentation level.
-
-    Returns:
-        True if write was successful, False otherwise.
-    """
+    """Write JSON file atomically with retry. @zara"""
     temp_path = path.with_suffix(".tmp")
 
     for attempt in range(retries):
         try:
-            # Ensure parent directory exists
             path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Write to temp file first
             async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(data, indent=indent, ensure_ascii=False))
 
-            # Atomic rename (on POSIX systems this is atomic)
             temp_path.replace(path)
 
             return True
@@ -128,16 +103,7 @@ async def append_to_file_safe(
     content: str,
     retries: int = FILE_RETRY_COUNT,
 ) -> bool:
-    """Append content to file with retry logic. @zara
-
-    Args:
-        path: Path to the file.
-        content: Content to append.
-        retries: Number of retry attempts.
-
-    Returns:
-        True if append was successful, False otherwise.
-    """
+    """Append content to file with retry logic. @zara"""
     for attempt in range(retries):
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -162,14 +128,7 @@ async def append_to_file_safe(
 
 
 def ensure_directory(path: Path) -> bool:
-    """Ensure a directory exists. @zara
-
-    Args:
-        path: Path to the directory.
-
-    Returns:
-        True if directory exists or was created, False on error.
-    """
+    """Ensure a directory exists. @zara"""
     try:
         path.mkdir(parents=True, exist_ok=True)
         return True

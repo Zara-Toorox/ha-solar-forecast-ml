@@ -9,48 +9,38 @@
       },
       "sensors": {
         "title": "Sensor-Konfiguration",
-        "description": "Konfiguriere alle Sensor-Zuordnungen. Lasse leer wenn nicht verfügbar.\n\n**Benötigte Einheiten:**\n- Leistung: Watt (W)\n- Energie: kWh (mit täglichem Reset)\n- SOC: Prozent (0-100)\n- Preis: ct/kWh",
+        "description": "Konfiguriere alle Sensor-Zuordnungen. Lasse leer wenn nicht verfügbar.\n\n**W-Sensoren** werden für das Echtzeit-Flussdiagramm benötigt.\n**kWh-Sensoren** sind optional - wenn vorhanden, werden sie für genauere Tagesstatistiken verwendet.\n\n**Benötigte Einheiten:**\n- Leistung: Watt (W)\n- Energie: kWh (mit täglichem Reset)\n- SOC: Prozent (0-100)\n- Preis: ct/kWh",
         "data": {
-          "sensor_solar_power": "PV-Leistung (W)",
-          "sensor_solar_to_house": "Solar → Haus (W)",
-          "sensor_solar_to_battery": "Solar → Batterie (W)",
-          "sensor_solar_yield_daily": "Solarertrag heute (kWh)",
-          "sensor_grid_to_house": "Netz → Haus (W)",
-          "sensor_grid_to_battery": "Netz → Batterie (W)",
-          "sensor_house_to_grid": "Einspeisung (W)",
-          "sensor_grid_import_daily": "Netzbezug heute (kWh)",
-          "sensor_grid_import_yearly": "Netzbezug Jahr (kWh)",
-          "sensor_smartmeter_import": "Smartmeter Bezug (W)",
-          "sensor_smartmeter_export": "Smartmeter Einspeisung (W)",
-          "sensor_battery_soc": "Batterie SOC (%)",
-          "sensor_battery_power": "Batterie-Leistung (W)",
-          "sensor_battery_to_house": "Batterie → Haus (W)",
-          "sensor_battery_to_grid": "Batterie → Netz (W)",
-          "sensor_battery_charge_solar_daily": "Solar-Ladung heute (kWh)",
-          "sensor_battery_charge_grid_daily": "Netz-Ladung heute (kWh)",
           "sensor_home_consumption": "Hausverbrauch (W)",
+          "sensor_home_consumption_daily": "Hausverbrauch heute (kWh)",
+          "sensor_solar_to_battery": "Solar → Batterie (W)",
+          "sensor_battery_charge_solar_daily": "Solar → Batterie heute (kWh)",
+          "sensor_battery_to_house": "Batterie → Haus (W)",
+          "sensor_battery_discharge_daily": "Batterie → Haus heute (kWh)",
+          "sensor_grid_to_battery": "Netz → Batterie (W)",
+          "sensor_battery_charge_grid_daily": "Netz → Batterie heute (kWh)",
+          "sensor_battery_soc": "Batterie SOC (%)",
+          "sensor_smartmeter_import": "Smartmeter Bezug (W)",
+          "sensor_grid_import_daily": "Netzbezug heute (kWh)",
+          "sensor_smartmeter_export": "Smartmeter Einspeisung (W)",
+          "sensor_grid_export_daily": "Einspeisung heute (kWh)",
           "sensor_price_total": "Strompreis aktuell (ct/kWh)",
           "weather_entity": "Wetter-Entity"
         },
         "data_description": {
-          "sensor_solar_power": "Gesamte PV-Leistung in Watt (W). Aktueller Wert vom Wechselrichter.",
-          "sensor_solar_to_house": "Solar-Direktverbrauch in Watt (W). Leistung die direkt ins Haus fließt.",
-          "sensor_solar_to_battery": "Solar-Batterieladung in Watt (W). Leistung die in die Batterie lädt.",
-          "sensor_solar_yield_daily": "Tagesertrag in kWh. Nutze utility_meter mit täglichem Reset.",
-          "sensor_grid_to_house": "Netzbezug Haus in Watt (W). Strom der vom Netz bezogen wird.",
-          "sensor_grid_to_battery": "Netzbezug Batterie in Watt (W). Netzstrom für Batterieladung.",
-          "sensor_house_to_grid": "Netz-Einspeisung in Watt (W). Überschuss der ins Netz fließt.",
-          "sensor_grid_import_daily": "Tages-Netzbezug in kWh. Nutze utility_meter mit täglichem Reset.",
-          "sensor_grid_import_yearly": "Jahres-Netzbezug in kWh. Gesamt-Bezug im Kalenderjahr.",
-          "sensor_smartmeter_import": "Smartmeter Bezug in Watt (W). Aktueller Bezug vom Zähler.",
-          "sensor_smartmeter_export": "Smartmeter Export in Watt (W). Aktuelle Einspeisung am Zähler.",
+          "sensor_home_consumption": "Gesamter Hausverbrauch in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_home_consumption_daily": "Optional: Täglicher kWh-Sensor vom Wechselrichter. Wird für genauere Tagesstatistik verwendet.",
+          "sensor_solar_to_battery": "Solar-Batterieladung in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_battery_charge_solar_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
+          "sensor_battery_to_house": "Batterie-Entladung in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_battery_discharge_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
+          "sensor_grid_to_battery": "Netzbezug Batterie in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_battery_charge_grid_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
           "sensor_battery_soc": "Ladestand in Prozent (0-100%). State of Charge der Batterie.",
-          "sensor_battery_power": "Batterie-Leistung in Watt (W). Positiv=Laden, Negativ=Entladen.",
-          "sensor_battery_to_house": "Batterie-Entladung in Watt (W). Leistung die ans Haus geht.",
-          "sensor_battery_to_grid": "Batterie-Einspeisung in Watt (W). Leistung die ins Netz geht.",
-          "sensor_battery_charge_solar_daily": "Solar-Ladung heute in kWh. Nutze utility_meter mit täglichem Reset.",
-          "sensor_battery_charge_grid_daily": "Netz-Ladung heute in kWh. Nutze utility_meter mit täglichem Reset.",
-          "sensor_home_consumption": "Gesamter Hausverbrauch in Watt (W). Alle Verbraucher zusammen.",
+          "sensor_smartmeter_import": "Smartmeter Bezug in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_grid_import_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
+          "sensor_smartmeter_export": "Smartmeter Export in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_grid_export_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
           "sensor_price_total": "Aktueller Strompreis in ct/kWh. Von Tibber, aWATTar, etc.",
           "weather_entity": "Home Assistant Wetter-Integration (weather.xxx)."
         }
@@ -73,6 +63,7 @@
           "theme": "Farbschema",
           "billing_start_month": "Abrechnungs-Startmonat",
           "billing_start_day": "Abrechnungs-Starttag",
+          "billing_price_mode": "Tarif-Modus",
           "billing_fixed_price": "Fallback-Strompreis (ct/kWh)",
           "feed_in_tariff": "Einspeisevergütung (ct/kWh)"
         },
@@ -81,6 +72,7 @@
           "theme": "Dark oder Light Theme für Charts",
           "billing_start_month": "Monat in dem dein Abrechnungsjahr beginnt",
           "billing_start_day": "Tag an dem dein Abrechnungsjahr beginnt",
+          "billing_price_mode": "Dynamisch: Stundenpreise vom Grid Price Monitor. Festpreis: einheitlicher Preis. Kein Tarif: deaktiviert Finanzanzeigen.",
           "billing_fixed_price": "Wird verwendet wenn Grid Price Monitor keinen Preis liefert",
           "feed_in_tariff": "EEG-Vergütung in Cent pro kWh"
         }
@@ -105,15 +97,71 @@
           "menu_choice": "Kategorie"
         },
         "menu_options": {
-          "sensors": "Sensoren",
-          "consumers": "Verbraucher (WP, Heizstab, Wallbox)",
-          "settings": "Einstellungen",
-          "advanced": "Erweitert"
+          "sensors_main": "⚡ Haupt-Sensoren (Pflicht)",
+          "sensors_battery": "🔋 Batterie-Sensoren (Optional)",
+          "sensors_smartmeter": "📊 Smartmeter (Optional)",
+          "consumers": "🏠 Verbraucher (WP, Heizstab, Wallbox)",
+          "settings": "⚙️ Einstellungen",
+          "advanced": "🔧 Erweitert"
+        }
+      },
+      "sensors_main": {
+        "title": "Haupt-Sensoren (Pflicht)",
+        "description": "**Hausverbrauch ist der wichtigste Sensor!**\n\nDer W-Sensor wird für das Echtzeit-Flussdiagramm benötigt.\nOptional: kWh-Sensor zusätzlich für genauere Tagesstatistik.\nSolar-Leistung kommt automatisch von SFML.",
+        "data": {
+          "sensor_home_consumption": "⚡ Hausverbrauch (W)",
+          "sensor_home_consumption_daily": "⚡ Hausverbrauch heute (kWh)",
+          "sensor_price_total": "💰 Strompreis aktuell (ct/kWh)",
+          "weather_entity": "🌤️ Wetter-Entity"
+        },
+        "data_description": {
+          "sensor_home_consumption": "Gesamter Hausverbrauch in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_home_consumption_daily": "Optional: Täglicher kWh-Sensor vom Wechselrichter. Wird für genauere Tagesstatistik verwendet.",
+          "sensor_price_total": "Aktueller Strompreis in ct/kWh. Von Tibber, aWATTar, etc.",
+          "weather_entity": "Home Assistant Wetter-Integration (weather.xxx)."
+        }
+      },
+      "sensors_battery": {
+        "title": "Batterie-Sensoren (Optional)",
+        "description": "Nur konfigurieren wenn du einen Batteriespeicher hast.\n\nW-Sensoren werden für das Echtzeit-Flussdiagramm benötigt.\nkWh-Sensoren sind optional - wenn vorhanden, werden sie für genauere Tagesstatistiken verwendet.\n\n**Solar→Haus und Netz→Haus werden automatisch berechnet!**",
+        "data": {
+          "sensor_solar_to_battery": "☀️ Solar → Batterie (W)",
+          "sensor_battery_charge_solar_daily": "☀️ Solar → Batterie heute (kWh)",
+          "sensor_battery_to_house": "🔋 Batterie → Haus (W)",
+          "sensor_battery_discharge_daily": "🔋 Batterie → Haus heute (kWh)",
+          "sensor_grid_to_battery": "⚡ Netz → Batterie (W)",
+          "sensor_battery_charge_grid_daily": "⚡ Netz → Batterie heute (kWh)",
+          "sensor_battery_soc": "📊 Batterie SOC (%)"
+        },
+        "data_description": {
+          "sensor_solar_to_battery": "Solar-Batterieladung in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_battery_charge_solar_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
+          "sensor_battery_to_house": "Batterie-Entladung in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_battery_discharge_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
+          "sensor_grid_to_battery": "Netzbezug Batterie in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_battery_charge_grid_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
+          "sensor_battery_soc": "Ladestand in Prozent (0-100%). State of Charge der Batterie."
+        }
+      },
+      "sensors_smartmeter": {
+        "title": "Smartmeter-Sensoren (Optional)",
+        "description": "Für genaue Netzwerte.\n\nW-Sensoren werden für das Echtzeit-Flussdiagramm benötigt.\nkWh-Sensoren sind optional - wenn vorhanden, werden sie für genauere Tagesstatistiken verwendet.\n\n**Ohne Smartmeter werden Einspeisung und Netzbezug geschätzt.**",
+        "data": {
+          "sensor_smartmeter_import": "📥 Smartmeter Bezug (W)",
+          "sensor_grid_import_daily": "📥 Netzbezug heute (kWh)",
+          "sensor_smartmeter_export": "📤 Smartmeter Einspeisung (W)",
+          "sensor_grid_export_daily": "📤 Einspeisung heute (kWh)"
+        },
+        "data_description": {
+          "sensor_smartmeter_import": "Smartmeter Bezug in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_grid_import_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung.",
+          "sensor_smartmeter_export": "Smartmeter Export in Watt (W). Wird für das Echtzeit-Flussdiagramm benötigt.",
+          "sensor_grid_export_daily": "Optional: Täglicher kWh-Sensor. Wird für genauere Tagesstatistik verwendet statt W-Berechnung."
         }
       },
       "sensors": {
         "title": "Alle Sensoren",
-        "description": "Alle Sensor-Zuordnungen konfigurieren.\n\n**Benötigte Einheiten:**\n- Leistung: Watt (W)\n- Energie: kWh (mit täglichem Reset)\n- SOC: Prozent (0-100)\n- Preis: ct/kWh",
+        "description": "Alle Sensor-Zuordnungen konfigurieren.\n\n**W-Sensoren** werden für das Echtzeit-Flussdiagramm benötigt.\n**kWh-Sensoren** sind optional für genauere Tagesstatistiken.\n\n**Benötigte Einheiten:**\n- Leistung: Watt (W)\n- Energie: kWh (mit täglichem Reset)\n- SOC: Prozent (0-100)\n- Preis: ct/kWh",
         "data": {
           "sensor_solar_power": "PV-Leistung (W)",
           "sensor_solar_to_house": "Solar → Haus (W)",
@@ -193,6 +241,7 @@
           "theme": "Farbschema",
           "billing_start_month": "Abrechnungs-Startmonat",
           "billing_start_day": "Abrechnungs-Starttag",
+          "billing_price_mode": "Tarif-Modus",
           "billing_fixed_price": "Fallback-Strompreis (ct/kWh)",
           "feed_in_tariff": "Einspeisevergütung (ct/kWh)"
         },
@@ -203,6 +252,7 @@
           "theme": "Dark oder Light Theme für die Charts",
           "billing_start_month": "Monat in dem dein Abrechnungsjahr beginnt",
           "billing_start_day": "Tag an dem dein Abrechnungsjahr beginnt",
+          "billing_price_mode": "Dynamisch: Stundenpreise vom Grid Price Monitor. Festpreis: einheitlicher Preis. Kein Tarif: deaktiviert Finanzanzeigen.",
           "billing_fixed_price": "Wird verwendet wenn Grid Price Monitor keinen Preis liefert",
           "feed_in_tariff": "EEG-Vergütung in Cent pro kWh"
         }

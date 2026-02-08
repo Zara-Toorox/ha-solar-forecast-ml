@@ -11,19 +11,15 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.helpers.storage import Store
 
-from ..const import DOMAIN
+if TYPE_CHECKING:
+    from ..storage.db_connector import GPMDatabaseConnector
 
 _LOGGER = logging.getLogger(__name__)
-
-STORAGE_VERSION = 1
-STORAGE_KEY = f"{DOMAIN}.battery_stats"
 
 
 class BatteryTracker:
@@ -33,19 +29,18 @@ class BatteryTracker:
         self,
         hass: HomeAssistant,
         entry_id: str,
-        storage_path: Path | None = None
+        db: GPMDatabaseConnector | None = None,
     ) -> None:
         """Initialize the battery tracker @zara
 
         Args:
             hass: Home Assistant instance
             entry_id: Config entry ID
-            storage_path: Optional custom storage path
+            db: GPM database connector instance
         """
         self.hass = hass
         self._entry_id = entry_id
-        self._store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry_id}")
-        self._storage_path = storage_path
+        self._db = db
 
         # Current state
         self._power_sensor_id: str | None = None
@@ -154,7 +149,7 @@ class BatteryTracker:
             # Calculate time delta in hours
             delta_hours = (now - self._last_update).total_seconds() / 3600
 
-            # Energy = Power × Time (Wh)
+            # Energy = Power x Time (Wh)
             # Use previous power value (left Riemann sum)
             energy_wh = self._last_power_w * delta_hours
 
@@ -164,7 +159,7 @@ class BatteryTracker:
             self._energy_month_wh += energy_wh
 
             _LOGGER.debug(
-                "Battery energy update: +%.3f Wh (%.1f W × %.4f h)",
+                "Battery energy update: +%.3f Wh (%.1f W x %.4f h)",
                 energy_wh,
                 self._last_power_w,
                 delta_hours,
@@ -233,18 +228,31 @@ class BatteryTracker:
         )
 
     async def _async_load_data(self) -> None:
-        """Load stored statistics from disk @zara"""
-        data = await self._store.async_load()
-        if data is None:
+        """Load stored statistics from database @zara"""
+        if not self._db:
+            _LOGGER.debug("No database connector, skipping battery stats load")
+            return
+
+        try:
+            row = await self._db.fetchone(
+                """SELECT energy_today_wh, energy_week_wh, energy_month_wh,
+                          current_day, current_week, current_month
+                   FROM GPM_battery_stats WHERE id = 1"""
+            )
+        except Exception as err:
+            _LOGGER.warning("Failed to load battery statistics: %s", err)
+            return
+
+        if row is None:
             _LOGGER.debug("No stored battery statistics found")
             return
 
         now = datetime.now(timezone.utc).astimezone()
 
         # Load values and check if they're still valid
-        stored_day = data.get("current_day")
-        stored_week = data.get("current_week")
-        stored_month = data.get("current_month")
+        stored_day = row["current_day"]
+        stored_week = row["current_week"]
+        stored_month = row["current_month"]
 
         current_day = now.day
         current_week = now.isocalendar()[1]
@@ -252,19 +260,19 @@ class BatteryTracker:
 
         # Only restore if same day
         if stored_day == current_day:
-            self._energy_today_wh = data.get("energy_today_wh", 0.0)
+            self._energy_today_wh = row["energy_today_wh"] or 0.0
         else:
             self._energy_today_wh = 0.0
 
         # Only restore if same week
         if stored_week == current_week:
-            self._energy_week_wh = data.get("energy_week_wh", 0.0)
+            self._energy_week_wh = row["energy_week_wh"] or 0.0
         else:
             self._energy_week_wh = 0.0
 
         # Only restore if same month
         if stored_month == current_month:
-            self._energy_month_wh = data.get("energy_month_wh", 0.0)
+            self._energy_month_wh = row["energy_month_wh"] or 0.0
         else:
             self._energy_month_wh = 0.0
 
@@ -280,16 +288,34 @@ class BatteryTracker:
         )
 
     async def _async_save_data(self) -> None:
-        """Save statistics to disk @zara"""
-        data = {
-            "energy_today_wh": self._energy_today_wh,
-            "energy_week_wh": self._energy_week_wh,
-            "energy_month_wh": self._energy_month_wh,
-            "current_day": self._current_day,
-            "current_week": self._current_week,
-            "current_month": self._current_month,
-        }
-        await self._store.async_save(data)
+        """Save statistics to database @zara"""
+        if not self._db:
+            return
+
+        try:
+            await self._db.execute(
+                """INSERT INTO GPM_battery_stats
+                   (id, energy_today_wh, energy_week_wh, energy_month_wh,
+                    current_day, current_week, current_month)
+                   VALUES (1, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                       energy_today_wh = excluded.energy_today_wh,
+                       energy_week_wh = excluded.energy_week_wh,
+                       energy_month_wh = excluded.energy_month_wh,
+                       current_day = excluded.current_day,
+                       current_week = excluded.current_week,
+                       current_month = excluded.current_month""",
+                (
+                    self._energy_today_wh,
+                    self._energy_week_wh,
+                    self._energy_month_wh,
+                    self._current_day,
+                    self._current_week,
+                    self._current_month,
+                ),
+            )
+        except Exception as err:
+            _LOGGER.error("Failed to save battery statistics: %s", err)
 
     def get_statistics(self) -> dict[str, Any]:
         """Get all battery statistics @zara"""

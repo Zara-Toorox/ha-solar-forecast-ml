@@ -1,11 +1,17 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
+
+"""
+Coordinator Initialization Helpers for Solar Forecast ML V16.0.0.
+Provides helper methods for coordinator initialization and configuration extraction.
+Pure utility functions with no database dependencies.
+"""
 
 import logging
 from dataclasses import dataclass, field
@@ -15,26 +21,41 @@ from typing import Any, Optional
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from ..const import (
-    CONF_HOURLY,
-    CONF_INVERTER_MAX_POWER,
-    CONF_LEARNING_ENABLED,
-    CONF_PANEL_GROUPS,
-    CONF_POWER_ENTITY,
-    CONF_SOLAR_CAPACITY,
-    CONF_SOLAR_YIELD_TODAY,
-    CONF_TOTAL_CONSUMPTION_TODAY,
-    CONF_WEATHER_ENTITY,
-    DEFAULT_INVERTER_MAX_POWER,
-    DEFAULT_SOLAR_CAPACITY,
-    DOMAIN,
-)
-
 _LOGGER = logging.getLogger(__name__)
+
+try:
+    from ..const import (
+        CONF_HOURLY,
+        CONF_INVERTER_MAX_POWER,
+        CONF_LEARNING_ENABLED,
+        CONF_PANEL_GROUPS,
+        CONF_POWER_ENTITY,
+        CONF_SOLAR_CAPACITY,
+        CONF_SOLAR_YIELD_TODAY,
+        CONF_TOTAL_CONSUMPTION_TODAY,
+        CONF_WEATHER_ENTITY,
+        DEFAULT_INVERTER_MAX_POWER,
+        DEFAULT_SOLAR_CAPACITY,
+        DOMAIN,
+    )
+except ImportError:
+    CONF_HOURLY = "hourly"
+    CONF_INVERTER_MAX_POWER = "inverter_max_power"
+    CONF_LEARNING_ENABLED = "learning_enabled"
+    CONF_PANEL_GROUPS = "panel_groups"
+    CONF_POWER_ENTITY = "power_entity"
+    CONF_SOLAR_CAPACITY = "solar_capacity"
+    CONF_SOLAR_YIELD_TODAY = "solar_yield_today"
+    CONF_TOTAL_CONSUMPTION_TODAY = "total_consumption_today"
+    CONF_WEATHER_ENTITY = "weather_entity"
+    DEFAULT_INVERTER_MAX_POWER = 0.0
+    DEFAULT_SOLAR_CAPACITY = 10.0
+    DOMAIN = "solar_forecast_ml"
+
 
 @dataclass
 class CoordinatorConfiguration:
-    """Configuration data extracted from ConfigEntry"""
+    """Configuration data extracted from ConfigEntry. @zara"""
 
     solar_capacity: float
     learning_enabled: bool
@@ -45,11 +66,8 @@ class CoordinatorConfiguration:
     primary_weather_entity: Optional[str]
     total_consumption_today: Optional[str]
 
-    # Panel groups configuration (optional)
     panel_groups: list[dict[str, Any]] = field(default_factory=list)
-
-    # Inverter clipping configuration (optional)
-    inverter_max_power: float = 0.0  # 0 = disabled
+    inverter_max_power: float = 0.0
 
     @property
     def has_panel_groups(self) -> bool:
@@ -61,16 +79,15 @@ class CoordinatorConfiguration:
         """Check if inverter clipping is enabled. @zara"""
         return self.inverter_max_power > 0.0
 
+
 class CoordinatorInitHelpers:
-    """Helper methods for coordinator initialization"""
+    """Helper methods for coordinator initialization. @zara"""
 
     @staticmethod
     def extract_configuration(entry: ConfigEntry) -> CoordinatorConfiguration:
-        """Extract configuration from entry @zara"""
-
+        """Extract configuration from entry. @zara"""
         solar_capacity_value = entry.data.get(CONF_SOLAR_CAPACITY)
         if solar_capacity_value is None or solar_capacity_value == 0:
-
             solar_capacity_value = entry.data.get("plant_kwp", DEFAULT_SOLAR_CAPACITY)
             if solar_capacity_value != DEFAULT_SOLAR_CAPACITY:
                 _LOGGER.warning(
@@ -78,7 +95,6 @@ class CoordinatorInitHelpers:
                     f"Please reconfigure to update."
                 )
 
-        # Extract panel groups if configured
         panel_groups = entry.data.get(CONF_PANEL_GROUPS, [])
         if panel_groups:
             _LOGGER.info(
@@ -87,11 +103,10 @@ class CoordinatorInitHelpers:
                 float(solar_capacity_value),
             )
 
-        # Extract inverter max power for clipping
         inverter_max_power = entry.data.get(CONF_INVERTER_MAX_POWER, DEFAULT_INVERTER_MAX_POWER)
         if inverter_max_power and inverter_max_power > 0:
             _LOGGER.info(
-                "Inverter clipping enabled: max %.2f kW (forecasts capped, clipped hours excluded from training)",
+                "Inverter clipping enabled: max %.2f kW",
                 float(inverter_max_power),
             )
 
@@ -109,7 +124,7 @@ class CoordinatorInitHelpers:
 
     @staticmethod
     def setup_data_directory(hass: HomeAssistant) -> Path:
-        """Setup and return data directory path @zara"""
+        """Setup and return data directory path. @zara"""
         config_dir = hass.config.path()
         data_dir_path = Path(config_dir) / DOMAIN
         return data_dir_path

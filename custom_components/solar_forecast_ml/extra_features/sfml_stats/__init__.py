@@ -1,28 +1,14 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""SFML Stats integration for Home Assistant."""
+"""SFML Stats integration for Home Assistant. @zara"""
 from __future__ import annotations
-
-# PyArmor Runtime Path Setup - MUST be before any protected module imports
-import sys
-from pathlib import Path as _Path
-_runtime_path = str(_Path(__file__).parent)
-if _runtime_path not in sys.path:
-    sys.path.insert(0, _runtime_path)
-
-# Pre-load PyArmor runtime at module level (before async event loop)
-# This prevents "blocking call to open" warning from platform.libc_ver()
-try:
-    import pyarmor_runtime_009810  # noqa: F401
-except ImportError:
-    pass  # Runtime not present (development mode)
 
 import logging
 from datetime import datetime
@@ -52,6 +38,7 @@ from .const import (
     CONF_FORECAST_ENTITY_2,
 )
 from .storage import DataValidator
+from .storage.db_connection_manager import DatabaseConnectionManager
 from .api import async_setup_views, async_setup_websocket
 from .services.daily_aggregator import DailyEnergyAggregator
 from .services.billing_calculator import BillingCalculator
@@ -80,17 +67,26 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     """Migrate old entry to new version. @zara"""
     _LOGGER.info(
         "Migrating SFML Stats from version %s to %s",
-        config_entry.version, 2
+        config_entry.version, VERSION
     )
 
-    if config_entry.version == 1:
-        new_data = {**config_entry.data}
+    new_data = {**config_entry.data}
+
+    if config_entry.version < 2:
         hass.config_entries.async_update_entry(
             config_entry,
             data=new_data,
             version=2
         )
         _LOGGER.info("Migration to version 2 successful")
+
+    if config_entry.version < 6:
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data=new_data,
+            version=6
+        )
+        _LOGGER.info("Migration to version 6 successful")
 
     return True
 
@@ -106,6 +102,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("DataValidator could not be initialized")
         return False
 
+    db_manager = None
+    try:
+        _LOGGER.info("Initializing database connection manager...")
+        db_manager = await DatabaseConnectionManager.get_instance(hass)
+        _LOGGER.info("Database connection manager initialized successfully")
+        _LOGGER.info("Manager connected: %s, available: %s", db_manager.is_connected, db_manager.is_available)
+
+        from .readers.solar_reader import SolarDataReader
+        from .readers.weather_reader import WeatherDataReader
+        SolarDataReader._db_manager = db_manager
+        WeatherDataReader._db_manager = db_manager
+        _LOGGER.info("Database manager set on reader classes")
+    except Exception as err:
+        _LOGGER.error("Could not initialize database connection manager: %s", err, exc_info=True)
+
     source_status = validator.source_status
     _LOGGER.info(
         "Source status: Solar Forecast ML=%s, Grid Price Monitor=%s",
@@ -113,7 +124,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         source_status.get("grid_price_monitor", False),
     )
 
-    # Show persistent notification if no source integration is found
     if not any(source_status.values()):
         _LOGGER.warning(
             "No source integration found. "
@@ -138,7 +148,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     billing_calculator = BillingCalculator(hass, config_path, entry_data=entry_config)
     monthly_tariff_manager = MonthlyTariffManager(hass, config_path, entry_data=entry_config)
 
-    # Initialize Power Sources Collector with error handling
     from .power_sources_collector import PowerSourcesCollector
     power_sources_path = config_path / "sfml_stats" / "data"
     power_sources_collector = PowerSourcesCollector(hass, entry_config, power_sources_path)
@@ -146,11 +155,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await power_sources_collector.start()
     except Exception as err:
         _LOGGER.error("Failed to start power sources collector: %s", err)
-        # Collector is optional, integration can still function
 
-    # Initialize Weather Collector if weather entity is configured
-    # Note: WeatherDataCollector is a passive loader that reads from Solar Forecast ML
-    # It doesn't need start/stop - it loads data on demand via get_history()
     weather_collector = None
     weather_entity = entry_config.get(CONF_WEATHER_ENTITY)
     if weather_entity:
@@ -161,10 +166,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("Weather collector initialized for entity: %s", weather_entity)
         except Exception as err:
             _LOGGER.error("Failed to initialize weather collector: %s", err)
-            # Weather collector is optional
 
-    # Initialize Forecast Comparison Collector
-    forecast_comparison_collector = ForecastComparisonCollector(hass, config_path)
+    _LOGGER.info("Initializing forecast comparison collector with db_manager: %s", db_manager is not None)
+    forecast_comparison_collector = ForecastComparisonCollector(hass, config_path, db_manager)
+    if db_manager:
+        ForecastComparisonCollector._db_manager = db_manager
+        _LOGGER.info("Database manager set on ForecastComparisonCollector class")
     _LOGGER.info("Forecast comparison collector initialized")
 
     hass.data[DOMAIN][entry.entry_id] = {
@@ -203,7 +210,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DAILY_AGGREGATION_MINUTE,
     )
 
-    # Schedule forecast comparison morning job (08:00 - collect forecasts)
     async def _forecast_morning_job(now: datetime) -> None:
         """Run morning forecast collection job. @zara"""
         _LOGGER.info("Starting scheduled morning forecast collection")
@@ -227,7 +233,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         FORECAST_MORNING_MINUTE,
     )
 
-    # Schedule forecast comparison evening job (23:50 - collect actual production)
     async def _forecast_evening_job(now: datetime) -> None:
         """Run evening actual production collection job. @zara"""
         _LOGGER.info("Starting scheduled evening actual collection")
@@ -251,10 +256,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         FORECAST_EVENING_MINUTE,
     )
 
-    # Schedule forecast comparison chart generation job
     async def _forecast_chart_job(now: datetime) -> None:
         """Generate forecast comparison chart. @zara"""
-        # Only generate if external forecasts are configured
         if not entry_config.get(CONF_FORECAST_ENTITY_1) and not entry_config.get(CONF_FORECAST_ENTITY_2):
             _LOGGER.debug("No external forecast entities configured, skipping chart generation")
             return
@@ -294,7 +297,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     tree = await validator.async_get_directory_tree()
     _LOGGER.debug("Directory structure: %s", tree)
 
-    # Run initial aggregation as background task to not block startup
     async def _initial_aggregation() -> None:
         """Run initial aggregation in background. @zara"""
         try:
@@ -307,7 +309,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         f"{DOMAIN}_initial_aggregation",
     )
 
-    # Run initial forecast comparison collection if no data exists
     async def _initial_forecast_collection() -> None:
         """Run initial forecast comparison collection if needed. @zara"""
         import asyncio
@@ -316,14 +317,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             from .readers.forecast_comparison_reader import ForecastComparisonReader
             reader = ForecastComparisonReader(config_path)
 
-            # Check if data file exists or has less than 7 days
             needs_historical = False
 
             if not reader.is_available:
                 needs_historical = True
                 _LOGGER.info("No forecast comparison data found")
             else:
-                # Check how many days we have
                 comparison_days = await reader.async_get_comparison_days(days=7)
                 days_with_data = sum(1 for d in comparison_days if d.has_data)
                 if days_with_data < 7:
@@ -334,7 +333,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     )
 
             if needs_historical:
-                # Wait 60 seconds for all sensors to initialize after HA restart
                 _LOGGER.info("Waiting 60s for sensors to initialize before collecting historical data")
                 await asyncio.sleep(60)
                 _LOGGER.info("Running historical forecast comparison collection")
@@ -368,7 +366,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry_data = hass.data[DOMAIN][entry.entry_id]
 
-    # Cancel scheduled jobs
     if "cancel_daily_job" in entry_data:
         try:
             entry_data["cancel_daily_job"]()
@@ -397,7 +394,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as err:
             _LOGGER.warning("Error cancelling forecast chart job: %s", err)
 
-    # Stop power sources collector
     if "power_sources_collector" in entry_data and entry_data["power_sources_collector"]:
         try:
             await entry_data["power_sources_collector"].stop()
@@ -405,19 +401,21 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as err:
             _LOGGER.warning("Error stopping power sources collector: %s", err)
 
-    # Weather collector doesn't need stopping (passive loader)
-    # Just log if it was present
     if "weather_collector" in entry_data and entry_data["weather_collector"]:
         _LOGGER.debug("Weather collector cleaned up")
 
-    # Dismiss persistent notification if it was created
     try:
         from homeassistant.components.persistent_notification import async_dismiss
         await async_dismiss(hass, f"{DOMAIN}_no_sources")
     except Exception:
-        pass  # Notification might not exist
+        pass
 
-    # Clean up entry data
+    try:
+        await DatabaseConnectionManager.close_instance()
+        _LOGGER.info("Database connection manager closed")
+    except Exception as err:
+        _LOGGER.warning("Error closing database connection manager: %s", err)
+
     del hass.data[DOMAIN][entry.entry_id]
 
     return True
@@ -442,7 +440,6 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
     entry_data["config"] = new_config
 
-    # Update BillingCalculator
     if "billing_calculator" in entry_data and entry_data["billing_calculator"]:
         try:
             entry_data["billing_calculator"].update_config(new_config)
@@ -450,7 +447,6 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
         except Exception as err:
             _LOGGER.warning("Error updating BillingCalculator config: %s", err)
 
-    # Update DailyEnergyAggregator
     if "aggregator" in entry_data and entry_data["aggregator"]:
         aggregator = entry_data["aggregator"]
         if hasattr(aggregator, "update_config"):
@@ -460,7 +456,6 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
             except Exception as err:
                 _LOGGER.warning("Error updating DailyEnergyAggregator config: %s", err)
 
-    # Update PowerSourcesCollector
     if "power_sources_collector" in entry_data and entry_data["power_sources_collector"]:
         collector = entry_data["power_sources_collector"]
         if hasattr(collector, "update_config"):
@@ -470,7 +465,6 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
             except Exception as err:
                 _LOGGER.warning("Error updating PowerSourcesCollector config: %s", err)
 
-    # Update MonthlyTariffManager
     if "monthly_tariff_manager" in entry_data and entry_data["monthly_tariff_manager"]:
         try:
             entry_data["monthly_tariff_manager"].update_config(new_config)
@@ -478,8 +472,5 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
             _LOGGER.debug("MonthlyTariffManager config updated")
         except Exception as err:
             _LOGGER.warning("Error updating MonthlyTariffManager config: %s", err)
-
-    # ForecastComparisonCollector doesn't need config update
-    # It reads config fresh from hass.data on each collection
 
     _LOGGER.info("Configuration refresh complete")

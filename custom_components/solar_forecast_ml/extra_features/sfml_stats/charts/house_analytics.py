@@ -1,13 +1,13 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""House Analytics Export Chart for SFML Stats."""
+"""House analytics export chart for SFML Stats. @zara"""
 from __future__ import annotations
 
 import asyncio
@@ -25,12 +25,11 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Shared executor for matplotlib operations
 _MATPLOTLIB_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="matplotlib")
 
 
 class HouseAnalyticsChart:
-    """Chart für House Analytics PNG-Export."""
+    """House analytics PNG export chart. @zara"""
 
     def __init__(
         self,
@@ -38,14 +37,14 @@ class HouseAnalyticsChart:
         stats: dict[str, Any],
         data: list[dict[str, Any]],
     ) -> None:
-        """Initialize chart."""
+        """Initialize chart. @zara"""
         self.period = period
         self.stats = stats
         self.data = self._filter_data_by_period(data, period)
         self._styles = ChartStyles()
 
     def _filter_data_by_period(self, data: list[dict[str, Any]], period: str) -> list[dict[str, Any]]:
-        """Filter data based on selected period."""
+        """Filter data based on selected period. @zara"""
         if not data:
             return []
 
@@ -61,7 +60,7 @@ class HouseAnalyticsChart:
         return sorted_data[:days]
 
     async def async_render(self) -> bytes:
-        """Render chart to PNG bytes."""
+        """Render chart to PNG bytes. @zara"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             _MATPLOTLIB_EXECUTOR,
@@ -69,7 +68,7 @@ class HouseAnalyticsChart:
         )
 
     def _render_sync(self) -> bytes:
-        """Synchronous render - runs in executor thread."""
+        """Synchronous render in executor thread. @zara"""
         import matplotlib.pyplot as plt
         from .styles import apply_dark_theme
 
@@ -78,35 +77,27 @@ class HouseAnalyticsChart:
         fig = plt.figure(figsize=(14, 10), facecolor=self._styles.background)
         gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.3, top=0.92, bottom=0.08)
 
-        # Title
         period_names = {'week': 'Letzte 7 Tage', 'month': 'Letzter Monat', 'year': 'Dieses Jahr'}
         title = f"Haus Analytics - {period_names.get(self.period, self.period.capitalize())}"
         fig.suptitle(title, fontsize=20, fontweight='bold', color=self._styles.text_primary)
 
-        # Stats Grid (top row, full width)
         ax_stats = fig.add_subplot(gs[0, :])
         self._render_stats_grid(ax_stats)
 
-        # Consumption Chart (middle left)
         ax_consumption = fig.add_subplot(gs[1, 0])
         self._render_consumption_chart(ax_consumption)
 
-        # Autarky Chart (middle right)
         ax_autarky = fig.add_subplot(gs[1, 1])
         self._render_autarky_chart(ax_autarky)
 
-        # Energy Sources (bottom left)
         ax_sources = fig.add_subplot(gs[2, 0])
         self._render_sources_chart(ax_sources)
 
-        # Peak Times (bottom right)
         ax_peak = fig.add_subplot(gs[2, 1])
         self._render_peak_chart(ax_peak)
 
-        # Footer
         self._add_footer(fig)
 
-        # Render to bytes
         buf = io.BytesIO()
         fig.savefig(
             buf,
@@ -122,12 +113,12 @@ class HouseAnalyticsChart:
         return buf.read()
 
     def _render_stats_grid(self, ax: Any) -> None:
-        """Render stats as a grid."""
+        """Render stats as a grid. @zara"""
         ax.axis('off')
 
         stats_text = [
             f"Verbrauch (Mo-So): {self.stats.get('weekConsumption', 0):.2f} kWh",
-            f"Ø pro Tag: {self.stats.get('avgDaily', 0):.2f} kWh",
+            f"\u00d8 pro Tag: {self.stats.get('avgDaily', 0):.2f} kWh",
             f"Autarkie: {self.stats.get('autarky', 0):.1f}%",
             f"Eigenverbrauch: {self.stats.get('selfConsumption', 0):.1f}%",
             f"Solar-Abdeckung: {self.stats.get('solarCoverage', 0):.1f}%",
@@ -143,7 +134,7 @@ class HouseAnalyticsChart:
             props = dict(
                 boxstyle='round,pad=0.8',
                 facecolor=self._styles.background_card,
-                edgecolor='#00ffff',  # Cyan wie House Node
+                edgecolor='#00ffff',
                 linewidth=2,
                 alpha=0.9
             )
@@ -160,9 +151,9 @@ class HouseAnalyticsChart:
             )
 
     def _render_consumption_chart(self, ax: Any) -> None:
-        """Render consumption timeline."""
+        """Render consumption timeline. @zara"""
         if not self.data:
-            ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Daten verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
@@ -183,9 +174,9 @@ class HouseAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _render_autarky_chart(self, ax: Any) -> None:
-        """Render autarky and self-consumption chart."""
+        """Render autarky and self-consumption chart. @zara"""
         if not self.data:
-            ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Daten verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
@@ -214,14 +205,13 @@ class HouseAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _render_sources_chart(self, ax: Any) -> None:
-        """Render energy sources pie chart."""
+        """Render energy sources pie chart. @zara"""
         if not self.data:
-            ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Daten verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
 
-        # Aggregate sources over period
         solar = sum(d.get('solar_kwh', 0) for d in self.data)
         battery = sum(d.get('battery_kwh', 0) for d in self.data)
         grid = sum(d.get('grid_kwh', 0) for d in self.data)
@@ -230,10 +220,9 @@ class HouseAnalyticsChart:
         sizes = [solar, battery, grid]
         colors = [self._styles.solar_yellow, self._styles.accuracy_good, self._styles.predicted]
 
-        # Filter out zero values
         non_zero = [(l, s, c) for l, s, c in zip(labels, sizes, colors) if s > 0]
         if not non_zero:
-            ax.text(0.5, 0.5, 'Keine Energiequellen verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Energiequellen verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
@@ -245,9 +234,9 @@ class HouseAnalyticsChart:
         ax.set_title('Energiequellen', color=self._styles.text_primary, fontweight='bold')
 
     def _render_peak_chart(self, ax: Any) -> None:
-        """Render peak consumption times."""
+        """Render peak consumption times. @zara"""
         if not self.data:
-            ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Daten verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
@@ -269,7 +258,7 @@ class HouseAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _apply_adaptive_ticks(self, ax: Any, dates: list[str]) -> None:
-        """Apply adaptive tick labels based on data length."""
+        """Apply adaptive tick labels based on data length. @zara"""
         if len(dates) > 60:
             tick_positions = list(range(0, len(dates), 14))
             tick_labels = [dates[i] for i in tick_positions]
@@ -285,7 +274,7 @@ class HouseAnalyticsChart:
             ax.set_xticklabels(dates, rotation=45, ha='right')
 
     def _add_footer(self, fig: "Figure") -> None:
-        """Add footer with timestamp."""
+        """Add footer with timestamp. @zara"""
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
         footer_text = f"Generiert: {timestamp}"
 

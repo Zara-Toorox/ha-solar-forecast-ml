@@ -1,41 +1,36 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Forecast comparison collector for SFML Stats.
-
-Collects daily forecast values from:
-- SFML (Solar Forecast ML) predictions
-- Up to 2 external forecast entities (e.g., Solcast, Forecast.Solar)
-- Actual production sensor
-
-Stores data for 7-day comparison charts.
-"""
+"""Forecast comparison collector for SFML Stats. @zara"""
 from __future__ import annotations
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING, AsyncIterator
 
 import aiofiles
+import aiosqlite
 
 from homeassistant.core import HomeAssistant
+
+if TYPE_CHECKING:
+    from ..storage.db_connection_manager import DatabaseConnectionManager
 
 from ..const import (
     DOMAIN,
     SFML_STATS_DATA,
-    SOLAR_FORECAST_ML_STATS,
-    SOLAR_DAILY_SUMMARIES,
+    SOLAR_FORECAST_DB,
     EXTERNAL_FORECASTS_HISTORY,
     FORECAST_COMPARISON_RETENTION_DAYS,
-    CONF_SENSOR_SOLAR_YIELD_DAILY,
     CONF_FORECAST_ENTITY_1,
     CONF_FORECAST_ENTITY_2,
     CONF_FORECAST_ENTITY_1_NAME,
@@ -43,6 +38,7 @@ from ..const import (
     DEFAULT_FORECAST_ENTITY_1_NAME,
     DEFAULT_FORECAST_ENTITY_2_NAME,
 )
+from ..sfml_data_reader import SFMLDataReader
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,13 +46,17 @@ _LOGGER = logging.getLogger(__name__)
 class ForecastComparisonCollector:
     """Collect and store forecast comparison data. @zara"""
 
-    def __init__(self, hass: HomeAssistant, config_path: Path) -> None:
+    _db_manager: DatabaseConnectionManager | None = None
+
+    def __init__(self, hass: HomeAssistant, config_path: Path, db_manager: DatabaseConnectionManager | None = None) -> None:
         """Initialize the collector. @zara"""
         self._hass = hass
         self._config_path = config_path
         self._data_path = config_path / SFML_STATS_DATA
         self._history_file = self._data_path / EXTERNAL_FORECASTS_HISTORY
-        self._sfml_summaries_file = config_path / SOLAR_FORECAST_ML_STATS / SOLAR_DAILY_SUMMARIES
+        self._db_path = config_path / SOLAR_FORECAST_DB
+        if db_manager is not None:
+            ForecastComparisonCollector._db_manager = db_manager
 
     def _get_config(self) -> dict[str, Any]:
         """Get current configuration. @zara"""
@@ -121,65 +121,87 @@ class ForecastComparisonCollector:
             _LOGGER.error("Error saving forecast history: %s", err)
             return False
 
-    async def _get_sfml_forecast(self, day_str: str) -> float | None:
-        """Get SFML forecast for a specific day. @zara
+    @asynccontextmanager
+    async def _get_db_connection(self) -> AsyncIterator[aiosqlite.Connection | None]:
+        """Get a database connection via the centralized manager. @zara"""
+        from ..storage.db_connection_manager import get_manager
 
-        For today/tomorrow: reads from daily_forecasts.json (live predictions)
-        For past days: reads from daily_summaries.json (historical data)
-        """
+        manager = get_manager()
+        if manager is not None and manager.is_connected:
+            try:
+                _LOGGER.debug("ForecastComparisonCollector: Using database connection manager")
+                yield await manager.get_connection()
+                return
+            except Exception as err:
+                _LOGGER.warning("Error getting connection from manager: %s", err)
+
+        _LOGGER.warning("ForecastComparisonCollector: Database manager not available, using direct connection (THIS CAUSES THREADING ERRORS)")
+        if not self._db_path.exists():
+            _LOGGER.debug("SFML database not found: %s", self._db_path)
+            yield None
+            return
+
+        try:
+            conn = await aiosqlite.connect(str(self._db_path))
+            conn.row_factory = aiosqlite.Row
+            try:
+                yield conn
+            finally:
+                await conn.close()
+        except Exception as err:
+            _LOGGER.error("Error connecting to SFML database: %s", err)
+            yield None
+
+    async def _get_sfml_forecast(self, day_str: str) -> float | None:
+        """Get SFML forecast for a specific day from database. @zara"""
         today_str = date.today().isoformat()
         tomorrow_str = (date.today() + timedelta(days=1)).isoformat()
 
-        # For today or tomorrow, use daily_forecasts.json
-        if day_str in (today_str, tomorrow_str):
-            forecasts_file = self._config_path / SOLAR_FORECAST_ML_STATS / "daily_forecasts.json"
-            if forecasts_file.exists():
-                try:
-                    async with aiofiles.open(forecasts_file, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        data = json.loads(content)
+        async with self._get_db_connection() as conn:
+            if not conn:
+                return None
 
-                    today_data = data.get("today", {})
-
+            try:
+                if day_str in (today_str, tomorrow_str):
                     if day_str == today_str:
-                        forecast_day = today_data.get("forecast_day", {})
-                        prediction = forecast_day.get("prediction_kwh")
-                        if prediction is not None:
-                            _LOGGER.debug("SFML forecast for today from daily_forecasts.json: %.2f kWh", prediction)
-                            return prediction
+                        async with conn.execute(
+                            """SELECT prediction_kwh FROM daily_forecasts
+                               WHERE forecast_type = 'today'
+                               ORDER BY created_at DESC LIMIT 1"""
+                        ) as cursor:
+                            row = await cursor.fetchone()
+                            if row and row["prediction_kwh"] is not None:
+                                prediction = row["prediction_kwh"]
+                                _LOGGER.debug("SFML forecast for today from DB: %.2f kWh", prediction)
+                                return prediction
 
                     elif day_str == tomorrow_str:
-                        forecast_tomorrow = today_data.get("forecast_tomorrow", {})
-                        prediction = forecast_tomorrow.get("prediction_kwh")
-                        if prediction is not None:
-                            _LOGGER.debug("SFML forecast for tomorrow from daily_forecasts.json: %.2f kWh", prediction)
-                            return prediction
+                        async with conn.execute(
+                            """SELECT prediction_kwh FROM daily_forecasts
+                               WHERE forecast_type = 'tomorrow'
+                               ORDER BY created_at DESC LIMIT 1"""
+                        ) as cursor:
+                            row = await cursor.fetchone()
+                            if row and row["prediction_kwh"] is not None:
+                                prediction = row["prediction_kwh"]
+                                _LOGGER.debug("SFML forecast for tomorrow from DB: %.2f kWh", prediction)
+                                return prediction
 
-                except Exception as err:
-                    _LOGGER.warning("Error reading daily_forecasts.json: %s", err)
+                async with conn.execute(
+                    """SELECT predicted_total_kwh FROM daily_summaries
+                       WHERE date = ?""",
+                    (day_str,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row and row["predicted_total_kwh"] is not None:
+                        return row["predicted_total_kwh"]
 
-        # For past days or fallback, use daily_summaries.json
-        if not self._sfml_summaries_file.exists():
-            _LOGGER.debug("SFML summaries file not found: %s", self._sfml_summaries_file)
-            return None
+                _LOGGER.debug("No SFML forecast found for %s", day_str)
+                return None
 
-        try:
-            async with aiofiles.open(self._sfml_summaries_file, "r", encoding="utf-8") as f:
-                content = await f.read()
-                data = json.loads(content)
-
-            summaries = data.get("summaries", [])
-            for summary in summaries:
-                if summary.get("date") == day_str:
-                    overall = summary.get("overall", {})
-                    return overall.get("predicted_total_kwh")
-
-            _LOGGER.debug("No SFML forecast found for %s", day_str)
-            return None
-
-        except Exception as err:
-            _LOGGER.warning("Error reading SFML summaries: %s", err)
-            return None
+            except Exception as err:
+                _LOGGER.warning("Error reading SFML forecast from database: %s", err)
+                return None
 
     async def _cleanup_old_entries(self, history: dict[str, Any]) -> None:
         """Remove entries older than retention period. @zara"""
@@ -199,50 +221,37 @@ class ForecastComparisonCollector:
             _LOGGER.debug("Removed old forecast entry: %s", day_str)
 
     async def async_collect_morning_forecasts(self) -> bool:
-        """Collect forecast values for TODAY at 08:00. @zara
-
-        This runs in the morning to capture forecast values BEFORE they
-        change during the day (for rolling forecasts). The actual production
-        will be added later in the evening by async_collect_evening_actual().
-        """
+        """Collect forecast values for today at morning time. @zara"""
         config = self._get_config()
         today_str = date.today().isoformat()
 
         _LOGGER.info("Collecting morning forecast values for %s", today_str)
 
-        # Get entities from config
         external_1_entity = config.get(CONF_FORECAST_ENTITY_1)
         external_1_name = config.get(CONF_FORECAST_ENTITY_1_NAME, DEFAULT_FORECAST_ENTITY_1_NAME)
         external_2_entity = config.get(CONF_FORECAST_ENTITY_2)
         external_2_name = config.get(CONF_FORECAST_ENTITY_2_NAME, DEFAULT_FORECAST_ENTITY_2_NAME)
 
-        # Get current forecast values (before they change during the day)
         external_1_kwh = self._get_sensor_value(external_1_entity) if external_1_entity else None
         external_2_kwh = self._get_sensor_value(external_2_entity) if external_2_entity else None
 
-        # Get SFML forecast for today
         sfml_forecast_kwh = await self._get_sfml_forecast(today_str)
 
-        # Load history
         history = await self._load_history()
 
-        # Create or update entry for today (only forecasts, no actual yet)
         daily_entry: dict[str, Any] = history.get("days", {}).get(today_str, {})
 
-        # Only update if we don't have forecast values yet
         if "sfml_forecast_kwh" not in daily_entry or daily_entry.get("sfml_forecast_kwh") is None:
             daily_entry["sfml_forecast_kwh"] = sfml_forecast_kwh
 
         daily_entry["timestamp"] = datetime.now().isoformat()
 
-        # Add external forecasts if configured (capture morning values)
         if external_1_entity:
             if "external_1" not in daily_entry:
                 daily_entry["external_1"] = {
                     "entity_id": external_1_entity,
                     "name": external_1_name,
                 }
-            # Only set forecast if not already captured
             if daily_entry["external_1"].get("forecast_kwh") is None:
                 daily_entry["external_1"]["forecast_kwh"] = external_1_kwh
 
@@ -252,15 +261,12 @@ class ForecastComparisonCollector:
                     "entity_id": external_2_entity,
                     "name": external_2_name,
                 }
-            # Only set forecast if not already captured
             if daily_entry["external_2"].get("forecast_kwh") is None:
                 daily_entry["external_2"]["forecast_kwh"] = external_2_kwh
 
-        # actual_kwh stays None until evening collection
         if "actual_kwh" not in daily_entry:
             daily_entry["actual_kwh"] = None
 
-        # Save to history
         history["days"][today_str] = daily_entry
         history["metadata"]["last_updated"] = datetime.now().isoformat()
 
@@ -278,42 +284,32 @@ class ForecastComparisonCollector:
         return success
 
     async def async_collect_evening_actual(self) -> bool:
-        """Collect actual production for TODAY at 23:50. @zara
-
-        This runs in the evening to capture the final actual production
-        for the day and calculate accuracy metrics against the morning forecasts.
-        """
+        """Collect actual production for today at evening time. @zara"""
         config = self._get_config()
         today_str = date.today().isoformat()
 
         _LOGGER.info("Collecting evening actual production for %s", today_str)
 
-        # Get actual production
-        actual_entity = config.get(CONF_SENSOR_SOLAR_YIELD_DAILY)
-        actual_kwh = self._get_sensor_value(actual_entity)
+        sfml_reader = SFMLDataReader(self._hass)
+        actual_kwh = sfml_reader.get_live_yield()
 
-        # Load history
         history = await self._load_history()
 
-        # Get or create entry for today
         daily_entry = history.get("days", {}).get(today_str, {})
 
         if not daily_entry:
             _LOGGER.warning("No morning forecast data for %s, creating new entry", today_str)
             daily_entry = {"timestamp": datetime.now().isoformat()}
 
-        # Update actual production
         daily_entry["actual_kwh"] = actual_kwh
         daily_entry["timestamp"] = datetime.now().isoformat()
 
-        # Try to fill in missing SFML forecast if not captured in the morning
         if daily_entry.get("sfml_forecast_kwh") is None:
             sfml_forecast = await self._get_sfml_forecast(today_str)
             if sfml_forecast is not None:
                 daily_entry["sfml_forecast_kwh"] = sfml_forecast
                 _LOGGER.info("Filled missing SFML forecast for %s: %.2f kWh", today_str, sfml_forecast)
 
-        # Calculate accuracy metrics if we have actual and forecast data
         if actual_kwh is not None and actual_kwh > 0:
             sfml_forecast_kwh = daily_entry.get("sfml_forecast_kwh")
             if sfml_forecast_kwh is not None:
@@ -341,11 +337,9 @@ class ForecastComparisonCollector:
                         max(0, 100 - (error / actual_kwh * 100)), 1
                     )
 
-        # Save to history
         history["days"][today_str] = daily_entry
         history["metadata"]["last_updated"] = datetime.now().isoformat()
 
-        # Cleanup old entries
         await self._cleanup_old_entries(history)
 
         success = await self._save_history(history)
@@ -386,34 +380,35 @@ class ForecastComparisonCollector:
         return result
 
     async def _get_all_sfml_summaries(self) -> dict[str, dict[str, Any]]:
-        """Load all SFML summaries from daily_summaries.json. @zara"""
-        if not self._sfml_summaries_file.exists():
-            _LOGGER.debug("SFML summaries file not found: %s", self._sfml_summaries_file)
-            return {}
+        """Load all SFML summaries from database. @zara"""
+        async with self._get_db_connection() as conn:
+            if not conn:
+                return {}
 
-        try:
-            async with aiofiles.open(self._sfml_summaries_file, "r", encoding="utf-8") as f:
-                content = await f.read()
-                data = json.loads(content)
+            try:
+                async with conn.execute(
+                    """SELECT date, predicted_total_kwh, actual_total_kwh, accuracy_percent
+                       FROM daily_summaries
+                       ORDER BY date DESC"""
+                ) as cursor:
+                    rows = await cursor.fetchall()
 
-            result = {}
-            summaries = data.get("summaries", [])
-            for summary in summaries:
-                day_str = summary.get("date")
-                if day_str:
-                    overall = summary.get("overall", {})
-                    result[day_str] = {
-                        "predicted_kwh": overall.get("predicted_total_kwh"),
-                        "actual_kwh": overall.get("actual_total_kwh"),
-                        "accuracy_percent": overall.get("accuracy_percent"),
-                    }
+                result = {}
+                for row in rows:
+                    day_str = row["date"]
+                    if day_str:
+                        result[day_str] = {
+                            "predicted_kwh": row["predicted_total_kwh"],
+                            "actual_kwh": row["actual_total_kwh"],
+                            "accuracy_percent": row["accuracy_percent"],
+                        }
 
-            _LOGGER.debug("Loaded %d SFML summaries", len(result))
-            return result
+                _LOGGER.debug("Loaded %d SFML summaries from database", len(result))
+                return result
 
-        except Exception as err:
-            _LOGGER.warning("Error reading SFML summaries: %s", err)
-            return {}
+            except Exception as err:
+                _LOGGER.warning("Error reading SFML summaries from database: %s", err)
+                return {}
 
     async def _get_sensor_history_from_recorder(
         self, entity_id: str, days: int
@@ -430,23 +425,21 @@ class ForecastComparisonCollector:
 
             start_time = datetime.now() - timedelta(days=days)
 
-            # Get state changes from recorder
             states = await get_instance(self._hass).async_add_executor_job(
                 state_changes_during_period,
                 self._hass,
                 start_time,
-                None,  # end_time
+                None,
                 entity_id,
-                False,  # include_start_time_state
-                True,   # significant_changes_only
-                1000,   # limit
+                False,
+                True,
+                1000,
             )
 
             if entity_id not in states:
                 _LOGGER.debug("No recorder data found for %s", entity_id)
                 return result
 
-            # Group by day, take the maximum value per day (end-of-day value for daily sensors)
             daily_values: dict[str, list[float]] = {}
 
             for state in states[entity_id]:
@@ -463,7 +456,6 @@ class ForecastComparisonCollector:
                 except (ValueError, TypeError):
                     continue
 
-            # Take the maximum value per day (for daily kWh sensors)
             for day_str, values in daily_values.items():
                 if values:
                     result[day_str] = max(values)
@@ -480,37 +472,26 @@ class ForecastComparisonCollector:
         return result
 
     async def async_collect_historical(self, days: int = 7) -> bool:
-        """Collect historical data for the last N days. @zara
-
-        This method is called on initial setup when no data exists.
-        It loads:
-        - SFML forecasts from daily_summaries.json
-        - Actual production from HA Recorder
-        - External forecast values from HA Recorder
-        """
+        """Collect historical data for the last N days. @zara"""
         config = self._get_config()
 
         _LOGGER.info("Collecting historical forecast comparison data for last %d days", days)
 
-        # Load all SFML summaries
         sfml_data = await self._get_all_sfml_summaries()
 
-        # Get configured entities
-        actual_entity = config.get(CONF_SENSOR_SOLAR_YIELD_DAILY)
+        sfml_reader = SFMLDataReader(self._hass)
+        actual_entity = sfml_reader.get_yield_entity_id()
         external_1_entity = config.get(CONF_FORECAST_ENTITY_1)
         external_1_name = config.get(CONF_FORECAST_ENTITY_1_NAME, DEFAULT_FORECAST_ENTITY_1_NAME)
         external_2_entity = config.get(CONF_FORECAST_ENTITY_2)
         external_2_name = config.get(CONF_FORECAST_ENTITY_2_NAME, DEFAULT_FORECAST_ENTITY_2_NAME)
 
-        # Get historical data from recorder
         actual_history = await self._get_sensor_history_from_recorder(actual_entity, days)
         external_1_history = await self._get_sensor_history_from_recorder(external_1_entity, days)
         external_2_history = await self._get_sensor_history_from_recorder(external_2_entity, days)
 
-        # Load existing history
         history = await self._load_history()
 
-        # Build entries for each day
         end_date = date.today()
         start_date = end_date - timedelta(days=days - 1)
 
@@ -520,19 +501,16 @@ class ForecastComparisonCollector:
         while current <= end_date:
             day_str = current.isoformat()
 
-            # Skip if we already have data for this day
             if day_str in history.get("days", {}):
                 current = current + timedelta(days=1)
                 continue
 
-            # Get values for this day
             sfml_info = sfml_data.get(day_str, {})
             sfml_forecast = sfml_info.get("predicted_kwh")
             actual_kwh = actual_history.get(day_str) or sfml_info.get("actual_kwh")
             external_1_kwh = external_1_history.get(day_str)
             external_2_kwh = external_2_history.get(day_str)
 
-            # Only create entry if we have some data
             if sfml_forecast is not None or actual_kwh is not None or external_1_kwh is not None or external_2_kwh is not None:
                 daily_entry: dict[str, Any] = {
                     "actual_kwh": actual_kwh,
@@ -540,7 +518,6 @@ class ForecastComparisonCollector:
                     "timestamp": datetime.now().isoformat(),
                 }
 
-                # Add external forecasts if configured
                 if external_1_entity:
                     daily_entry["external_1"] = {
                         "entity_id": external_1_entity,
@@ -555,7 +532,6 @@ class ForecastComparisonCollector:
                         "forecast_kwh": external_2_kwh,
                     }
 
-                # Calculate accuracy metrics if we have actual and forecast data
                 if actual_kwh is not None and actual_kwh > 0:
                     if sfml_forecast is not None:
                         error = abs(sfml_forecast - actual_kwh)
@@ -583,10 +559,8 @@ class ForecastComparisonCollector:
 
             current = current + timedelta(days=1)
 
-        # Update metadata
         history["metadata"]["last_updated"] = datetime.now().isoformat()
 
-        # Save history
         success = await self._save_history(history)
 
         if success:
@@ -598,19 +572,11 @@ class ForecastComparisonCollector:
         return success
 
     async def async_repair_missing_sfml_forecasts(self, days: int = 7) -> int:
-        """Repair missing SFML forecasts from daily_summaries.json. @zara
-
-        This method fills in any missing sfml_forecast_kwh values by looking
-        them up in the SFML daily_summaries.json file.
-
-        Returns the number of entries repaired.
-        """
+        """Repair missing SFML forecasts from database. @zara"""
         _LOGGER.info("Repairing missing SFML forecasts for last %d days", days)
 
-        # Load all SFML summaries
         sfml_data = await self._get_all_sfml_summaries()
 
-        # Load history
         history = await self._load_history()
 
         repaired_count = 0
@@ -624,9 +590,7 @@ class ForecastComparisonCollector:
             if day_str in history.get("days", {}):
                 daily_entry = history["days"][day_str]
 
-                # Check if SFML forecast is missing
                 if daily_entry.get("sfml_forecast_kwh") is None:
-                    # Try to get from SFML summaries
                     sfml_info = sfml_data.get(day_str, {})
                     sfml_forecast = sfml_info.get("predicted_kwh")
 
@@ -634,7 +598,6 @@ class ForecastComparisonCollector:
                         daily_entry["sfml_forecast_kwh"] = sfml_forecast
                         _LOGGER.info("Repaired SFML forecast for %s: %.2f kWh", day_str, sfml_forecast)
 
-                        # Recalculate accuracy if we have actual data
                         actual_kwh = daily_entry.get("actual_kwh")
                         if actual_kwh is not None and actual_kwh > 0:
                             error = abs(sfml_forecast - actual_kwh)

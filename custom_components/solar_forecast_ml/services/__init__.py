@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,3 +7,6 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
+"""Services module exports @zara"""
+
+__all__ = []

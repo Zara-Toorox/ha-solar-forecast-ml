@@ -1,11 +1,17 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
+
+"""
+Coordinator Helper Functions for Solar Forecast ML V16.0.0.
+Provides utility functions for the data update coordinator.
+Pure utility functions with minimal database dependencies.
+"""
 
 import logging
 from datetime import datetime, timedelta
@@ -15,14 +21,15 @@ from .core_helpers import SafeDateTimeUtil as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class CoordinatorHelpers:
-    """Helper functions for the data update coordinator"""
+    """Helper functions for the data update coordinator. @zara"""
 
     @staticmethod
     def calculate_next_update_time(
         last_update: Optional[datetime], interval_minutes: int = 15
     ) -> datetime:
-        """Calculate the next scheduled update time"""
+        """Calculate the next scheduled update time. @zara"""
         if last_update is None:
             return dt_util.now()
 
@@ -35,7 +42,7 @@ class CoordinatorHelpers:
 
     @staticmethod
     def should_force_update(last_update: Optional[datetime], max_age_hours: int = 24) -> bool:
-        """Check if data should be force-updated due to age @zara"""
+        """Check if data should be force-updated due to age. @zara"""
         if last_update is None:
             return True
 
@@ -44,7 +51,7 @@ class CoordinatorHelpers:
 
     @staticmethod
     def validate_coordinator_data(data: Dict[str, Any]) -> bool:
-        """Validate coordinator data structure @zara"""
+        """Validate coordinator data structure. @zara"""
         required_keys = ["last_update", "forecasts"]
 
         for key in required_keys:
@@ -56,12 +63,11 @@ class CoordinatorHelpers:
 
     @staticmethod
     def merge_forecast_data(old_data: Dict[str, Any], new_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Merge new forecast data with existing data @zara"""
+        """Merge new forecast data with existing data. @zara"""
         merged = old_data.copy()
 
         for key, value in new_data.items():
             if key == "forecasts" and key in merged:
-
                 merged[key].update(value)
             else:
                 merged[key] = value
@@ -72,7 +78,7 @@ class CoordinatorHelpers:
 
     @staticmethod
     def calculate_data_staleness(last_update: Optional[datetime]) -> Dict[str, Any]:
-        """Calculate data staleness metrics @zara"""
+        """Calculate data staleness metrics. @zara"""
         if last_update is None:
             return {
                 "stale": True,
@@ -115,7 +121,7 @@ class CoordinatorHelpers:
 
     @staticmethod
     def format_update_summary(update_results: Dict[str, bool]) -> str:
-        """Format update results into a readable summary @zara"""
+        """Format update results into a readable summary. @zara"""
         total = len(update_results)
         successful = sum(1 for v in update_results.values() if v)
         failed = total - successful

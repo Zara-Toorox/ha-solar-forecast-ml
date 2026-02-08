@@ -1,17 +1,13 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Automatic sensor helper creation for SFML Stats. @zara
-
-Creates Integration sensors (W -> kWh) and Utility Meters (daily reset)
-automatically when only power sensors are available.
-"""
+"""Automatic sensor helper creation for SFML Stats. @zara"""
 from __future__ import annotations
 
 import logging
@@ -23,17 +19,18 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     DOMAIN,
-    CONF_SENSOR_SOLAR_POWER,
-    CONF_SENSOR_SOLAR_YIELD_DAILY,
     CONF_SENSOR_GRID_TO_HOUSE,
     CONF_SENSOR_GRID_IMPORT_DAILY,
     CONF_SENSOR_HOUSE_TO_GRID,
+    CONF_SENSOR_GRID_EXPORT_DAILY,
     CONF_SENSOR_HOME_CONSUMPTION,
+    CONF_SENSOR_HOME_CONSUMPTION_DAILY,
+    CONF_SENSOR_BATTERY_TO_HOUSE,
+    CONF_SENSOR_BATTERY_DISCHARGE_DAILY,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-# Prefix for auto-created helpers
 HELPER_PREFIX = "sfml_stats"
 
 
@@ -41,27 +38,14 @@ HELPER_PREFIX = "sfml_stats"
 class SensorHelperDefinition:
     """Definition for an auto-created sensor helper. @zara"""
 
-    # Source power sensor config key (W)
     source_power_key: str
-    # Target daily sensor config key (kWh)
     target_daily_key: str
-    # Name for the integration sensor
     integration_name: str
-    # Name for the utility meter
     utility_meter_name: str
-    # Friendly name
     friendly_name: str
 
 
-# Define which power sensors can be converted to daily kWh sensors
 SENSOR_HELPER_DEFINITIONS: list[SensorHelperDefinition] = [
-    SensorHelperDefinition(
-        source_power_key=CONF_SENSOR_SOLAR_POWER,
-        target_daily_key=CONF_SENSOR_SOLAR_YIELD_DAILY,
-        integration_name=f"{HELPER_PREFIX}_solar_energy_total",
-        utility_meter_name=f"{HELPER_PREFIX}_solar_yield_daily",
-        friendly_name="Solar Yield Daily (Auto)",
-    ),
     SensorHelperDefinition(
         source_power_key=CONF_SENSOR_GRID_TO_HOUSE,
         target_daily_key=CONF_SENSOR_GRID_IMPORT_DAILY,
@@ -71,17 +55,24 @@ SENSOR_HELPER_DEFINITIONS: list[SensorHelperDefinition] = [
     ),
     SensorHelperDefinition(
         source_power_key=CONF_SENSOR_HOUSE_TO_GRID,
-        target_daily_key=f"{HELPER_PREFIX}_grid_export_daily",
+        target_daily_key=CONF_SENSOR_GRID_EXPORT_DAILY,
         integration_name=f"{HELPER_PREFIX}_grid_export_total",
         utility_meter_name=f"{HELPER_PREFIX}_grid_export_daily",
         friendly_name="Grid Export Daily (Auto)",
     ),
     SensorHelperDefinition(
         source_power_key=CONF_SENSOR_HOME_CONSUMPTION,
-        target_daily_key=f"{HELPER_PREFIX}_consumption_daily",
+        target_daily_key=CONF_SENSOR_HOME_CONSUMPTION_DAILY,
         integration_name=f"{HELPER_PREFIX}_consumption_total",
         utility_meter_name=f"{HELPER_PREFIX}_consumption_daily",
         friendly_name="Home Consumption Daily (Auto)",
+    ),
+    SensorHelperDefinition(
+        source_power_key=CONF_SENSOR_BATTERY_TO_HOUSE,
+        target_daily_key=CONF_SENSOR_BATTERY_DISCHARGE_DAILY,
+        integration_name=f"{HELPER_PREFIX}_battery_discharge_total",
+        utility_meter_name=f"{HELPER_PREFIX}_battery_discharge_daily",
+        friendly_name="Battery Discharge Daily (Auto)",
     ),
 ]
 
@@ -98,29 +89,22 @@ class SensorHelperManager:
         self,
         config_data: dict[str, Any],
     ) -> list[SensorHelperDefinition]:
-        """Analyze which daily sensors are missing but could be created. @zara
-
-        Returns list of helper definitions that can be auto-created.
-        """
+        """Analyze which daily sensors are missing but could be created. @zara"""
         missing: list[SensorHelperDefinition] = []
 
         for definition in SENSOR_HELPER_DEFINITIONS:
-            # Check if power sensor is configured
             power_sensor = config_data.get(definition.source_power_key)
             if not power_sensor:
                 continue
 
-            # Check if daily sensor is already configured
             daily_sensor = config_data.get(definition.target_daily_key)
             if daily_sensor:
                 continue
 
-            # Check if power sensor exists and is valid
             state = self._hass.states.get(power_sensor)
             if not state or state.state in ("unknown", "unavailable"):
                 continue
 
-            # This sensor can be auto-created
             missing.append(definition)
             _LOGGER.debug(
                 "Can create helper for %s -> %s",
@@ -135,10 +119,7 @@ class SensorHelperManager:
         definitions: list[SensorHelperDefinition],
         config_data: dict[str, Any],
     ) -> dict[str, str]:
-        """Create integration sensors and utility meters. @zara
-
-        Returns mapping of config keys to created sensor entity IDs.
-        """
+        """Create integration sensors and utility meters. @zara"""
         created: dict[str, str] = {}
 
         for definition in definitions:
@@ -147,7 +128,6 @@ class SensorHelperManager:
                 continue
 
             try:
-                # Step 1: Create Integration sensor (W -> kWh)
                 integration_entity_id = await self._create_integration_sensor(
                     source_sensor=source_sensor,
                     name=definition.integration_name,
@@ -161,7 +141,6 @@ class SensorHelperManager:
                     )
                     continue
 
-                # Step 2: Create Utility Meter (daily reset)
                 utility_meter_entity_id = await self._create_utility_meter(
                     source_sensor=integration_entity_id,
                     name=definition.utility_meter_name,
@@ -194,13 +173,11 @@ class SensorHelperManager:
     ) -> str | None:
         """Create an integration sensor (Riemann sum). @zara"""
         try:
-            # Check if already exists
             entity_id = f"sensor.{name}"
             if self._hass.states.get(entity_id):
                 _LOGGER.debug("Integration sensor %s already exists", entity_id)
                 return entity_id
 
-            # Create via service call
             await self._hass.services.async_call(
                 "homeassistant",
                 "reload_config_entry",
@@ -208,35 +185,29 @@ class SensorHelperManager:
                 blocking=False,
             )
 
-            # Use the helper platform to create integration sensor
             from homeassistant.components.integration.sensor import (
                 DOMAIN as INTEGRATION_DOMAIN,
             )
 
-            # Create configuration for the integration sensor
             config = {
                 "platform": "integration",
                 "source": source_sensor,
                 "name": friendly_name,
                 "unique_id": f"{DOMAIN}_{name}",
-                "unit_prefix": "k",  # kWh
-                "unit_time": "h",  # per hour
+                "unit_prefix": "k",
+                "unit_time": "h",
                 "round": 3,
                 "method": "trapezoidal",
             }
 
-            # Register with entity registry
             ent_reg = er.async_get(self._hass)
 
-            # Check if entity already registered
             existing = ent_reg.async_get_entity_id(
                 "sensor", INTEGRATION_DOMAIN, f"{DOMAIN}_{name}"
             )
             if existing:
                 return existing
 
-            # For now, return expected entity_id
-            # The actual creation happens via configuration
             _LOGGER.info(
                 "Integration sensor config prepared: %s from %s",
                 name,
@@ -258,12 +229,10 @@ class SensorHelperManager:
         try:
             entity_id = f"sensor.{name}"
 
-            # Check if already exists
             if self._hass.states.get(entity_id):
                 _LOGGER.debug("Utility meter %s already exists", entity_id)
                 return entity_id
 
-            # Configuration for utility meter
             config = {
                 "source": source_sensor,
                 "name": friendly_name,
@@ -287,13 +256,9 @@ class SensorHelperManager:
         definitions: list[SensorHelperDefinition],
         config_data: dict[str, Any],
     ) -> str:
-        """Generate YAML configuration for manual helper creation. @zara
-
-        Returns YAML that user can copy to configuration.yaml.
-        """
+        """Generate YAML configuration for manual helper creation. @zara"""
         yaml_parts = []
 
-        # Integration sensors
         integration_configs = []
         utility_meter_configs = []
 
@@ -302,7 +267,6 @@ class SensorHelperManager:
             if not source_sensor:
                 continue
 
-            # Integration sensor YAML
             integration_configs.append(f"""  - platform: integration
     source: {source_sensor}
     name: "{definition.friendly_name} Total"
@@ -312,20 +276,17 @@ class SensorHelperManager:
     round: 3
     method: trapezoidal""")
 
-            # Utility meter YAML
             utility_meter_configs.append(f"""  {definition.utility_meter_name}:
     source: sensor.{definition.integration_name}
     name: "{definition.friendly_name}"
     cycle: daily""")
 
         if integration_configs:
-            yaml_parts.append("# Integration Sensors (W -> kWh)")
             yaml_parts.append("sensor:")
             yaml_parts.extend(integration_configs)
             yaml_parts.append("")
 
         if utility_meter_configs:
-            yaml_parts.append("# Utility Meters (daily reset)")
             yaml_parts.append("utility_meter:")
             yaml_parts.extend(utility_meter_configs)
 
@@ -340,11 +301,7 @@ async def check_and_suggest_helpers(
     hass: HomeAssistant,
     config_data: dict[str, Any],
 ) -> tuple[list[SensorHelperDefinition], str]:
-    """Check for missing sensors and generate suggestions. @zara
-
-    Returns:
-        Tuple of (missing definitions, YAML suggestion)
-    """
+    """Check for missing sensors and generate suggestions. @zara"""
     manager = SensorHelperManager(hass)
     missing = await manager.analyze_missing_sensors(config_data)
 

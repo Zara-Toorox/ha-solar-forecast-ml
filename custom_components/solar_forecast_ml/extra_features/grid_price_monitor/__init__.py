@@ -25,7 +25,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Grid Price Monitor from a config entry @zara"""
+    """Set up Grid Price Monitor from a config entry.
+
+    Uses background initialization to avoid blocking HA startup. @zara
+    """
     # Lazy import to avoid blocking the event loop during module import
     from .coordinator import GridPriceMonitorCoordinator
 
@@ -38,33 +41,60 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Initialize domain data storage
     hass.data.setdefault(DOMAIN, {})
 
-    # Create and initialize coordinator
+    # Create coordinator (lightweight, no blocking)
     coordinator = GridPriceMonitorCoordinator(hass, entry)
 
-    # Initialize persistent storage (creates /config/grid_price_monitor/ structure)
-    await coordinator.async_initialize_storage()
-
-    # Initialize battery tracker if configured
-    await coordinator.async_setup_battery_tracker()
-
-    # Fetch initial data
-    await coordinator.async_config_entry_first_refresh()
-
-    # Store coordinator
+    # Store coordinator BEFORE background init
+    # This allows platforms to set up even if data isn't ready yet
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Set up platforms
+    # Set up platforms - they will show "unavailable" until data is ready
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Register update listener for options changes
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
-    _LOGGER.info(
-        "%s setup complete - monitoring %s electricity prices",
-        NAME,
-        entry.data.get("country", "DE"),
+    # Background initialization to avoid blocking HA startup @zara
+    async def _background_initialization() -> None:
+        """Initialize coordinator in background to not block HA startup."""
+        import asyncio
+
+        try:
+            _LOGGER.debug("Grid Price Monitor: Starting background initialization")
+
+            # Initialize persistent storage (creates /config/grid_price_monitor/ structure)
+            await coordinator.async_initialize_storage()
+
+            # Initialize battery tracker if configured
+            await coordinator.async_setup_battery_tracker()
+
+            # Fetch initial data with timeout to prevent indefinite blocking
+            # Note: Use async_refresh() instead of async_config_entry_first_refresh()
+            # because we're in a background task after setup has completed (state is LOADED)
+            try:
+                async with asyncio.timeout(60):
+                    await coordinator.async_refresh()
+            except asyncio.TimeoutError:
+                _LOGGER.warning(
+                    "Grid Price Monitor: First refresh timed out after 60s - "
+                    "will retry at next scheduled update"
+                )
+
+            _LOGGER.info(
+                "%s setup complete - monitoring %s electricity prices",
+                NAME,
+                entry.data.get("country", "DE"),
+            )
+        except Exception as err:
+            _LOGGER.error("Grid Price Monitor background init failed: %s", err)
+
+    # Start background initialization - does not block HA startup
+    hass.async_create_background_task(
+        _background_initialization(),
+        f"{DOMAIN}_background_init_{entry.entry_id}",
     )
 
+    _LOGGER.info("Grid Price Monitor basic setup complete - initialization continues in background")
     return True
 
 

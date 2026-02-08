@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,7 +7,7 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Base chart class for SFML Stats."""
+"""Base chart class for SFML Stats. @zara"""
 from __future__ import annotations
 
 import asyncio
@@ -28,65 +28,39 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Shared executor for matplotlib operations
 _MATPLOTLIB_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="matplotlib")
 
 
 class BaseChart(ABC):
-    """Abstrakte Basisklasse für alle Charts."""
+    """Abstract base class for all charts. @zara"""
 
     def __init__(
         self,
         validator: "DataValidator",
         figsize: tuple[int, int] = (12, 8),
     ) -> None:
-        """Initialisiere das Chart.
-
-        Args:
-            validator: DataValidator Instanz
-            figsize: Größe der Figure (Breite, Höhe) in Zoll
-        """
+        """Initialize the chart. @zara"""
         self._validator = validator
         self._figsize = figsize
         self._styles = ChartStyles()
         self._fig: "Figure | None" = None
-        # Note: apply_dark_theme() is now called in executor when generating charts
 
     @property
     def styles(self) -> ChartStyles:
-        """Gibt die Style-Konfiguration zurück."""
+        """Return the style configuration. @zara"""
         return self._styles
 
     @property
     def export_path(self) -> Path:
-        """Gibt den Export-Pfad für Charts zurück."""
+        """Return the export path for charts. @zara"""
         return self._validator.get_export_path("charts")
 
     @abstractmethod
     async def generate(self, **kwargs: Any) -> "Figure":
-        """Generiert das Chart.
-
-        WICHTIG: Subklassen sollten das Chart-Rendering in einem Executor ausführen,
-        um den Event-Loop nicht zu blockieren. Nutze _run_in_executor() dafür.
-
-        Args:
-            **kwargs: Chart-spezifische Parameter
-
-        Returns:
-            Matplotlib Figure
-        """
+        """Generate the chart. @zara"""
 
     async def _run_in_executor(self, func, *args, **kwargs):
-        """Führt eine Funktion im Executor aus.
-
-        Args:
-            func: Die auszuführende Funktion
-            *args: Positionale Argumente
-            **kwargs: Keyword Argumente
-
-        Returns:
-            Das Ergebnis der Funktion
-        """
+        """Run a function in the executor. @zara"""
         import functools
         loop = asyncio.get_running_loop()
         if kwargs:
@@ -95,37 +69,18 @@ class BaseChart(ABC):
 
     @abstractmethod
     def get_filename(self, **kwargs: Any) -> str:
-        """Gibt den Dateinamen für das Chart zurück.
-
-        Args:
-            **kwargs: Parameter für den Dateinamen
-
-        Returns:
-            Dateiname (ohne Pfad)
-        """
+        """Return the filename for the chart. @zara"""
 
     async def save(self, filename: str | None = None, **kwargs: Any) -> Path:
-        """Speichert das Chart als PNG.
-
-        Args:
-            filename: Optionaler Dateiname (sonst aus get_filename)
-            **kwargs: Parameter für generate() und get_filename()
-
-        Returns:
-            Pfad zur gespeicherten Datei
-        """
-        # Chart generieren falls noch nicht geschehen
+        """Save the chart as PNG. @zara"""
         if self._fig is None:
             self._fig = await self.generate(**kwargs)
 
-        # Dateiname bestimmen
         if filename is None:
             filename = self.get_filename(**kwargs)
 
-        # Vollständigen Pfad erstellen
         file_path = self.export_path / filename
 
-        # Speichern im Executor
         def _save_sync():
             import matplotlib.pyplot as plt
             self._fig.savefig(
@@ -151,19 +106,7 @@ class BaseChart(ABC):
         figsize: tuple[int, int] | None = None,
         **kwargs: Any,
     ) -> tuple["Figure", Any]:
-        """Erstellt eine neue Figure mit Subplots.
-
-        WICHTIG: Diese Methode muss in einem Executor aufgerufen werden.
-
-        Args:
-            nrows: Anzahl Zeilen
-            ncols: Anzahl Spalten
-            figsize: Optionale Größe (sonst self._figsize)
-            **kwargs: Weitere Parameter für subplots()
-
-        Returns:
-            Tuple aus (Figure, Axes)
-        """
+        """Create a new figure with subplots. @zara"""
         import matplotlib.pyplot as plt
         size = figsize or self._figsize
         fig, axes = plt.subplots(
@@ -181,13 +124,7 @@ class BaseChart(ABC):
         title: str,
         subtitle: str | None = None,
     ) -> None:
-        """Fügt Titel und optionalen Untertitel hinzu.
-
-        Args:
-            ax: Matplotlib Axes
-            title: Haupttitel
-            subtitle: Optionaler Untertitel
-        """
+        """Add title and optional subtitle. @zara"""
         ax.set_title(
             title,
             fontsize=self._styles.title_size,
@@ -212,12 +149,7 @@ class BaseChart(ABC):
         fig: "Figure",
         text: str | None = None,
     ) -> None:
-        """Fügt einen Footer mit Zeitstempel hinzu.
-
-        Args:
-            fig: Matplotlib Figure
-            text: Optionaler zusätzlicher Text
-        """
+        """Add footer with timestamp. @zara"""
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
         footer_text = f"Generiert: {timestamp}"
 
@@ -234,7 +166,6 @@ class BaseChart(ABC):
             transform=fig.transFigure,
         )
 
-        # SFML Stats Branding
         fig.text(
             0.01, 0.01,
             "SFML Stats",
@@ -252,14 +183,7 @@ class BaseChart(ABC):
         kpis: dict[str, str | float],
         position: str = "right",
     ) -> None:
-        """Fügt eine KPI-Box zum Chart hinzu.
-
-        Args:
-            ax: Matplotlib Axes
-            kpis: Dictionary mit KPI-Namen und Werten
-            position: Position ("right", "left", "top", "bottom")
-        """
-        # Text für die Box erstellen
+        """Add a KPI box to the chart. @zara"""
         lines = []
         for name, value in kpis.items():
             if isinstance(value, float):
@@ -268,7 +192,6 @@ class BaseChart(ABC):
 
         text = "\n".join(lines)
 
-        # Position bestimmen
         positions = {
             "right": (0.98, 0.98, "right", "top"),
             "left": (0.02, 0.98, "left", "top"),
@@ -277,7 +200,6 @@ class BaseChart(ABC):
         }
         x, y, ha, va = positions.get(position, positions["right"])
 
-        # Box erstellen
         props = dict(
             boxstyle="round,pad=0.5",
             facecolor=self._styles.background_card,
@@ -301,16 +223,7 @@ class BaseChart(ABC):
         self,
         labels_colors: dict[str, str],
     ) -> list["mpatches.Patch"]:
-        """Erstellt Legende-Patches.
-
-        WICHTIG: Diese Methode muss in einem Executor aufgerufen werden.
-
-        Args:
-            labels_colors: Dictionary mit Labels und Farben
-
-        Returns:
-            Liste von Matplotlib Patches
-        """
+        """Create legend patches. @zara"""
         import matplotlib.patches as mpatches
         return [
             mpatches.Patch(color=color, label=label)
@@ -318,14 +231,7 @@ class BaseChart(ABC):
         ]
 
     def _format_kwh(self, value: float) -> str:
-        """Formatiert einen kWh-Wert.
-
-        Args:
-            value: Wert in kWh
-
-        Returns:
-            Formatierter String
-        """
+        """Format a kWh value. @zara"""
         if value >= 1000:
             return f"{value / 1000:.1f} MWh"
         elif value >= 1:
@@ -334,23 +240,9 @@ class BaseChart(ABC):
             return f"{value * 1000:.0f} Wh"
 
     def _format_price(self, value: float) -> str:
-        """Formatiert einen Preiswert.
-
-        Args:
-            value: Wert in ct/kWh
-
-        Returns:
-            Formatierter String
-        """
+        """Format a price value. @zara"""
         return f"{value:.2f} ct/kWh"
 
     def _format_percent(self, value: float) -> str:
-        """Formatiert einen Prozentwert.
-
-        Args:
-            value: Wert in Prozent
-
-        Returns:
-            Formatierter String
-        """
+        """Format a percentage value. @zara"""
         return f"{value:.1f}%"

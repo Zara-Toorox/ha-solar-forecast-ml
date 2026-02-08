@@ -1,13 +1,13 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Data validator for SFML Stats."""
+"""Data validator for SFML Stats. @zara"""
 from __future__ import annotations
 
 import logging
@@ -20,10 +20,8 @@ from ..const import (
     EXPORT_DIRECTORIES,
     SFML_STATS_BASE,
     SOLAR_FORECAST_ML_BASE,
-    SOLAR_FORECAST_ML_STATS,
-    SOLAR_FORECAST_ML_AI,
+    SOLAR_FORECAST_DB,
     GRID_PRICE_MONITOR_BASE,
-    GRID_PRICE_MONITOR_DATA,
 )
 
 if TYPE_CHECKING:
@@ -84,42 +82,51 @@ class DataValidator:
 
     async def _validate_sources(self) -> None:
         """Validate availability of source integrations. @zara"""
-        sources = {
-            "solar_forecast_ml": {
-                "base": SOLAR_FORECAST_ML_BASE,
-                "required_dirs": [SOLAR_FORECAST_ML_STATS, SOLAR_FORECAST_ML_AI],
-            },
-            "grid_price_monitor": {
-                "base": GRID_PRICE_MONITOR_BASE,
-                "required_dirs": [GRID_PRICE_MONITOR_DATA],
-            },
-        }
+        solar_base_path = self._config_path / SOLAR_FORECAST_ML_BASE
+        solar_db_path = self._config_path / SOLAR_FORECAST_DB
 
-        for source_name, source_config in sources.items():
-            base_path = self._config_path / source_config["base"]
-            is_available = await self._hass.async_add_executor_job(base_path.exists)
+        solar_base_exists = await self._hass.async_add_executor_job(solar_base_path.exists)
+        solar_db_exists = await self._hass.async_add_executor_job(solar_db_path.exists)
 
-            if is_available:
-                for required_dir in source_config["required_dirs"]:
-                    dir_path = self._config_path / required_dir
-                    dir_exists = await self._hass.async_add_executor_job(dir_path.exists)
-                    if not dir_exists:
-                        _LOGGER.warning(
-                            "Source directory not found: %s",
-                            dir_path
-                        )
-                        is_available = False
-                        break
+        solar_available = solar_base_exists and solar_db_exists
+        self._source_status["solar_forecast_ml"] = solar_available
 
-            self._source_status[source_name] = is_available
-
-            if is_available:
-                _LOGGER.info("Source available: %s (%s)", source_name, base_path)
-            else:
+        if solar_available:
+            _LOGGER.info("Source available: solar_forecast_ml (database at %s)", solar_db_path)
+        else:
+            if not solar_base_exists:
                 _LOGGER.warning(
-                    "Source not available: %s - some statistics will not be generated",
-                    source_name
+                    "Source not available: solar_forecast_ml - base directory not found (%s)",
+                    solar_base_path
                 )
+            elif not solar_db_exists:
+                _LOGGER.warning(
+                    "Source not available: solar_forecast_ml - database not found (%s). "
+                    "Some statistics will not be generated.",
+                    solar_db_path
+                )
+
+        grid_available = False
+        if solar_db_exists:
+            try:
+                import aiosqlite
+                async with aiosqlite.connect(str(solar_db_path)) as db:
+                    async with db.execute(
+                        "SELECT COUNT(*) FROM GPM_price_history LIMIT 1"
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        grid_available = row is not None and row[0] > 0
+            except Exception:
+                grid_available = False
+
+        self._source_status["grid_price_monitor"] = grid_available
+
+        if grid_available:
+            _LOGGER.info("Source available: grid_price_monitor (GPM_price_history in %s)", solar_db_path)
+        else:
+            _LOGGER.warning(
+                "Source not available: grid_price_monitor - GPM_price_history table empty or missing"
+            )
 
     async def _create_export_directories(self) -> None:
         """Create all export directories. @zara"""

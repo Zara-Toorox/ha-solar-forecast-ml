@@ -134,3 +134,8 @@ ATTR_CHEAP_HOURS_TOMORROW = "cheap_hours_tomorrow"
 ATTR_PRICE_TREND = "price_trend"
 ATTR_LAST_UPDATE = "last_update"
 ATTR_DATA_SOURCE = "data_source"
+
+# ============================================================================
+# DATABASE
+# ============================================================================
+DB_PATH = "/config/solar_forecast_ml/solar_forecast.db"

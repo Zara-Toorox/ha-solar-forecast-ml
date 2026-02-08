@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,31 +7,75 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
+"""
+Coordinator Update Helpers for Solar Forecast ML V16.0.0.
+Provides helper methods for coordinator data updates and forecast generation.
+Uses DatabaseManager for state operations.
+"""
+
 import logging
+from datetime import timedelta
 from typing import Any, Dict, Optional, Tuple
 
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from ..core.core_helpers import SafeDateTimeUtil as dt_util
+from .core_helpers import SafeDateTimeUtil as dt_util
+from ..data.db_manager import DatabaseManager
+from ..const import (
+    DATA_KEY_FORECAST_TODAY,
+    DATA_KEY_FORECAST_TOMORROW,
+    DATA_KEY_FORECAST_DAY_AFTER,
+    DATA_KEY_HOURLY_FORECAST,
+    DATA_KEY_CURRENT_WEATHER,
+    DATA_KEY_EXTERNAL_SENSORS,
+    DATA_KEY_PRODUCTION_TIME,
+    DATA_KEY_PEAK_TODAY,
+    DATA_KEY_YIELD_TODAY,
+    DATA_KEY_EXPECTED_DAILY_PRODUCTION,
+    DATA_KEY_STATISTICS,
+    PROD_TIME_ACTIVE,
+    PROD_TIME_DURATION_SECONDS,
+    PROD_TIME_START_TIME,
+    PROD_TIME_END_TIME,
+    PEAK_TODAY_POWER_W,
+    PEAK_TODAY_AT,
+    YIELD_TODAY_KWH,
+    YIELD_TODAY_SENSOR,
+    FORECAST_KEY_TODAY,
+    FORECAST_KEY_TOMORROW,
+    FORECAST_KEY_DAY_AFTER,
+    FORECAST_KEY_HOURLY,
+    FORECAST_KEY_METHOD,
+    EXT_SENSOR_SOLAR_YIELD_TODAY,
+    STATS_ALL_TIME_PEAK,
+    STATS_LAST_7_DAYS,
+    STATS_LAST_30_DAYS,
+    STATS_AVG_ACCURACY,
+    STATS_YIELD_KWH,
+    STATS_AVG_YIELD_KWH,
+    STATS_CONSUMPTION_KWH,
+    STATS_CURRENT_MONTH,
+    STATS_CURRENT_WEEK,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-class CoordinatorUpdateHelpers:
-    """Helper methods for coordinator data updates"""
 
-    def __init__(self, coordinator: "SolarForecastMLCoordinator"):
-        """Initialize helpers @zara"""
+class CoordinatorUpdateHelpers:
+    """Helper methods for coordinator data updates. @zara"""
+
+    def __init__(self, coordinator: Any, db_manager: DatabaseManager):
         self.coordinator = coordinator
+        self.db = db_manager
 
     async def fetch_weather_data(self) -> Tuple[Optional[Dict], Optional[list]]:
-        """Fetch current weather and hourly forecast @zara"""
+        """Fetch current weather and hourly forecast. @zara"""
         current_weather = None
         hourly_forecast = None
 
         if self.coordinator.weather_service:
             try:
                 current_weather = await self.coordinator.weather_service.get_current_weather()
-
                 hourly_forecast = (
                     await self.coordinator.weather_service.get_corrected_hourly_forecast()
                 )
@@ -51,7 +95,7 @@ class CoordinatorUpdateHelpers:
         hourly_forecast: Optional[list],
         external_sensors: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Generate forecast using orchestrator"""
+        """Generate forecast using orchestrator. @zara"""
         forecast = await self.coordinator.forecast_orchestrator.orchestrate_forecast(
             current_weather=current_weather,
             hourly_forecast=hourly_forecast,
@@ -64,13 +108,11 @@ class CoordinatorUpdateHelpers:
         if not forecast:
             raise UpdateFailed("Forecast generation failed")
 
-        hourly_count = len(forecast.get("hourly", []))
+        hourly_count = len(forecast.get(FORECAST_KEY_HOURLY, []))
         _LOGGER.debug(
-            f"Forecast data from orchestrator: "
-            f"today={forecast.get('today', 'N/A')} kWh, "
-            f"tomorrow={forecast.get('tomorrow', 'N/A')} kWh, "
-            f"day_after={forecast.get('day_after_tomorrow', 'N/A')} kWh, "
-            f"method={forecast.get('method', 'unknown')}, "
+            f"Forecast generated: today={forecast.get(FORECAST_KEY_TODAY, 'N/A')} kWh, "
+            f"tomorrow={forecast.get(FORECAST_KEY_TOMORROW, 'N/A')} kWh, "
+            f"method={forecast.get(FORECAST_KEY_METHOD, 'unknown')}, "
             f"hourly_entries={hourly_count}"
         )
         return forecast
@@ -81,196 +123,252 @@ class CoordinatorUpdateHelpers:
         current_weather: Optional[Dict],
         external_sensors: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Build coordinator result dictionary (async to load diagnostic data safely)"""
-        import asyncio
+        """Build coordinator result dictionary. @zara"""
+        # Load statistics from database @zara
+        statistics = await self._load_statistics()
 
-        # Load diagnostic data in executor to avoid blocking event loop
-        loop = asyncio.get_running_loop()
-        cached_patterns = await loop.run_in_executor(None, self._load_cached_patterns)
-        cached_physics = await loop.run_in_executor(None, self._load_cached_physics)
+        # Load peak today from database if not set on coordinator @zara
+        peak_power_today = getattr(self.coordinator, "_peak_power_today", 0.0)
+        peak_time_today = getattr(self.coordinator, "_peak_time_today", None)
+
+        if peak_power_today == 0.0:
+            today_peak = await self._get_today_peak()
+            if today_peak:
+                peak_power_today = today_peak.get("power_w", 0.0)
+                peak_time_today = today_peak.get("time")
 
         result = {
-            "forecast_today": forecast.get("today"),
-            "forecast_tomorrow": forecast.get("tomorrow"),
-            "forecast_day_after_tomorrow": forecast.get("day_after_tomorrow"),
-            "hourly_forecast": forecast.get("hourly", []) if self.coordinator.enable_hourly else [],
-            "current_weather": current_weather,
-            "external_sensors": external_sensors,
-
-            "production_time": {
-                "active": self.coordinator.production_time_calculator.is_active,
-                "duration_seconds": self.coordinator.production_time_calculator.total_seconds,
-                "start_time": self.coordinator.production_time_calculator.start_time,
-                "end_time": self.coordinator.production_time_calculator.end_time,
+            DATA_KEY_FORECAST_TODAY: forecast.get(FORECAST_KEY_TODAY),
+            DATA_KEY_FORECAST_TOMORROW: forecast.get(FORECAST_KEY_TOMORROW),
+            DATA_KEY_FORECAST_DAY_AFTER: forecast.get(FORECAST_KEY_DAY_AFTER),
+            DATA_KEY_HOURLY_FORECAST: forecast.get(FORECAST_KEY_HOURLY, []) if self.coordinator.enable_hourly else [],
+            DATA_KEY_CURRENT_WEATHER: current_weather,
+            DATA_KEY_EXTERNAL_SENSORS: external_sensors,
+            DATA_KEY_PRODUCTION_TIME: {
+                PROD_TIME_ACTIVE: self.coordinator.production_time_calculator.is_active,
+                PROD_TIME_DURATION_SECONDS: self.coordinator.production_time_calculator.total_seconds,
+                PROD_TIME_START_TIME: self.coordinator.production_time_calculator.start_time,
+                PROD_TIME_END_TIME: self.coordinator.production_time_calculator.end_time,
             },
-            "peak_today": {
-                "power_w": getattr(self.coordinator, "_peak_power_today", 0.0),
-                "at": getattr(self.coordinator, "_peak_time_today", None),
+            DATA_KEY_PEAK_TODAY: {
+                PEAK_TODAY_POWER_W: peak_power_today,
+                PEAK_TODAY_AT: peak_time_today,
             },
-            "yield_today": {
-                "kwh": external_sensors.get("solar_yield_today"),
-                "sensor": self.coordinator.solar_yield_today,
+            DATA_KEY_YIELD_TODAY: {
+                YIELD_TODAY_KWH: external_sensors.get(EXT_SENSOR_SOLAR_YIELD_TODAY),
+                YIELD_TODAY_SENSOR: self.coordinator.solar_yield_today,
             },
-            # Cached diagnostic data (loaded async via executor to avoid blocking)
-            "_cached_patterns": cached_patterns,
-            "_cached_physics": cached_physics,
+            DATA_KEY_EXPECTED_DAILY_PRODUCTION: self.coordinator.expected_daily_production,
+            DATA_KEY_STATISTICS: statistics,
         }
         return result
 
-    def _load_cached_patterns(self) -> Dict[str, Any]:
-        """Load AI seasonal data for diagnostic sensors (called from async context) @zara"""
+    async def _load_statistics(self) -> Dict[str, Any]:
+        """Load statistics from database. @zara"""
+        statistics = {
+            STATS_ALL_TIME_PEAK: {},
+            STATS_LAST_7_DAYS: {},
+            STATS_LAST_30_DAYS: {},
+            STATS_CURRENT_MONTH: {},
+            STATS_CURRENT_WEEK: {},
+        }
+
         try:
-            data_manager = getattr(self.coordinator, "data_manager", None)
-            if not data_manager:
-                return {}
+            # Load all-time peak from production_time_state @zara
+            all_time_peak = await self.db.fetchone(
+                """SELECT peak_record_w, peak_record_date, peak_record_time
+                   FROM production_time_state
+                   WHERE id = 1 AND peak_record_w IS NOT NULL"""
+            )
+            if all_time_peak and all_time_peak[0]:
+                statistics[STATS_ALL_TIME_PEAK] = {
+                    PEAK_TODAY_POWER_W: float(all_time_peak[0]),
+                    PEAK_TODAY_AT: f"{all_time_peak[1]} {all_time_peak[2]}" if all_time_peak[1] and all_time_peak[2] else None,
+                    "date": all_time_peak[1],
+                }
 
-            # Load seasonal.json from ai/ directory (replaces learned_patterns.json)
-            seasonal_file = data_manager.data_dir / "ai" / "seasonal.json"
-            if not seasonal_file.exists():
-                return {}
+            # Load 7-day statistics @zara
+            stats_7d = await self.db.fetchone(
+                """SELECT AVG(actual_total_kwh), AVG(accuracy_percent), SUM(actual_total_kwh)
+                   FROM daily_summaries
+                   WHERE date >= DATE('now', '-7 days') AND actual_total_kwh IS NOT NULL"""
+            )
+            if stats_7d:
+                statistics[STATS_LAST_7_DAYS] = {
+                    STATS_AVG_YIELD_KWH: float(stats_7d[0]) if stats_7d[0] else None,
+                    STATS_AVG_ACCURACY: float(stats_7d[1]) if stats_7d[1] else None,
+                    STATS_YIELD_KWH: float(stats_7d[2]) if stats_7d[2] else None,
+                }
 
-            import json
-            with open(seasonal_file, "r") as f:
-                return json.load(f)
+            # Load 30-day statistics @zara
+            stats_30d = await self.db.fetchone(
+                """SELECT AVG(actual_total_kwh), AVG(accuracy_percent), SUM(actual_total_kwh)
+                   FROM daily_summaries
+                   WHERE date >= DATE('now', '-30 days') AND actual_total_kwh IS NOT NULL"""
+            )
+            if stats_30d:
+                statistics[STATS_LAST_30_DAYS] = {
+                    STATS_AVG_YIELD_KWH: float(stats_30d[0]) if stats_30d[0] else None,
+                    STATS_AVG_ACCURACY: float(stats_30d[1]) if stats_30d[1] else None,
+                    STATS_YIELD_KWH: float(stats_30d[2]) if stats_30d[2] else None,
+                }
+
+            # Load current month statistics @zara
+            month_start = dt_util.now().date().replace(day=1).isoformat()
+
+            month_yield = await self.db.fetchone(
+                """SELECT SUM(actual_total_kwh)
+                   FROM daily_summaries
+                   WHERE date >= ? AND actual_total_kwh IS NOT NULL""",
+                (month_start,)
+            )
+
+            month_consumption = await self.db.fetchone(
+                """SELECT SUM(consumption_kwh)
+                   FROM forecast_history
+                   WHERE date >= ? AND consumption_kwh IS NOT NULL""",
+                (month_start,)
+            )
+
+            statistics[STATS_CURRENT_MONTH] = {
+                STATS_YIELD_KWH: float(month_yield[0]) if month_yield and month_yield[0] else 0.0,
+                STATS_CONSUMPTION_KWH: float(month_consumption[0]) if month_consumption and month_consumption[0] else 0.0,
+            }
+
+            # Load current week statistics @zara
+            week_start = (dt_util.now().date() - timedelta(
+                days=dt_util.now().date().weekday()
+            )).isoformat()
+
+            week_yield = await self.db.fetchone(
+                """SELECT SUM(actual_total_kwh)
+                   FROM daily_summaries
+                   WHERE date >= ? AND actual_total_kwh IS NOT NULL""",
+                (week_start,)
+            )
+
+            week_consumption = await self.db.fetchone(
+                """SELECT SUM(consumption_kwh)
+                   FROM forecast_history
+                   WHERE date >= ? AND consumption_kwh IS NOT NULL""",
+                (week_start,)
+            )
+
+            statistics[STATS_CURRENT_WEEK] = {
+                STATS_YIELD_KWH: float(week_yield[0]) if week_yield and week_yield[0] else 0.0,
+                STATS_CONSUMPTION_KWH: float(week_consumption[0]) if week_consumption and week_consumption[0] else 0.0,
+            }
+
         except Exception as e:
-            _LOGGER.debug(f"Error loading cached patterns: {e}")
-            return {}
+            _LOGGER.warning(f"Failed to load statistics: {e}")
 
-    def _load_cached_physics(self) -> Dict[str, Any]:
-        """Load AI weights for diagnostic sensors (called from async context) @zara"""
+        return statistics
+
+    async def _get_today_peak(self) -> Optional[Dict[str, Any]]:
+        """Get today's peak power from production_time_state. @zara"""
         try:
-            data_manager = getattr(self.coordinator, "data_manager", None)
-            if not data_manager:
-                return {}
-
-            import json
-
-            # Load learned_weights.json from ai/ directory (TinyLSTM weights)
-            weights_file = data_manager.data_dir / "ai" / "learned_weights.json"
-            if weights_file.exists():
-                with open(weights_file, "r") as f:
-                    data = json.load(f)
-                    data["_source"] = "ai_weights"
-                    return data
-
-            return {}
+            today = dt_util.now().date().isoformat()
+            row = await self.db.fetchone(
+                """SELECT peak_power_w, peak_power_time
+                   FROM production_time_state
+                   WHERE id = 1 AND date = ?""",
+                (today,)
+            )
+            if row and row[0]:
+                return {
+                    "power_w": float(row[0]),
+                    "time": str(row[1]) if row[1] else None,
+                }
         except Exception as e:
-            _LOGGER.debug(f"Error loading cached physics: {e}")
-            return {}
+            _LOGGER.debug(f"Could not get today's peak: {e}")
+        return None
 
     async def save_forecasts(self, forecast_data: Dict[str, Any], hourly_forecast: list) -> None:
-        """Save forecasts to storage @zara"""
-        await self.coordinator._save_forecasts_to_storage(
-            forecast_data={
-                "today": forecast_data.get("today"),
-                "tomorrow": forecast_data.get("tomorrow"),
-                "day_after_tomorrow": forecast_data.get("day_after_tomorrow"),
-                "best_hour": forecast_data.get("best_hour"),
-                "best_hour_kwh": forecast_data.get("best_hour_kwh"),
-            },
-            hourly_forecast=hourly_forecast,
-        )
+        """Save forecasts to database. Only writes if NOT locked (morning routine has priority). @zara"""
+        try:
+            now = dt_util.now()
+            today_date = now.date().isoformat()
+            tomorrow_date = (now.date() + timedelta(days=1)).isoformat()
+            day_after_date = (now.date() + timedelta(days=2)).isoformat()
+
+            forecasts_to_save = [
+                ("today", today_date, forecast_data.get(FORECAST_KEY_TODAY)),
+                ("tomorrow", tomorrow_date, forecast_data.get(FORECAST_KEY_TOMORROW)),
+                ("day_after_tomorrow", day_after_date, forecast_data.get(FORECAST_KEY_DAY_AFTER)),
+            ]
+
+            for forecast_type, forecast_date, kwh_value in forecasts_to_save:
+                if kwh_value is None:
+                    continue
+
+                # Check if locked - morning routine has exclusive write access when locked
+                lock_check = await self.db.fetchone(
+                    """SELECT locked FROM daily_forecasts
+                        WHERE forecast_type = ? AND forecast_date = ?""",
+                    (forecast_type, forecast_date)
+                )
+
+                if lock_check and lock_check[0]:
+                    _LOGGER.debug(
+                        "Skipping %s forecast update - locked by morning routine",
+                        forecast_type
+                    )
+                    continue
+
+                # Not locked - safe to write
+                await self.db.execute(
+                    """INSERT INTO daily_forecasts
+                        (forecast_type, forecast_date, prediction_kwh, source)
+                        VALUES (?, ?, ?, 'coordinator_update')
+                        ON CONFLICT(forecast_type, forecast_date) DO UPDATE SET
+                            prediction_kwh = excluded.prediction_kwh,
+                            source = excluded.source
+                        WHERE locked = 0 OR locked IS NULL""",
+                    (forecast_type, forecast_date, kwh_value)
+                )
+
+            _LOGGER.debug("Forecasts saved to database (respecting locks)")
+
+        except Exception as e:
+            _LOGGER.error(f"Error saving forecasts to database: {e}", exc_info=True)
 
     async def handle_startup_recovery(self) -> None:
-        """Handle startup recovery for missing forecasts @zara
+        """Handle startup recovery for missing forecasts. @zara"""
+        try:
+            today_forecast = await self.db.fetchone(
+                """SELECT prediction_kwh, locked
+                   FROM daily_forecasts
+                   WHERE forecast_type = 'today' AND forecast_date = DATE('now')
+                   ORDER BY created_at DESC LIMIT 1"""
+            )
 
-        V13.2: Added learning data freshness check and auto-restore from /share/
-        """
-        # V13.2: Check data freshness and restore from /share/ if needed
-        await self._check_and_restore_learning_data()
+            now_local = dt_util.now()
 
-        today_forecast = await self.coordinator.data_manager.get_current_day_forecast()
-        now_local = dt_util.now()
-
-        if not today_forecast or not today_forecast.get("forecast_day", {}).get("locked"):
-            if now_local.hour < 12:
-                _LOGGER.info(
-                    "System started without locked forecast (before 12:00) - initiating recovery"
-                )
-                await self.coordinator._recovery_forecast_process(source="startup_recovery")
-            else:
-                _LOGGER.info(
-                    "System started late without forecast (after 12:00) - "
-                    "using current forecast (NOT morning baseline!)"
-                )
-                if self.coordinator.data and "forecast_today" in self.coordinator.data:
-                    forecast_value = self.coordinator.data.get("forecast_today")
-                    await self.coordinator.data_manager.save_daily_forecast(
-                        prediction_kwh=forecast_value,
-                        source=f"late_startup_{now_local.hour:02d}:{now_local.minute:02d}",
-                    )
+            if not today_forecast or not today_forecast[1]:
+                if now_local.hour < 12:
                     _LOGGER.info(
-                        f"Set forecast to current value: {forecast_value:.2f} kWh "
-                        f"(not representative of morning prediction)"
+                        "System started without locked forecast (before 12:00) - initiating recovery"
                     )
-
-    async def _check_and_restore_learning_data(self) -> None:
-        """V13.2: Check learning data freshness and restore from /share/ if stale.
-
-        This protects against learning data loss when user restores an old HA backup.
-        The /share/ directory is not overwritten during standard HA backup restores.
-
-        @zara
-        """
-        # Check if feature is enabled and manager exists
-        if not getattr(self.coordinator, "share_backup_manager", None):
-            return
-
-        if not getattr(self.coordinator, "_learning_backup_enabled", False):
-            return
-
-        try:
-            share_backup_manager = self.coordinator.share_backup_manager
-
-            # Check if local data is fresh
-            is_fresh, age_hours = await share_backup_manager.check_data_freshness()
-
-            if is_fresh:
-                _LOGGER.debug("Learning data is fresh - no restore needed")
-                return
-
-            # Data is stale - attempt restore from /share/
-            _LOGGER.warning(
-                f"Learning data appears stale ({age_hours}h old) - "
-                "possible backup restore detected. Attempting recovery from /share/..."
-            )
-
-            restored = await share_backup_manager.restore_from_share()
-
-            if restored:
-                _LOGGER.info(
-                    "Learning data successfully restored from /share/ backup"
-                )
-                await self._notify_learning_data_restored(age_hours)
-            else:
-                _LOGGER.warning(
-                    "Could not restore learning data from /share/ - "
-                    "no valid backup found or restore failed"
-                )
+                    if hasattr(self.coordinator, '_recovery_forecast_process'):
+                        await self.coordinator._recovery_forecast_process(source="startup_recovery")
+                else:
+                    _LOGGER.info(
+                        "System started late without forecast (after 12:00) - "
+                        "using current forecast (NOT morning baseline)"
+                    )
+                    if self.coordinator.data and DATA_KEY_FORECAST_TODAY in self.coordinator.data:
+                        forecast_value = self.coordinator.data.get(DATA_KEY_FORECAST_TODAY)
+                        # Only insert if no entry exists - never overwrite existing (locked or not)
+                        await self.db.execute(
+                            """INSERT OR IGNORE INTO daily_forecasts
+                               (forecast_type, forecast_date, prediction_kwh, source, locked)
+                               VALUES ('today', DATE('now'), ?, ?, TRUE)""",
+                            (forecast_value, f"late_startup_{now_local.hour:02d}:{now_local.minute:02d}")
+                        )
+                        _LOGGER.info(
+                            f"Set forecast to current value: {forecast_value:.2f} kWh "
+                            f"(not representative of morning prediction)"
+                        )
 
         except Exception as e:
-            _LOGGER.error(f"Error during learning data freshness check: {e}")
-
-    async def _notify_learning_data_restored(self, age_hours: int) -> None:
-        """Send notification to user about successful learning data restore.
-
-        @zara
-        """
-        try:
-            await self.coordinator.hass.services.async_call(
-                "persistent_notification",
-                "create",
-                {
-                    "title": "SFML: Lerndaten wiederhergestellt",
-                    "message": (
-                        f"Nach einem Backup-Restore wurden veraltete Lerndaten "
-                        f"({age_hours} Stunden alt) erkannt.\n\n"
-                        "Die Lerndaten wurden automatisch aus dem geschuetzten "
-                        "Speicher (/share/) wiederhergestellt.\n\n"
-                        "Ihr Lernfortschritt ist erhalten geblieben!"
-                    ),
-                    "notification_id": "solar_forecast_ml_learning_data_restored",
-                },
-            )
-        except Exception as e:
-            _LOGGER.warning(f"Could not send restore notification: {e}")
+            _LOGGER.error(f"Error during startup recovery: {e}", exc_info=True)

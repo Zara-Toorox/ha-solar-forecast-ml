@@ -34,13 +34,9 @@
         <header class="header">
             <h1>SFML Hybrid-AI Dashboard by Zara</h1>
             <div class="header-controls">
-                <button @click="toggleDashboardStyle" class="style-toggle" :class="{'active-3d': dashboardStyle === '3d', 'active-2d': dashboardStyle === '2d', 'active-list': dashboardStyle === 'list'}" :title="dashboardStyle === '3d' ? 'Zu 2D wechseln' : dashboardStyle === '2d' ? 'Zur Liste wechseln' : 'Zu 3D wechseln'">
+                <button @click="toggleDashboardStyle" class="style-toggle" :class="{'active-3d': dashboardStyle === '3d', 'active-2d': dashboardStyle === '2d'}" :title="dashboardStyle === '3d' ? 'Zu 2D wechseln' : 'Zu 3D wechseln'">
                     <span class="style-toggle-icon">{{ getDashboardStyleIcon() }}</span>
                     <span>{{ getDashboardStyleLabel() }}</span>
-                </button>
-                <button @click="goToLcars" class="lcars-toggle" title="LCARS Interface (Star Trek)">
-                    <span>🖖</span>
-                    <span>LCARS</span>
                 </button>
                 <button @click="toggleTheme" class="theme-toggle" :title="isDarkTheme ? 'Zu Hell wechseln' : 'Zu Dunkel wechseln'">
                     {{ isDarkTheme ? '☀️' : '🌙' }}
@@ -71,7 +67,7 @@
                         <div class="weather-details">
                             <div class="weather-detail"><span>☀️</span><span>{{ weather.radiation?.toFixed(0) || '0' }} W/m²</span></div>
                             <div class="weather-detail"><span>💧</span><span>{{ weather.humidity?.toFixed(0) || '—' }}%</span></div>
-                            <div class="weather-detail"><span>🌬️</span><span>{{ weather.wind?.toFixed(1) || '—' }} m/s</span></div>
+                            <div class="weather-detail"><span>🌬️</span><span>{{ weather.wind?.toFixed(1) || '—' }} km/h</span></div>
                             <div class="weather-detail"><span>☁️</span><span>{{ weather.clouds?.toFixed(0) || '—' }}%</span></div>
                         </div>
                     </div>
@@ -88,7 +84,7 @@
                         <div class="weather-details">
                             <div class="weather-detail"><span>☀️</span><span>{{ weatherCorrected.radiation?.toFixed(0) || '0' }} W/m²</span></div>
                             <div class="weather-detail"><span>💧</span><span>{{ weatherCorrected.humidity?.toFixed(0) || '—' }}%</span></div>
-                            <div class="weather-detail"><span>🌬️</span><span>{{ weatherCorrected.wind?.toFixed(1) || '—' }} m/s</span></div>
+                            <div class="weather-detail"><span>🌬️</span><span>{{ weatherCorrected.wind?.toFixed(1) || '—' }} km/h</span></div>
                             <div class="weather-detail"><span>☁️</span><span>{{ weatherCorrected.clouds?.toFixed(0) || '—' }}%</span></div>
                         </div>
                     </div>
@@ -109,7 +105,7 @@
                         <div class="weather-details">
                             <div class="weather-detail"><span>📍</span><span>{{ weatherHA.state || '—' }}</span></div>
                             <div class="weather-detail"><span>💧</span><span>{{ weatherHA.humidity?.toFixed(0) || '—' }}%</span></div>
-                            <div class="weather-detail"><span>🌬️</span><span>{{ weatherHA.wind_speed?.toFixed(1) || '—' }} m/s</span></div>
+                            <div class="weather-detail"><span>🌬️</span><span>{{ weatherHA.wind_speed?.toFixed(1) || '—' }} km/h</span></div>
                             <div class="weather-detail"><span>☁️</span><span>{{ weatherHA.cloud_coverage?.toFixed(0) || '—' }}%</span></div>
                         </div>
                     </div>
@@ -125,7 +121,7 @@
                         </div>
                         <div class="weather-details">
                             <div class="weather-detail"><span>🌡️</span><span>{{ weather.temperature?.toFixed(0) || '—' }}°C</span></div>
-                            <div class="weather-detail"><span>💨</span><span>{{ weather.wind?.toFixed(1) || '—' }} m/s</span></div>
+                            <div class="weather-detail"><span>💨</span><span>{{ weather.wind?.toFixed(1) || '—' }} km/h</span></div>
                             <div class="weather-detail"><span>💧</span><span>{{ weather.humidity?.toFixed(0) || '—' }}%</span></div>
                             <div class="weather-detail"><span>☁️</span><span>{{ weather.clouds?.toFixed(0) || '—' }}%</span></div>
                         </div>
@@ -1029,86 +1025,6 @@
                 </svg>
 
                 <!-- ========== LIST VIEW (Kompakte Listenansicht) ========== -->
-                <div v-show="!isSectionCollapsed('energyFlow') && dashboardStyle === 'list'" class="energy-list-view">
-                    <div class="energy-list-grid">
-                        <!-- Solar -->
-                        <div class="energy-list-card" @click="openSolarModal" style="cursor: pointer; border-color: #ffdd00;">
-                            <div class="energy-list-icon">☀️</div>
-                            <div class="energy-list-content">
-                                <div class="energy-list-label">Solar-Produktion</div>
-                                <div class="energy-list-value" style="color: #ffdd00;">{{ energyFlow.flows.solar_power?.toFixed(0) || '0' }} W</div>
-                                <div class="energy-list-sub">Heute: {{ energyFlow.statistics.solar_yield_daily?.toFixed(2) || '0' }} kWh</div>
-                            </div>
-                            <div class="energy-list-flows">
-                                <div v-if="energyFlow.flows.solar_to_house > 0">→ Haus: {{ energyFlow.flows.solar_to_house?.toFixed(0) }} W</div>
-                                <div v-if="hasBattery && energyFlow.flows.solar_to_battery > 0">→ Akku: {{ energyFlow.flows.solar_to_battery?.toFixed(0) }} W</div>
-                            </div>
-                        </div>
-
-                        <!-- Batterie -->
-                        <div v-if="hasBattery" class="energy-list-card" @click="openBatteryModal" style="cursor: pointer; border-color: #22c55e;">
-                            <div class="energy-list-icon">🔋</div>
-                            <div class="energy-list-content">
-                                <div class="energy-list-label">Batterie</div>
-                                <div class="energy-list-value" style="color: #22c55e;">{{ energyFlow.battery.soc?.toFixed(0) || '—' }}%</div>
-                                <div class="energy-list-sub">{{ energyFlow.battery.power?.toFixed(0) || '0' }} W</div>
-                            </div>
-                            <div class="energy-list-flows">
-                                <div v-if="energyFlow.flows.battery_to_house > 0" style="color: #22c55e;">→ Haus: {{ energyFlow.flows.battery_to_house?.toFixed(0) }} W</div>
-                                <div v-if="energyFlow.flows.solar_to_battery > 0" style="color: #ffdd00;">← Solar: {{ energyFlow.flows.solar_to_battery?.toFixed(0) }} W</div>
-                            </div>
-                        </div>
-
-                        <!-- Haus -->
-                        <div class="energy-list-card" @click="openHouseModal" style="cursor: pointer; border-color: #00d4ff;">
-                            <div class="energy-list-icon">🏠</div>
-                            <div class="energy-list-content">
-                                <div class="energy-list-label">Hausverbrauch</div>
-                                <div class="energy-list-value" style="color: #00d4ff;">{{ energyFlow.home.consumption?.toFixed(0) || '0' }} W</div>
-                                <div class="energy-list-sub">Netz heute: {{ energyFlow.statistics.grid_import_daily?.toFixed(2) || '0' }} kWh</div>
-                            </div>
-                            <div class="energy-list-flows">
-                                <div v-if="energyFlow.flows.solar_to_house > 0" style="color: #ffdd00;">← Solar: {{ energyFlow.flows.solar_to_house?.toFixed(0) }} W</div>
-                                <div v-if="hasBattery && energyFlow.flows.battery_to_house > 0" style="color: #22c55e;">← Akku: {{ energyFlow.flows.battery_to_house?.toFixed(0) }} W</div>
-                                <div v-if="energyFlow.flows.grid_to_house > 0" style="color: #8b5cf6;">← Netz: {{ energyFlow.flows.grid_to_house?.toFixed(0) }} W</div>
-                            </div>
-                        </div>
-
-                        <!-- Netz -->
-                        <div class="energy-list-card" @click="openGridModal" style="cursor: pointer; border-color: #8b5cf6;">
-                            <div class="energy-list-icon">⚡</div>
-                            <div class="energy-list-content">
-                                <div class="energy-list-label">Stromnetz</div>
-                                <div class="energy-list-value" :style="{color: energyFlow.flows.house_to_grid > 0 ? '#00ffff' : '#8b5cf6'}">
-                                    {{ energyFlow.flows.house_to_grid > 0 ? '-' : '' }}{{ Math.abs(energyFlow.flows.grid_to_house - energyFlow.flows.house_to_grid)?.toFixed(0) || '0' }} W
-                                </div>
-                                <div class="energy-list-sub">{{ energyFlow.flows.house_to_grid > 0 ? 'Einspeisung' : 'Bezug' }}</div>
-                            </div>
-                            <div class="energy-list-flows">
-                                <div v-if="energyFlow.flows.grid_to_house > 0" style="color: #8b5cf6;">Import: {{ energyFlow.flows.grid_to_house?.toFixed(0) }} W</div>
-                                <div v-if="energyFlow.flows.house_to_grid > 0" style="color: #00ffff;">Export: {{ energyFlow.flows.house_to_grid?.toFixed(0) }} W</div>
-                            </div>
-                        </div>
-
-                        <!-- Verbraucher (falls vorhanden) -->
-                        <div v-if="energyFlow.consumers && (energyFlow.consumers.heatpump || energyFlow.consumers.heatingrod || energyFlow.consumers.wallbox)"
-                             class="energy-list-card" @click="openConsumerModal" style="cursor: pointer; border-color: #ec4899;">
-                            <div class="energy-list-icon">🔌</div>
-                            <div class="energy-list-content">
-                                <div class="energy-list-label">Verbraucher</div>
-                                <div class="energy-list-value" style="color: #ec4899;">
-                                    {{ ((energyFlow.consumers.heatpump?.power || 0) + (energyFlow.consumers.heatingrod?.power || 0) + (energyFlow.consumers.wallbox?.power || 0)).toFixed(0) }} W
-                                </div>
-                                <div class="energy-list-sub">Gesamtverbrauch</div>
-                            </div>
-                            <div class="energy-list-flows">
-                                <div v-if="energyFlow.consumers.heatpump?.power > 0">WP: {{ energyFlow.consumers.heatpump.power?.toFixed(0) }} W</div>
-                                <div v-if="energyFlow.consumers.heatingrod?.power > 0">Heizstab: {{ energyFlow.consumers.heatingrod.power?.toFixed(0) }} W</div>
-                                <div v-if="energyFlow.consumers.wallbox?.power > 0">Wallbox: {{ energyFlow.consumers.wallbox.power?.toFixed(0) }} W</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </section>
 
             <!-- Solar Power Live Card - Header klickbar für Modal -->
@@ -1558,19 +1474,19 @@
                             </div>
                         </div>
 
-                        <div class="energy-balance-item cost">
+                        <div class="energy-balance-item cost" v-if="energyBalance.priceMode !== 'none'">
                             <div class="energy-balance-icon">💰</div>
                             <div class="energy-balance-value purple">{{ energyBalance.estimatedCost?.toFixed(2) || '0.00' }}</div>
                             <div class="energy-balance-label">€ Stromkosten</div>
                             <div class="energy-balance-sub">Ø {{ energyBalance.avgPrice?.toFixed(1) || 35 }} ct/kWh</div>
                         </div>
-                        <div class="energy-balance-item savings">
+                        <div class="energy-balance-item savings" v-if="energyBalance.priceMode !== 'none'">
                             <div class="energy-balance-icon">💚</div>
                             <div class="energy-balance-value green">{{ energyBalance.savings?.toFixed(2) || '0.00' }}</div>
                             <div class="energy-balance-label">€ gespart</div>
                             <div class="energy-balance-sub">durch {{ energyBalance.savedKwh?.toFixed(0) || 0 }} kWh Solar</div>
                         </div>
-                        <div class="energy-balance-item projection" v-if="energyBalance.projectedYearlySavings">
+                        <div class="energy-balance-item projection" v-if="energyBalance.priceMode !== 'none' && energyBalance.projectedYearlySavings">
                             <div class="energy-balance-icon">📈</div>
                             <div class="energy-balance-value cyan">{{ energyBalance.projectedYearlySavings?.toFixed(0) || '—' }}</div>
                             <div class="energy-balance-label">€ Hochrechnung</div>
@@ -1627,132 +1543,6 @@
                 </div><!-- Ende v-show energyBalance -->
             </section>
 
-            <!-- Statistics Cards - Sortiert: Heute > Woche > Monat > Jahr -->
-            <section class="stats-container collapsible-section sortable-item" data-section="stats">
-                <div class="stats-container-header">
-                    <div>
-                        <div class="stats-container-title">⚙️ Maschinenraum</div>
-                        <div class="stats-container-subtitle">Energie-Systeme & Astronomische Sensoren</div>
-                    </div>
-                    <button class="section-collapse-btn" @click="toggleSection('stats')" :title="isSectionCollapsed('stats') ? 'Ausklappen' : 'Einklappen'">
-                        {{ isSectionCollapsed('stats') ? '+' : '−' }}
-                    </button>
-                </div>
-                <div v-show="!isSectionCollapsed('stats')" class="stats-grid">
-
-                <!-- ========== HEUTE ========== -->
-                <div class="stat-card peak">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">⚡</span>
-                        <span class="stat-card-badge">Heute</span>
-                    </div>
-                    <div class="stat-card-value">{{ stats.peaks.today?.power_w?.toFixed(0) || '—' }} W</div>
-                    <div class="stat-card-label">Peak Leistung</div>
-                    <div class="stat-card-sub" v-if="stats.peaks.today?.at">{{ formatTime(stats.peaks.today.at) }}</div>
-                </div>
-
-                <div class="stat-card grid" v-if="energyFlow.statistics.grid_import_daily !== null">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">🔌</span>
-                        <span class="stat-card-badge">Heute</span>
-                    </div>
-                    <div class="stat-card-value">{{ energyFlow.statistics.grid_import_daily?.toFixed(1) || '—' }} kWh</div>
-                    <div class="stat-card-label">Netzbezug</div>
-                </div>
-
-                <div class="stat-card battery" v-if="energyFlow.statistics.battery_charge_solar_daily !== null">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">🔋☀️</span>
-                        <span class="stat-card-badge">Heute</span>
-                    </div>
-                    <div class="stat-card-value">{{ energyFlow.statistics.battery_charge_solar_daily?.toFixed(1) || '—' }} kWh</div>
-                    <div class="stat-card-label">Akku aus Sonne</div>
-                </div>
-
-                <div class="stat-card battery" v-if="energyFlow.statistics.battery_charge_grid_daily !== null">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">🔋⚡</span>
-                        <span class="stat-card-badge">Heute</span>
-                    </div>
-                    <div class="stat-card-value">{{ energyFlow.statistics.battery_charge_grid_daily?.toFixed(1) || '—' }} kWh</div>
-                    <div class="stat-card-label">Akku aus Netz</div>
-                </div>
-
-                <!-- ========== WOCHE ========== -->
-                <div class="stat-card production">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">📅</span>
-                        <span class="stat-card-badge">7 Tage</span>
-                    </div>
-                    <div class="stat-card-value">{{ stats.statistics.last_7_days?.total_yield_kwh?.toFixed(1) || '—' }} kWh</div>
-                    <div class="stat-card-label">Wochenproduktion</div>
-                    <div class="stat-card-sub">Ø {{ stats.statistics.last_7_days?.avg_yield_kwh?.toFixed(2) || '—' }} kWh/Tag</div>
-                </div>
-
-                <!-- ========== MONAT ========== -->
-                <div class="stat-card production">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">📆</span>
-                        <span class="stat-card-badge">Monat</span>
-                    </div>
-                    <div class="stat-card-value">{{ stats.statistics.current_month?.yield_kwh?.toFixed(1) || '—' }} kWh</div>
-                    <div class="stat-card-label">Monatsproduktion</div>
-                    <div class="stat-card-sub">{{ stats.statistics.current_month?.days || '—' }} Tage</div>
-                </div>
-
-                <!-- ========== JAHR / REKORD ========== -->
-                <div class="stat-card grid" v-if="energyFlow.statistics.grid_import_yearly !== null">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">📊</span>
-                        <span class="stat-card-badge">Jahr</span>
-                    </div>
-                    <div class="stat-card-value">{{ energyFlow.statistics.grid_import_yearly?.toFixed(0) || '—' }} kWh</div>
-                    <div class="stat-card-label">Netzbezug Jahr</div>
-                </div>
-
-                <div class="stat-card peak">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">🏆</span>
-                        <span class="stat-card-badge">Rekord</span>
-                    </div>
-                    <div class="stat-card-value">{{ stats.peaks.all_time?.power_w?.toFixed(0) || '—' }} W</div>
-                    <div class="stat-card-label">All-Time Peak</div>
-                    <div class="stat-card-sub" v-if="stats.peaks.all_time?.date">{{ stats.peaks.all_time.date }}</div>
-                </div>
-
-                <!-- ========== ASTRONOMIE ========== -->
-                <div class="stat-card astro">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">🌞</span>
-                        <span class="stat-card-badge">Astro</span>
-                    </div>
-                    <div class="stat-card-value">{{ sunPosition.elevation_deg?.toFixed(1) || '—' }}°</div>
-                    <div class="stat-card-label">Sonnenhöhe</div>
-                    <div class="stat-card-sub">{{ sunPosition.direction || '—' }} ({{ sunPosition.azimuth_deg?.toFixed(0) || '—' }}°)</div>
-                </div>
-
-                <div class="stat-card astro">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">🌅</span>
-                        <span class="stat-card-badge">Astro</span>
-                    </div>
-                    <div class="stat-card-value">{{ sunPosition.sunrise || '—' }}</div>
-                    <div class="stat-card-label">Sonnenaufgang</div>
-                    <div class="stat-card-sub">🌇 {{ sunPosition.sunset || '—' }}</div>
-                </div>
-
-                <div class="stat-card astro">
-                    <div class="stat-card-header">
-                        <span class="stat-card-icon">☀️</span>
-                        <span class="stat-card-badge">Astro</span>
-                    </div>
-                    <div class="stat-card-value">{{ sunPosition.daylight_hours?.toFixed(1) || '—' }}h</div>
-                    <div class="stat-card-label">Tageslicht</div>
-                </div>
-
-                </div>
-            </section>
-
             <!-- KPIs -->
             <section class="kpi-grid collapsible-section sortable-item" data-section="kpis">
                 <div class="section-header" @click="toggleSection('kpis')" style="grid-column: 1 / -1;">
@@ -1797,7 +1587,7 @@
                     </div>
                     <div class="chart-container" ref="accuracyChart"></div>
                 </div>
-                <div v-show="!isSectionCollapsed('mainCharts')" class="chart-card">
+                <div v-show="!isSectionCollapsed('mainCharts')" v-if="energyBalance.priceMode === 'dynamic'" class="chart-card">
                     <div class="chart-header">
                         <div class="chart-title">Strompreise Heute vs. Morgen (Endpreis)</div>
                         <div class="chart-stats">
@@ -1819,25 +1609,8 @@
                     <span class="section-title">📊 Erweiterte Analyse-Charts</span>
                     <span class="section-toggle">{{ isSectionCollapsed('charts') ? '+' : '−' }}</span>
                 </div>
-                <div v-show="!isSectionCollapsed('charts')" class="chart-card full-width">
-                    <div class="chart-header">
-                        <div class="chart-title">📈 Langzeit-Trend (30 Tage)</div>
-                        <div class="chart-stats">
-                            <span class="chart-stat" style="color: #00ff88;">Ø Produktion: {{ historyStats.avgProduction?.toFixed(2) || '—' }} kWh/Tag</span>
-                            <span class="chart-stat" style="color: #8b5cf6;">Ø Prognose: {{ historyStats.avgForecast?.toFixed(2) || '—' }} kWh/Tag</span>
-                        </div>
-                    </div>
-                    <div class="chart-container tall" ref="trendChart"></div>
-                </div>
-                <div v-show="!isSectionCollapsed('charts')" class="chart-card full-width">
-                    <div class="chart-header">
-                        <div class="chart-title">📅 Monats-Vergleich</div>
-                        <div class="chart-stats">
-                            <span class="chart-stat" style="color: #00ff88;">Gesamt: {{ historyStats.totalProduction?.toFixed(1) || '—' }} kWh</span>
-                        </div>
-                    </div>
-                    <div class="chart-container" ref="monthlyChart"></div>
-                </div>
+
+
             </section>
         </main>
 
@@ -2172,15 +1945,15 @@
                             <div class="modal-stat-value">{{ gridModal.stats.netBalance?.toFixed(2) || '—' }} kWh</div>
                             <div class="modal-stat-label">Netto Balance</div>
                         </div>
-                        <div class="modal-stat-card">
+                        <div class="modal-stat-card" v-if="energyBalance.priceMode !== 'none'">
                             <div class="modal-stat-value">{{ gridModal.stats.avgPrice?.toFixed(2) || '—' }} ct/kWh</div>
                             <div class="modal-stat-label">Ø Strompreis</div>
                         </div>
-                        <div class="modal-stat-card">
+                        <div class="modal-stat-card" v-if="energyBalance.priceMode !== 'none'">
                             <div class="modal-stat-value">{{ gridModal.stats.costs?.toFixed(2) || '—' }} €</div>
                             <div class="modal-stat-label">Kosten (Mo-So)</div>
                         </div>
-                        <div class="modal-stat-card">
+                        <div class="modal-stat-card" v-if="energyBalance.priceMode !== 'none'">
                             <div class="modal-stat-value">{{ gridModal.stats.revenue?.toFixed(2) || '—' }} €</div>
                             <div class="modal-stat-label">Erlöse (Mo-So)</div>
                         </div>
@@ -2211,7 +1984,7 @@
                         </div>
 
                         <!-- Price Timeline -->
-                        <div class="modal-chart-container">
+                        <div class="modal-chart-container" v-if="energyBalance.priceMode === 'dynamic'">
                             <div class="modal-chart-title">
                                 <span>💰</span>
                                 <span>Strompreis Verlauf</span>
@@ -2220,7 +1993,7 @@
                         </div>
 
                         <!-- Cost/Revenue Analysis -->
-                        <div class="modal-chart-container">
+                        <div class="modal-chart-container" v-if="energyBalance.priceMode !== 'none'">
                             <div class="modal-chart-title">
                                 <span>💶</span>
                                 <span>Kosten / Erlöse</span>
@@ -2276,7 +2049,7 @@
                                     <span class="modal-stat-label">Wärme:</span>
                                     <span style="color: #fbbf24;">{{ (consumerModal.stats.heatpump.daily_kwh * consumerModal.stats.heatpump.cop)?.toFixed(2) || 0 }} kWh</span>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
+                                <div v-if="energyBalance.priceMode !== 'none'" style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
                                     <span class="modal-stat-label">Kosten:</span>
                                     <span style="color: #f87171;">{{ consumerModal.stats.heatpump.cost_today?.toFixed(2) || 0 }} €</span>
                                 </div>
@@ -2299,7 +2072,7 @@
                                     <span class="modal-stat-label">Heute:</span>
                                     <span style="color: #f0f6fc;">{{ consumerModal.stats.heatingrod.daily_kwh?.toFixed(2) || 0 }} kWh</span>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
+                                <div v-if="energyBalance.priceMode !== 'none'" style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
                                     <span class="modal-stat-label">Kosten:</span>
                                     <span style="color: #f87171;">{{ consumerModal.stats.heatingrod.cost_today?.toFixed(2) || 0 }} €</span>
                                 </div>
@@ -2328,7 +2101,7 @@
                                         {{ consumerModal.stats.wallbox.state === 'charging' ? '⚡ Lädt' : '💤 Bereit' }}
                                     </span>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
+                                <div v-if="energyBalance.priceMode !== 'none'" style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 4px; border-top: 1px solid #30363d;">
                                     <span class="modal-stat-label">Kosten:</span>
                                     <span style="color: #f87171;">{{ consumerModal.stats.wallbox.cost_today?.toFixed(2) || 0 }} €</span>
                                 </div>
@@ -2346,7 +2119,7 @@
                             <div class="modal-stat-value" style="color: #22c55e;">{{ consumerModal.stats.total_daily_kwh?.toFixed(2) || 0 }} kWh</div>
                             <div class="modal-stat-label">Verbraucher gesamt heute</div>
                         </div>
-                        <div class="modal-stat-card" style="background: linear-gradient(135deg, rgba(248, 113, 113, 0.15), rgba(248, 113, 113, 0.05));">
+                        <div class="modal-stat-card" v-if="energyBalance.priceMode !== 'none'" style="background: linear-gradient(135deg, rgba(248, 113, 113, 0.15), rgba(248, 113, 113, 0.05));">
                             <div class="modal-stat-value" style="color: #f87171;">{{ consumerModal.stats.total_cost_today?.toFixed(2) || 0 }} €</div>
                             <div class="modal-stat-label">Gesamtkosten heute</div>
                         </div>
@@ -2945,27 +2718,12 @@
                 <span class="footer-tag">Real-Time</span>
                 <span class="footer-tag">Local</span>
             </div>
-            <div class="footer-links">
-                <a href="/api/sfml_stats/help" class="footer-help-link" title="SFML Stats Sensor Hilfe">
-                    <span class="help-icon">?</span>
-                    <span>Stats-Hilfe</span>
-                </a>
-                <a href="/api/sfml_stats/help-sfml" class="footer-help-link sfml" title="Solar Forecast ML Sensor Hilfe">
-                    <span class="help-icon">☀</span>
-                    <span>Solar-KI Hilfe</span>
-                </a>
-            </div>
             <span>SFML Stats v2.0</span>
         </footer>
     </div>
 
     <script>
-        // Check if LCARS mode was last selected and redirect if needed
-        if (localStorage.getItem('sfml-dashboard-style') === 'lcars') {
-            window.location.href = '/api/sfml_stats/lcars';
-        }
-
-        const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } = Vue;
+        const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
 
         // ============================================================
         // Toast Notification System
@@ -3214,9 +2972,9 @@
                     document.documentElement.classList.add('light-theme');
                 }
 
-                // Dashboard Style Toggle (2D/3D/List)
+                // Dashboard Style Toggle (2D/3D)
                 const dashboardStyle = ref(localStorage.getItem('sfml-dashboard-style') || '3d');
-                const dashboardStyles = ['3d', '2d', 'list'];
+                const dashboardStyles = ['3d', '2d'];
 
                 function toggleDashboardStyle() {
                     const currentIndex = dashboardStyles.indexOf(dashboardStyle.value);
@@ -3227,20 +2985,12 @@
 
                 function getDashboardStyleIcon() {
                     if (dashboardStyle.value === '3d') return '🎲';
-                    if (dashboardStyle.value === '2d') return '⬜';
-                    return '📋';
+                    return '⬜';
                 }
 
                 function getDashboardStyleLabel() {
                     if (dashboardStyle.value === '3d') return '3D';
-                    if (dashboardStyle.value === '2d') return '2D';
-                    return 'Liste';
-                }
-
-                // LCARS Navigation
-                function goToLcars() {
-                    localStorage.setItem('sfml-dashboard-style', 'lcars');
-                    window.location.href = '/api/sfml_stats/lcars';
+                    return '2D';
                 }
 
                 // Collapsible Sections
@@ -3251,6 +3001,15 @@
                 function toggleSection(sectionName) {
                     collapsedSections[sectionName] = !collapsedSections[sectionName];
                     localStorage.setItem('sfml-collapsed-sections', JSON.stringify(collapsedSections));
+                    // Resize charts after section is expanded (v-show causes 0-size init)
+                    if (!collapsedSections[sectionName]) {
+                        nextTick(() => {
+                            setTimeout(() => {
+                                Object.values(charts).forEach(c => c?.resize());
+                                Object.values(panelGroupCharts).forEach(c => c?.resize());
+                            }, 50);
+                        });
+                    }
                 }
 
                 function isSectionCollapsed(sectionName) {
@@ -4503,8 +4262,8 @@
                         const moneyEl = document.getElementById('grid-money-chart');
                         const patternEl = document.getElementById('grid-pattern-chart');
                         if (flowEl && flowEl.offsetWidth > 0) gridFlowChart.value = echarts.init(flowEl);
-                        if (priceEl && priceEl.offsetWidth > 0) gridPriceChart.value = echarts.init(priceEl);
-                        if (moneyEl && moneyEl.offsetWidth > 0) gridMoneyChart.value = echarts.init(moneyEl);
+                        if (priceEl && priceEl.offsetWidth > 0 && energyBalance.priceMode === 'dynamic') gridPriceChart.value = echarts.init(priceEl);
+                        if (moneyEl && moneyEl.offsetWidth > 0 && energyBalance.priceMode !== 'none') gridMoneyChart.value = echarts.init(moneyEl);
                         if (patternEl && patternEl.offsetWidth > 0) gridPatternChart.value = echarts.init(patternEl);
                     }, 150);
                 }
@@ -6465,6 +6224,11 @@
                         energyBalance.savings = finance.savings_eur || 0;
                         energyBalance.avgPrice = finance.avg_price_ct || 35;
 
+                        // ===== TARIF-MODUS =====
+                        if (data.config?.price_mode) {
+                            energyBalance.priceMode = data.config.price_mode;
+                        }
+
                         // ===== AUTARKIE =====
                         energyBalance.autarkiePercent = data.autarkie_percent || 0;
 
@@ -6549,6 +6313,11 @@
                             // Feed-in tariff from config
                             if (energyFlowData.feed_in_tariff !== undefined) {
                                 energyFlow.feed_in_tariff = energyFlowData.feed_in_tariff;
+                            }
+
+                            // Price mode from config
+                            if (energyFlowData.price_mode !== undefined) {
+                                energyBalance.priceMode = energyFlowData.price_mode;
                             }
 
                             // Check if battery is configured (has valid SOC value)
@@ -6783,7 +6552,7 @@
                             }
                         }
 
-                        if (prices.success && prices.data?.prices) {
+                        if (prices.success && prices.data?.prices && energyBalance.priceMode === 'dynamic') {
                             updatePriceChart(prices.data.prices, prices.data.statistics);
                         }
 
@@ -6793,7 +6562,7 @@
 
                 function initCharts() {
                     if (productionChart.value) charts.production = echarts.init(productionChart.value);
-                    if (priceChart.value) charts.price = echarts.init(priceChart.value);
+                    if (priceChart.value && energyBalance.priceMode === 'dynamic') charts.price = echarts.init(priceChart.value);
                     if (timelineChart.value) charts.timeline = echarts.init(timelineChart.value);
                     if (todayProductionChart.value) charts.todayProduction = echarts.init(todayProductionChart.value);
                     if (accuracyChart.value) charts.accuracy = echarts.init(accuracyChart.value);
@@ -7675,8 +7444,22 @@
                     fetchData();
                     // Initialize power sources preview chart
                     setTimeout(() => updatePowerSourcesPreviewChart(), 1500);
-                    interval = setInterval(fetchData, 30000);
-                    window.addEventListener('resize', () => Object.values(charts).forEach(c => c?.resize()));
+                    interval = setInterval(fetchData, 5000);
+                    window.addEventListener('resize', () => {
+                        Object.values(charts).forEach(c => c?.resize());
+                        // Resize all modal charts
+                        [batterySOCChart, batteryChargeChart, batteryEfficiencyChart, batteryPowerChart,
+                         houseConsumptionChart, houseAutarkyChart, houseSourcesChart, housePeakChart,
+                         gridFlowChart, gridPriceChart, gridMoneyChart, gridPatternChart,
+                         solarProductionChart, solarHeatmapChart, solarAccuracyChart, solarPanelGroupChart,
+                         weatherTempChart, weatherRadiationChart, weatherRainChart, weatherWindChart,
+                         weatherTempComparisonChart, weatherRadiationComparisonChart, weatherCloudsComparisonChart, weatherAccuracyChart,
+                         powerSourcesMainChart, powerSourcesSOCChart, powerSourcesPieChart,
+                         consumerBarChart, forecastComparisonChart
+                        ].forEach(c => c.value?.resize());
+                        // Resize panel group charts
+                        Object.values(panelGroupCharts).forEach(c => c?.resize());
+                    });
                     // Initialize SortableJS for section reordering
                     setTimeout(() => {
                         initSortable();
@@ -7689,7 +7472,7 @@
                 });
 
                 return {
-                    lastUpdate, isDarkTheme, toggleTheme, dashboardStyle, toggleDashboardStyle, goToLcars, hasBattery, isNightTime,
+                    lastUpdate, isDarkTheme, toggleTheme, dashboardStyle, toggleDashboardStyle, hasBattery, isNightTime,
                     getDashboardStyleIcon, getDashboardStyleLabel,
                     collapsedSections, toggleSection, isSectionCollapsed,
                     sortableContainer, resetSectionOrder,

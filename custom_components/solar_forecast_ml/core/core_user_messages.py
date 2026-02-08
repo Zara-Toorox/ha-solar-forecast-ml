@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,16 +7,15 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-from typing import Any, Dict, Optional
+"""User-friendly messages for Home Assistant logs @zara"""
+
+from typing import Any
 
 
 class UserMessages:
-    """Centralized user-friendly messages for Home Assistant logs @zara"""
+    """Centralized user messages @zara"""
 
-    # ==========================================================================
-    # AI TRAINING MESSAGES
-    # ==========================================================================
-
+    # AI Training @zara
     AI_LEARNING_PHASE = (
         "Learning phase: AI model is still collecting data. "
         "So far {samples} data points captured (range: {min_val:.2f}-{max_val:.2f} kWh). "
@@ -54,17 +53,10 @@ class UserMessages:
         "System uses alternative calculation."
     )
 
-    # ==========================================================================
-    # WEATHER DATA MESSAGES
-    # ==========================================================================
+    # Weather Data @zara
+    WEATHER_CACHE_UPDATING = "Weather data is being updated. No action required."
 
-    WEATHER_CACHE_UPDATING = (
-        "Weather data is being updated. No action required."
-    )
-
-    WEATHER_CACHE_NOT_FOUND = (
-        "Weather cache not found. Weather data will be fetched."
-    )
+    WEATHER_CACHE_NOT_FOUND = "Weather cache not found. Weather data will be fetched."
 
     WEATHER_NO_FORECAST_DATA = (
         "No weather forecast for {date} in cache. "
@@ -77,82 +69,34 @@ class UserMessages:
         "Forecast based on last available data."
     )
 
-    WEATHER_PRECISION_SKIP = (
-        "Weather precision calculation skipped - data being collected."
-    )
+    WEATHER_PRECISION_SKIP = "Weather precision calculation skipped - data being collected."
 
     WEATHER_FALLBACK_ACTIVE = (
         "Weather data temporarily unavailable. "
         "Forecast based on default values."
     )
 
-    # ==========================================================================
-    # ASTRONOMY / SOLAR POSITION MESSAGES
-    # ==========================================================================
-
+    # Astronomy @zara
     ASTRONOMY_CACHE_BUILDING = (
         "Solar position data being calculated for the first time... "
         "This may take a few seconds."
     )
 
-    ASTRONOMY_CACHE_NOT_FOUND = (
-        "Solar position data being recalculated."
-    )
+    ASTRONOMY_CACHE_NOT_FOUND = "Solar position data being recalculated."
 
-    ASTRONOMY_CACHE_READY = (
-        "Solar position data calculated for {days} days."
-    )
+    ASTRONOMY_CACHE_READY = "Solar position data calculated for {days} days."
 
     ASTRONOMY_CACHE_ERROR = (
         "Solar position calculation failed for {date}. "
         "System uses default values."
     )
 
-    # ==========================================================================
-    # FILE / DATA MESSAGES
-    # ==========================================================================
+    # Forecasts @zara
+    FORECAST_TODAY_SAVED = "Daily forecast saved: {kwh:.2f} kWh (source: {source})"
 
-    FILE_NOT_FOUND_CREATING = (
-        "File '{filename}' not found. Creating new file."
-    )
+    FORECAST_TOMORROW_SAVED = "Tomorrow's forecast saved: {kwh:.2f} kWh"
 
-    FILE_HOURLY_PREDICTIONS_NEW = (
-        "New installation detected - prediction database being created."
-    )
-
-    FILE_SAVE_ERROR = (
-        "Error saving '{filename}'. "
-        "Please check write permissions in configuration directory."
-    )
-
-    FILE_LOAD_ERROR = (
-        "Error loading '{filename}'. "
-        "File will be recreated on next update."
-    )
-
-    FILE_BACKUP_CREATED = (
-        "Backup created: {filename}"
-    )
-
-    FILE_BACKUP_RESTORED = (
-        "Backup restored: {filename}"
-    )
-
-    # ==========================================================================
-    # FORECAST MESSAGES
-    # ==========================================================================
-
-    FORECAST_TODAY_SAVED = (
-        "Daily forecast saved: {kwh:.2f} kWh (source: {source})"
-    )
-
-    FORECAST_TOMORROW_SAVED = (
-        "Tomorrow's forecast saved: {kwh:.2f} kWh"
-    )
-
-    FORECAST_LOCKED = (
-        "Forecast for {date} already set. No update needed."
-    )
+    FORECAST_LOCKED = "Forecast for {date} already set. No update needed."
 
     FORECAST_ADJUSTED = (
         "Forecast adjusted: Current production ({current:.2f} kWh) "
@@ -160,40 +104,26 @@ class UserMessages:
         "New forecast: {adjusted:.2f} kWh"
     )
 
-    FORECAST_FALLBACK = (
-        "AI forecast unavailable. Rule-based forecast being used."
-    )
+    FORECAST_FALLBACK = "AI forecast unavailable. Rule-based forecast being used."
 
     FORECAST_ALL_FAILED = (
         "Forecast could not be created. "
         "Please check internet connection and weather service."
     )
 
-    # ==========================================================================
-    # PRODUCTION TRACKING MESSAGES
-    # ==========================================================================
-
-    PRODUCTION_TRACKING_STARTED = (
-        "Production monitoring started for {entity}"
-    )
+    # Production Tracking @zara
+    PRODUCTION_TRACKING_STARTED = "Production monitoring started for {entity}"
 
     PRODUCTION_TRACKING_DISABLED = (
         "No power entity configured. "
         "Production time tracking is disabled."
     )
 
-    PRODUCTION_NEW_PEAK = (
-        "New daily record: {power_w:.0f}W at {time}"
-    )
+    PRODUCTION_NEW_PEAK = "New daily record: {power_w:.0f}W at {time}"
 
-    PRODUCTION_ALL_TIME_PEAK = (
-        "NEW ALL-TIME RECORD: {power_w:.0f}W on {date}"
-    )
+    PRODUCTION_ALL_TIME_PEAK = "NEW ALL-TIME RECORD: {power_w:.0f}W on {date}"
 
-    # ==========================================================================
-    # CONFIGURATION MESSAGES
-    # ==========================================================================
-
+    # Configuration @zara
     CONFIG_SOLAR_CAPACITY_ZERO = (
         "Configuration problem: PV system capacity is 0 or negative. "
         "Please correct in settings. "
@@ -210,67 +140,36 @@ class UserMessages:
         "Please check permissions for '{path}'."
     )
 
-    # ==========================================================================
-    # INITIALIZATION MESSAGES
-    # ==========================================================================
+    # Initialization @zara
+    INIT_COORDINATOR_READY = "Solar Forecast ready ({mode}, {capacity} kWp)"
 
-    INIT_COORDINATOR_READY = (
-        "Solar Forecast ready ({mode}, {capacity} kWp)"
-    )
+    INIT_AI_READY = "AI model initialized and ready."
 
-    INIT_AI_READY = (
-        "AI model initialized and ready."
-    )
+    INIT_AI_DISABLED = "AI functions disabled. Rule-based forecasting active."
 
-    INIT_AI_DISABLED = (
-        "AI functions disabled. Rule-based forecasting active."
-    )
+    INIT_CLEAN_SLATE = "New installation detected - data structure being created..."
 
-    INIT_CLEAN_SLATE = (
-        "New installation detected - data structure being created..."
-    )
-
-    INIT_CLEAN_SLATE_COMPLETE = (
-        "New installation complete. System is operational."
-    )
+    INIT_CLEAN_SLATE_COMPLETE = "New installation complete. System is operational."
 
     INIT_DEPENDENCIES_MISSING = (
         "Some optional dependencies are missing. "
         "AI functions are limited."
     )
 
-    # ==========================================================================
-    # SCHEDULED TASKS MESSAGES
-    # ==========================================================================
+    # Scheduled Tasks @zara
+    TASK_MORNING_ROUTINE_START = "Morning routine started for {date}"
 
-    TASK_MORNING_ROUTINE_START = (
-        "Morning routine started for {date}"
-    )
+    TASK_MORNING_ROUTINE_SUCCESS = "Morning routine completed successfully."
 
-    TASK_MORNING_ROUTINE_SUCCESS = (
-        "Morning routine completed successfully."
-    )
+    TASK_MORNING_ROUTINE_RETRY = "Morning routine failed. Retry in {wait}s..."
 
-    TASK_MORNING_ROUTINE_RETRY = (
-        "Morning routine failed. Retry in {wait}s..."
-    )
+    TASK_END_OF_DAY_START = "End-of-day routine started"
 
-    TASK_END_OF_DAY_START = (
-        "End-of-day routine started"
-    )
+    TASK_END_OF_DAY_SUCCESS = "End-of-day routine successful. Accuracy: {accuracy:.1%}"
 
-    TASK_END_OF_DAY_SUCCESS = (
-        "End-of-day routine successful. Accuracy: {accuracy:.1%}"
-    )
+    TASK_MIDNIGHT_ROTATION = "Midnight rotation: Forecasts prepared for new day."
 
-    TASK_MIDNIGHT_ROTATION = (
-        "Midnight rotation: Forecasts prepared for new day."
-    )
-
-    # ==========================================================================
-    # SENSOR MESSAGES
-    # ==========================================================================
-
+    # Sensors @zara
     SENSOR_UNAVAILABLE = (
         "Sensor '{entity}' not available. "
         "Please check if the sensor is configured correctly."
@@ -281,22 +180,12 @@ class UserMessages:
         "Skipped for calculation."
     )
 
-    # ==========================================================================
-    # SHADOW DETECTION MESSAGES
-    # ==========================================================================
+    # Shadow Detection @zara
+    SHADOW_DETECTION_INIT = "Shadow analysis initialized."
 
-    SHADOW_DETECTION_INIT = (
-        "Shadow analysis initialized."
-    )
+    SHADOW_DETECTION_FALLBACK = "Shadow analysis: Alternative method being used."
 
-    SHADOW_DETECTION_FALLBACK = (
-        "Shadow analysis: Alternative method being used."
-    )
-
-    # ==========================================================================
-    # GENERAL ERROR MESSAGES
-    # ==========================================================================
-
+    # General Errors @zara
     ERROR_UNEXPECTED = (
         "Unexpected error occurred. "
         "System attempting to continue. Details in debug log."
@@ -309,7 +198,7 @@ class UserMessages:
 
     @classmethod
     def format(cls, message_key: str, **kwargs: Any) -> str:
-        """Format a message with the given parameters @zara"""
+        """Format message with parameters @zara"""
         message_template = getattr(cls, message_key, None)
         if message_template is None:
             return message_key
@@ -321,10 +210,10 @@ class UserMessages:
 
     @classmethod
     def get(cls, message_key: str) -> str:
-        """Get a message template without formatting @zara"""
+        """Get message template @zara"""
         return getattr(cls, message_key, message_key)
 
 
 def user_msg(key: str, **kwargs: Any) -> str:
-    """Shorthand function to get and format a user message @zara"""
+    """Format user message @zara"""
     return UserMessages.format(key, **kwargs)

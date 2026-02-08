@@ -1,11 +1,21 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
+
+# *****************************************************************************
+# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# Refactored: JSON replaced with DatabaseManager @zara
+# *****************************************************************************
+
+"""
+Notification service for Solar Forecast ML.
+Handles persistent notifications in Home Assistant.
+"""
 
 import asyncio
 import logging
@@ -27,6 +37,7 @@ from ..const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Notification IDs
 NOTIFICATION_ID_DEPENDENCIES = "solar_forecast_ml_dependencies"
 NOTIFICATION_ID_INSTALLATION = "solar_forecast_ml_installation"
 NOTIFICATION_ID_SUCCESS = "solar_forecast_ml_success"
@@ -42,11 +53,12 @@ NOTIFICATION_ID_WEATHER_ALERT = "solar_forecast_ml_weather_alert"
 NOTIFICATION_ID_SNOW_COVERED = "solar_forecast_ml_snow_covered"
 NOTIFICATION_ID_ADAPTIVE_CORRECTION = "solar_forecast_ml_adaptive_correction"
 
+
 class NotificationService:
-    """Service for Persistent Notifications in Home Assistant"""
+    """Service for Persistent Notifications in Home Assistant. @zara"""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        """Initialize Notification Service @zara"""
+        """Initialize Notification Service. @zara"""
         self.hass = hass
         self.entry = entry
         self._initialized = False
@@ -54,7 +66,7 @@ class NotificationService:
         _LOGGER.debug("NotificationService instance created")
 
     async def initialize(self) -> bool:
-        """Initialize the Notification Service @zara"""
+        """Initialize the Notification Service. @zara"""
         try:
             async with self._notification_lock:
                 if self._initialized:
@@ -80,7 +92,7 @@ class NotificationService:
             return False
 
     def _should_notify(self, notification_type: str) -> bool:
-        """Centralized check if notification should be displayed @zara"""
+        """Centralized check if notification should be displayed. @zara"""
         if not self._initialized:
             return False
 
@@ -94,7 +106,7 @@ class NotificationService:
     async def _safe_create_notification(
         self, message: str, title: str, notification_id: str
     ) -> bool:
-        """Create notification with error handling"""
+        """Create notification with error handling. @zara"""
         if not self._initialized:
             _LOGGER.warning(
                 f"[!] NotificationService not initialized - "
@@ -123,7 +135,7 @@ class NotificationService:
             return False
 
     async def _safe_dismiss_notification(self, notification_id: str) -> bool:
-        """Remove notification with error handling @zara"""
+        """Remove notification with error handling. @zara"""
         if not self._initialized:
             return False
 
@@ -143,6 +155,16 @@ class NotificationService:
             _LOGGER.warning(f"[!] Error dismissing notification '{notification_id}': {e}")
             return False
 
+    async def create_notification(
+        self, title: str, message: str, notification_id: str
+    ) -> bool:
+        """Public method to create a custom notification. @zara"""
+        return await self._safe_create_notification(message, title, notification_id)
+
+    async def dismiss_notification(self, notification_id: str) -> bool:
+        """Public method to dismiss a notification. @zara"""
+        return await self._safe_dismiss_notification(notification_id)
+
     async def show_startup_success(
         self,
         ml_mode: bool = True,
@@ -150,83 +172,60 @@ class NotificationService:
         missing_packages: Optional[List[str]] = None,
         use_attention: bool = False,
     ) -> bool:
-        """Show startup notification with integration status"""
+        """Show startup notification with integration status. @zara"""
         if not self._should_notify(CONF_NOTIFY_STARTUP):
             return False
 
         try:
-
             installed_list = ""
             if installed_packages:
-                installed_items = "\n".join([f"✓ {pkg}" for pkg in installed_packages])
+                installed_items = "\n".join([f"* {pkg}" for pkg in installed_packages])
                 installed_list = f"\n\n**Installed Dependencies:**\n{installed_items}"
 
             missing_list = ""
             if missing_packages:
-                missing_items = "\n".join([f"✗ {pkg}" for pkg in missing_packages])
+                missing_items = "\n".join([f"x {pkg}" for pkg in missing_packages])
                 missing_list = f"\n\n**Missing Packages:**\n{missing_items}"
 
             if ml_mode:
-                # Build AI Architecture section
-                ai_architecture = """**AI Architecture:**
-• AI-Neural Network mit 24h temporalen Sequenzen
-• Physics-basiertes Bestrahlungsmodell (pro Panel-Gruppe)
-• Konfidenz-gewichtetes Hybrid-Blending
-• Echtzeit-Wetterkorrektur"""
-
-                # Add attention info if enabled
+                engine = "LSTM + Ridge Regression + Physics"
                 if use_attention:
-                    ai_architecture += "\n• Advanced Attention AI (aktiv)"
+                    engine = "AI (Attention) + Ridge Regression + Physics"
 
-                message = f"""**Solar Forecast Hybrid AI Started Successfully!** ⭐
+                message = f"""Three proprietary AI models, a local Machine Learning engine, and a full solar physics engine work in perfect synergy to deliver **3-day hourly forecasts** with up to **97% accuracy** after calibration.
 
-**Mode:** Hybrid AI (Physics + Machine Learning)
+🔒 **100% local AI (3 + 1)** — no cloud, no subscriptions, no data leaves your network. No external AI (ChatGPT, Grok, Gemini) needed. Everything runs on your hardware.
 
-**Version:** "Sarpeidon" - Named after the planet from Star Trek where the Guardian of Forever resides
+| | |
+|---|---|
+| 🧠 **Mode** | Hybrid AI (Physics + Machine Learning) |
+| ⚡ **Engine** | {engine} |
+| 📊 **Features** | Multi-Panel · Weather · Self-Learning · Briefings |
+| ✅ **Status** | All systems operational |
+{installed_list}
+> *"Logic is the beginning of wisdom, not the end."* — Spock
 
-**Author:** Zara-Toorox
-
-{ai_architecture}
-
-**Active Features:**
-• Hybrid-Vorhersage mit automatischer Konfidenz-Gewichtung
-• Multi-Output Forecasting (pro Panel-Gruppe)
-• Historische Datenanalyse & selbstlernendes Training
-• Wetterintegration für höhere Genauigkeit
-• Peak-Produktionszeit-Erkennung
-• Autarkie & Eigenverbrauch-Tracking
-• Daily Solar Briefing Benachrichtigungen{installed_list}
-
-**System Status:** All systems operational ✓
-
-*"The future is not set in stone, but with data and logic, we can illuminate the path ahead."* — Inspired by Star Trek
-
-**Personal Note from Zara:**
-Thank you for using Solar Forecast Hybrid AI! May your panels generate efficiently. Live long and prosper! 🖖"""
+🖖 by **Zara-Toorox** — Live long and prosper!"""
             else:
-                message = f"""**Solar Forecast ML Started in Fallback Mode** ⚠️
+                message = f"""A full solar physics engine delivers reliable forecasts — even without ML dependencies. Install the missing packages to unlock three proprietary AI models and up to **97% accuracy**.
 
-**Mode:** Rule-Based Calculations (Limited Features)
+🔒 **100% local** — no cloud, no subscriptions, no data leaves your network.
 
-**Version:** "Sarpeidon" - Named after the planet from Star Trek where the Guardian of Forever resides
+| | |
+|---|---|
+| 📐 **Mode** | Rule-Based (Limited Features) |
+| 📊 **Features** | Solar Forecasting · Production Statistics |
+| ✅ **Status** | Operational |
+{missing_list}{installed_list}
+⚠️ Install missing Python packages to enable ML features.
 
-**Author:** Zara-Toorox
+> *"Logic is the beginning of wisdom, not the end."* — Spock
 
-**Active Features:**
-• Rule-based solar forecasting
-• Historical data tracking
-• Basic production statistics{missing_list}{installed_list}
-
-**Note:** Install missing Python packages to enable ML features. The integration will continue working with rule-based calculations.
-
-*"Even in the absence of certainty, we must still chart our course."* — Inspired by Star Trek
-
-**Personal Note from Zara:**
-Thank you for using Solar Forecast ML! Install the missing dependencies to unlock the full power of machine learning. 🖖"""
+🖖 by **Zara-Toorox**"""
 
             await self._safe_create_notification(
                 message=message,
-                title="🌤️ Solar Forecast Hybrid AI Started",
+                title="☀️ Solar Forecast ML — Sarpeidion AI & DB-Version",
                 notification_id=NOTIFICATION_ID_STARTUP,
             )
 
@@ -239,7 +238,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
     async def show_forecast_update(
         self, forecast_energy: float, confidence: Optional[float] = None
     ) -> bool:
-        """Show forecast update notification"""
+        """Show forecast update notification. @zara"""
         if not self._should_notify(CONF_NOTIFY_FORECAST):
             return False
 
@@ -248,10 +247,12 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             if confidence is not None:
                 confidence_text = f"\n**Confidence:** {confidence:.1f}%"
 
-            message = f"""Solar Forecast Updated"""
+            message = f"Solar Forecast Updated"
 
             await self._safe_create_notification(
-                message=message, title="Forecast Updated", notification_id=NOTIFICATION_ID_FORECAST
+                message=message,
+                title="Forecast Updated",
+                notification_id=NOTIFICATION_ID_FORECAST,
             )
 
             return True
@@ -261,15 +262,17 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def show_training_start(self, sample_count: int) -> bool:
-        """Show notification when AI training starts @zara"""
+        """Show notification when AI training starts. @zara"""
         if not self._should_notify(CONF_NOTIFY_LEARNING):
             return False
 
         try:
-            message = f"""AI Training Started"""
+            message = f"AI Training Started with {sample_count} samples"
 
             await self._safe_create_notification(
-                message=message, title="Training Started", notification_id=NOTIFICATION_ID_LEARNING
+                message=message,
+                title="Training Started",
+                notification_id=NOTIFICATION_ID_LEARNING,
             )
 
             return True
@@ -281,7 +284,7 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
     async def show_training_complete(
         self, success: bool, accuracy: Optional[float] = None, sample_count: Optional[int] = None
     ) -> bool:
-        """Show notification when AI training completes"""
+        """Show notification when AI training completes. @zara"""
         if not self._should_notify(CONF_NOTIFY_SUCCESSFUL_LEARNING):
             return False
 
@@ -295,14 +298,16 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
                 if sample_count is not None:
                     sample_text = f"\n**Samples Used:** {sample_count}"
 
-                message = f"""OK AI Training Complete"""
+                message = f"AI Training Complete{accuracy_text}{sample_text}"
             else:
-                message = """ AI Training Failed"""
+                message = "AI Training Failed"
 
             await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
             await self._safe_create_notification(
-                message=message, title="Training Complete", notification_id=NOTIFICATION_ID_LEARNING
+                message=message,
+                title="Training Complete",
+                notification_id=NOTIFICATION_ID_LEARNING,
             )
 
             return True
@@ -312,15 +317,15 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
             return False
 
     async def dismiss_startup_notification(self) -> bool:
-        """Remove startup notification @zara"""
+        """Remove startup notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_STARTUP)
 
     async def dismiss_forecast_notification(self) -> bool:
-        """Remove forecast notification @zara"""
+        """Remove forecast notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_FORECAST)
 
     async def dismiss_training_notification(self) -> bool:
-        """Remove training notification @zara"""
+        """Remove training notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_LEARNING)
 
     async def show_model_retraining_required(
@@ -329,38 +334,37 @@ Thank you for using Solar Forecast ML! Install the missing dependencies to unloc
         old_features: Optional[int] = None,
         new_features: Optional[int] = None,
     ) -> bool:
-        """Show notification when AI model needs retraining"""
+        """Show notification when AI model needs retraining. @zara"""
         try:
-
             if reason == "feature_mismatch":
-                reason_text = f"""**Grund:** Sensoränderung erkannt
+                reason_text = f"""**Reason:** Sensor change detected
 
 **Details:**
-• Alte Features: {old_features}
-• Neue Features: {new_features}
+- Old Features: {old_features}
+- New Features: {new_features}
 
-Das AI-Modell wird automatisch neu trainiert, um die geänderte Sensorkonfiguration zu berücksichtigen."""
+The AI model will be automatically retrained to account for the changed sensor configuration."""
             else:
-                reason_text = "Das AI-Modell muss neu trainiert werden."
+                reason_text = "The AI model needs to be retrained."
 
-            message = f"""**Solar Forecast ML - Modell-Neutraining erforderlich** ⚠️
+            message = f"""**Solar Forecast ML - Model Retraining Required**
 
 {reason_text}
 
-**Nächste Schritte:**
-• Das Training wird automatisch durchgeführt
-• Bei Bedarf manuell starten: Service `solar_forecast_ml.force_retrain`
+**Next Steps:**
+- Training will be performed automatically
+- If needed, manually start: Service `solar_forecast_ml.force_retrain`
 
-**Status:** Automatisches Training läuft...
+**Status:** Automatic training running...
 
-*"Anpassung ist der Schlüssel zum Überleben."* — Inspired by Star Trek
+*"Adaptation is the key to survival."* - Inspired by Star Trek
 
 **Personal Note from Zara:**
-Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
+No worries! The integration adapts automatically."""
 
             await self._safe_create_notification(
                 message=message,
-                title="🔄 AI-Modell Neutraining",
+                title="AI Model Retraining",
                 notification_id=NOTIFICATION_ID_RETRAINING,
             )
 
@@ -371,48 +375,50 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             return False
 
     async def dismiss_retraining_notification(self) -> bool:
-        """Remove retraining notification @zara"""
+        """Remove retraining notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_RETRAINING)
 
     async def show_frost_warning(
         self,
         frost_score: int,
         temperature_c: float,
-        dewpoint_c: float,
+        dewpoint_c: Optional[float],
         frost_margin_c: float,
         hour: int,
         confidence: float = 0.0,
     ) -> bool:
-        """Show frost warning notification when heavy frost is detected @zara"""
+        """Show frost warning notification when heavy frost is detected. @zara"""
         if not self._should_notify(CONF_NOTIFY_FROST):
             return False
 
         try:
             confidence_pct = int(confidence * 100)
+            dewpoint_str = f"{dewpoint_c:.1f}°C" if dewpoint_c is not None else "N/A"
+            frost_margin_str = f"{frost_margin_c:.1f}" if frost_margin_c is not None else "N/A"
 
-            message = f"""**Starker Frost auf Solarpanelen erkannt!** ❄️
+            message = f"""**Heavy Frost on Solar Panels Detected!**
 
-**Zeit:** {hour:02d}:00 Uhr
-**Frost-Score:** {frost_score}/10
-**Konfidenz:** {confidence_pct}%
+**Time:** {hour:02d}:00
+**Frost Score:** {frost_score}/10
+**Confidence:** {confidence_pct}%
 
-**Wetterbedingungen:**
-• Temperatur: {temperature_c:.1f}°C
-• Taupunkt: {dewpoint_c:.1f}°C
-• Frost-Margin: {frost_margin_c:.1f}°C
+**Weather Conditions:**
+- Temperature: {temperature_c:.1f}°C
+- Dew Point: {dewpoint_str}
+- Frost Margin: {frost_margin_str}°C
 
-**Auswirkungen:**
-• Die Solarproduktion ist wahrscheinlich reduziert
-• Diese Stunde wird vom ML-Training ausgeschlossen
-• Die Prognose-Genauigkeit kann beeinträchtigt sein
+**Effects:**
+- Solar production is likely reduced
+- This hour will be excluded from AI training
+- Forecast accuracy may be affected
 
-**Hinweis:** Frost löst sich normalerweise auf, sobald die Sonne die Panele erwärmt.
+**Note:** Frost typically dissipates once the sun warms the panels.
 
-*"Even the coldest winter holds the promise of spring."* — Inspired by Star Trek"""
+*"Even the coldest winter holds the promise of spring."* - Inspired by Star Trek"""
 
             await self._safe_create_notification(
                 message=message,
-                title="❄️ Frost auf Solarpanelen",
+                title="Frost on Solar Panels",
                 notification_id=NOTIFICATION_ID_FROST,
             )
 
@@ -423,7 +429,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             return False
 
     async def dismiss_frost_notification(self) -> bool:
-        """Remove frost notification @zara"""
+        """Remove frost notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_FROST)
 
     async def show_fog_warning(
@@ -434,33 +440,33 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
         hour: int,
         fog_type: str = "dense",
     ) -> bool:
-        """Show fog warning notification when dense fog is detected @zara"""
+        """Show fog warning notification when dense fog is detected. @zara"""
         if not self._should_notify(CONF_NOTIFY_FOG):
             return False
 
         try:
             visibility_km = visibility_m / 1000.0
-            fog_type_de = "Dichter Nebel" if fog_type == "dense" else "Leichter Nebel"
+            fog_type_text = "Dense Fog" if fog_type == "dense" else "Light Fog"
 
-            message = f"""**{fog_type_de} erkannt!** 🌫️
+            message = f"""**{fog_type_text} Detected!**
 
-**Zeit:** {hour:02d}:00 Uhr
-**Sichtweite:** {visibility_km:.1f} km
-**Luftfeuchtigkeit:** {humidity:.0f}%
-**Temperatur:** {temperature_c:.1f}°C
+**Time:** {hour:02d}:00
+**Visibility:** {visibility_km:.1f} km
+**Humidity:** {humidity:.0f}%
+**Temperature:** {temperature_c:.1f}C
 
-**Auswirkungen auf Solarproduktion:**
-• Nebel blockiert weniger Licht als echte Wolken
-• Diffuse Strahlung passiert den Nebel
-• Die Prognose wird automatisch angepasst
+**Effects on Solar Production:**
+- Fog blocks less light than real clouds
+- Diffuse radiation passes through fog
+- The forecast is automatically adjusted
 
-**Hinweis:** Nebel löst sich oft auf, sobald die Sonne stärker wird und die Temperatur steigt.
+**Note:** Fog often dissipates once the sun gets stronger and temperature rises.
 
-*"Through the fog, the sun still shines."* — Inspired by Star Trek 🖖"""
+*"Through the fog, the sun still shines."* - Inspired by Star Trek"""
 
             await self._safe_create_notification(
                 message=message,
-                title="🌫️ Starker Nebel erkannt",
+                title="Dense Fog Detected",
                 notification_id=NOTIFICATION_ID_FOG,
             )
 
@@ -471,7 +477,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             return False
 
     async def dismiss_fog_notification(self) -> bool:
-        """Remove fog notification @zara"""
+        """Remove fog notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_FOG)
 
     async def show_weather_alert(
@@ -483,62 +489,60 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
         weather_actual: dict = None,
         weather_forecast: dict = None,
     ) -> bool:
-        """Show weather alert notification when unexpected weather is detected @zara"""
+        """Show weather alert notification when unexpected weather is detected. @zara"""
         if not self._should_notify(CONF_NOTIFY_WEATHER_ALERT):
             return False
 
         try:
-            # Map alert types to German descriptions
             alert_descriptions = {
-                "unexpected_rain": "Unerwarteter Regen",
-                "unexpected_snow": "Unerwarteter Schnee",
-                "unexpected_clouds": "Unerwartete Bewölkung",
-                "sudden_storm": "Plötzliches Unwetter",
-                "unexpected_fog": "Unerwarteter Nebel",
-                "snow_covered_panels": "Schneebedeckte Panels",
+                "unexpected_rain": "Unexpected Rain",
+                "unexpected_snow": "Unexpected Snow",
+                "unexpected_clouds": "Unexpected Clouds",
+                "sudden_storm": "Sudden Storm",
+                "unexpected_fog": "Unexpected Fog",
+                "snow_covered_panels": "Snow Covered Panels",
             }
             alert_title = alert_descriptions.get(alert_type, alert_type)
 
-            # Build weather details
             weather_details = ""
             if weather_actual:
                 actual_rain = weather_actual.get("precipitation_mm", 0)
                 actual_clouds = weather_actual.get("clouds", 0)
                 actual_temp = weather_actual.get("temperature", "N/A")
                 weather_details += f"""
-**Aktuelle Wetterdaten:**
-• Niederschlag: {actual_rain:.1f} mm
-• Bewölkung: {actual_clouds}%
-• Temperatur: {actual_temp}°C"""
+**Current Weather Data:**
+- Precipitation: {actual_rain:.1f} mm
+- Cloud Cover: {actual_clouds}%
+- Temperature: {actual_temp}C"""
 
             if weather_forecast:
                 forecast_rain = weather_forecast.get("precipitation_probability", 0)
                 forecast_clouds = weather_forecast.get("clouds", 0)
                 weather_details += f"""
 
-**Prognose war:**
-• Niederschlagswahrscheinlichkeit: {forecast_rain}%
-• Bewölkung: {forecast_clouds}%"""
+**Forecast Was:**
+- Precipitation Probability: {forecast_rain}%
+- Cloud Cover: {forecast_clouds}%"""
 
-            message = f"""**Unerwartetes Wetterereignis erkannt!** ⚠️
+            message = f"""**Unexpected Weather Event Detected!**
 
-**Zeit:** {date_str} {hour:02d}:00 Uhr
-**Ereignis:** {alert_title}
-**Grund:** {reason}
+**Time:** {date_str} {hour:02d}:00
+**Event:** {alert_title}
+**Reason:** {reason}
 {weather_details}
 
-**Auswirkungen:**
-• Die Solarproduktion weicht von der Prognose ab
-• Diese Stunde wird vom ML-Training ausgeschlossen
-• Die Prognose-Genauigkeit wird nicht beeinträchtigt
+**Effects:**
+- Solar production deviates from forecast
+- This hour will be excluded from AI training
+- Forecast accuracy is not affected
 
-**Hinweis:** Das System lernt aus dieser Abweichung für zukünftige Wettervorhersagen.
+**Note:** The system learns from this deviation for future weather forecasts.
 
-*"Der Weltraum mag kalt sein, aber unsere Algorithmen lernen warm."* — Inspired by Star Trek 🖖"""
+*"Space may be cold, but our algorithms learn warm."* - Inspired by Star Trek"""
 
             await self._safe_create_notification(
                 message=message,
-                title=f"⚠️ Wetteralarm: {alert_title}",
+                title=f"Weather Alert: {alert_title}",
                 notification_id=NOTIFICATION_ID_WEATHER_ALERT,
             )
 
@@ -549,7 +553,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             return False
 
     async def dismiss_weather_alert_notification(self) -> bool:
-        """Remove weather alert notification @zara"""
+        """Remove weather alert notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_WEATHER_ALERT)
 
     async def show_snow_covered_warning(
@@ -557,37 +561,46 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
         temperature_c: float,
         precipitation_mm: float,
         hour: int,
+        message: str = None,
     ) -> bool:
-        """Show warning when snow coverage on panels is possible @zara
-
-        V12.9.1: Changed to tentative wording - snow detection is not 100% certain
-        """
+        """Show warning when snow coverage on panels is possible. @zara V16.1"""
         if not self._should_notify(CONF_NOTIFY_SNOW_COVERED):
             return False
 
         try:
-            # V12.9.1: Adjusted factor from 10x to 8x
             estimated_depth = precipitation_mm * 8  # Conservative estimate
 
-            # V12.9.1: Use tentative wording - "möglich" instead of "erkannt"
-            message = f"""**Schneebedeckung auf Solarpanelen möglich** ❄️
+            if message:
+                # Custom message provided (e.g., overnight snow) @zara V16.1
+                notification_message = f"""❄️ **Schnee auf Solarmodulen erkannt**
+
+**Zeit:** {hour:02d}:00 Uhr
+**Temperatur:** {temperature_c:.1f}°C
+
+{message}
+
+**Hinweis:** Diese Stunden werden vom ML-Training ausgeschlossen.
+
+*"Auch im kältesten Winter geht die Sonne auf."*"""
+            else:
+                notification_message = f"""❄️ **Schnee auf Solarmodulen möglich**
 
 **Zeit:** {hour:02d}:00 Uhr
 **Temperatur:** {temperature_c:.1f}°C
 **Niederschlag:** {precipitation_mm:.1f} mm
-**Mögliche Schneehöhe:** ~{estimated_depth:.0f} mm (Schätzung)
+**Geschätzte Schneehöhe:** ~{estimated_depth:.0f} mm
 
 **Mögliche Auswirkungen:**
-• Die Solarproduktion könnte reduziert sein
-• Diese Stunde wird vorsichtshalber vom ML-Training ausgeschlossen
+- Solarproduktion kann reduziert sein
+- Diese Stunde wird vorsorglich vom ML-Training ausgeschlossen
 
-**Hinweis:** Diese Warnung basiert auf Wetterdaten und ist eine Schätzung. Prüfen Sie bei Bedarf die Panele visuell.
+**Hinweis:** Diese Warnung basiert auf Wetterdaten und ist eine Schätzung.
 
-*"Even in the coldest winter, the sun still rises."* — Inspired by Star Trek 🖖"""
+*"Auch im kältesten Winter geht die Sonne auf."*"""
 
             await self._safe_create_notification(
-                message=message,
-                title="❄️ Schnee möglich",
+                message=notification_message,
+                title="❄️ Schnee erkannt",
                 notification_id=NOTIFICATION_ID_SNOW_COVERED,
             )
 
@@ -602,27 +615,24 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
         temperature_c: float,
         hour: int,
     ) -> bool:
-        """Show info when snow may be melting from panels @zara
-
-        V12.9.1: Changed to tentative wording
-        """
+        """Show info when snow may be melting from panels. @zara V16.1"""
         if not self._should_notify(CONF_NOTIFY_SNOW_COVERED):
             return False
 
         try:
-            message = f"""**Schnee schmilzt wahrscheinlich** ☀️
+            message = f"""☀️ **Schnee schmilzt vermutlich**
 
 **Zeit:** {hour:02d}:00 Uhr
 **Temperatur:** {temperature_c:.1f}°C
 
 **Status:**
-• Die Temperatur ist gestiegen
-• Der Schnee könnte schmelzen
-• Die Solarproduktion könnte sich normalisieren
+- Temperatur ist gestiegen
+- Schnee beginnt zu schmelzen
+- Solarproduktion normalisiert sich
 
-**Hinweis:** Es kann einige Stunden dauern, bis die Panele schneefrei sind. Dies ist eine automatische Schätzung.
+**Hinweis:** Es kann noch einige Stunden dauern, bis die Module schneefrei sind.
 
-*"After every storm, comes the calm."* — Inspired by Star Trek 🖖"""
+*"Nach jedem Sturm kommt die Ruhe."*"""
 
             await self._safe_create_notification(
                 message=message,
@@ -637,7 +647,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             return False
 
     async def dismiss_snow_covered_notification(self) -> bool:
-        """Remove snow covered notification @zara"""
+        """Remove snow covered notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_SNOW_COVERED)
 
     async def show_adaptive_correction(
@@ -649,14 +659,7 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
         am_actual: float = 0.0,
         am_predicted: float = 0.0,
     ) -> bool:
-        """Show notification when adaptive forecast correction was applied @zara
-
-        This notification informs the user that SFML has autonomously
-        corrected the afternoon forecast based on fresh weather data.
-        """
-        # Adaptive correction notifications are always shown (when the mode is enabled)
-        # No separate config option needed - the user opted in by enabling the mode
-
+        """Show notification when adaptive forecast correction was applied. @zara"""
         try:
             # Calculate change percentage
             if original_kwh > 0.1:
@@ -673,46 +676,49 @@ Keine Sorge! Die Integration passt sich automatisch an. 🖖"""
             else:
                 am_deviation_text = "N/A"
 
-            message = f"""**Adaptive Prognose-Korrektur durchgeführt** ☀️
+            message = f"""**Adaptive Forecast Correction Applied**
 
-**Grund:** {reason}
+**Reason:** {reason}
 
-**Vormittags-Analyse:**
-• IST-Produktion: {am_actual:.2f} kWh
-• Prognose war: {am_predicted:.2f} kWh
-• Abweichung: {am_deviation_text}
+**Morning Analysis:**
+- Actual Production: {am_actual:.2f} kWh
+- Forecast Was: {am_predicted:.2f} kWh
+- Deviation: {am_deviation_text}
 
-**Korrektur:**
-• Ursprüngliche Tagesprognose: {original_kwh:.2f} kWh
-• Korrigierte Tagesprognose: {corrected_kwh:.2f} kWh ({change_text})
-• Neu berechnete Stunden: {hours_corrected}
+**Correction:**
+- Original Daily Forecast: {original_kwh:.2f} kWh
+- Corrected Daily Forecast: {corrected_kwh:.2f} kWh ({change_text})
+- Recalculated Hours: {hours_corrected}
 
-**Hinweis:**
-Die Nachmittagsprognose wurde basierend auf aktuelleren Wetterdaten
-neu berechnet. Die Vormittagswerte bleiben unverändert.
+**Note:**
+The afternoon forecast was recalculated based on more recent weather data.
+Morning values remain unchanged.
 
-*"Adaptation is the key to survival."* — Inspired by Star Trek 🖖"""
+*"Adaptation is the key to survival."* - Inspired by Star Trek"""
 
             await self._safe_create_notification(
                 message=message,
-                title="☀️ Prognose automatisch angepasst",
+                title="Forecast Automatically Adjusted",
                 notification_id=NOTIFICATION_ID_ADAPTIVE_CORRECTION,
             )
 
             return True
 
         except Exception as e:
-            _LOGGER.error(f"[X] Error showing adaptive correction notification: {e}", exc_info=True)
+            _LOGGER.error(
+                f"[X] Error showing adaptive correction notification: {e}", exc_info=True
+            )
             return False
 
     async def dismiss_adaptive_correction_notification(self) -> bool:
-        """Remove adaptive correction notification @zara"""
+        """Remove adaptive correction notification. @zara"""
         return await self._safe_dismiss_notification(NOTIFICATION_ID_ADAPTIVE_CORRECTION)
+
 
 async def create_notification_service(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> Optional[NotificationService]:
-    """Factory function to create and initialize NotificationService"""
+    """Factory function to create and initialize NotificationService. @zara"""
     try:
         service = NotificationService(hass, entry)
 

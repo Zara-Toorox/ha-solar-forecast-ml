@@ -1,20 +1,13 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Config flow for SFML Stats integration. @zara
-
-Simplified setup flow:
-- Step 1: Welcome
-- Step 2: All sensors on one page (grouped)
-- Step 3: Helper check
-- Step 4: Settings (billing, theme)
-"""
+"""Config flow for SFML Stats integration. @zara"""
 from __future__ import annotations
 
 import logging
@@ -45,7 +38,6 @@ from .const import (
     THEME_LIGHT,
     DASHBOARD_STYLE_3D,
     DASHBOARD_STYLE_2D,
-    CONF_SENSOR_SOLAR_POWER,
     CONF_SENSOR_SOLAR_TO_HOUSE,
     CONF_SENSOR_SOLAR_TO_BATTERY,
     CONF_SENSOR_BATTERY_TO_HOUSE,
@@ -56,11 +48,13 @@ from .const import (
     CONF_SENSOR_BATTERY_SOC,
     CONF_SENSOR_BATTERY_POWER,
     CONF_SENSOR_HOME_CONSUMPTION,
-    CONF_SENSOR_SOLAR_YIELD_DAILY,
     CONF_SENSOR_GRID_IMPORT_DAILY,
     CONF_SENSOR_GRID_IMPORT_YEARLY,
     CONF_SENSOR_BATTERY_CHARGE_SOLAR_DAILY,
     CONF_SENSOR_BATTERY_CHARGE_GRID_DAILY,
+    CONF_SENSOR_BATTERY_DISCHARGE_DAILY,
+    CONF_SENSOR_GRID_EXPORT_DAILY,
+    CONF_SENSOR_HOME_CONSUMPTION_DAILY,
     CONF_SENSOR_PRICE_TOTAL,
     CONF_WEATHER_ENTITY,
     CONF_SENSOR_SMARTMETER_IMPORT,
@@ -79,12 +73,17 @@ from .const import (
     DEFAULT_PANEL4_NAME,
     CONF_BILLING_START_DAY,
     CONF_BILLING_START_MONTH,
+    CONF_BILLING_PRICE_MODE,
     CONF_BILLING_FIXED_PRICE,
     CONF_FEED_IN_TARIFF,
     DEFAULT_BILLING_START_DAY,
     DEFAULT_BILLING_START_MONTH,
+    DEFAULT_BILLING_PRICE_MODE,
     DEFAULT_BILLING_FIXED_PRICE,
     DEFAULT_FEED_IN_TARIFF,
+    PRICE_MODE_DYNAMIC,
+    PRICE_MODE_FIXED,
+    PRICE_MODE_NONE,
     CONF_PANEL_GROUP_NAMES,
     CONF_FORECAST_ENTITY_1,
     CONF_FORECAST_ENTITY_2,
@@ -92,7 +91,6 @@ from .const import (
     CONF_FORECAST_ENTITY_2_NAME,
     DEFAULT_FORECAST_ENTITY_1_NAME,
     DEFAULT_FORECAST_ENTITY_2_NAME,
-    # Consumer sensors (Wärmepumpe, Heizstab, Wallbox)
     CONF_SENSOR_HEATPUMP_POWER,
     CONF_SENSOR_HEATPUMP_DAILY,
     CONF_SENSOR_HEATPUMP_COP,
@@ -106,7 +104,6 @@ from .sensor_helpers import check_and_suggest_helpers
 
 _LOGGER = logging.getLogger(__name__)
 
-# Month names for translations
 MONTHS_DE = {
     1: "Januar", 2: "Februar", 3: "März", 4: "April",
     5: "Mai", 6: "Juni", 7: "Juli", 8: "August",
@@ -119,45 +116,56 @@ MONTHS_EN = {
     9: "September", 10: "October", 11: "November", 12: "December"
 }
 
-# All sensor keys for configuration - used in both initial and options flow
-ALL_SENSOR_KEYS = [
-    # === SOLAR (4) ===
-    CONF_SENSOR_SOLAR_POWER,
-    CONF_SENSOR_SOLAR_TO_HOUSE,
-    CONF_SENSOR_SOLAR_TO_BATTERY,
-    CONF_SENSOR_SOLAR_YIELD_DAILY,
-    # === GRID (7) ===
-    CONF_SENSOR_GRID_TO_HOUSE,
-    CONF_SENSOR_GRID_TO_BATTERY,
-    CONF_SENSOR_HOUSE_TO_GRID,
-    CONF_SENSOR_GRID_IMPORT_DAILY,
-    CONF_SENSOR_GRID_IMPORT_YEARLY,
-    CONF_SENSOR_SMARTMETER_IMPORT,
-    CONF_SENSOR_SMARTMETER_EXPORT,
-    # === BATTERY (6) ===
-    CONF_SENSOR_BATTERY_SOC,
-    CONF_SENSOR_BATTERY_POWER,
-    CONF_SENSOR_BATTERY_TO_HOUSE,
-    CONF_SENSOR_BATTERY_TO_GRID,
-    CONF_SENSOR_BATTERY_CHARGE_SOLAR_DAILY,
-    CONF_SENSOR_BATTERY_CHARGE_GRID_DAILY,
-    # === HOME (1) ===
+REQUIRED_SENSOR_KEYS = [
     CONF_SENSOR_HOME_CONSUMPTION,
-    # === ANDERE (2) ===
+    CONF_SENSOR_HOME_CONSUMPTION_DAILY,
+]
+
+BATTERY_SENSOR_KEYS = [
+    CONF_SENSOR_SOLAR_TO_BATTERY,
+    CONF_SENSOR_BATTERY_CHARGE_SOLAR_DAILY,
+    CONF_SENSOR_BATTERY_TO_HOUSE,
+    CONF_SENSOR_BATTERY_DISCHARGE_DAILY,
+    CONF_SENSOR_GRID_TO_BATTERY,
+    CONF_SENSOR_BATTERY_CHARGE_GRID_DAILY,
+    CONF_SENSOR_BATTERY_SOC,
+]
+
+SMARTMETER_SENSOR_KEYS = [
+    CONF_SENSOR_SMARTMETER_IMPORT,
+    CONF_SENSOR_GRID_IMPORT_DAILY,
+    CONF_SENSOR_SMARTMETER_EXPORT,
+    CONF_SENSOR_GRID_EXPORT_DAILY,
+]
+
+OTHER_SENSOR_KEYS = [
     CONF_SENSOR_PRICE_TOTAL,
     CONF_WEATHER_ENTITY,
 ]
 
-# Consumer sensor keys - Optional (Wärmepumpe, Heizstab, Wallbox)
+LEGACY_SENSOR_KEYS = [
+    CONF_SENSOR_SOLAR_TO_HOUSE,
+    CONF_SENSOR_GRID_TO_HOUSE,
+    CONF_SENSOR_HOUSE_TO_GRID,
+    CONF_SENSOR_BATTERY_TO_GRID,
+    CONF_SENSOR_BATTERY_POWER,
+    CONF_SENSOR_GRID_IMPORT_YEARLY,
+]
+
+ALL_SENSOR_KEYS = (
+    REQUIRED_SENSOR_KEYS +
+    BATTERY_SENSOR_KEYS +
+    SMARTMETER_SENSOR_KEYS +
+    OTHER_SENSOR_KEYS +
+    LEGACY_SENSOR_KEYS
+)
+
 CONSUMER_SENSOR_KEYS = [
-    # === WÄRMEPUMPE (3) ===
     CONF_SENSOR_HEATPUMP_POWER,
     CONF_SENSOR_HEATPUMP_DAILY,
     CONF_SENSOR_HEATPUMP_COP,
-    # === HEIZSTAB (2) ===
     CONF_SENSOR_HEATINGROD_POWER,
     CONF_SENSOR_HEATINGROD_DAILY,
-    # === WALLBOX (3) ===
     CONF_SENSOR_WALLBOX_POWER,
     CONF_SENSOR_WALLBOX_DAILY,
     CONF_SENSOR_WALLBOX_STATE,
@@ -236,16 +244,9 @@ def get_entity_selector_optional() -> selector.Selector:
 
 
 class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for SFML Stats. @zara
+    """Handle a config flow for SFML Stats. @zara"""
 
-    Simplified setup flow:
-    Step 1: Welcome screen
-    Step 2: All sensors on one page (grouped)
-    Step 3: Helper check
-    Step 4: Settings (billing, theme)
-    """
-
-    VERSION = 5
+    VERSION = 6
 
     def __init__(self) -> None:
         """Initialize the config flow. @zara"""
@@ -260,7 +261,6 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 
-        # Platform checks
         if _is_raspberry_pi():
             _LOGGER.error(
                 "Installation on Raspberry Pi is not supported due to performance limitations."
@@ -274,10 +274,8 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="proxmox_not_recommended")
 
         if user_input is not None:
-            # User clicked "Next", proceed to sensor configuration
             return await self.async_step_sensors()
 
-        # Show welcome screen
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({}),
@@ -287,26 +285,33 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle sensor configuration - All sensors on one page. @zara"""
+        """Handle sensor configuration - Simplified with groups. @zara"""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Filter out empty values and save
             for key, value in user_input.items():
                 if value and isinstance(value, str) and value.strip():
                     self._data[key] = value.strip()
-            # Check for missing kWh sensors
             return await self.async_step_helpers()
 
-        # Build sensor schema with all sensors
+        essential_keys = (
+            REQUIRED_SENSOR_KEYS +
+            BATTERY_SENSOR_KEYS +
+            SMARTMETER_SENSOR_KEYS +
+            OTHER_SENSOR_KEYS
+        )
+
         schema_dict = {}
-        for key in ALL_SENSOR_KEYS:
+        for key in essential_keys:
             schema_dict[vol.Optional(key, default="")] = get_entity_selector_optional()
 
         return self.async_show_form(
             step_id="sensors",
             data_schema=vol.Schema(schema_dict),
             errors=errors,
+            description_placeholders={
+                "info": "Hausverbrauch (W) ist Pflicht. Batterie und Smartmeter sind optional."
+            },
         )
 
     async def async_step_helpers(
@@ -317,17 +322,14 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             return await self.async_step_settings()
 
-        # Check for missing daily sensors
         missing_helpers, self._helper_yaml = await check_and_suggest_helpers(
             self.hass,
             self._data,
         )
 
-        # If no missing sensors, skip to settings
         if not missing_helpers:
             return await self.async_step_settings()
 
-        # Show helper suggestion
         missing_names = [h.friendly_name for h in missing_helpers]
 
         return self.async_show_form(
@@ -351,7 +353,6 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._data.update(user_input)
-            # Set empty panel group names mapping
             self._data[CONF_PANEL_GROUP_NAMES] = {}
             return self.async_create_entry(
                 title=NAME,
@@ -390,6 +391,14 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=DEFAULT_BILLING_START_DAY,
                 ): vol.In(days),
                 vol.Required(
+                    CONF_BILLING_PRICE_MODE,
+                    default=DEFAULT_BILLING_PRICE_MODE,
+                ): vol.In({
+                    PRICE_MODE_DYNAMIC: "Dynamisch (Stundenpreise)",
+                    PRICE_MODE_FIXED: "Festpreis",
+                    PRICE_MODE_NONE: "Kein Tarif",
+                }),
+                vol.Required(
                     CONF_BILLING_FIXED_PRICE,
                     default=DEFAULT_BILLING_FIXED_PRICE,
                 ): selector.NumberSelector(
@@ -427,13 +436,7 @@ class SFMLStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for SFML Stats. @zara
-
-    Simplified menu structure:
-    1. Sensoren - All sensor configuration
-    2. Einstellungen - Theme, billing, reports
-    3. Erweitert - Panels, group names
-    """
+    """Handle options flow for SFML Stats. @zara"""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow. @zara"""
@@ -458,12 +461,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         sensor_keys: list[str],
     ) -> vol.Schema:
-        """Build schema for sensor configuration form. @zara
-
-        WICHTIG: Verwende suggested_value statt default!
-        Mit default= wird beim Löschen eines Feldes der alte Wert verwendet.
-        Mit suggested_value= wird das Feld vorausgefüllt, aber Löschen funktioniert.
-        """
+        """Build schema for sensor configuration form. @zara"""
         current = self._config_entry.data
         schema_dict = {}
         for key in sensor_keys:
@@ -480,8 +478,12 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         """Manage the options - Simplified Menu. @zara"""
         if user_input is not None:
             next_step = user_input.get("menu_choice")
-            if next_step == "sensors":
-                return await self.async_step_sensors()
+            if next_step == "sensors_main":
+                return await self.async_step_sensors_main()
+            elif next_step == "sensors_battery":
+                return await self.async_step_sensors_battery()
+            elif next_step == "sensors_smartmeter":
+                return await self.async_step_sensors_smartmeter()
             elif next_step == "consumers":
                 return await self.async_step_consumers()
             elif next_step == "settings":
@@ -492,20 +494,84 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required("menu_choice", default="sensors"): vol.In({
-                    "sensors": "Sensoren",
-                    "consumers": "Verbraucher (WP, Heizstab, Wallbox)",
-                    "settings": "Einstellungen",
-                    "advanced": "Erweitert",
+                vol.Required("menu_choice", default="sensors_main"): vol.In({
+                    "sensors_main": "⚡ Haupt-Sensoren (Pflicht)",
+                    "sensors_battery": "🔋 Batterie-Sensoren (Optional)",
+                    "sensors_smartmeter": "📊 Smartmeter (Optional)",
+                    "consumers": "🏠 Verbraucher (WP, Heizstab, Wallbox)",
+                    "settings": "⚙️ Einstellungen",
+                    "advanced": "🔧 Erweitert",
                 }),
             }),
+        )
+
+    async def async_step_sensors_main(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage main/required sensors. @zara"""
+        sensor_keys = REQUIRED_SENSOR_KEYS + OTHER_SENSOR_KEYS
+
+        if user_input is not None:
+            new_data = self._process_sensor_input(user_input, sensor_keys)
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="sensors_main",
+            data_schema=self._build_sensor_schema(sensor_keys),
+            description_placeholders={
+                "info": "Hausverbrauch (W) ist der wichtigste Sensor für die Energiebilanz."
+            },
+        )
+
+    async def async_step_sensors_battery(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage battery sensors. @zara"""
+        if user_input is not None:
+            new_data = self._process_sensor_input(user_input, BATTERY_SENSOR_KEYS)
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="sensors_battery",
+            data_schema=self._build_sensor_schema(BATTERY_SENSOR_KEYS),
+            description_placeholders={
+                "info": "Nur konfigurieren wenn Batteriespeicher vorhanden."
+            },
+        )
+
+    async def async_step_sensors_smartmeter(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage smartmeter sensors. @zara"""
+        if user_input is not None:
+            new_data = self._process_sensor_input(user_input, SMARTMETER_SENSOR_KEYS)
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="sensors_smartmeter",
+            data_schema=self._build_sensor_schema(SMARTMETER_SENSOR_KEYS),
+            description_placeholders={
+                "info": "Für genaue Netzwerte. Ohne Smartmeter werden Werte geschätzt."
+            },
         )
 
     async def async_step_sensors(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage ALL sensor options on one page. @zara"""
+        """Legacy: Manage ALL sensor options on one page. @zara"""
         if user_input is not None:
             new_data = self._process_sensor_input(user_input, ALL_SENSOR_KEYS)
             self.hass.config_entries.async_update_entry(
@@ -522,7 +588,7 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage consumer sensor options (Wärmepumpe, Heizstab, Wallbox). @zara"""
+        """Manage consumer sensor options. @zara"""
         if user_input is not None:
             new_data = self._process_sensor_input(user_input, CONSUMER_SENSOR_KEYS)
             self.hass.config_entries.async_update_entry(
@@ -587,6 +653,14 @@ class SFMLStatsOptionsFlow(config_entries.OptionsFlow):
                     CONF_BILLING_START_DAY,
                     default=current.get(CONF_BILLING_START_DAY, DEFAULT_BILLING_START_DAY),
                 ): vol.In(days),
+                vol.Required(
+                    CONF_BILLING_PRICE_MODE,
+                    default=current.get(CONF_BILLING_PRICE_MODE, DEFAULT_BILLING_PRICE_MODE),
+                ): vol.In({
+                    PRICE_MODE_DYNAMIC: "Dynamisch (Stundenpreise)",
+                    PRICE_MODE_FIXED: "Festpreis",
+                    PRICE_MODE_NONE: "Kein Tarif",
+                }),
                 vol.Required(
                     CONF_BILLING_FIXED_PRICE,
                     default=current.get(CONF_BILLING_FIXED_PRICE, DEFAULT_BILLING_FIXED_PRICE),

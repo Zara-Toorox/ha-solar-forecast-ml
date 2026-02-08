@@ -1,13 +1,13 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Battery Analytics Export Chart for SFML Stats."""
+"""Battery analytics export chart for SFML Stats. @zara"""
 from __future__ import annotations
 
 import asyncio
@@ -25,12 +25,11 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Shared executor for matplotlib operations
 _MATPLOTLIB_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="matplotlib")
 
 
 class BatteryAnalyticsChart:
-    """Chart für Battery Analytics PNG-Export."""
+    """Battery analytics PNG export chart. @zara"""
 
     def __init__(
         self,
@@ -38,20 +37,14 @@ class BatteryAnalyticsChart:
         stats: dict[str, Any],
         data: list[dict[str, Any]],
     ) -> None:
-        """Initialize chart.
-
-        Args:
-            period: 'week', 'month', or 'year'
-            stats: Statistics dict with weekCharged, weekDischarged, etc.
-            data: Historical data points
-        """
+        """Initialize chart. @zara"""
         self.period = period
         self.stats = stats
         self.data = self._filter_data_by_period(data, period)
         self._styles = ChartStyles()
 
     def _filter_data_by_period(self, data: list[dict[str, Any]], period: str) -> list[dict[str, Any]]:
-        """Filter data based on selected period."""
+        """Filter data based on selected period. @zara"""
         if not data:
             return []
 
@@ -67,7 +60,7 @@ class BatteryAnalyticsChart:
         return sorted_data[:days]
 
     async def async_render(self) -> bytes:
-        """Render chart to PNG bytes."""
+        """Render chart to PNG bytes. @zara"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             _MATPLOTLIB_EXECUTOR,
@@ -75,7 +68,7 @@ class BatteryAnalyticsChart:
         )
 
     def _render_sync(self) -> bytes:
-        """Synchronous render - runs in executor thread."""
+        """Synchronous render in executor thread. @zara"""
         import matplotlib.pyplot as plt
         from .styles import apply_dark_theme
 
@@ -84,35 +77,27 @@ class BatteryAnalyticsChart:
         fig = plt.figure(figsize=(14, 10), facecolor=self._styles.background)
         gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.3, top=0.92, bottom=0.08)
 
-        # Title
         period_names = {'week': 'Letzte 7 Tage', 'month': 'Letzter Monat', 'year': 'Dieses Jahr'}
         title = f"Battery Analytics - {period_names.get(self.period, self.period.capitalize())}"
         fig.suptitle(title, fontsize=20, fontweight='bold', color=self._styles.text_primary)
 
-        # Stats Grid (top row, full width)
         ax_stats = fig.add_subplot(gs[0, :])
         self._render_stats_grid(ax_stats)
 
-        # SOC Chart (middle left)
         ax_soc = fig.add_subplot(gs[1, 0])
         self._render_soc_chart(ax_soc)
 
-        # Charge/Discharge Chart (middle right)
         ax_charge = fig.add_subplot(gs[1, 1])
         self._render_charge_chart(ax_charge)
 
-        # Efficiency Chart (bottom left)
         ax_efficiency = fig.add_subplot(gs[2, 0])
         self._render_efficiency_chart(ax_efficiency)
 
-        # Power Distribution (bottom right)
         ax_power = fig.add_subplot(gs[2, 1])
         self._render_power_chart(ax_power)
 
-        # Footer
         self._add_footer(fig)
 
-        # Render to bytes
         buf = io.BytesIO()
         fig.savefig(
             buf,
@@ -128,7 +113,7 @@ class BatteryAnalyticsChart:
         return buf.read()
 
     def _render_stats_grid(self, ax: Any) -> None:
-        """Render stats as a grid."""
+        """Render stats as a grid. @zara"""
         ax.axis('off')
 
         stats_text = [
@@ -149,7 +134,7 @@ class BatteryAnalyticsChart:
             props = dict(
                 boxstyle='round,pad=0.8',
                 facecolor=self._styles.background_card,
-                edgecolor='#22c55e',  # Grün wie Battery Node
+                edgecolor='#22c55e',
                 linewidth=2,
                 alpha=0.9
             )
@@ -166,7 +151,7 @@ class BatteryAnalyticsChart:
             )
 
     def _render_soc_chart(self, ax: Any) -> None:
-        """Render SOC timeline."""
+        """Render SOC timeline. @zara"""
         if not self.data:
             ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
@@ -194,7 +179,7 @@ class BatteryAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _render_charge_chart(self, ax: Any) -> None:
-        """Render charge/discharge chart."""
+        """Render charge/discharge chart. @zara"""
         if not self.data:
             ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
@@ -224,7 +209,7 @@ class BatteryAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _render_efficiency_chart(self, ax: Any) -> None:
-        """Render efficiency timeline."""
+        """Render efficiency timeline. @zara"""
         if not self.data:
             ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
@@ -233,7 +218,6 @@ class BatteryAnalyticsChart:
 
         data_reversed = list(reversed(self.data))
         dates = [d['date'][5:] for d in data_reversed]
-        # Validiere Wirkungsgrad-Werte auf sinnvollen Bereich (0-100%)
         efficiency = [max(0, min(100, d.get('efficiency', 0))) for d in data_reversed]
 
         avg = sum(efficiency) / len(efficiency) if efficiency else 0
@@ -256,7 +240,7 @@ class BatteryAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _render_power_chart(self, ax: Any) -> None:
-        """Render power distribution."""
+        """Render power distribution. @zara"""
         if not self.data:
             ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
@@ -280,7 +264,7 @@ class BatteryAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _apply_adaptive_ticks(self, ax: Any, dates: list[str]) -> None:
-        """Apply adaptive tick labels based on data length."""
+        """Apply adaptive tick labels based on data length. @zara"""
         if len(dates) > 60:
             tick_positions = list(range(0, len(dates), 14))
             tick_labels = [dates[i] for i in tick_positions]
@@ -296,7 +280,7 @@ class BatteryAnalyticsChart:
             ax.set_xticklabels(dates, rotation=45, ha='right')
 
     def _add_footer(self, fig: "Figure") -> None:
-        """Add footer with timestamp."""
+        """Add footer with timestamp. @zara"""
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
         footer_text = f"Generiert: {timestamp}"
 

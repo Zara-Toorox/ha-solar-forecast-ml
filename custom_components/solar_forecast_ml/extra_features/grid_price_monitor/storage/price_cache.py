@@ -9,15 +9,12 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import datetime, timedelta
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
+    from .db_connector import GPMDatabaseConnector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,63 +23,48 @@ CACHE_VALIDITY_HOURS = 48
 
 
 class PriceCache:
-    """Manages cached electricity price data @zara"""
+    """Manages cached electricity price data in SQLite @zara"""
 
-    def __init__(self, cache_file_path: Path, hass: "HomeAssistant | None" = None) -> None:
+    def __init__(self, db: GPMDatabaseConnector) -> None:
         """Initialize the price cache @zara
 
         Args:
-            cache_file_path: Path to the cache JSON file
-            hass: Home Assistant instance for async executor jobs
+            db: GPM database connector instance
         """
-        self._cache_path = cache_file_path
-        self._cache_data: dict[str, Any] | None = None
+        self._db = db
         self._loaded = False
-        self._hass = hass
-
-    async def _run_in_executor(self, func):
-        """Run a function in executor, using hass if available @zara"""
-        if self._hass:
-            return await self._hass.async_add_executor_job(func)
-        return await asyncio.get_running_loop().run_in_executor(None, func)
 
     async def async_load(self) -> bool:
-        """Load cache from disk asynchronously @zara
+        """Load cache metadata from database @zara
 
         Returns:
             True if cache was loaded successfully
         """
-        def _load() -> dict[str, Any] | None:
-            try:
-                if not self._cache_path.exists():
-                    _LOGGER.debug("No cache file found at %s", self._cache_path)
-                    return None
-
-                with open(self._cache_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-
-            except (json.JSONDecodeError, IOError) as err:
-                _LOGGER.warning("Failed to load price cache: %s", err)
-                return None
-
-        self._cache_data = await self._run_in_executor(_load)
-
-        if self._cache_data:
-            self._loaded = True
-            _LOGGER.debug(
-                "Loaded price cache with %d entries",
-                len(self._cache_data.get("prices", []))
+        try:
+            row = await self._db.fetchone(
+                "SELECT last_fetch, valid_until, country FROM GPM_price_cache_meta WHERE id = 1"
             )
-            return True
+            if row:
+                self._loaded = True
+                count_row = await self._db.fetchone(
+                    "SELECT COUNT(*) as cnt FROM GPM_price_cache"
+                )
+                entry_count = count_row["cnt"] if count_row else 0
+                _LOGGER.debug("Loaded price cache with %d entries", entry_count)
+                return True
 
-        return False
+            return False
+
+        except Exception as err:
+            _LOGGER.warning("Failed to load price cache: %s", err)
+            return False
 
     async def async_save(
         self,
         prices: list[dict[str, Any]],
-        country: str
+        country: str,
     ) -> bool:
-        """Save prices to cache asynchronously @zara
+        """Save prices to cache in database @zara
 
         Args:
             prices: List of price entries
@@ -91,189 +73,226 @@ class PriceCache:
         Returns:
             True if saved successfully
         """
-        # Use LOCAL time for JSON export - critical for user-facing data!
-        now_local = datetime.now().astimezone()
-        valid_until_local = now_local + timedelta(hours=CACHE_VALIDITY_HOURS)
+        try:
+            # Use LOCAL time - critical for user-facing data!
+            now_local = datetime.now().astimezone()
+            valid_until_local = now_local + timedelta(hours=CACHE_VALIDITY_HOURS)
 
-        self._cache_data = {
-            "version": 1,
-            "last_fetch": now_local.isoformat(),
-            "valid_until": valid_until_local.isoformat(),
-            "country": country,
-            "prices": self._serialize_prices(prices)
-        }
+            # Update metadata
+            await self._db.execute(
+                """INSERT INTO GPM_price_cache_meta (id, last_fetch, valid_until, country)
+                   VALUES (1, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                       last_fetch = excluded.last_fetch,
+                       valid_until = excluded.valid_until,
+                       country = excluded.country""",
+                (now_local.isoformat(), valid_until_local.isoformat(), country),
+                auto_commit=False,
+            )
 
-        def _save() -> bool:
-            try:
-                with open(self._cache_path, "w", encoding="utf-8") as f:
-                    json.dump(self._cache_data, f, indent=2, ensure_ascii=False)
-                return True
-            except IOError as err:
-                _LOGGER.error("Failed to save price cache: %s", err)
-                return False
+            # Replace all cache entries
+            await self._db.execute(
+                "DELETE FROM GPM_price_cache", auto_commit=False
+            )
 
-        result = await self._run_in_executor(_save)
+            # Insert new entries
+            params = []
+            for entry in prices:
+                ts = entry.get("timestamp")
+                if isinstance(ts, datetime):
+                    ts = ts.isoformat()
+                params.append((
+                    str(ts),
+                    entry.get("price", 0),
+                    entry.get("total_price"),
+                    entry.get("hour", 0),
+                ))
 
-        if result:
+            await self._db.executemany(
+                """INSERT OR REPLACE INTO GPM_price_cache
+                   (timestamp, price, total_price, hour) VALUES (?, ?, ?, ?)""",
+                params,
+            )
+
             _LOGGER.debug(
                 "Saved %d price entries to cache, valid until %s",
                 len(prices),
-                valid_until_local.isoformat()
+                valid_until_local.isoformat(),
             )
+            return True
 
-        return result
-
-    def _serialize_prices(
-        self,
-        prices: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Serialize price entries for JSON storage @zara
-
-        Args:
-            prices: List of price entries with datetime objects
-
-        Returns:
-            Serialized list safe for JSON
-        """
-        serialized = []
-        for entry in prices:
-            serialized_entry = entry.copy()
-            if "timestamp" in serialized_entry:
-                ts = serialized_entry["timestamp"]
-                if isinstance(ts, datetime):
-                    serialized_entry["timestamp"] = ts.isoformat()
-            serialized.append(serialized_entry)
-        return serialized
-
-    def _deserialize_prices(
-        self,
-        prices: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Deserialize price entries from JSON storage @zara
-
-        Args:
-            prices: List of serialized price entries
-
-        Returns:
-            List with datetime objects restored
-        """
-        deserialized = []
-        for entry in prices:
-            deserialized_entry = entry.copy()
-            if "timestamp" in deserialized_entry:
-                ts = deserialized_entry["timestamp"]
-                if isinstance(ts, str):
-                    deserialized_entry["timestamp"] = datetime.fromisoformat(ts)
-            deserialized.append(deserialized_entry)
-        return deserialized
+        except Exception as err:
+            _LOGGER.error("Failed to save price cache: %s", err)
+            return False
 
     def is_valid(self) -> bool:
         """Check if cache is valid and not expired @zara
 
+        Note: Uses in-memory check based on last loaded metadata.
+        For async validation, call async_is_valid().
+
+        Returns:
+            True if cache was loaded (actual validity checked async)
+        """
+        return self._loaded
+
+    async def async_is_valid(self) -> bool:
+        """Check if cache is valid and not expired (async) @zara
+
         Returns:
             True if cache is valid
         """
-        if not self._cache_data:
-            return False
-
-        valid_until_str = self._cache_data.get("valid_until")
-        if not valid_until_str:
-            return False
-
         try:
-            valid_until = datetime.fromisoformat(valid_until_str)
-            # Use local time for comparison (matching how we save)
+            row = await self._db.fetchone(
+                "SELECT valid_until FROM GPM_price_cache_meta WHERE id = 1"
+            )
+            if not row or not row["valid_until"]:
+                return False
+
+            valid_until = datetime.fromisoformat(row["valid_until"])
             now = datetime.now().astimezone()
 
-            # Handle timezone-naive timestamps (legacy data)
             if valid_until.tzinfo is None:
                 valid_until = valid_until.astimezone()
 
             return now < valid_until
 
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, Exception):
             return False
 
     def get_prices(self) -> list[dict[str, Any]]:
-        """Get cached prices @zara
+        """Sync wrapper - returns empty, use async_get_prices() @zara"""
+        return []
+
+    async def async_get_prices(self) -> list[dict[str, Any]]:
+        """Get cached prices from database @zara
 
         Returns:
             List of price entries or empty list
         """
-        if not self._cache_data:
+        try:
+            rows = await self._db.fetchall(
+                "SELECT timestamp, price, total_price, hour FROM GPM_price_cache ORDER BY timestamp"
+            )
+            prices = []
+            for row in rows:
+                entry = {
+                    "timestamp": datetime.fromisoformat(row["timestamp"]),
+                    "price": row["price"],
+                    "hour": row["hour"],
+                }
+                if row["total_price"] is not None:
+                    entry["total_price"] = row["total_price"]
+                prices.append(entry)
+            return prices
+
+        except Exception as err:
+            _LOGGER.warning("Failed to get cached prices: %s", err)
             return []
 
-        prices = self._cache_data.get("prices", [])
-        return self._deserialize_prices(prices)
-
-    def get_country(self) -> str | None:
+    async def async_get_country(self) -> str | None:
         """Get the country code for cached prices @zara
 
         Returns:
             Country code or None
         """
-        if not self._cache_data:
+        try:
+            row = await self._db.fetchone(
+                "SELECT country FROM GPM_price_cache_meta WHERE id = 1"
+            )
+            return row["country"] if row else None
+        except Exception:
             return None
-        return self._cache_data.get("country")
 
-    def get_last_fetch_time(self) -> datetime | None:
+    def get_country(self) -> str | None:
+        """Sync wrapper - returns None, use async_get_country() @zara"""
+        return None
+
+    async def async_get_last_fetch_time(self) -> datetime | None:
         """Get the timestamp of the last fetch @zara
 
         Returns:
             Datetime of last fetch or None
         """
-        if not self._cache_data:
-            return None
-
-        last_fetch_str = self._cache_data.get("last_fetch")
-        if last_fetch_str:
-            try:
-                return datetime.fromisoformat(last_fetch_str)
-            except (ValueError, TypeError):
-                pass
+        try:
+            row = await self._db.fetchone(
+                "SELECT last_fetch FROM GPM_price_cache_meta WHERE id = 1"
+            )
+            if row and row["last_fetch"]:
+                return datetime.fromisoformat(row["last_fetch"])
+        except (ValueError, TypeError, Exception):
+            pass
         return None
 
-    def get_cache_info(self) -> dict[str, Any]:
+    def get_last_fetch_time(self) -> datetime | None:
+        """Sync wrapper - returns None, use async_get_last_fetch_time() @zara"""
+        return None
+
+    async def async_get_cache_info(self) -> dict[str, Any]:
         """Get cache status information @zara
 
         Returns:
             Dictionary with cache status
         """
+        try:
+            row = await self._db.fetchone(
+                "SELECT last_fetch, valid_until, country FROM GPM_price_cache_meta WHERE id = 1"
+            )
+            count_row = await self._db.fetchone(
+                "SELECT COUNT(*) as cnt FROM GPM_price_cache"
+            )
+            entry_count = count_row["cnt"] if count_row else 0
+
+            return {
+                "loaded": self._loaded,
+                "valid": await self.async_is_valid(),
+                "country": row["country"] if row else None,
+                "last_fetch": row["last_fetch"] if row else None,
+                "valid_until": row["valid_until"] if row else None,
+                "entry_count": entry_count,
+            }
+        except Exception:
+            return {
+                "loaded": False,
+                "valid": False,
+                "country": None,
+                "last_fetch": None,
+                "valid_until": None,
+                "entry_count": 0,
+            }
+
+    def get_cache_info(self) -> dict[str, Any]:
+        """Sync wrapper - returns basic info @zara"""
         return {
             "loaded": self._loaded,
-            "valid": self.is_valid(),
-            "country": self.get_country(),
-            "last_fetch": self._cache_data.get("last_fetch") if self._cache_data else None,
-            "valid_until": self._cache_data.get("valid_until") if self._cache_data else None,
-            "entry_count": len(self._cache_data.get("prices", [])) if self._cache_data else 0,
+            "valid": self._loaded,
+            "country": None,
+            "last_fetch": None,
+            "valid_until": None,
+            "entry_count": 0,
         }
 
     async def async_clear(self) -> bool:
-        """Clear the cache asynchronously @zara
+        """Clear the cache @zara
 
         Returns:
             True if cleared successfully
         """
-        self._cache_data = {
-            "version": 1,
-            "last_fetch": None,
-            "valid_until": None,
-            "country": None,
-            "prices": []
-        }
-
-        def _clear() -> bool:
-            try:
-                with open(self._cache_path, "w", encoding="utf-8") as f:
-                    json.dump(self._cache_data, f, indent=2)
-                return True
-            except IOError as err:
-                _LOGGER.error("Failed to clear price cache: %s", err)
-                return False
-
-        result = await self._run_in_executor(_clear)
-
-        if result:
+        try:
+            await self._db.execute(
+                "DELETE FROM GPM_price_cache", auto_commit=False
+            )
+            await self._db.execute(
+                """INSERT INTO GPM_price_cache_meta (id, last_fetch, valid_until, country)
+                   VALUES (1, NULL, NULL, NULL)
+                   ON CONFLICT(id) DO UPDATE SET
+                       last_fetch = NULL,
+                       valid_until = NULL,
+                       country = NULL""",
+            )
+            self._loaded = False
             _LOGGER.debug("Price cache cleared")
-
-        return result
+            return True
+        except Exception as err:
+            _LOGGER.error("Failed to clear price cache: %s", err)
+            return False

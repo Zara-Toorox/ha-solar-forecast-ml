@@ -1,490 +1,198 @@
-# Solar Forecast ML V14.0.0 "Sarpeidon" - 1st HA Full Hybrid-AI Solar Forecast
+# Solar Forecast ML V16.0.0 "Sarpeidon" — Full AI & DB-Version
 
-[![Version](https://img.shields.io/badge/version-14.0.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+### The 1st Hybrid-AI Solar Forecast for Home Assistant — 100% Local, 100% Private
+
+[![Version](https://img.shields.io/badge/version-16.0.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM%20%7C%20RPi-lightgrey.svg)]()
 
+Fuel my late-night ideas with a coffee? I'd really appreciate it!
+<a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee' /></a>
 
-Fuel my late-night ideas with a coffee? I'd really appreciate it ♡
-<a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee ' /></a>
-
-Further information:
-🌐 **[Website & Documentation](https://zara-toorox.github.io/index.html)**
-
-## Solar Forecast ML – Sarpeidon Edition
-*No static API calls. No rigid, off-the-shelf models.*
-
-Experience an adaptive hybrid AI ecosystem powered by three proprietary, locally-hosted AI engines working in perfect synergy. This system continuously molds itself to the unique characteristics of your installation: from complex shading patterns and local topography to the specific thermal behavior of your inverter under peak loads.
-
-Solar Forecast ML is not just another forecasting tool—it is a sophisticated AI Solar Companion for Home Assistant that doesn't just deliver data, but actively learns and evolves with your home.
-
-With Version 14.0.0 "Sarpeidon," solar optimization enters a new dimension:
-
-**Triple-AI Core Architecture:** Three specialized, locally-deployed AI models collaborate to synchronize energy generation, weather dynamics, and system behavior—all without a single external server request.
-
-**Fog/Visibility Intelligence:** Detects fog and haze with significantly higher precision than standard weather apps, adjusting atmospheric transmittance in real-time.
-
-**5-Weather-Expert Blending:** Five independent weather services compete for accuracy. Every hour, the AI dynamically decides which model currently provides the highest validity for your specific location.
-
-**Precipitation Sentinel:** Provides targeted alerts for potential yield losses due to snow or heavy rain before the front even arrives.
-
-**Transmittance-Based Learning:** The system masters the actual atmospheric transparency of your local environment—becoming more precise with every passing day.
-
-**The Result:** Your smart home stops reacting. It starts anticipating.
-
-**100% Local – 100% Privacy.** This system operates entirely without ChatGPT, Gemini, Claude, or other cloud-based LLMs. The entire intelligence resides on your hardware. Zero data leaves your network. No exploitative API fees, no cloud dependency—just pure physics and high-performance machine learning on your own machine.
-
-*Welcome to the future of solar optimization. The sun doesn't just shine anymore—it is now predicted.*
-
-<p align="center">
-  <img src="docs/images/progose_graph.png" alt="Solar Forecast ML Prognose" width="600">
-</p>
+[Website & Documentation](https://zara-toorox.github.io/index.html)
 
 ---
 
-## Features in V14.0.0 "Sarpeidon"
+## ☀️ What Is Solar Forecast ML?
 
-### MPPT Throttle Detection (NEW)
-- **Zero Export Detection** - Automatically detects when inverter throttles due to zero feed-in policy or grid export limits
-- **Battery Full Detection** - Identifies production limitations when battery is fully charged and curtailment kicks in
-- **Combined Detection** - Recognizes throttling from both zero feed-in AND full battery scenarios
-- **Learning Protection** - Throttled hours are automatically excluded from AI training
-- **Transparent Flagging** - Clear indication in hourly predictions with reason codes
+I didn't want another static API wrapper. So I built an **adaptive AI companion** that learns your installation from the ground up — your roof geometry, local shading patterns, microclimate, and inverter behavior. It doesn't just calculate; it evolves with your home.
 
-### Learning Data Protection (NEW)
-- **Automatic Backup** - Learning data is automatically backed up to /share/ directory at 4:00 AM
-- **Self-Healing** - Automatic detection and repair of corrupted data files
-- **Crash Recovery** - Seamless restoration of learned weights after system failures
-- **Migration Support** - Preserves learning progress during Home Assistant migrations
-- **Selective Restore Safe** - Learning progress survives selective HA backup restores
-- **Integrity Checks** - Validates backup data before restoration
+The first **100% local AI** for Home Assistant — no ChatGPT, no Grok, no Gemini, no external AI of any kind. Three proprietary AI models, a local Machine Learning engine, and a full solar physics engine work in perfect synergy to deliver **3-day hourly forecasts** with up to **97% accuracy** after calibration. Powered by a fully transactional SQL database — slim, quick, and reliable. Everything runs on your hardware. No cloud. No subscriptions. No data leaves your network.
 
-### AI-Ridge Physics Blending (NEW)
-- **Early Accuracy Boost** - AI-Ridge model blends with physics model when less than 50 samples available
-- **Faster Learning** - Delivers better predictions from day one instead of waiting for full AI training
-- **Smooth Transition** - Automatically shifts weight to pure AI as more data becomes available
-
-### Transformer AI Model (NEW)
-- **State-of-the-Art Architecture** - Hybrid AI expanded with Transformer model (same principle as ChatGPT, Gemini, Claude, Grok)
-- **Attention Mechanism** - Learns complex temporal patterns and long-range dependencies in solar production
-- **100% Local** - Runs entirely on your hardware without cloud dependencies
-
-### Feature Importance Analysis (NEW)
-- **Developer Tool** - Analyze which input features have the greatest impact on predictions
-- **Regression Coefficients** - View feature weights to understand model behavior
-- **Debugging Support** - Identify potential issues in your sensor data or configuration
-
-### Midday Forecast Correction (NEW)
-- **12:30 Validation Check** - Automatic forecast verification at midday
-- **5-Parameter Analysis** - Compares actual vs. predicted values across 5 key metrics
-- **Auto-Correction** - Adjusts remaining day forecast when significant deviations detected
-
-### Extended Grid Search (NEW)
-- **Hyperparameter Optimization** - Automated search for optimal AI model parameters
-- **Enhanced Model Tuning** - Finds best configuration for your specific installation
-- **Platform:** x86_64 only (not available on Proxmox and ARM)
-
-### SFML-STATS Support (NEW)
-- **Enhanced Dashboard Integration** - Improved data exchange with SFML-STATS companion
-- **Real-time Metrics** - Live AI model status and prediction confidence
-- **Extended API** - New endpoints for detailed forecast analytics
-
-### Zero Feed-in Option (NEW)
-- **Configurable Mode** - Enable for systems with zero grid export policy
-- **Adjusted Learning** - AI learns actual consumption patterns instead of max production
-- **Throttle Awareness** - Correctly interprets inverter limiting as expected behavior
-
-### 5-Weather-Expert Blending
-- **Multi-Source Weather Data** - Combines 5 independent weather services for optimal accuracy
-- **Adaptive Weight Learning** - System learns which weather source is most accurate for your location
-- **Automatic Failover** - Seamless switching between sources if one fails
-
-### Fog & Visibility Detection
-- **FOG Detection** - Visibility below 1 km triggers FOG cloud type
-- **FOG_LIGHT Detection** - Visibility 1-5 km triggers light fog classification
-- **Transmittance-Based Learning** - VisibilityLearner determines optimal visibility data source
-- **Automatic Transmittance Reduction** - Fog conditions reduce solar transmittance calculations
-
-### Precipitation Notifications
-- **Rain Alerts** - Persistent notification when rain is expected
-- **Snow Alerts** - Temperature-based snow detection (below 2°C)
-- **Configurable Threshold** - Rain detection at 0.5 mm/h
-- **Home Assistant Integration** - Notifications via HA persistent notification system
-
-### Learning Filter System
-- **Intelligent Data Filtering** - Excludes anomalous hours from AI training
-- **Weather Alert Detection** - Automatically flags unexpected weather events
-- **Inverter Clipping Detection** - Excludes hardware-limited data points
-- **Daily Learning Protection** - Skips training if >25% of data is flagged
-
-### Per-Panel-Group Learning
-- **Individual Energy Sensors** - Configure separate kWh sensors per panel group
-- **Group-specific Efficiency** - Each panel group learns its own hourly efficiency factors
-- **Shadow Detection per Group** - Identifies which panels are affected by shadows
-
-### Hourly Correction Factors
-- **Hour-specific Weather Corrections** - Corrections applied per hour instead of daily averages
-- **Morning/Afternoon Optimization** - Addresses systematic forecast biases at different times
-- **7-day Rolling Learning** - Continuously improves based on recent performance
-
-### Physics-First Hybrid-AI Architecture
-- **PhysicsEngine** - Real solar physics calculations (POA, temperature correction, cell efficiency)
-- **GeometryLearner** - Automatically learns panel tilt & azimuth using Levenberg-Marquardt optimization
-- **AI Neural Network** - Pure NumPy AI that captures temporal patterns
-- **Residual Learning** - AI learns the difference between physics and reality
-- **Weighted Ensemble** - Confidence-based blending of physics + AI predictions
-- **Captain's LOG** - Monthly system health report (tilt, azimuth, seasonal tracking)
-
-### Intelligent Detection Systems
-- **Correlation-based Shadow Detection** - Distinguishes clouds from real obstructions
-- **Physics-based Frost Detection** - Uses Magnus formula (dew point) for accurate frost warnings
-- **Cloud Layer Physics** - Separate transmission models for low/mid/high clouds
-
-### SFML Stats Lite
-- **Universal Dashboard** - Works on ALL platforms including Raspberry Pi and ARM
-- **Real-time Energy Flow** - Visualize solar, battery, grid, and house consumption
-- **Cost Tracking** - Fixed or dynamic pricing support
-- **Multi-String Support** - Track up to 4 panel groups individually
-- **Automated Reports** - Weekly and monthly chart generation
-
-### SFML Stats (x86_64 only)
-- **Interactive Web Dashboard** - Self-hosted dashboard for local access
-- **Beautiful UX** - Dark and light mode support
-- **Advanced Statistics** - Download charts about your solar system
-- **Clothing Recommendation** - Weather-based clothing suggestions
-
-### Grid Price Monitor (DE/AT)
-- **Dynamic Spot Prices** - Real-time electricity price monitoring
-- **Automation Triggers** - Automatic EV/battery charging when prices are low
-- **Price Forecasts** - Today's and tomorrow's hourly prices
+**Your smart home stops reacting. It starts anticipating.**
 
 ---
 
-## Core Features
+## 🧠 Why I Built Solar Forecast ML
 
-### Forecasting
-- **3-day yield forecasts** (today, tomorrow, day after) with Physics+AI optimization
-- **Hourly predictions** for detailed planning
-- **Physics-based calculations** using GHI, DNI, DHI from Open-Meteo
-- **Automatic panel geometry learning** - no manual tilt/azimuth configuration needed
-- **Temperature-corrected efficiency** - accounts for cell temperature effects
+Most integrations rely on rigid formulas or static API calls. I wanted something better.
 
-### Hybrid-AI Engine
-- **Adaptive Algorithm Selection:**
-  - < 100 samples: Ridge Regression (fast, stable)
-  - 100+ samples: AI Neural Network (+5-10% accuracy)
-- **14 optimized features** per hour (time, weather, astronomy, lag)
-- **24-hour sequence learning** for temporal pattern recognition
-- **Zero external dependencies** - pure NumPy implementation
-
-### Analytics & Detection (AI)
-- **Shadow Detection** - Correlation-based analysis separates weather from obstructions
-- **Frost Detection** - Physics-based dew point calculation with Magnus formula
-- **Peak hour detection** - When do you produce the most?
-- **Production time calculation** - Optimized sunrise to sunset tracking
-- **Self-sufficiency calculation** - How independent are you really?
-
-### Data Privacy
-- **100% local processing** - Everything calculated on your system
-- **100% local Hybrid-AI** - No ChatGPT, Claude, Gemini, Grok needed
-- **No cloud services** - All data stays on your disk
-- **No API keys required** - Uses free Open-Meteo API
+- **Proactive, not reactive** — I wanted my smart home to anticipate the sun, not just respond to it.
+- **Precision Physics** — I combined atmospheric transmittance modeling with real-world sensor feedback.
+- **100% Privacy** — I made sure every single byte of Machine Learning stays on your local machine.
 
 ---
 
-## Extra Modules (v6.4.4)
+## 🏗️ Quad-Engine Architecture
 
-Solar Forecast ML includes 5 companion integrations that extend its capabilities. All modules are installed via the `install_extras` service and share data seamlessly.
+I designed the system to orchestrate four independent intelligence layers, delivering a 3-day hourly forecast with surgical precision — all 100% local, zero outbound traffic:
 
-| Module | Description | Platform |
-|--------|-------------|----------|
-| **SFML Stats** | Advanced statistics dashboard with charts | x86_64 only |
-| **SFML Stats Lite** | Lightweight dashboard for all platforms | All platforms |
-| **Grid Price Monitor** | Dynamic electricity price monitoring (DE/AT) | All platforms |
-| **ML Weather** | Corrected weather data based on learning | All platforms |
-| **ESC Easy Sensor Creation** | Create custom sensors without YAML | All platforms |
+| Engine | Purpose | What It Does |
+|--------|---------|--------------|
+| **Weather AI** | Intelligence Layer | Multi-source blending & custom rolling bias correction across 5 weather services. |
+| **Physics AI** | Geometric Baseline | Learns your panel tilt, azimuth, and real-world shading obstacles. Calibrates atmospheric transmittance and cell efficiency. |
+| **ML Backbone** | Rapid Adaptation | High-stability model tuned for early-phase learning. Delivers predictions from as few as 10 samples. |
+| **Hybrid AI** | Temporal Logic | Local Attention Model that captures complex seasonal and time-of-day patterns across 24-hour sequences. |
 
-
-
-### SFML Stats (Advanced Statistics Dashboard)
-
-<p align="center">
-  <img src="docs/images/energy_flow.png" alt="SFML Stats Energy Flow" width="500">
-</p>
-
-**What it does:** Provides comprehensive statistics, visualizations, and analytics for your solar production data. A powerful dashboard that visualizes solar production, battery storage, grid consumption, and energy costs in real-time. Includes the new **Clothing Recommendation** feature.
-
-**Features:**
-- Real-time energy flow visualization (solar, battery, grid, house)
-- Historical production charts (daily, weekly, monthly)
-- Forecast vs. actual comparison graphs
-- Cost tracking with fixed or dynamic pricing
-- Multi-string support (up to 4 panel groups)
-- Automated weekly and monthly report generation
-- Weather overlay on charts
-- Dark and light theme support
-- Clothing recommendations based on weather
-
-**Installation:**
-1. Go to Settings > Devices & Services > Add Integration > SFML Stats
-2. Configure your sensors (all optional - integration works with partial config)
-3. Access the dashboard at `http://YOUR_HA:8123/api/sfml_stats/dashboard`
-
-> **Platform Compatibility for SFML Stats:**
->
-> | Platform | Status | Notes |
-> |----------|--------|-------|
-> | x86_64 (Intel/AMD) | **Fully Supported** | Recommended |
-> | Home Assistant OS (x86) | **Fully Supported** | Native installation |
-> | Docker on x86 | **Fully Supported** | Standard HA container |
-> | **Proxmox VE** | **Try on your own if your aware what you are doing** | no support by the developer |
-> | **Raspberry Pi (ARM)** | **not supported** | Use SFML Stats Lite instead |
-> | **SBC / ARM Processors** | **not supported** | Use SFML Stats Lite instead |
+All four engines are blended using an **Adaptive Ensemble** — learned confidence weights that continuously evaluate which model performs best under which conditions. A disagreement detector prevents overconfident predictions when models diverge.
 
 ---
 
-### SFML Stats Lite (For Raspberry Pi & ARM)
+## ⚡ Key Capabilities
 
-**What it does:** A lightweight version of SFML Stats designed specifically for Raspberry Pi and ARM devices. Provides the same energy monitoring dashboard without the heavy computational requirements.
+### 🔮 Forecasting
+- **72-hour horizon** — granular hourly forecasts for today, tomorrow, and the day after
+- **Dynamic sunrise scheduling** — forecast generation adapts daily to actual sunrise time
+- **Adaptive re-forecast** — automatic midday correction when conditions shift significantly
+- **Per-panel-group predictions** — individual forecasts for each panel orientation
+- **Confidence scoring** — every prediction includes a learned confidence metric
 
-**Features:**
-- Real-time energy flow visualization (solar, battery, grid, house)
-- Cost tracking with fixed or dynamic pricing
-- Multi-string support (up to 4 panel groups)
-- Automated weekly and monthly report generation
-- Weather overlay on charts
-- Dark and light theme support
+### 🧠 AI & Machine Learning
+- **Quad-Engine ensemble** — Weather AI, Physics AI, ML Backbone, and Hybrid AI with Attention — all local
+- **28 engineered features** — time, weather, radiation, astronomy, historical production, panel geometry
+- **Automatic training** — daily model updates at end of day
+- **Auto-optimization** — the system runs hyperparameter grid searches for you
+- **Feature importance analysis** — understand which inputs drive your predictions
 
-**Installation:**
-1. Go to Settings > Devices & Services > Add Integration > SFML Stats Lite
-2. Configure your sensors (all optional - integration works with partial config)
-3. Access the dashboard at `http://YOUR_HA:8123/api/sfml_stats_lite/dashboard`
+### 🌦️ Weather Intelligence
+- **5-source weather blending** — Open-Meteo, Bright Sky, Pirate Weather, wttr.in, ECMWF
+- **3-stage correction** — daily rolling factors, hourly corrections, condition-specific adjustments
+- **Expert weight learning** — each weather source earns trust based on historical accuracy
+- **Fog & visibility detection** — identifies fog and haze conditions that standard weather apps miss
+- **Cloud trend analysis** — 1-hour and 3-hour cloudiness trend sensors with volatility tracking
 
-> **Platform Compatibility for SFML Stats Lite:**
->
-> | Platform | Status |
-> |----------|--------|
-> | Raspberry Pi (ARM) | **Fully Supported** |
-> | All ARM devices | **Fully Supported** |
-> | Proxmox VE | **Fully Supported** |
-> | x86_64 (Intel/AMD) | **Fully Supported** |
-> | Home Assistant OS | **Fully Supported** |
-> | Docker | **Fully Supported** |
+### 🕵️ Detection & Protection
+- **Shadow mapping** — distinguishes between a passing cloud and a tree's physical shadow
+- **Shadow pattern learning** — learns recurring shading from trees, buildings, terrain
+- **Frost & fog warning** — physics-based dew point calculation for edge-case weather
+- **MPPT clipping detection** — the AI recognizes when your inverter limits production so it doesn't pollute training data
+- **Full zero-export & battery support** — detects zero-export limiting and battery-full curtailment, adjusts learning accordingly
+- **Learning filter** — automatically excludes anomalous data from AI training
 
-### Grid-Price Monitor
+### 🛠️ Technical Depth
+- **Transactional SQL** — slim, async SQLite engine for maximum reliability
+- **Automatic backups** — daily learning data backups with 30-day retention
+- **Self-healing** — automatic detection and repair of corrupted data
+- **Crash recovery** — seamless restoration after system failures
+- **Learning data protection** — survives Home Assistant backup restores
 
-**What it does:** Monitors dynamic electricity spot prices from aWATTar (Germany & Austria) and provides smart automation triggers for optimal energy usage. Perfect for charging EVs, batteries, or running high-power appliances when electricity is cheapest.
+### 📐 Panel Group Support
+- **Up to 4 panel groups** — different orientations, tilts, capacities
+- **Individual efficiency learning** — each group learns its own correction factors
+- **Per-group energy sensors** — optional dedicated kWh sensors per group
+- **Group-specific AI** — multi-output model with per-group predictions
 
-**Features:**
-- **Real-time Spot Prices** - Current and next hour prices in ct/kWh
-- **Price Forecasts** - Today's and tomorrow's hourly prices (available from ~14:00)
-- **Cheapest/Most Expensive Hour** - Automatically identifies optimal times
-- **Binary Sensor for Automations** - `binary_sensor.cheap_energy` triggers when price is below threshold
-- **Configurable Price Components** - Grid fees, taxes, VAT, provider markup
-- **Calibration Mode** - Match your actual electricity bill
-- **Battery Tracking** - Track how much energy was charged from grid
+### ❄️ Seasonal Intelligence — "The Winter Edge"
+I built a dedicated Winter Mode (Nov–Feb) into the core. It automatically adjusts for low sun angles and atmospheric clearness, ensuring your energy management stays reliable when the sun is rarest.
 
-**Sensors:**
+- **Seasonal correction factors** — monthly calibration that adapts to changing sun angles
+- **DNI ratio tracking** — 7-day rolling atmospheric clearness monitoring
+
+---
+
+## 📊 Sensors
+
+### Forecast
 | Sensor | Description |
 |--------|-------------|
-| `sensor.grid_price_monitor_spot_price` | Current spot price (ct/kWh) |
-| `sensor.grid_price_monitor_total_price` | Total price incl. fees & taxes |
-| `sensor.grid_price_monitor_cheapest_hour_today` | Cheapest hour today |
-| `sensor.grid_price_monitor_average_price_today` | Average price today |
-| `binary_sensor.grid_price_monitor_cheap_energy` | ON when price < threshold |
+| `solar_forecast_ml_today` | Today's forecast (kWh) |
+| `solar_forecast_ml_tomorrow` | Tomorrow's forecast (kWh) |
+| `solar_forecast_ml_day_after_tomorrow` | Day after tomorrow (kWh) |
+| `solar_forecast_ml_next_hour` | Next hour prediction (kWh) |
+| `solar_forecast_ml_peak_production_hour` | Best production hour today |
 
-**Installation:**
-1. Go to Settings > Devices & Services > Add Integration > Grid Price Monitor
-2. Configure:
-   - **Country:** Germany (DE) or Austria (AT)
-   - **VAT Rate:** 19% (DE) or 20% (AT)
-   - **Grid Fee:** Your grid operator fee (ct/kWh)
-   - **Taxes & Fees:** Additional taxes (ct/kWh)
-   - **Max Price Threshold:** Price below which `cheap_energy` is ON
-
-**Example Automation:**
-```yaml
-automation:
-  - alias: "Charge EV when electricity is cheap"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.grid_price_monitor_cheap_energy
-        to: "on"
-    action:
-      - service: switch.turn_on
-        target:
-          entity_id: switch.ev_charger
-```
-
-> **Availability:** Currently supports **aWATTar** API (Germany & Austria). No API key required - uses free public market data.
-
----
-
-### ML Weather (Corrected Weather Data BETA 3)
-
-**What it does:** Provides corrected weather data based on Solar Forecast ML's learning algorithms. The integration learns from your actual solar production to correct weather forecast inaccuracies for your specific location.
-
-**Features:**
-- **Learned Weather Corrections** - Uses historical data to improve weather accuracy
-- **Location-specific Adjustments** - Corrections tailored to your exact location
-- **Cloud Cover Optimization** - Improves cloud predictions based on actual production
-- **Seamless Integration** - Works automatically with Solar Forecast ML data
-
-**Sensors:**
+### Production
 | Sensor | Description |
 |--------|-------------|
-| `weather.ml_weather` | Corrected weather entity with improved accuracy |
+| `solar_forecast_ml_production_time` | Production hours (start/end/duration) |
+| `solar_forecast_ml_max_peak_today` | Peak power today (W) |
+| `solar_forecast_ml_max_peak_all_time` | All-time peak power (W) |
+| `solar_forecast_ml_expected_daily_production` | Daily production target |
 
-**Installation:**
-1. Go to Settings > Devices & Services > Add Integration > ML Weather
-
-> **Note:** ML Weather requires Solar Forecast ML to have at least 7 days of learning data for meaningful corrections.
-
----
-
-### ESC Easy Sensor Creation
-
-**What it does:** Create custom sensors, binary sensors, and switches directly from the Home Assistant UI - no YAML required. Perfect for users who want to extend their setup without coding.
-
-**Features:**
-- **No YAML Required** - Create sensors through the UI
-- **Multiple Sensor Types** - Sensors, binary sensors, and switches
-- **Template Support** - Use Jinja2 templates for calculations
-- **History Integration** - New sensors automatically record history
-- **Easy Management** - Edit or delete sensors through the options flow
-
-**Supported Entity Types:**
-| Type | Description |
-|------|-------------|
-| `sensor` | Numeric or text sensors with templates |
-| `binary_sensor` | On/off sensors based on conditions |
-| `switch` | Controllable switches with custom logic |
-
-**Installation:**
-1. Go to Settings > Devices & Services > Add Integration > ESC Easy Sensor Creation
-2. Use the options flow to create new sensors
-
-**Example Use Cases:**
-- Calculate solar self-consumption percentage
-- Create a "good production day" binary sensor
-- Build combined energy sensors from multiple sources
-
----
-
-> **Note:** All extra modules require Solar Forecast ML to be installed and configured first. They share data seamlessly without additional configuration.
-
----
-
-## Sensors & Diagnostics
-
-### Core Sensors
+### Statistics
 | Sensor | Description |
 |--------|-------------|
-| `sensor.solar_forecast_ml_today` | Today's forecast (kWh) |
-| `sensor.solar_forecast_ml_tomorrow` | Tomorrow's forecast (kWh) |
-| `sensor.solar_forecast_ml_day_after_tomorrow` | Day after tomorrow (kWh) |
-| `sensor.solar_forecast_ml_next_hour` | Next hour prediction (kWh) |
-| `sensor.solar_forecast_ml_production_time` | Production hours today |
+| `solar_forecast_ml_average_yield` | Cumulative average yield |
+| `solar_forecast_ml_average_yield_7_days` | 7-day rolling average |
+| `solar_forecast_ml_average_yield_30_days` | 30-day rolling average |
+| `solar_forecast_ml_monthly_yield` | Current month total |
+| `solar_forecast_ml_weekly_yield` | Current week total |
 
-### AI & Analytics Sensors
+### AI & Diagnostics
 | Sensor | Description |
 |--------|-------------|
-| `sensor.solar_forecast_ml_model_state` | AI model training status |
-| `sensor.solar_forecast_ml_model_accuracy` | Current prediction accuracy (%) |
-| `sensor.solar_forecast_ml_training_samples` | Number of training samples |
-| `sensor.solar_forecast_ml_shadow_current` | Current shadow detection |
-| `sensor.solar_forecast_ml_performance_loss` | Shadow-related losses (%) |
+| `solar_forecast_ml_model_state` | Active prediction model (AI / Rule-Based) |
+| `solar_forecast_ml_model_accuracy` | Current prediction accuracy (%) |
+| `solar_forecast_ml_ai_rmse` | Model quality (Excellent / Very Good / Good / Fair) |
+| `solar_forecast_ml_training_samples` | Available training samples |
+| `solar_forecast_ml_ml_metrics` | MAE, RMSE, R² metrics |
 
-
----
-
-## Services (Developer)
-
-### AI Services (Developers only or on advice)
-| Service | Description |
-|---------|-------------|
-| `force_retrain` | Retrain AI model with all available data |
-| `reset_model` | Reset AI model to initial state |
-
-### Bootstrap Services (Developers only or on advice)
-| Service | Description |
-|---------|-------------|
-| `bootstrap_physics_from_history` | Train Physics+AI from HA history (up to 6 months) |
-| `bootstrap_from_history` | Bootstrap pattern learning from history |
-
-### Multi-Weather Services (Developers only or on advice)
-| Service | Description |
-|---------|-------------|
-| `refresh_multi_weather` | Force refresh of all weather sources |
-| `learn_weather_weights` | Trigger weight learning from today's data |
-
-### Companion Integration Services
-| Service | Description |
-|---------|-------------|
-| `install_extras` | **Main installer!** Installs/updates ALL companion modules (SFML Stats Lite, SFM-Stats, Grid Price Monitor). Run via Developer Tools > Services |
-
-### Reset & Recovery Services
-| Service | Description |
-|---------|-------------|
-| `borg_mode` | **Complete system reset** - Deletes ALL learned data and starts fresh. Use when: predictions are very inaccurate after 3-4 days, you changed sensors, or migrated from an older installation with corrupted data |
-
-### Astronomy Services (Developers only or on advice)
-| Service | Description |
-|---------|-------------|
-| `build_astronomy_cache` | Build comprehensive sun position cache |
-| `refresh_cache_today` | Refresh astronomy data for current week |
-
-### Testing & Maintenance (Developers only or on advice)
-| Service | Description |
-|---------|-------------|
-| `test_morning_routine` | Analyze 6 AM predictions (read-only) |
-| `run_all_day_end_tasks` | Manual trigger for 23:30 workflow |
-| `run_weather_correction` | Rebuild corrected weather forecast |
-| `send_daily_briefing` | Send formatted solar forecast notification |
+### Shadow & Weather
+| Sensor | Description |
+|--------|-------------|
+| `solar_forecast_ml_shadow_current` | Current shadow level (Clear / Light / Moderate / Heavy) |
+| `solar_forecast_ml_performance_loss` | Shadow-related production loss (%) |
+| `solar_forecast_ml_cloudiness_trend_1h` | 1-hour cloud trend |
+| `solar_forecast_ml_cloudiness_trend_3h` | 3-hour cloud trend |
+| `solar_forecast_ml_cloudiness_volatility` | Weather stability index |
 
 ---
 
-## Installation
+## 📈 System Lifecycle
+
+| Phase | Timeline | What Happens |
+|-------|----------|--------------|
+| **Fresh Install** | Day 0 | Physics engine active, ~70% accuracy |
+| **Early Learning** | Day 1–7 | ML Backbone activates, geometry converges |
+| **Calibration** | Day 7–14 | Tilt/azimuth learned to +/-3°, ~85–90% accuracy |
+| **AI Activation** | Day 14–30 | Hybrid AI enabled, full ensemble blending begins |
+| **Production** | Day 30+ | Full calibration, 93–97% accuracy |
+
+> **Shortcut:** Use `bootstrap_physics_from_history` to skip to Production phase immediately using your existing Home Assistant history data (up to 6 months).
+
+---
+
+## 🚀 Installation
 
 ### HACS (Recommended)
-1. Open HACS in Home Assistant
-2. Go to "Integrations"
-3. Click the three dots menu -> "Custom repositories"
-4. Add: `https://github.com/Zara-Toorox/ha-solar-forecast-ml`
-5. Select category: "Integration"
-6. Install "Solar Forecast ML"
-7. Restart Home Assistant
-8. After Setup please wait 10-15 min and perform a 2nd Restart (needed to fill the caches)
+1. Open HACS > Integrations
+2. Three-dot menu > Custom repositories
+3. Add `https://github.com/Zara-Toorox/ha-solar-forecast-ml` (Category: Integration)
+4. Install "Solar Forecast ML"
+5. Restart Home Assistant
+6. Wait 10–15 minutes, then restart once more (cache initialization)
 
-### Manual Installation
+### Manual
 1. Download the latest release
 2. Copy `custom_components/solar_forecast_ml` to your `config/custom_components/`
 3. Restart Home Assistant
-4. After Setup please wait 10-15 min and perform a 2nd Restart (needed to fill the caches)
-
-
-> Then restart Home Assistant to apply the updates.
-
-> This deletes ALL learned data and lets the system relearn from scratch. Recommended after major version updates or sensor changes.
+4. Wait 10–15 minutes, then restart once more
 
 ### Configuration
-1. Go to Settings -> Devices & Services
-2. Click "Add Integration"
-3. Search for "Solar Forecast ML"
-4. Configure:
-   - **Power Sensor** (required): Current solar power in Watts
-   - **Daily Yield Sensor** (required): Daily yield in kWh (must reset at midnight)
-   - **System Capacity** (optional): Your system size in kWp
-   - **Panel Groups** (optional): Format `Power(Wp)/Azimuth(deg)/Tilt(deg)/[EnergySensor]`
-   - **Additional Sensors** (optional): Temperature, Lux, Radiation, etc.
+1. Settings > Devices & Services > Add Integration > "Solar Forecast ML"
+2. Configure:
+   - **Power Sensor** (required) — current solar power in Watts
+   - **Daily Yield Sensor** (required) — daily yield in kWh (must reset at midnight)
+   - **System Capacity** (optional) — total system size in kWp
+   - **Panel Groups** (optional) — `Power(Wp)/Azimuth(°)/Tilt(°)/[EnergySensor]`
+   - **Additional Sensors** (optional) — temperature, lux, radiation, humidity, wind
 
----
+### Panel Group Configuration
 
-## Panel Group Configuration
+For systems with multiple panel orientations:
 
-For systems with multiple panel orientations, you can configure individual groups:
-
-**Format:** `Power(Wp)/Azimuth(deg)/Tilt(deg)/[EnergySensor]`
+**Format:** `Power(Wp)/Azimuth(°)/Tilt(°)/[EnergySensor]`
 
 **Example:**
 ```
@@ -492,148 +200,119 @@ For systems with multiple panel orientations, you can configure individual group
 870/180/47/sensor.pv_roof_kwh_today
 ```
 
-This creates:
-- **Group 1:** 1425Wp, facing South (180deg), 9deg tilt, with its own energy sensor
-- **Group 2:** 870Wp, facing South (180deg), 47deg tilt, with its own energy sensor
-
-The system will learn individual efficiency factors for each group, improving overall accuracy.
+This creates two independent groups, each with its own physics calculations, AI predictions, and efficiency learning.
 
 ---
 
-## Quick Start After Installation
+## 🔧 Services
 
-For immediate full accuracy, run the bootstrap service (Developers only or on advice):
+### Core
+| Service | Description |
+|---------|-------------|
+| `force_forecast` | Trigger immediate forecast update |
+| `send_daily_briefing` | Send formatted solar forecast notification |
+| `install_extras` | Install/update all companion modules |
+| `borg_mode` | Complete system reset — deletes all learned data |
 
-```yaml
-service: solar_forecast_ml.bootstrap_physics_from_history
-data:
-  days: 180  # Uses up to 6 months of history
+### AI
+| Service | Description |
+|---------|-------------|
+| `retrain_ai_model` | Force AI model retraining |
+| `reset_ai_model` | Reset AI to initial state |
+| `analyze_feature_importance` | Show which features impact predictions most |
+| `run_grid_search` | Hyperparameter optimization |
+
+### Bootstrap
+| Service | Description |
+|---------|-------------|
+| `bootstrap_physics_from_history` | Train from HA history (up to 6 months) |
+| `bootstrap_from_history` | Bootstrap pattern learning from history |
+
+### Weather
+| Service | Description |
+|---------|-------------|
+| `refresh_multi_weather` | Force refresh all weather sources |
+| `run_weather_correction` | Rebuild corrected weather forecast |
+
+### Maintenance
+| Service | Description |
+|---------|-------------|
+| `run_all_day_end_tasks` | Manual trigger for end-of-day workflow |
+| `test_morning_routine` | Analyze morning routine (read-only) |
+| `build_astronomy_cache` | Rebuild sun position cache |
+
+---
+
+## 🧩 Companion Modules
+
+Solar Forecast ML includes optional companion integrations, installed via the `install_extras` service:
+
+### SFML Stats — The First Complete Solar & Energy Dashboard for Home Assistant
+A stunning, fully self-hosted dashboard built exclusively for solar and energy tracking. Real-time energy flows, historical charts, forecast vs. actual comparisons, cost tracking, and multi-string monitoring — all in one place. **x86_64 only.**
+
+| Module | Description | Platform |
+|--------|-------------|----------|
+| **SFML Stats** | Complete solar & energy tracking dashboard | x86_64 only |
+| **Grid Price Monitor** | Dynamic electricity spot prices (DE/AT) | All |
+
+---
+
+## 📋 Requirements
+
+- Home Assistant 2024.1.0+
+- Power sensor (Watts) + Daily yield sensor (kWh, midnight reset)
+- ~50 MB disk space
+- ~100–200 MB RAM during AI training
+
+**Optional but recommended:** Lux sensor, temperature sensor, solar radiation sensor (W/m²)
+
+**Runs on all platforms** — x86_64, ARM, Raspberry Pi. Only SFML Stats requires x86_64.
+
+---
+
+## 🔒 Privacy
+
+**100% Local — Zero Cloud Dependencies**
+
+Solar Forecast ML runs entirely on your hardware. No ChatGPT, no Claude, no Gemini, no Grok — no cloud-based AI of any kind. No data leaves your network. No API keys required for core functionality (uses free Open-Meteo weather data). The entire intelligence resides on your machine.
+
+---
+
+## ❓ Troubleshooting
+
+**Predictions too low?**
+- Verify kWp matches total installed panel power
+- Check that yield sensor is in kWh and resets at midnight
+- Check that power sensor is in Watts
+
+**AI not training?**
+- Check `sensor.solar_forecast_ml_training_samples` — minimum 10 samples needed
+- Allow 3–7 days for initial data collection
+
+**Shadow detection inaccurate?**
+- Configure a lux sensor for best results
+- System needs clear-sky days to establish baseline patterns
+
+**Log location:**
 ```
-
-This will:
-1. Fetch your production history from Home Assistant
-2. Get historical weather from Open-Meteo Archive
-3. Train the GeometryLearner (learns panel tilt/azimuth)
-4. Train the ResidualTrainer (AI corrections)
-5. Your system is fully calibrated!
-
----
-
-## How It Works
-
-### Architecture: "Physics-First"
-
-```
-+-------------------------------------------------------------------+
-|  LAYER 1: DATA SOURCES                                             |
-|  Open-Meteo + wttr.in (Blended) + Astronomy + Local Sensors        |
-+-------------------------------------------------------------------+
-|  LAYER 2: PHYSICS ENGINE                                           |
-|  POA Calculation -> Temperature Correction -> Power Output         |
-+-------------------------------------------------------------------+
-|  LAYER 3: LEARNING ENGINE                                          |
-|  GeometryLearner + ShadowLearner + WeatherPrecision + PanelGroups  |
-+-------------------------------------------------------------------+
-|  LAYER 4: PREDICTION ENSEMBLE                                      |
-|  Physics (Rule-Based) + AI Neural Network -> Weighted Combination  |
-+-------------------------------------------------------------------+
-|  LAYER 5: ANOMALY DETECTION                                        |
-|  Frost Detection + Shadow Detection + Cloud Physics                |
-+-------------------------------------------------------------------+
-```
-
----
-
-## System Lifecycle
-
-| Phase | Duration | What Happens |
-|-------|----------|--------------|
-| **Fresh Install** | Day 0 | Physics engine active with defaults, ~70% accuracy |
-| **Initial Learning** | Day 1-7 | Geometry converges, Ridge AI available |
-| **Geometry Convergence** | Day 7-14 | +/-3 deg tilt, +/-8 deg azimuth accuracy, ~85-90% |
-| **AI Activation** | Day 14-30 | AI Neural Network enabled, ensemble: 70% physics + 30% AI |
-| **Production** | Day 30+ | Full calibration, 93-97% accuracy |
-
-*With `bootstrap_physics_from_history`: Skip to "Production" phase immediately!*
-
----
-
-## Requirements
-
-- Home Assistant 2024.1.0 or newer
-- Power sensor (Watts)
-- Daily yield sensor (kWh, resets at midnight)
-- ~50 MB disk space for data files
-- ~100-150 MB RAM during AI training
-
-**Note:** Solar Forecast ML runs on all platforms including Raspberry Pi and ARM devices. Only the optional SFM-Stats companion integration requires x86_64 architecture.
-
-### Optional but Recommended
-- Lux sensor (improves shadow detection)
-- Temperature sensor (improves efficiency calculation)
-- Solar radiation sensor (W/m2, best for precision)
-
----
-
-## Troubleshooting
-
-### Check Logs
-```bash
-# Dedicated log file
 /config/solar_forecast_ml/logs/solar_forecast_ml.log
 ```
 
-### Common Issues
+---
 
-**Predictions too low?**
-- Check if you have used the correct parameters (kWp = the sum of all your installed panels)
-- Check if `yield-sensor` is set correctly (kWh of your panels! must reset at midnight)
-- Check if `power-sensor` is set correctly (W of your panels!)
+## 📄 License
 
-**AI not training?**
-- Need more time
-- Check `sensor.solar_forecast_ml_training_samples`
-
-**Shadow detection wrong?**
-- Ensure lux sensor is configured
-- System needs clear-sky days to learn patterns
-
-**SFM-Stats not working on Proxmox/ARM?**
-- The SFM-Stats companion integration is not compatible with ARM-based systems
-- Solar Forecast ML itself works fine on these platforms
-- For SFM-Stats, please use x86_64 hardware
-
-
-- This deletes ALL learned data and starts fresh
-- After running, wait 3-7 days for the system to relearn your installation
-- Consider running `bootstrap_physics_from_history` afterwards to speed up learning
+Proprietary Non-Commercial License — free for personal, educational, and non-commercial use. See [LICENSE](LICENSE) for details.
 
 ---
 
-## Contributing
+## 👤 Credits
 
-Contributions are welcome! Please read our contributing guidelines and submit pull requests to the `dev` branch.
+**Developer:** [Zara-Toorox](https://github.com/Zara-Toorox)
 
----
-
-## License
-
-This project is licensed under a **Proprietary Non-Commercial License** - see the [LICENSE](LICENSE) file for details. Free for personal, educational, and non-commercial use.
-
----
-
-## Credits
-
-- **Developer:** [Zara-Toorox](https://github.com/Zara-Toorox)
-- **Architecture Design:** Physics-First Hybrid-AI in Python, SFML-STATS in VUE, Grid Price Monitor in Python
-
-
----
-
-## Support
-
-- **Issues:** [GitHub Issues](https://github.com/Zara-Toorox/ha-solar-forecast-ml/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/Zara-Toorox/ha-solar-forecast-ml/discussions)
+**Support:**
+- [GitHub Issues](https://github.com/Zara-Toorox/ha-solar-forecast-ml/issues)
+- [GitHub Discussions](https://github.com/Zara-Toorox/ha-solar-forecast-ml/discussions)
 
 ---
 

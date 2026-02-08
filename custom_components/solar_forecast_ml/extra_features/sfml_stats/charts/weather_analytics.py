@@ -1,13 +1,13 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Weather Analytics Export Chart for SFML Stats."""
+"""Weather analytics export chart for SFML Stats. @zara"""
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +15,6 @@ import io
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from .styles import ChartStyles
@@ -26,12 +25,11 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Shared executor for matplotlib operations
 _MATPLOTLIB_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="matplotlib")
 
 
 class WeatherAnalyticsChart:
-    """Chart für Weather Analytics PNG-Export."""
+    """Weather analytics PNG export chart. @zara"""
 
     def __init__(
         self,
@@ -39,14 +37,14 @@ class WeatherAnalyticsChart:
         stats: dict[str, Any],
         data: list[dict[str, Any]],
     ) -> None:
-        """Initialize chart."""
+        """Initialize chart. @zara"""
         self.period = period
         self.stats = stats
         self.data = self._filter_data_by_period(data, period)
         self._styles = ChartStyles()
 
     def _filter_data_by_period(self, data: list[dict[str, Any]], period: str) -> list[dict[str, Any]]:
-        """Filter data based on selected period."""
+        """Filter data based on selected period. @zara"""
         if not data:
             return []
 
@@ -62,11 +60,7 @@ class WeatherAnalyticsChart:
         return sorted_data[:days]
 
     async def async_render(self) -> bytes:
-        """Render chart to PNG bytes.
-
-        Runs all matplotlib operations in a thread executor to avoid
-        blocking the event loop.
-        """
+        """Render chart to PNG bytes. @zara"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             _MATPLOTLIB_EXECUTOR,
@@ -74,46 +68,36 @@ class WeatherAnalyticsChart:
         )
 
     def _render_sync(self) -> bytes:
-        """Synchronous render - runs in executor thread."""
-        # Import matplotlib inside the executor thread
+        """Synchronous render in executor thread. @zara"""
         import matplotlib.pyplot as plt
         from .styles import apply_dark_theme
 
-        # Apply theme in this thread
         apply_dark_theme()
 
         fig = plt.figure(figsize=(14, 10), facecolor=self._styles.background)
         gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.3, top=0.92, bottom=0.08)
 
-        # Title
         period_names = {'week': 'Letzte 7 Tage', 'month': 'Letzter Monat', 'year': 'Dieses Jahr'}
         title = f"Wetter Analytics - {period_names.get(self.period, self.period.capitalize())}"
         fig.suptitle(title, fontsize=20, fontweight='bold', color=self._styles.text_primary)
 
-        # Stats Grid (top row, full width)
         ax_stats = fig.add_subplot(gs[0, :])
         self._render_stats_grid(ax_stats)
 
-        # Temperature Chart (middle left)
         ax_temp = fig.add_subplot(gs[1, 0])
         self._render_temperature_chart(ax_temp)
 
-        # Radiation & Solar Chart (middle right)
         ax_rad = fig.add_subplot(gs[1, 1])
         self._render_radiation_chart(ax_rad)
 
-        # Rain & Humidity (bottom left)
         ax_rain = fig.add_subplot(gs[2, 0])
         self._render_rain_chart(ax_rain)
 
-        # Wind Chart (bottom right)
         ax_wind = fig.add_subplot(gs[2, 1])
         self._render_wind_chart(ax_wind)
 
-        # Footer
         self._add_footer(fig)
 
-        # Render to bytes
         buf = io.BytesIO()
         fig.savefig(
             buf,
@@ -129,15 +113,15 @@ class WeatherAnalyticsChart:
         return buf.read()
 
     def _render_stats_grid(self, ax: Any) -> None:
-        """Render stats as a grid."""
+        """Render stats as a grid. @zara"""
         ax.axis('off')
 
         stats_text = [
-            f"Ø Temperatur (Woche): {self.stats.get('avgTemp', 0):.1f}°C",
-            f"Höchsttemperatur: {self.stats.get('maxTemp', 0):.1f}°C",
-            f"Tiefsttemperatur: {self.stats.get('minTemp', 0):.1f}°C",
+            f"\u00d8 Temperatur (Woche): {self.stats.get('avgTemp', 0):.1f}\u00b0C",
+            f"H\u00f6chsttemperatur: {self.stats.get('maxTemp', 0):.1f}\u00b0C",
+            f"Tiefsttemperatur: {self.stats.get('minTemp', 0):.1f}\u00b0C",
             f"Niederschlag (Monat): {self.stats.get('totalRain', 0):.1f} mm",
-            f"Ø Wind: {self.stats.get('avgWind', 0):.1f} m/s",
+            f"\u00d8 Wind: {self.stats.get('avgWind', 0):.1f} m/s",
             f"Sonnenstunden (Monat): {self.stats.get('sunHours', 0):.0f} h",
         ]
 
@@ -150,7 +134,7 @@ class WeatherAnalyticsChart:
             props = dict(
                 boxstyle='round,pad=0.8',
                 facecolor=self._styles.background_card,
-                edgecolor='#f59e0b',  # Orange wie Weather Modal
+                edgecolor='#f59e0b',
                 linewidth=2,
                 alpha=0.9
             )
@@ -167,9 +151,9 @@ class WeatherAnalyticsChart:
             )
 
     def _render_temperature_chart(self, ax: Any) -> None:
-        """Render temperature timeline."""
+        """Render temperature timeline. @zara"""
         if not self.data:
-            ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Daten verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
@@ -192,7 +176,7 @@ class WeatherAnalyticsChart:
         ax.fill_between(range(len(dates)), temp_min, temp_max, alpha=0.1, color='#f59e0b')
 
         ax.set_xlabel('Datum', color=self._styles.text_primary)
-        ax.set_ylabel('Temperatur (°C)', color=self._styles.text_primary)
+        ax.set_ylabel('Temperatur (\u00b0C)', color=self._styles.text_primary)
         ax.set_title('Temperatur Verlauf', color=self._styles.text_primary, fontweight='bold')
 
         self._apply_adaptive_ticks(ax, dates)
@@ -202,9 +186,9 @@ class WeatherAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _render_radiation_chart(self, ax: Any) -> None:
-        """Render radiation with solar correlation."""
+        """Render radiation with solar correlation. @zara"""
         if not self.data:
-            ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Daten verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
@@ -220,7 +204,7 @@ class WeatherAnalyticsChart:
                  color='#22c55e', label='Solar-Produktion')
 
         ax.set_xlabel('Datum', color=self._styles.text_primary)
-        ax.set_ylabel('Einstrahlung (W/m²)', color=self._styles.text_primary)
+        ax.set_ylabel('Einstrahlung (W/m\u00b2)', color=self._styles.text_primary)
         ax2.set_ylabel('Solar-Produktion (kWh)', color=self._styles.text_primary)
         ax.set_title('Einstrahlung & Solar-Korrelation', color=self._styles.text_primary, fontweight='bold')
 
@@ -231,9 +215,9 @@ class WeatherAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _render_rain_chart(self, ax: Any) -> None:
-        """Render rain and humidity."""
+        """Render rain and humidity. @zara"""
         if not self.data:
-            ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Daten verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
@@ -261,9 +245,9 @@ class WeatherAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _render_wind_chart(self, ax: Any) -> None:
-        """Render wind speed."""
+        """Render wind speed chart. @zara"""
         if not self.data:
-            ax.text(0.5, 0.5, 'Keine Daten verfügbar', ha='center', va='center',
+            ax.text(0.5, 0.5, 'Keine Daten verf\u00fcgbar', ha='center', va='center',
                     color=self._styles.text_muted, fontsize=14)
             ax.axis('off')
             return
@@ -286,7 +270,7 @@ class WeatherAnalyticsChart:
         ax.set_facecolor(self._styles.background)
 
     def _apply_adaptive_ticks(self, ax: Any, dates: list[str]) -> None:
-        """Apply adaptive tick labels based on data length."""
+        """Apply adaptive tick labels based on data length. @zara"""
         if len(dates) > 60:
             tick_positions = list(range(0, len(dates), 14))
             tick_labels = [dates[i] for i in tick_positions]
@@ -302,7 +286,7 @@ class WeatherAnalyticsChart:
             ax.set_xticklabels(dates, rotation=45, ha='right')
 
     def _add_footer(self, fig: Figure) -> None:
-        """Add footer with timestamp."""
+        """Add footer with timestamp. @zara"""
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
         footer_text = f"Generiert: {timestamp}"
 

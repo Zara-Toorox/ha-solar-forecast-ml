@@ -49,18 +49,18 @@ retrain_ai_model:
 
     Training requirements:
     - Minimum 50 training samples required
-    - Uses last 30 days of hourly_predictions.json data
+    - Uses last 30 days of data from hourly_predictions database table
     - Multi-Output mode: One output per panel group
 
     Data sources:
-    - hourly_predictions.json (main source with actual production)
-    - weather_forecast_corrected.json (weather + precision corrections)
-    - astronomy_cache.json (sun position, theoretical max, clear-sky radiation)
+    - hourly_predictions database table (main source with actual production)
+    - weather_forecast database table (weather + precision corrections)
+    - astronomy_cache database table (sun position, theoretical max, clear-sky radiation)
 
     Model storage:
-    - Weights: /ai/learned_weights.json (TinyLSTM weights)
-    - Seasonal factors: /ai/seasonal.json
-    - DNI tracking: /ai/dni_tracker.json
+    - Weights: ai_model_weights database table (TinyLSTM weights)
+    - Seasonal factors: ai_seasonal_factors database table
+    - DNI tracking: ai_dni_tracker database table
 
     Use this service:
     - After collecting new production data (to improve accuracy)
@@ -91,7 +91,7 @@ reset_ai_model:
     - After major configuration changes (solar_capacity, location)
     - If model produces consistently wrong predictions
     - To start fresh AI training
-    - After corrupted learned_weights.json file
+    - After corrupted ai_model_weights database table
 
     What happens after reset:
     - Model will use Rule-Based predictions until retrained
@@ -100,7 +100,7 @@ reset_ai_model:
     - Requires ≥50 samples with actual production to retrain
 
     ⚠️ CAUTION: This action CANNOT be undone!
-    Consider backing up /ai/learned_weights.json before resetting.
+    Consider backing up the ai_model_weights database table before resetting.
 
     Alternative: Use retrain_ai_model service to keep model but retrain with latest data.
   fields: {}
@@ -148,10 +148,10 @@ analyze_feature_importance:
     - group_azimuth_normalized, group_tilt_normalized, group_capacity_normalized
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    📁 ERGEBNIS-DATEI
+    📁 ERGEBNIS-SPEICHERORT
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /config/solar_forecast_ml/ai/feature_importance.json
+    ai_feature_importance database table
 
     Enthält:
     - feature_importance: Score für jedes Feature
@@ -165,7 +165,7 @@ analyze_feature_importance:
     ⚠️ WICHTIGE HINWEISE
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    - Benötigt ein trainiertes AI-Modell (learned_weights.json)
+    - Benötigt ein trainiertes AI-Modell (ai_model_weights database table)
     - Benötigt mindestens 10 Validierungs-Samples
     - Rechenintensiv: Kann mehrere Sekunden dauern
     - Ergebnisse dienen nur der ANALYSE - keine automatischen Änderungen!
@@ -247,15 +247,14 @@ run_all_day_end_tasks:
 
     Processing time: ~3-10 seconds (10 steps)
 
-    Files affected:
-    - daily_summaries.json (new entry for today with shadow analysis)
-    - hourly_predictions.json (today moved to history section)
-    - ai/seasonal.json (seasonal adjustments updated)
-    - coordinator_state.json (yesterday deviation updated)
-    - hourly_samples.json (cleaned, duplicates removed)
-    - ai/learned_weights.json (TinyLSTM model weights)
-    - ai/seasonal.json (seasonal adjustment factors)
-    - ai/dni_tracker.json (DNI tracking data)
+    Database tables affected:
+    - daily_summaries database table (new entry for today with shadow analysis)
+    - hourly_predictions database table (today moved to history section)
+    - ai_seasonal_factors database table (seasonal adjustments updated)
+    - coordinator_state database table (yesterday deviation updated)
+    - hourly_samples database table (cleaned, duplicates removed)
+    - ai_model_weights database table (TinyLSTM model weights)
+    - ai_dni_tracker database table (DNI tracking data)
 
     ⚠️ CAUTION: Run ONLY ONCE per day to avoid duplicate entries!
     This service calls: coordinator.scheduled_tasks.end_of_day_workflow()
@@ -285,8 +284,8 @@ test_morning_routine:
     Code Reference: services/service_registry.py::_handle_test_morning_routine
 
     What this service does:
-    1. Loads stored predictions from hourly_predictions.json (created at 06:00)
-    2. Loads weather data from open_meteo_cache.json (fetched at 06:00)
+    1. Loads stored predictions from hourly_predictions database table (created at 06:00)
+    2. Loads weather data from weather_forecast database table (fetched at 06:00)
     3. Analyzes predicted best hour vs actual best hour
     4. Shows prediction accuracy and errors
     5. Compares ML/Rule blending effectiveness
@@ -301,8 +300,8 @@ test_morning_routine:
     - ML contribution and blending weights
 
     Data sources:
-    - /stats/hourly_predictions.json (predictions created at 06:00)
-    - /data/open_meteo_cache.json (weather forecast from Open-Meteo)
+    - hourly_predictions database table (predictions created at 06:00)
+    - weather_forecast database table (weather forecast from Open-Meteo)
   fields: {}
 
 test_retrospective_forecast:
@@ -311,7 +310,7 @@ test_retrospective_forecast:
     ╔══════════════════════════════════════════════════════════════════════════╗
     ║ ⚠️ NUR FÜR ENTWICKLER / DEVELOPER ONLY                                  ║
     ║ Erstellt eine "retrospektive" Prognose mit dem AKTUELLEN Code.          ║
-    ║ Schreibt NUR in retrospective_forecast.json (beeinflusst keine Daten).  ║
+    ║ Schreibt NUR in retrospective_forecast table (beeinflusst keine Daten). ║
     ╚══════════════════════════════════════════════════════════════════════════╝
 
     🔄 RETROSPECTIVE FORECAST - Test code changes without waiting!
@@ -336,7 +335,7 @@ test_retrospective_forecast:
     - 14:00: You change a correction factor
     - 14:00: Run test_retrospective_forecast
     - Result: See what the 07:00 forecast WOULD have been with your new code
-    - Compare: retrospective_forecast.json vs hourly_predictions.json
+    - Compare: retrospective_forecast table vs hourly_predictions database table
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     📋 WHAT THIS SERVICE DOES:
@@ -344,7 +343,7 @@ test_retrospective_forecast:
 
     1. Determines today's sunrise time from astronomy cache
     2. Sets simulation time to "sunrise - 1 hour" (e.g., 07:00 in winter)
-    3. Loads current weather forecast (weather_forecast_corrected.json)
+    3. Loads current weather forecast (weather_forecast database table)
     4. Loads current astronomy data for today
     5. Runs the FULL forecast pipeline with CURRENT code:
        - Physics engine calculations
@@ -352,13 +351,13 @@ test_retrospective_forecast:
        - AI/ML predictions (if available)
        - All correction factors and calibrations
     6. Calculates hourly predictions for ALL production hours (e.g., 08:00-16:00)
-    7. Saves result to stats/retrospective_forecast.json
+    7. Saves result to retrospective_forecast database table
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    📁 OUTPUT FILE:
+    📁 OUTPUT:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /config/solar_forecast_ml/stats/retrospective_forecast.json
+    retrospective_forecast database table
 
     Contains:
     - simulation_context: When/why this was created
@@ -372,9 +371,9 @@ test_retrospective_forecast:
     🔒 SAFETY:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    - DOES NOT modify hourly_predictions.json
+    - DOES NOT modify hourly_predictions database table
     - DOES NOT affect actual forecasts or sensors
-    - ONLY writes to retrospective_forecast.json
+    - ONLY writes to retrospective_forecast database table
     - Safe to run multiple times (overwrites previous result)
 
     Use cases:
@@ -430,13 +429,13 @@ build_astronomy_cache:
     - ✅ After updating solar_capacity in integration settings (rebuilds with correct kWp!)
     - On first setup (runs automatically during installation)
     - After changing Home Assistant location
-    - To rebuild corrupted cache file
+    - To rebuild corrupted cache data
     - To extend historical range for analysis
 
     Processing time: ~5 seconds for 37 days (30 back + today + 7 ahead)
-    File size: ~250 KB (compact JSON with hourly granularity)
+    Storage: astronomy_cache database table (~250 KB equivalent with hourly granularity)
 
-    Cache file: /config/solar_forecast_ml/stats/astronomy_cache.json
+    Database: /config/solar_forecast_ml/data/solar_forecast.db
 
     Location data: Automatically from Home Assistant configuration
     - Latitude, Longitude, Elevation, Timezone
@@ -518,7 +517,7 @@ run_weather_correction:
     ║ Überschreibt existierende Wettervorhersage-Korrekturen!                 ║
     ╚══════════════════════════════════════════════════════════════════════════╝
 
-    ⚠️ MANUAL TRIGGER - Rebuilds weather_forecast_corrected.json immediately!
+    ⚠️ MANUAL TRIGGER - Rebuilds weather_forecast database table immediately!
 
     This service manually triggers the corrected weather forecast generation
     which normally runs automatically at:
@@ -526,11 +525,11 @@ run_weather_correction:
     - sunrise-40min: Before final morning forecast (sunrise-30min)
 
     What this does:
-    1. Loads raw weather forecast from open_meteo_cache.json
-    2. Loads precision correction factors from weather_precision_daily.json
+    1. Loads raw weather forecast from weather_forecast database table
+    2. Loads precision correction factors from weather_precision_daily database table
     3. Loads astronomy data for clear_sky calculations
     4. Applies physics-based corrections (clear_sky × cloud_factor)
-    5. Saves corrected forecast to weather_forecast_corrected.json
+    5. Saves corrected forecast to weather_forecast database table
 
     Use this service:
     - To test weather correction logic immediately
@@ -539,7 +538,7 @@ run_weather_correction:
 
     Processing time: ~1 second
 
-    Result file: /config/solar_forecast_ml/stats/weather_forecast_corrected.json
+    Result: weather_forecast database table (corrected forecast)
 
     IMPORTANT: This service will overwrite the existing corrected forecast!
   fields: {}
@@ -555,14 +554,14 @@ refresh_open_meteo_cache:
     Manually refresh Open-Meteo direct radiation data!
 
     This service fetches fresh radiation forecasts from Open-Meteo API
-    and updates the persistent cache (open_meteo_cache.json).
+    and updates the persistent cache (weather_forecast database table).
 
     What this does:
     1. Fetches 72-hour forecast from api.open-meteo.com
     2. Gets direct_radiation, diffuse_radiation, GHI (W/m2)
     3. Gets temperature, clouds, humidity, wind, precipitation
     4. Updates in-memory cache for immediate use
-    5. Saves to open_meteo_cache.json (survives HA restarts)
+    5. Saves to weather_forecast database table (survives HA restarts)
 
     Direct Radiation Mode:
     - Uses GHI (Global Horizontal Irradiance) directly from API
@@ -581,8 +580,8 @@ refresh_open_meteo_cache:
 
     Processing time: ~2-5 seconds (depends on API response)
 
-    Result files:
-    - /config/solar_forecast_ml/data/open_meteo_cache.json (persistent)
+    Result:
+    - weather_forecast database table (persistent)
     - In-memory cache (immediate use in corrected forecast)
 
     API: api.open-meteo.com (free, no API key required)
@@ -606,8 +605,8 @@ refresh_multi_weather:
     1. Fetches 72-hour forecast from Open-Meteo (primary source)
     2. If cloud_cover > 50%: Also fetches from wttr.in (World Weather Online)
     3. Blends cloud_cover using learned weights (based on past accuracy)
-    4. Saves blended forecast to open_meteo_cache.json
-    5. Updates wttr_in_cache.json (6h cache, 12h fallback)
+    4. Saves blended forecast to weather_forecast database table
+    5. Updates wttr_in_cache database table (6h cache, 12h fallback)
 
     Multi-Source Blending:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -632,15 +631,15 @@ refresh_multi_weather:
 
     Processing time: ~3-10 seconds (depends on API responses)
 
-    Result files:
-    - /config/solar_forecast_ml/data/open_meteo_cache.json (blended forecast)
-    - /config/solar_forecast_ml/data/wttr_in_cache.json (wttr.in cache)
-    - /config/solar_forecast_ml/data/weather_source_weights.json (learned weights)
+    Result:
+    - weather_forecast database table (blended forecast)
+    - wttr_in_cache database table (wttr.in cache)
+    - weather_source_weights database table (learned weights)
   fields:
     force_update:
       name: "Force Update"
       description: >
-        V12.8: Force a fresh API call to ALL weather sources (Open-Meteo, wttr.in,
+        V16: Force a fresh API call to ALL weather sources (Open-Meteo, wttr.in,
         Bright Sky, Pirate Weather) even if the cache is still valid.
         This bypasses the memory cache and forces new API requests.
         Use this to get fresh visibility data for fog detection.
@@ -755,16 +754,16 @@ borg_assimilation_reverse:
     Verfügbare Targets:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     🧠 ai_weights
-       Setzt AI-Dateien zurück:
-       - ai/learned_weights.json (TinyLSTM weights)
-       - ai/seasonal.json (seasonal factors)
-       - ai/dni_tracker.json (DNI tracking)
+       Setzt AI-Daten zurück:
+       - ai_model_weights database table (TinyLSTM weights)
+       - ai_seasonal_factors database table (seasonal factors)
+       - ai_dni_tracker database table (DNI tracking)
        ➜ ML-Modell startet Training von Grund auf neu
 
     📜 hourly_history
        Entfernt alte Einträge:
-       - stats/hourly_predictions.json
-       - stats/hourly_weather_actual.json
+       - hourly_predictions database table
+       - hourly_weather_actual database table
        - Optional: before_date Parameter für gezieltes Löschen
        ➜ Entfernt "Garbage Data" aus der Vergangenheit
 
@@ -775,7 +774,7 @@ borg_assimilation_reverse:
     Sicherheit:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     ✓ Automatisches Backup in: /solar_forecast_ml/backups/borg_reverse_YYYYMMDD_HHMMSS/
-    ✓ Backup enthält alle betroffenen Dateien vor dem Reset
+    ✓ Backup enthält alle betroffenen Daten vor dem Reset
     ✓ Backup-Retention: 30 Tage (ältere werden automatisch gelöscht)
 
     Nach dem Reset:
@@ -884,7 +883,7 @@ rescue_calibration:
     🔧 WAS MACHT DIESER SERVICE?
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    1. Analysiert daily_summaries.json und calibration_history.json
+    1. Analysiert daily_summaries und physics_calibration_history database tables
     2. Sucht nach mindestens 2 Tagen mit Ratio zwischen 10 und 40 (actual/physics)
     3. Prüft ob Ratio > 40 → Wahrscheinlich Konfigurationsfehler → BRICHT AB
     4. Falls 10-40: Führt EINMALIGE Kalibrierung mit erhöhtem MAX_FACTOR=50 durch
@@ -897,16 +896,16 @@ rescue_calibration:
 
     - Mindestens 2 Tage mit Abweichung im gültigen Bereich (Ratio 10-40) müssen vorhanden sein
     - Nur Daten der LETZTEN 5 TAGE werden berücksichtigt (Zeitfenster-Schutz)
-    - Die Daten müssen in hourly_predictions.json oder daily_summaries.json existieren
+    - Die Daten müssen in hourly_predictions oder daily_summaries database tables existieren
     - Der Service wird NICHT ausgeführt, wenn weniger als 2 Tage gefunden werden
     - Der Service BRICHT AB bei Ratio > 40 (Konfigurationsfehler wahrscheinlich)
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    📁 BETROFFENE DATEIEN
+    📁 BETROFFENE DATEN
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    - /config/solar_forecast_ml/physics/learning_config.json (wird aktualisiert)
-    - Liest: daily_summaries.json, hourly_predictions.json, calibration_history.json
+    - physics_learning_config database table (wird aktualisiert)
+    - Liest: daily_summaries, hourly_predictions, physics_calibration_history database tables
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     ℹ️ NACH DER AUSFÜHRUNG
@@ -950,7 +949,7 @@ repair_calibration:
     🔧 WAS MACHT DIESER SERVICE?
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    1. Lädt learning_config.json und analysiert alle Bucket-Faktoren
+    1. Lädt physics_learning_config database table und analysiert alle Bucket-Faktoren
     2. Identifiziert Ausreißer basierend auf konfigurierbaren Schwellwerten:
        - Faktoren > max_allowed_factor (Standard: 4.0)
        - Faktoren > global_factor × max_global_ratio (Standard: 2.0)
@@ -970,15 +969,15 @@ repair_calibration:
     dry_run: false
       - Erstellt Backup
       - Korrigiert alle Ausreißer auf target_factor
-      - Speichert geänderte learning_config.json
+      - Speichert geänderte physics_learning_config database table
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    📁 BETROFFENE DATEIEN
+    📁 BETROFFENE DATEN
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    Liest:  /config/solar_forecast_ml/physics/learning_config.json
+    Liest:  physics_learning_config database table
     Backup: /config/solar_forecast_ml/backups/repair_calibration/backup_YYYYMMDD_HHMMSS/
-    Ändert: learning_config.json (nur wenn dry_run=false)
+    Ändert: physics_learning_config database table (nur wenn dry_run=false)
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     ⚠️ WICHTIGE HINWEISE
@@ -1044,8 +1043,8 @@ repair_calibration:
       selector:
         boolean:
 
-winter_bucket_correction_v13:
-  name: "🌨️ Winter Bucket Correction V13 (DEVELOPER ONLY)"
+winter_bucket_correction_v16:
+  name: "🌨️ Winter Bucket Correction V16 (DEVELOPER ONLY)"
   description: >
     ╔══════════════════════════════════════════════════════════════════════════╗
     ║ 🚨🚨🚨 WARNUNG / WARNING 🚨🚨🚨                                          ║
@@ -1057,13 +1056,13 @@ winter_bucket_correction_v13:
     ║ zu dauerhaft schlechten Prognosen führen!                               ║
     ╚══════════════════════════════════════════════════════════════════════════╝
 
-    🌨️ WINTER BUCKET CORRECTION V13 - Korrigiert Bucket-Konfidenz für V13.1
+    🌨️ WINTER BUCKET CORRECTION V16 - Korrigiert Bucket-Konfidenz für V16
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     🎯 HINTERGRUND
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    V13.1 führt eine neue, physikalisch korrektere Cloud-Faktor-Berechnung ein.
+    V16 führt eine neue, physikalisch korrektere Cloud-Faktor-Berechnung ein.
     Die alten Bucket-Faktoren wurden mit der falschen (zu optimistischen) Formel
     kalibriert. Dieser Service reduziert die KONFIDENZ (nicht die Faktor-Werte!),
     damit das System schneller mit der neuen Formel neu lernen kann.
@@ -1072,7 +1071,7 @@ winter_bucket_correction_v13:
     🔧 WAS MACHT DIESER SERVICE?
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    1. Lädt learning_config.json
+    1. Lädt physics_learning_config database table
     2. Reduziert die `confidence` aller Bucket-Faktoren auf den angegebenen Wert
     3. BEHÄLT die Faktor-WERTE bei (keine Löschung der Kalibrierung!)
     4. Erstellt IMMER ein Backup vor der Änderung
@@ -1106,7 +1105,7 @@ winter_bucket_correction_v13:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     NUR nach Rücksprache mit dem Entwickler, wenn:
-    - Das System bereits länger mit V12.x kalibriert war
+    - Das System bereits länger mit älteren Versionen kalibriert war
     - Die Winter-Prognosen stark daneben lagen (>50% Abweichung)
     - Der Entwickler dies explizit empfohlen hat
 
@@ -1191,3 +1190,37 @@ install_extra_features:
     - To update extra features to latest version
     - When new extra features become available
   fields: {}
+
+backfill_shadow_detection:
+  name: "🔍 Backfill Shadow Detection"
+  description: >
+    Runs shadow detection for hours that have actual production data but no shadow detection results.
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📊 WHAT IT DOES:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    1. Finds all hours with actual_kwh but no shadow_detection
+    2. Loads astronomy and weather data for each hour
+    3. Runs ensemble shadow detection
+    4. Saves results to hourly_shadow_detection table
+    5. Refreshes coordinator cache
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🎯 USE CASES:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    - After fixing shadow detection bugs
+    - To fill gaps in shadow detection data
+    - For debugging shadow detection issues
+    - Before running Shadow Pattern Learning (EOD Step 12)
+
+    Processing time: ~1-5 seconds depending on number of hours
+  fields:
+    target_date:
+      name: "Target Date"
+      description: "Date to backfill shadow detection for (YYYY-MM-DD). Leave empty for today."
+      required: false
+      example: "2026-02-04"
+      selector:
+        text:

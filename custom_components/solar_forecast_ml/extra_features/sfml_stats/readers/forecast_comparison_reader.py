@@ -1,18 +1,18 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Forecast comparison data reader for SFML Stats."""
+"""Forecast comparison data reader for SFML Stats. @zara"""
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -122,7 +122,6 @@ class ForecastComparisonReader:
         if not data or "days" not in data:
             return []
 
-        # Determine date range
         if end_date is None:
             end_date = date.today()
         if start_date is None:
@@ -138,7 +137,6 @@ class ForecastComparisonReader:
                 raw = data["days"][day_str]
                 comparison_day = self._parse_day(current, raw)
             else:
-                # Create empty entry for missing day
                 comparison_day = ForecastComparisonDay(
                     date=current,
                     actual_kwh=None,
@@ -210,7 +208,6 @@ class ForecastComparisonReader:
         if days_with_actual == 0:
             return stats
 
-        # Calculate SFML statistics
         sfml_accuracies = [
             d.sfml_accuracy_percent for d in comparison_days
             if d.sfml_accuracy_percent is not None
@@ -225,7 +222,6 @@ class ForecastComparisonReader:
         if sfml_errors:
             stats.sfml_total_error_kwh = round(sum(sfml_errors), 2)
 
-        # Calculate External 1 statistics
         ext1_accuracies = []
         ext1_errors = []
         for d in comparison_days:
@@ -242,7 +238,6 @@ class ForecastComparisonReader:
         if ext1_errors:
             stats.external_1_total_error_kwh = round(sum(ext1_errors), 2)
 
-        # Calculate External 2 statistics
         ext2_accuracies = []
         ext2_errors = []
         for d in comparison_days:
@@ -259,7 +254,6 @@ class ForecastComparisonReader:
         if ext2_errors:
             stats.external_2_total_error_kwh = round(sum(ext2_errors), 2)
 
-        # Determine best forecast
         accuracies = {}
         if stats.sfml_avg_accuracy is not None:
             accuracies["SFML"] = stats.sfml_avg_accuracy
@@ -281,7 +275,6 @@ class ForecastComparisonReader:
         comparison_days = await self.async_get_comparison_days(days=days)
         stats = await self.async_get_statistics(days=days)
 
-        # Prepare series data
         dates = [d.date.strftime("%d.%m") for d in comparison_days]
         actual = [d.actual_kwh for d in comparison_days]
         sfml = [d.sfml_forecast_kwh for d in comparison_days]
@@ -291,7 +284,6 @@ class ForecastComparisonReader:
         external_2 = None
         external_2_name = None
 
-        # Check if we have external forecasts
         for d in comparison_days:
             if d.external_1 and d.external_1.forecast_kwh is not None:
                 if external_1 is None:

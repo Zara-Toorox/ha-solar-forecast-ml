@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,14 +7,25 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
+"""
+Data Adapter for Solar Forecast ML V16.0.0.
+Converts data between database rows and typed dataclasses.
+Provides type-safe conversion for legacy structure compatibility.
+
+@zara
+"""
+
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from ..const import CORRECTION_FACTOR_MAX, CORRECTION_FACTOR_MIN, DATA_VERSION, ML_MODEL_VERSION
-
+from ..const import (
+    CORRECTION_FACTOR_MAX,
+    CORRECTION_FACTOR_MIN,
+    DATA_VERSION,
+    ML_MODEL_VERSION,
+)
 from ..core.core_helpers import SafeDateTimeUtil as dt_util
-
 from ..ai import (
     HourlyProfile,
     LearnedWeights,
@@ -25,260 +36,275 @@ from ..ai import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class TypedDataAdapter:
-    """Adapter class responsible for converting data between unstructured dictionaries"""
+    """Adapter class for converting between database rows and typed objects. @zara
+
+    Provides static methods for bidirectional conversion between
+    database dictionaries and typed dataclass instances.
+    """
 
     @staticmethod
-    def dict_to_prediction_record(data: Dict[str, Any]) -> PredictionRecord:
-        """Converts a dictionary to a PredictionRecord dataclass instance @zara"""
+    def dict_to_prediction_record(data: dict[str, Any]) -> PredictionRecord:
+        """Convert a dictionary to a PredictionRecord. @zara
+
+        Args:
+            data: Dictionary with prediction data
+
+        Returns:
+            PredictionRecord instance
+        """
         if isinstance(data, PredictionRecord):
             return data
 
         try:
-
-            timestamp = data.get("timestamp", dt_util.now().isoformat())
-            predicted = float(data.get("predicted_value", 0.0))
-
-            actual_raw = data.get("actual_value")
-            actual = float(actual_raw) if actual_raw is not None else None
-            weather = data.get("weather_data", {})
-            sensor = data.get("sensor_data", {})
-            accuracy = float(data.get("accuracy", 0.0))
-            version = data.get("model_version", ML_MODEL_VERSION)
-
             return PredictionRecord(
-                timestamp=timestamp,
-                predicted_value=predicted,
-                actual_value=actual,
-                weather_data=weather,
-                sensor_data=sensor,
-                accuracy=accuracy,
-                model_version=version,
+                date=data.get("date", data.get("target_date", "")),
+                hour=int(data.get("hour", data.get("target_hour", 0))),
+                predicted_kwh=float(data.get("predicted_kwh", data.get("prediction_kwh", 0.0))),
+                actual_kwh=float(data["actual_kwh"]) if data.get("actual_kwh") is not None else None,
+                weather_source=data.get("weather_source", data.get("source", "")),
+                timestamp=data.get("timestamp", data.get("prediction_created_at")),
             )
-
         except (ValueError, TypeError, KeyError) as e:
-            _LOGGER.error("Failed to convert dictionary to PredictionRecord: %s. Data: %s", e, data)
-
-            raise ValueError(f"Invalid data for PredictionRecord conversion: {e}") from e
+            _LOGGER.error("Failed to convert dict to PredictionRecord: %s", e)
+            raise ValueError(f"Invalid data for PredictionRecord: {e}") from e
 
     @staticmethod
-    def dict_to_learned_weights(data: Dict[str, Any]) -> LearnedWeights:
-        """Converts a dictionary to a LearnedWeights dataclass instance @zara"""
+    def prediction_record_to_dict(record: PredictionRecord) -> dict[str, Any]:
+        """Convert a PredictionRecord to a dictionary. @zara
+
+        Args:
+            record: PredictionRecord instance
+
+        Returns:
+            Dictionary representation
+        """
+        if not isinstance(record, PredictionRecord):
+            _LOGGER.error("Invalid input: expected PredictionRecord instance")
+            return {}
+
+        return {
+            "date": record.date,
+            "hour": record.hour,
+            "predicted_kwh": record.predicted_kwh,
+            "actual_kwh": record.actual_kwh,
+            "weather_source": record.weather_source,
+            "timestamp": record.timestamp,
+        }
+
+    @staticmethod
+    def dict_to_learned_weights(data: dict[str, Any]) -> LearnedWeights:
+        """Convert a dictionary to LearnedWeights. @zara
+
+        Handles legacy field names and provides fallbacks.
+
+        Args:
+            data: Dictionary with weight data
+
+        Returns:
+            LearnedWeights instance
+        """
         if isinstance(data, LearnedWeights):
             return data
 
         try:
-
+            # Handle weights field with fallback @zara
             weights = data.get("weights")
             if weights is None:
-
                 weights = data.get("weather_weights", {})
                 if weights:
-                    _LOGGER.debug("Using 'weather_weights' as fallback for 'weights' field.")
+                    _LOGGER.debug("Using 'weather_weights' as fallback for 'weights'")
 
-            bias = float(data.get("bias", 0.0))
-
-            default_feature_names = [
-                "temperature",
-                "humidity",
-                "cloudiness",
-                "wind_speed",
-                "hour_of_day",
-                "seasonal_factor",
-                "weather_trend",
-                "production_yesterday",
-                "production_last_hour",
-            ]
-            feature_names = data.get("feature_names", default_feature_names)
-            if not isinstance(feature_names, list) or not feature_names:
-                _LOGGER.warning(
-                    "Invalid or missing 'feature_names' in weights data, using default list."
-                )
-                feature_names = default_feature_names
-
-            feature_means = data.get("feature_means", {})
+            # Handle feature_stds @zara
             feature_stds = data.get("feature_stds", {})
+            if not isinstance(feature_stds, dict):
+                feature_stds = {}
 
-            accuracy = float(data.get("accuracy", 0.0))
-            training_samples = int(data.get("training_samples", 0))
-            last_trained = data.get(
-                "last_trained", dt_util.now().isoformat()
-            )
-            model_version = data.get("model_version", ML_MODEL_VERSION)
+            # Parse version @zara
+            version = data.get("version", data.get("model_version", ML_MODEL_VERSION))
 
-            correction_factor_raw = data.get("correction_factor", 1.0)
-            try:
-                correction_factor = float(correction_factor_raw)
+            # Parse last_trained @zara
+            last_trained = data.get("last_trained")
+            if last_trained is None:
+                last_trained = dt_util.now().isoformat()
 
-                correction_factor = max(
-                    CORRECTION_FACTOR_MIN, min(CORRECTION_FACTOR_MAX, correction_factor)
-                )
-            except (ValueError, TypeError):
-                _LOGGER.warning(
-                    f"Invalid correction_factor '{correction_factor_raw}', using default 1.0."
-                )
-                correction_factor = 1.0
-
-            learned_weights_instance = LearnedWeights(
+            return LearnedWeights(
                 weights=weights if isinstance(weights, dict) else {},
-                bias=bias,
-                feature_names=feature_names,
-                feature_means=(
-                    feature_means if isinstance(feature_means, dict) else {}
-                ),
-                feature_stds=feature_stds if isinstance(feature_stds, dict) else {},
-                accuracy=accuracy,
-                training_samples=training_samples,
+                feature_stds=feature_stds,
+                version=str(version),
                 last_trained=last_trained,
-                model_version=model_version,
-                algorithm_used=data.get("algorithm_used", "ridge"),
-                correction_factor=correction_factor,
-
-                weather_weights=data.get("weather_weights", {}),
-                seasonal_factors=data.get("seasonal_factors", {}),
-                feature_importance=data.get("feature_importance", {}),
             )
-            _LOGGER.debug("Successfully converted dictionary to LearnedWeights object.")
-            return learned_weights_instance
 
         except Exception as e:
-
-            _LOGGER.error(
-                "Failed to convert dictionary to LearnedWeights: %s. Returning default weights.",
-                e,
-                exc_info=True,
-            )
-
+            _LOGGER.error("Failed to convert dict to LearnedWeights: %s", e)
             return create_default_learned_weights()
 
     @staticmethod
-    def learned_weights_to_dict(weights: LearnedWeights) -> Dict[str, Any]:
-        """Converts a LearnedWeights dataclass instance back into a dictionary @zara"""
-        if not isinstance(weights, LearnedWeights):
-            _LOGGER.error(
-                "Invalid input: learned_weights_to_dict expects a LearnedWeights instance."
-            )
+    def learned_weights_to_dict(weights: LearnedWeights) -> dict[str, Any]:
+        """Convert LearnedWeights to a dictionary. @zara
 
+        Args:
+            weights: LearnedWeights instance
+
+        Returns:
+            Dictionary representation
+        """
+        if not isinstance(weights, LearnedWeights):
+            _LOGGER.error("Invalid input: expected LearnedWeights instance")
             return TypedDataAdapter.learned_weights_to_dict(create_default_learned_weights())
 
         return {
-
             "weights": weights.weights,
-            "bias": weights.bias,
-            "feature_names": weights.feature_names,
-            "feature_means": weights.feature_means,
             "feature_stds": weights.feature_stds,
-
-            "accuracy": weights.accuracy,
-            "training_samples": weights.training_samples,
+            "version": weights.version,
             "last_trained": weights.last_trained,
-            "model_version": weights.model_version,
-            "algorithm_used": weights.algorithm_used,
-            "correction_factor": weights.correction_factor,
-
-            "weather_weights": weights.weather_weights,
-            "seasonal_factors": weights.seasonal_factors,
-            "feature_importance": weights.feature_importance,
-
             "file_format_version": DATA_VERSION,
             "last_saved": dt_util.now().isoformat(),
         }
 
     @staticmethod
-    def dict_to_hourly_profile(data: Dict[str, Any]) -> HourlyProfile:
-        """Converts a dictionary to an HourlyProfile dataclass instance @zara"""
+    def dict_to_hourly_profile(data: dict[str, Any]) -> HourlyProfile:
+        """Convert a dictionary to HourlyProfile. @zara
+
+        Handles legacy nested format and provides fallbacks.
+
+        Args:
+            data: Dictionary with profile data
+
+        Returns:
+            HourlyProfile instance
+        """
         if isinstance(data, HourlyProfile):
             return data
 
         try:
-
+            # Parse hourly_averages with legacy format support @zara
             hourly_averages_raw = data.get("hourly_averages", {})
+            hourly_averages: dict[str, float] = {}
 
-            # Convert hourly_averages, handling old dict format migration
-            hourly_averages: Dict[str, float] = {}
             if isinstance(hourly_averages_raw, dict):
-                for k, v in hourly_averages_raw.items():
-                    if isinstance(v, dict):
-                        # Old format: {"count": 0, "total": 0.0, "average": 0.5}
-                        hourly_averages[str(k)] = float(v.get("average", 0.0))
-                    elif isinstance(v, (int, float)):
-                        hourly_averages[str(k)] = float(v)
+                for key, value in hourly_averages_raw.items():
+                    if isinstance(value, dict):
+                        # Legacy format: {"count": 0, "total": 0.0, "average": 0.5} @zara
+                        hourly_averages[str(key)] = float(value.get("average", 0.0))
+                    elif isinstance(value, (int, float)):
+                        hourly_averages[str(key)] = float(value)
                     else:
-                        hourly_averages[str(k)] = 0.0
+                        hourly_averages[str(key)] = 0.0
 
-            samples_count = int(data.get("samples_count", 0))
-            last_updated = data.get(
-                "last_updated", dt_util.now().isoformat()
-            )
-            confidence = float(data.get("confidence", 0.1))
+            # Parse other fields @zara
+            total_samples = int(data.get("total_samples", data.get("samples_count", 0)))
+            last_updated = data.get("last_updated")
 
-            hourly_factors = data.get("hourly_factors", {})
-            seasonal_adjustment = data.get("seasonal_adjustment", {})
-
-            hourly_profile_instance = HourlyProfile(
+            return HourlyProfile(
                 hourly_averages=hourly_averages,
-                samples_count=samples_count,
+                total_samples=total_samples,
                 last_updated=last_updated,
-                confidence=confidence,
-
-                hourly_factors=hourly_factors if isinstance(hourly_factors, dict) else {},
-                seasonal_adjustment=(
-                    seasonal_adjustment if isinstance(seasonal_adjustment, dict) else {}
-                ),
             )
-            _LOGGER.debug("Successfully converted dictionary to HourlyProfile object.")
-            return hourly_profile_instance
 
         except Exception as e:
-            _LOGGER.error(
-                "Failed to convert dictionary to HourlyProfile: %s. Returning default profile.",
-                e,
-                exc_info=True,
-            )
-
+            _LOGGER.error("Failed to convert dict to HourlyProfile: %s", e)
             return create_default_hourly_profile()
 
     @staticmethod
-    def hourly_profile_to_dict(profile: HourlyProfile) -> Dict[str, Any]:
-        """Converts an HourlyProfile dataclass instance back into a dictionary @zara"""
+    def hourly_profile_to_dict(profile: HourlyProfile) -> dict[str, Any]:
+        """Convert HourlyProfile to a dictionary. @zara
+
+        Args:
+            profile: HourlyProfile instance
+
+        Returns:
+            Dictionary representation
+        """
         if not isinstance(profile, HourlyProfile):
-            _LOGGER.error(
-                "Invalid input: hourly_profile_to_dict expects an HourlyProfile instance."
-            )
+            _LOGGER.error("Invalid input: expected HourlyProfile instance")
             return TypedDataAdapter.hourly_profile_to_dict(create_default_hourly_profile())
 
         return {
-
             "hourly_averages": profile.hourly_averages,
-
-            "samples_count": profile.samples_count,
+            "total_samples": profile.total_samples,
             "last_updated": profile.last_updated,
-            "confidence": profile.confidence,
-
-            "hourly_factors": profile.hourly_factors,
-            "seasonal_adjustment": profile.seasonal_adjustment,
-
             "file_format_version": DATA_VERSION,
             "last_saved": dt_util.now().isoformat(),
         }
 
     @staticmethod
-    def prediction_record_to_dict(record: PredictionRecord) -> Dict[str, Any]:
-        """Converts a PredictionRecord dataclass instance into a dictionary @zara"""
-        if not isinstance(record, PredictionRecord):
-            _LOGGER.error(
-                "Invalid input: prediction_record_to_dict expects a PredictionRecord instance."
-            )
+    def row_to_dict(row: Any) -> dict[str, Any]:
+        """Convert a database row to a dictionary. @zara
 
+        Args:
+            row: Database row (aiosqlite.Row or similar)
+
+        Returns:
+            Dictionary representation
+        """
+        if row is None:
             return {}
 
-        return {
-            "timestamp": record.timestamp,
-            "predicted_value": record.predicted_value,
-            "actual_value": record.actual_value,
-            "weather_data": record.weather_data,
-            "sensor_data": record.sensor_data,
-            "accuracy": record.accuracy,
-            "model_version": record.model_version,
+        if isinstance(row, dict):
+            return row
 
-        }
+        try:
+            # aiosqlite.Row can be accessed by key @zara
+            return dict(row)
+        except Exception:
+            pass
+
+        try:
+            # Try to access keys() method @zara
+            if hasattr(row, "keys"):
+                return {key: row[key] for key in row.keys()}
+        except Exception:
+            pass
+
+        # Fallback: convert to dict via __iter__ @zara
+        try:
+            return dict(zip(range(len(row)), row))
+        except Exception as e:
+            _LOGGER.error("Failed to convert row to dict: %s", e)
+            return {}
+
+    @staticmethod
+    def parse_datetime_safe(value: Any) -> Optional[datetime]:
+        """Safely parse a datetime from various formats. @zara
+
+        Args:
+            value: datetime, string, or None
+
+        Returns:
+            datetime instance or None
+        """
+        if value is None:
+            return None
+
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, str):
+            return dt_util.parse_datetime(value)
+
+        _LOGGER.warning("Cannot parse datetime from type: %s", type(value))
+        return None
+
+    @staticmethod
+    def to_iso_string(value: Any) -> Optional[str]:
+        """Convert a datetime to ISO format string. @zara
+
+        Args:
+            value: datetime, string, or None
+
+        Returns:
+            ISO format string or None
+        """
+        if value is None:
+            return None
+
+        if isinstance(value, str):
+            return value
+
+        if isinstance(value, datetime):
+            return value.isoformat()
+
+        _LOGGER.warning("Cannot convert to ISO string from type: %s", type(value))
+        return None

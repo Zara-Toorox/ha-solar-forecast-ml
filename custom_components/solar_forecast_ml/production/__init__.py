@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,13 +7,40 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-# PyArmor Runtime - MUST be imported before any obfuscated modules
-import sys
-from pathlib import Path as _Path
-_runtime_path = str(_Path(__file__).parent.parent)
-if _runtime_path not in sys.path:
-    sys.path.insert(0, _runtime_path)
-try:
-    import pyarmor_runtime_009810  # noqa: F401
-except ImportError:
-    pass  # Runtime not present (development mode)
+"""
+Production module for Solar Forecast ML.
+
+Contains production tracking, scheduling, and forecast management components.
+
+@author zara
+"""
+
+from .production_adaptive_forecast import AdaptiveForecastEngine
+from .production_external_helpers import (
+    BaseExternalSensor,
+    SensorValueExtractor,
+    format_time_ago,
+)
+from .production_history import ProductionCalculator
+from .production_morning_routine import MorningRoutineHandler
+from .production_rule_based_strategy import RuleBasedForecastStrategy
+from .production_scheduled_tasks import ScheduledTasksManager
+from .production_task_executor import TaskExecutor, TaskQueue
+from .production_task_scheduler import TaskScheduler, ScheduledTaskTracker
+from .production_tracker import ProductionTimeCalculator
+
+__all__ = [
+    "AdaptiveForecastEngine",
+    "BaseExternalSensor",
+    "SensorValueExtractor",
+    "format_time_ago",
+    "ProductionCalculator",
+    "MorningRoutineHandler",
+    "RuleBasedForecastStrategy",
+    "ScheduledTasksManager",
+    "TaskExecutor",
+    "TaskQueue",
+    "TaskScheduler",
+    "ScheduledTaskTracker",
+    "ProductionTimeCalculator",
+]

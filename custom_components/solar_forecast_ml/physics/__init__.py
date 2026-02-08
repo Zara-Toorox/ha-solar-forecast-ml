@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,16 +7,7 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-# PyArmor Runtime - MUST be imported before any obfuscated modules
-import sys
-from pathlib import Path as _Path
-_runtime_path = str(_Path(__file__).parent.parent)
-if _runtime_path not in sys.path:
-    sys.path.insert(0, _runtime_path)
-try:
-    import pyarmor_runtime_009810  # noqa: F401
-except ImportError:
-    pass  # Runtime not present (development mode)
+"""Physics module exports @zara"""
 
 from .physics_engine import (
     PhysicsEngine,
@@ -34,22 +25,29 @@ from .panel_group_calculator import (
 )
 from .physics_calibrator import (
     PhysicsCalibrator,
-    CalibrationResult,
+    WeatherBucket,
+    BucketFactors,
     GroupCalibrationFactors,
+    CalibrationResult,
 )
 
 __all__ = [
+    # Physics Engine
     "PhysicsEngine",
     "SunPosition",
     "PanelGeometry",
     "IrradianceData",
     "POAResult",
     "PowerResult",
+    # Panel Group Calculator
     "PanelGroup",
     "PanelGroupResult",
     "MultiGroupResult",
     "PanelGroupCalculator",
+    # Physics Calibrator
     "PhysicsCalibrator",
-    "CalibrationResult",
+    "WeatherBucket",
+    "BucketFactors",
     "GroupCalibrationFactors",
+    "CalibrationResult",
 ]

@@ -1,20 +1,13 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Forecast comparison chart for SFML Stats.
-
-7-day line chart comparing:
-- Actual solar production (green, solid)
-- SFML forecast (purple, dashed)
-- External forecast 1 (cyan, dotted) - optional
-- External forecast 2 (orange, dash-dot) - optional
-"""
+"""Forecast comparison chart for SFML Stats. @zara"""
 from __future__ import annotations
 
 import logging
@@ -55,10 +48,8 @@ class ForecastComparisonChart(BaseChart):
         """Generate the forecast comparison chart. @zara"""
         days = kwargs.get("days", FORECAST_COMPARISON_CHART_DAYS)
 
-        # Load data asynchronously
         chart_data = await self._reader.async_get_chart_data(days=days)
 
-        # Generate chart in executor
         fig = await self._run_in_executor(
             self._generate_sync,
             chart_data,
@@ -88,7 +79,6 @@ class ForecastComparisonChart(BaseChart):
 
         x = np.arange(len(dates))
 
-        # Plot actual production (green, solid line)
         actual_clean = [v if v is not None else np.nan for v in actual]
         ax.plot(
             x, actual_clean,
@@ -101,7 +91,6 @@ class ForecastComparisonChart(BaseChart):
             zorder=10,
         )
 
-        # Plot SFML forecast (purple, dashed line)
         sfml_clean = [v if v is not None else np.nan for v in sfml]
         ax.plot(
             x, sfml_clean,
@@ -115,7 +104,6 @@ class ForecastComparisonChart(BaseChart):
             zorder=9,
         )
 
-        # Plot external forecast 1 (cyan, dotted line)
         if external_1 is not None:
             ext1_clean = [v if v is not None else np.nan for v in external_1]
             if any(v is not None for v in external_1):
@@ -131,7 +119,6 @@ class ForecastComparisonChart(BaseChart):
                     zorder=8,
                 )
 
-        # Plot external forecast 2 (orange, dash-dot line)
         if external_2 is not None:
             ext2_clean = [v if v is not None else np.nan for v in external_2]
             if any(v is not None for v in external_2):
@@ -147,26 +134,21 @@ class ForecastComparisonChart(BaseChart):
                     zorder=7,
                 )
 
-        # X-axis: Date labels
         ax.set_xticks(x)
         ax.set_xticklabels(dates, rotation=45, ha="right")
 
-        # Labels
         ax.set_xlabel("Datum", fontsize=self._styles.label_size)
         ax.set_ylabel("Energie (kWh)", fontsize=self._styles.label_size)
 
-        # Title with subtitle
         self._add_title(
             ax,
             "7-Tage Prognose-Vergleich",
             "Vergleich der Prognosegenauigkeit verschiedener Quellen",
         )
 
-        # Grid for readability
         ax.yaxis.grid(True, alpha=0.2, linestyle="-", linewidth=0.5)
         ax.xaxis.grid(False)
 
-        # Set y-axis limit
         all_values = []
         for series in [actual_clean, sfml_clean]:
             all_values.extend([v for v in series if not np.isnan(v)])
@@ -182,7 +164,6 @@ class ForecastComparisonChart(BaseChart):
         else:
             ax.set_ylim(bottom=0, top=50)
 
-        # Legend
         ax.legend(
             loc="upper left",
             fontsize=self._styles.legend_size,
@@ -191,10 +172,8 @@ class ForecastComparisonChart(BaseChart):
             facecolor=self._styles.background_card,
         )
 
-        # Add accuracy statistics box
         self._add_stats_box(ax, stats, external_1_name, external_2_name)
 
-        # Footer
         self._add_footer(fig, "Prognose-Vergleich")
 
         plt.tight_layout()
@@ -211,31 +190,27 @@ class ForecastComparisonChart(BaseChart):
         """Add accuracy statistics box to the chart. @zara"""
         lines = []
 
-        # SFML accuracy
         sfml_acc = stats.get("sfml_avg_accuracy")
         if sfml_acc is not None:
             lines.append(f"SFML: {sfml_acc:.1f}%")
 
-        # External 1 accuracy
         ext1_acc = stats.get("external_1_avg_accuracy")
         if ext1_acc is not None:
             lines.append(f"{ext1_name}: {ext1_acc:.1f}%")
 
-        # External 2 accuracy
         ext2_acc = stats.get("external_2_avg_accuracy")
         if ext2_acc is not None:
             lines.append(f"{ext2_name}: {ext2_acc:.1f}%")
 
-        # Best forecast indicator
         best = stats.get("best_forecast")
         if best:
-            lines.append(f"─────────")
+            lines.append(f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
             lines.append(f"Beste: {best}")
 
         if not lines:
             lines.append("Keine Daten")
 
-        text = "Ø Genauigkeit\n" + "\n".join(lines)
+        text = "\u00d8 Genauigkeit\n" + "\n".join(lines)
 
         props = dict(
             boxstyle="round,pad=0.5",

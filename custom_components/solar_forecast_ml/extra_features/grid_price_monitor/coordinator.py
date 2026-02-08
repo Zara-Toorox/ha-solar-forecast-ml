@@ -26,6 +26,7 @@ from .const import (
     CONF_PROVIDER_MARKUP,
     CONF_TAXES_FEES,
     CONF_VAT_RATE,
+    DB_PATH,
     DEFAULT_COUNTRY,
     DEFAULT_GRID_FEE,
     DEFAULT_MAX_PRICE,
@@ -38,7 +39,7 @@ from .const import (
     VAT_RATE_DE,
 )
 from .core import ElectricityPriceService, BatteryTracker, PriceCalculator
-from .storage import DataValidator, PriceCache, HistoryManager, StatisticsStore
+from .storage import DataValidator, GPMDatabaseConnector, PriceCache, HistoryManager, StatisticsStore
 from .helpers import GPMLogger, async_setup_gpm_logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -83,6 +84,7 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._battery_tracker: BatteryTracker | None = None
 
         # Storage components (initialized in async_initialize_storage)
+        self._db_connector: GPMDatabaseConnector | None = None
         self._data_validator: DataValidator | None = None
         self._price_cache: PriceCache | None = None
         self._history_manager: HistoryManager | None = None
@@ -129,22 +131,26 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         config_path = Path(self.hass.config.path())
         gpm_path = config_path / "grid_price_monitor"
 
-        # Initialize data validator and ensure structure exists
-        self._data_validator = DataValidator(gpm_path, self.hass)
+        # Initialize database connector
+        self._db_connector = GPMDatabaseConnector(DB_PATH)
+        await self._db_connector.connect()
+
+        # Initialize data validator (for logs directory + legacy cleanup)
+        self._data_validator = DataValidator(gpm_path, self._db_connector, self.hass)
         await self._data_validator.async_validate_structure()
 
-        # Initialize storage components with hass for proper async executor
-        self._price_cache = PriceCache(self._data_validator.price_cache_path, self.hass)
-        self._history_manager = HistoryManager(self._data_validator.price_history_path, self.hass)
-        self._statistics_store = StatisticsStore(self._data_validator.statistics_path, self.hass)
+        # Initialize storage components with DB connector
+        self._price_cache = PriceCache(self._db_connector)
+        self._history_manager = HistoryManager(self._db_connector)
+        self._statistics_store = StatisticsStore(self._db_connector)
 
         # Initialize GPM logger
         self._gpm_logger = await async_setup_gpm_logging(self._data_validator.logs_path, self.hass)
 
         # Load cached prices if available and valid
         await self._price_cache.async_load()
-        if self._price_cache.is_valid():
-            cached_prices = self._price_cache.get_prices()
+        if await self._price_cache.async_is_valid():
+            cached_prices = await self._price_cache.async_get_prices()
             if cached_prices:
                 self._price_service.set_prices_from_cache(cached_prices)
                 _LOGGER.debug("Loaded %d prices from cache", len(cached_prices))
@@ -158,7 +164,7 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._statistics_store.async_load()
 
         self._storage_initialized = True
-        _LOGGER.info("GPM storage initialized at: %s", gpm_path)
+        _LOGGER.info("GPM storage initialized (database: %s)", DB_PATH)
 
     async def async_shutdown_storage(self) -> None:
         """Shutdown storage components @zara"""
@@ -166,19 +172,20 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._gpm_logger.shutdown()
             self._gpm_logger = None
 
+        # Close database connection
+        if self._db_connector:
+            await self._db_connector.close()
+            self._db_connector = None
+
         self._storage_initialized = False
 
     async def async_setup_battery_tracker(self) -> None:
         """Initialize the battery tracker if configured @zara"""
         if self._battery_power_sensor:
-            storage_path = None
-            if self._data_validator:
-                storage_path = self._data_validator.battery_stats_path
-
             self._battery_tracker = BatteryTracker(
                 self.hass,
                 self.entry.entry_id,
-                storage_path=storage_path
+                db=self._db_connector,
             )
             await self._battery_tracker.async_setup(self._battery_power_sensor)
             _LOGGER.debug("Battery tracker initialized for sensor: %s", self._battery_power_sensor)
@@ -192,7 +199,7 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def calculate_total_price(self, spot_price_net: float) -> float:
         """Calculate total gross price from net spot price @zara
 
-        Formula: (Spot_net × VAT_factor) + Grid_fee + Taxes + Provider_markup
+        Formula: (Spot_net x VAT_factor) + Grid_fee + Taxes + Provider_markup
 
         Args:
             spot_price_net: Net spot price in ct/kWh (from aWATTar)
@@ -303,9 +310,9 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if self._price_cache:
                     await self._price_cache.async_save(enriched_prices, self._country)
 
-                # Add to history
+                # Add to history (with total_price for each entry)
                 if self._history_manager:
-                    await self._history_manager.async_add_prices(prices)
+                    await self._history_manager.async_add_prices(enriched_prices)
 
         # Update config in case it changed
         self.update_config()
@@ -370,6 +377,19 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     max_price=most_expensive["price"] if most_expensive else None,
                 )
 
+                # Update monthly summary
+                cheap_hours_count = sum(
+                    1 for p in today_prices_for_avg
+                    if self.calculate_total_price(p["price"]) < self._max_price
+                )
+                await self._statistics_store.async_update_monthly_summary(
+                    year=now.year,
+                    month=now.month,
+                    average_price=average_total,
+                    total_cheap_hours=cheap_hours_count,
+                    country=self._country,
+                )
+
         # Get forecast data (reuse today_prices_for_avg if available)
         today_prices = today_prices_for_avg if today_prices_for_avg else self._price_service.get_today_prices()
         tomorrow_prices = self._price_service.get_tomorrow_prices()
@@ -429,6 +449,45 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "vat_factor": self.vat_factor,
             "max_price_threshold": self._max_price,
         }
+
+        # Write current price to DB for external integrations
+        if self._db_connector and total_price is not None:
+            try:
+                current_hour = datetime.now().astimezone().strftime("%Y-%m-%dT%H:00:00%z")
+                await self._db_connector.execute(
+                    """INSERT INTO GPM_current_price
+                       (id, timestamp, spot_price_net, spot_price_gross, total_price,
+                        price_next_hour, is_cheap, average_today,
+                        cheapest_today, most_expensive_today, country, last_updated)
+                       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(id) DO UPDATE SET
+                           timestamp = excluded.timestamp,
+                           spot_price_net = excluded.spot_price_net,
+                           spot_price_gross = excluded.spot_price_gross,
+                           total_price = excluded.total_price,
+                           price_next_hour = excluded.price_next_hour,
+                           is_cheap = excluded.is_cheap,
+                           average_today = excluded.average_today,
+                           cheapest_today = excluded.cheapest_today,
+                           most_expensive_today = excluded.most_expensive_today,
+                           country = excluded.country,
+                           last_updated = excluded.last_updated""",
+                    (
+                        current_hour,
+                        spot_price_net,
+                        spot_price_gross,
+                        total_price,
+                        total_price_next,
+                        1 if is_cheap else 0,
+                        average_total,
+                        cheapest_total,
+                        most_expensive_total,
+                        self._country,
+                        now.isoformat(),
+                    ),
+                )
+            except Exception as err:
+                _LOGGER.debug("Failed to write current price to DB: %s", err)
 
         # Add battery power directly from configured sensor
         if self._battery_power_sensor:
@@ -497,10 +556,10 @@ class GridPriceMonitorCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for entry in prices:
             enriched_entry = entry.copy()
             spot_net = entry.get("price", 0)
-            # Calculate total price: (Spot × VAT) + Grid + Taxes + Provider
+            # Calculate total price: (Spot x VAT) + Grid + Taxes + Provider
             enriched_entry["total_price"] = self.calculate_total_price(spot_net)
 
-            # Convert timestamp to LOCAL time for JSON export
+            # Convert timestamp to LOCAL time for cache
             # This is critical for automation triggers!
             ts = entry.get("timestamp")
             if ts is not None:

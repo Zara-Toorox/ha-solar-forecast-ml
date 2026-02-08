@@ -1,19 +1,19 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - SFML Stats
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast Stats x86 DB-Version part of Solar Forecast ML DB
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
 # 3. Clear attribution to "Zara-Toorox" is required.
-# * Full license terms: https://github.com/Zara-Toorox/sfml-stats/blob/main/LICENSE
+# * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""WebSocket API for realtime updates."""
+"""WebSocket API for realtime updates. @zara"""
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +22,8 @@ from homeassistant.core import HomeAssistant, callback
 
 if TYPE_CHECKING:
     from homeassistant.components.websocket_api import ActiveConnection
+
+from ..readers.solar_reader import SolarDataReader
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +36,12 @@ def _get_config_paths(hass: HomeAssistant) -> tuple[Path, Path]:
     solar_path = config_path / "solar_forecast_ml"
     grid_path = config_path / "grid_price_monitor"
     return solar_path, grid_path
+
+
+def _get_solar_reader(hass: HomeAssistant) -> SolarDataReader:
+    """Get a SolarDataReader instance for database access. @zara"""
+    config_path = Path(hass.config.path())
+    return SolarDataReader(config_path)
 
 
 async def async_setup_websocket(hass: HomeAssistant) -> None:
@@ -119,17 +127,48 @@ async def websocket_get_dashboard_data(
     try:
         import aiofiles
 
-        summaries_path = solar_path / "stats" / "daily_summaries.json"
-        if summaries_path.exists():
-            async with aiofiles.open(summaries_path, "r") as f:
-                summaries = json.loads(await f.read())
-                result["solar"]["summaries"] = summaries.get("summaries", [])[-7:]
+        try:
+            reader = _get_solar_reader(hass)
+            week_ago = date.today() - timedelta(days=7)
+            summaries = await reader.async_get_daily_summaries(
+                start_date=week_ago,
+                end_date=date.today()
+            )
+            result["solar"]["summaries"] = [
+                {
+                    "date": s.date.isoformat(),
+                    "overall": {
+                        "predicted_total_kwh": s.predicted_total_kwh,
+                        "actual_total_kwh": s.actual_total_kwh,
+                        "accuracy_percent": s.accuracy_percent,
+                    }
+                }
+                for s in summaries
+            ]
+        except Exception as e:
+            _LOGGER.error("Error loading summaries from database: %s", e)
+            result["solar"]["summaries"] = []
 
-        predictions_path = solar_path / "stats" / "hourly_predictions.json"
-        if predictions_path.exists():
-            async with aiofiles.open(predictions_path, "r") as f:
-                predictions = json.loads(await f.read())
-                result["solar"]["predictions"] = predictions.get("predictions", [])[-48:]
+        try:
+            reader = _get_solar_reader(hass)
+            two_days_ago = date.today() - timedelta(days=2)
+            all_predictions = []
+            current = two_days_ago
+            while current <= date.today():
+                day_predictions = await reader.async_get_hourly_predictions(target_date=current)
+                for p in day_predictions:
+                    all_predictions.append({
+                        "target_datetime": p.target_datetime.isoformat(),
+                        "target_hour": p.target_hour,
+                        "target_date": p.target_date.isoformat(),
+                        "prediction_kwh": p.prediction_kwh,
+                        "actual_kwh": p.actual_kwh,
+                    })
+                current += timedelta(days=1)
+            result["solar"]["predictions"] = all_predictions[-48:]
+        except Exception as e:
+            _LOGGER.error("Error loading predictions from database: %s", e)
+            result["solar"]["predictions"] = []
 
         prices_path = grid_path / "data" / "price_history.json"
         if prices_path.exists():
@@ -171,24 +210,21 @@ async def _get_realtime_data(hass: HomeAssistant) -> dict:
     try:
         import aiofiles
 
-        predictions_path = solar_path / "stats" / "hourly_predictions.json"
-        if predictions_path.exists():
-            async with aiofiles.open(predictions_path, "r") as f:
-                predictions = json.loads(await f.read())
-                now = datetime.now()
-                current = next(
-                    (p for p in predictions.get("predictions", [])
-                     if p.get("target_date") == now.date().isoformat()
-                     and p.get("target_hour") == now.hour),
-                    None
-                )
-                if current:
-                    data["solar"] = {
-                        "prediction": current.get("prediction_kwh", 0),
-                        "actual": current.get("actual_kwh"),
-                        "clouds": current.get("weather_forecast", {}).get("clouds", 0),
-                        "radiation": current.get("weather_forecast", {}).get("solar_radiation_wm2", 0),
-                    }
+        try:
+            reader = _get_solar_reader(hass)
+            now = datetime.now()
+            predictions = await reader.async_get_hourly_predictions(target_date=now.date())
+            current = next((p for p in predictions if p.target_hour == now.hour), None)
+
+            if current:
+                data["solar"] = {
+                    "prediction": current.prediction_kwh,
+                    "actual": current.actual_kwh,
+                    "clouds": current.clouds,
+                    "radiation": current.solar_radiation,
+                }
+        except Exception as e:
+            _LOGGER.error("Error loading realtime prediction from database: %s", e)
 
         prices_path = grid_path / "data" / "price_history.json"
         if prices_path.exists():

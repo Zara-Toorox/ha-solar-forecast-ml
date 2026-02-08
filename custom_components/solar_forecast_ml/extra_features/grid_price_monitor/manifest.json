@@ -7,6 +7,6 @@
   "documentation": "https://github.com/Zara-Toorox/ha-grid-price-monitor",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/Zara-Toorox/ha-grid-price-monitor/issues",
-  "requirements": [],
-  "version": "6.0.0"
+  "requirements": ["aiosqlite>=0.19.0"],
+  "version": "6.4.0"
 }

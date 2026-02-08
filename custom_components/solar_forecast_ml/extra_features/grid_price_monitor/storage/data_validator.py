@@ -18,77 +18,43 @@ from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from .db_connector import GPMDatabaseConnector
 
 _LOGGER = logging.getLogger(__name__)
 
-# Directory and file structure
-DATA_DIR_NAME = "data"
+# Directory structure
 LOGS_DIR_NAME = "logs"
 
-# Data files
-PRICE_HISTORY_FILE = "price_history.json"
-PRICE_CACHE_FILE = "price_cache.json"
-BATTERY_STATS_FILE = "battery_stats.json"
-STATISTICS_FILE = "statistics.json"
-CONFIG_BACKUP_FILE = "config_backup.json"
-
-# File templates
-EMPTY_PRICE_HISTORY = {
-    "version": 1,
-    "created": None,
-    "last_updated": None,
-    "prices": []
-}
-
-EMPTY_PRICE_CACHE = {
-    "version": 1,
-    "last_fetch": None,
-    "valid_until": None,
-    "country": None,
-    "prices": []
-}
-
-EMPTY_BATTERY_STATS = {
-    "version": 1,
-    "created": None,
-    "last_updated": None,
-    "current_day": None,
-    "current_week": None,
-    "current_month": None,
-    "energy_today_wh": 0.0,
-    "energy_week_wh": 0.0,
-    "energy_month_wh": 0.0,
-    "history": []
-}
-
-EMPTY_STATISTICS = {
-    "version": 1,
-    "created": None,
-    "last_updated": None,
-    "daily_averages": [],
-    "monthly_summaries": [],
-    "price_extremes": {
-        "all_time_low": None,
-        "all_time_high": None,
-        "lowest_day": None,
-        "highest_day": None
-    }
-}
+# Legacy JSON files to clean up
+LEGACY_DATA_DIR = "data"
+LEGACY_FILES = [
+    "price_cache.json",
+    "price_history.json",
+    "statistics.json",
+    "battery_stats.json",
+]
+LEGACY_CONFIG_BACKUP = "config_backup.json"
 
 
 class DataValidator:
-    """Validates and manages the data directory structure @zara"""
+    """Validates directory structure and manages config backup @zara"""
 
-    def __init__(self, base_path: Path, hass: "HomeAssistant | None" = None) -> None:
+    def __init__(
+        self,
+        base_path: Path,
+        db: GPMDatabaseConnector,
+        hass: HomeAssistant | None = None,
+    ) -> None:
         """Initialize the data validator @zara
 
         Args:
             base_path: Base path for GPM data (e.g., /config/grid_price_monitor)
+            db: GPM database connector instance
             hass: Home Assistant instance for async executor jobs
         """
         self._base_path = base_path
-        self._data_path = self._base_path / DATA_DIR_NAME
         self._logs_path = self._base_path / LOGS_DIR_NAME
+        self._db = db
         self._hass = hass
 
     @property
@@ -97,39 +63,9 @@ class DataValidator:
         return self._base_path
 
     @property
-    def data_path(self) -> Path:
-        """Get the data directory path @zara"""
-        return self._data_path
-
-    @property
     def logs_path(self) -> Path:
         """Get the logs directory path @zara"""
         return self._logs_path
-
-    @property
-    def price_history_path(self) -> Path:
-        """Get the price history file path @zara"""
-        return self._data_path / PRICE_HISTORY_FILE
-
-    @property
-    def price_cache_path(self) -> Path:
-        """Get the price cache file path @zara"""
-        return self._data_path / PRICE_CACHE_FILE
-
-    @property
-    def battery_stats_path(self) -> Path:
-        """Get the battery stats file path @zara"""
-        return self._data_path / BATTERY_STATS_FILE
-
-    @property
-    def statistics_path(self) -> Path:
-        """Get the statistics file path @zara"""
-        return self._data_path / STATISTICS_FILE
-
-    @property
-    def config_backup_path(self) -> Path:
-        """Get the config backup file path @zara"""
-        return self._base_path / CONFIG_BACKUP_FILE
 
     def get_log_file_path(self, date: datetime | None = None) -> Path:
         """Get the log file path for a specific month @zara
@@ -152,21 +88,18 @@ class DataValidator:
         return await asyncio.get_running_loop().run_in_executor(None, func)
 
     async def async_validate_structure(self) -> bool:
-        """Validate and create the complete directory structure @zara
+        """Validate and create the directory structure @zara
 
         Returns:
             True if structure is valid/created successfully
         """
         try:
-            # Create directories (non-blocking)
             await self._run_in_executor(self._ensure_directories)
-
-            # Create/validate data files
-            await self._async_ensure_data_files()
+            await self._async_cleanup_legacy_files()
 
             _LOGGER.info(
                 "Data structure validated successfully at %s",
-                self._base_path
+                self._base_path,
             )
             return True
 
@@ -178,7 +111,6 @@ class DataValidator:
         """Ensure all required directories exist (sync) @zara"""
         directories = [
             self._base_path,
-            self._data_path,
             self._logs_path,
         ]
 
@@ -187,100 +119,44 @@ class DataValidator:
                 directory.mkdir(parents=True, exist_ok=True)
                 _LOGGER.debug("Created directory: %s", directory)
 
-    async def _async_ensure_data_files(self) -> None:
-        """Ensure all required data files exist with valid content @zara"""
-        file_templates = [
-            (self.price_history_path, EMPTY_PRICE_HISTORY),
-            (self.price_cache_path, EMPTY_PRICE_CACHE),
-            (self.battery_stats_path, EMPTY_BATTERY_STATS),
-            (self.statistics_path, EMPTY_STATISTICS),
-        ]
+    async def _async_cleanup_legacy_files(self) -> None:
+        """Remove legacy JSON files after migration to database @zara"""
 
-        now = datetime.now().isoformat()
+        def _cleanup() -> None:
+            data_dir = self._base_path / LEGACY_DATA_DIR
+            removed = []
 
-        for file_path, template in file_templates:
-            if not file_path.exists():
-                # Create file with template
-                data = template.copy()
-                if "created" in data:
-                    data["created"] = now
-                await self._async_write_json(file_path, data)
-                _LOGGER.debug("Created data file: %s", file_path)
-            else:
-                # Validate existing file
-                await self._async_validate_json_file(file_path, template)
+            # Remove legacy data files
+            if data_dir.exists():
+                for filename in LEGACY_FILES:
+                    file_path = data_dir / filename
+                    if file_path.exists():
+                        file_path.unlink()
+                        removed.append(filename)
 
-    async def _async_validate_json_file(
-        self,
-        file_path: Path,
-        template: dict[str, Any]
-    ) -> None:
-        """Validate a JSON file and repair if necessary @zara
+                # Remove data directory if empty
+                try:
+                    data_dir.rmdir()
+                    removed.append(LEGACY_DATA_DIR + "/")
+                except OSError:
+                    pass  # Directory not empty (other files present)
 
-        Args:
-            file_path: Path to the JSON file
-            template: Template with required structure
-        """
-        try:
-            data = await self._async_read_json(file_path)
-            if data is None:
-                # File is corrupted, recreate from template
-                _LOGGER.warning(
-                    "Corrupted file detected, recreating: %s",
-                    file_path
+            # Remove legacy config backup
+            config_backup = self._base_path / LEGACY_CONFIG_BACKUP
+            if config_backup.exists():
+                config_backup.unlink()
+                removed.append(LEGACY_CONFIG_BACKUP)
+
+            if removed:
+                _LOGGER.info(
+                    "Migrated to database, removed legacy files: %s",
+                    ", ".join(removed),
                 )
-                data = template.copy()
-                data["created"] = datetime.now().isoformat()
-                await self._async_write_json(file_path, data)
-        except Exception as err:
-            _LOGGER.error("Error validating %s: %s", file_path, err)
 
-    async def _async_read_json(self, file_path: Path) -> dict[str, Any] | None:
-        """Read and parse a JSON file asynchronously @zara
-
-        Args:
-            file_path: Path to the JSON file
-
-        Returns:
-            Parsed JSON data or None if invalid
-        """
-        def _read() -> dict[str, Any] | None:
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError) as err:
-                _LOGGER.warning("Failed to read %s: %s", file_path, err)
-                return None
-
-        return await self._run_in_executor(_read)
-
-    async def _async_write_json(
-        self,
-        file_path: Path,
-        data: dict[str, Any]
-    ) -> bool:
-        """Write data to a JSON file asynchronously @zara
-
-        Args:
-            file_path: Path to the JSON file
-            data: Data to write
-
-        Returns:
-            True if successful
-        """
-        def _write() -> bool:
-            try:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
-                return True
-            except IOError as err:
-                _LOGGER.error("Failed to write %s: %s", file_path, err)
-                return False
-
-        return await self._run_in_executor(_write)
+        await self._run_in_executor(_cleanup)
 
     async def async_backup_config(self, config_data: dict[str, Any]) -> bool:
-        """Backup the current configuration @zara
+        """Backup the current configuration to database @zara
 
         Args:
             config_data: Configuration data to backup
@@ -288,25 +164,34 @@ class DataValidator:
         Returns:
             True if successful
         """
-        backup_data = {
-            "version": 1,
-            "backup_time": datetime.now().isoformat(),
-            "config": config_data
-        }
-        return await self._async_write_json(self.config_backup_path, backup_data)
+        try:
+            await self._db.execute(
+                """INSERT INTO GPM_config_backup (id, backup_time, config_json)
+                   VALUES (1, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                       backup_time = excluded.backup_time,
+                       config_json = excluded.config_json""",
+                (datetime.now().isoformat(), json.dumps(config_data)),
+            )
+            return True
+        except Exception as err:
+            _LOGGER.error("Failed to backup config: %s", err)
+            return False
 
     async def async_restore_config(self) -> dict[str, Any] | None:
-        """Restore configuration from backup @zara
+        """Restore configuration from database backup @zara
 
         Returns:
             Configuration data or None if no backup exists
         """
-        if not self.config_backup_path.exists():
-            return None
-
-        data = await self._async_read_json(self.config_backup_path)
-        if data and "config" in data:
-            return data["config"]
+        try:
+            row = await self._db.fetchone(
+                "SELECT config_json FROM GPM_config_backup WHERE id = 1"
+            )
+            if row and row["config_json"]:
+                return json.loads(row["config_json"])
+        except Exception as err:
+            _LOGGER.error("Failed to restore config: %s", err)
         return None
 
     def get_storage_info(self) -> dict[str, Any]:
@@ -318,22 +203,12 @@ class DataValidator:
         info = {
             "base_path": str(self._base_path),
             "exists": self._base_path.exists(),
-            "files": {}
+            "db_path": self._db.db_path,
         }
 
-        if self._base_path.exists():
-            for file_path in [
-                self.price_history_path,
-                self.price_cache_path,
-                self.battery_stats_path,
-                self.statistics_path,
-                self.config_backup_path,
-            ]:
-                if file_path.exists():
-                    stat = file_path.stat()
-                    info["files"][file_path.name] = {
-                        "size_bytes": stat.st_size,
-                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
-                    }
+        # Add DB file size
+        db_file = Path(self._db.db_path)
+        if db_file.exists():
+            info["db_size_bytes"] = db_file.stat().st_size
 
         return info

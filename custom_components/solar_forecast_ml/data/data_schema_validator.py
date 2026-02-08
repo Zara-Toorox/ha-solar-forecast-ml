@@ -1,5 +1,5 @@
 # ******************************************************************************
-# @copyright (C) 2025 Zara-Toorox - Solar Forecast ML
+# @copyright (C) 2026 Zara-Toorox - Solar Forecast ML DB-Version
 # * This program is protected by a Proprietary Non-Commercial License.
 # 1. Personal and Educational use only.
 # 2. COMMERCIAL USE AND AI TRAINING ARE STRICTLY PROHIBITED.
@@ -7,254 +7,446 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
+"""
+Schema Validator for Solar Forecast ML V16.0.0.
+Validates and ensures database schema integrity on startup.
+Replaces JSON file validation with database table validation.
+
+@zara
+"""
+
 import logging
-from pathlib import Path
-from typing import Any, Dict, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 
-from .data_schemas import get_schema, SCHEMA_FILE_PATHS
+from .db_manager import DatabaseManager
+from .data_io import DataManagerIO
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class DataSchemaValidator:
-    """Validates and creates JSON files using centralized schemas from data_schemas.py.
+# Required database tables with their essential columns @zara
+REQUIRED_TABLES = {
+    "ai_seasonal_factors": ["month", "factor", "sample_count"],
+    "ai_feature_importance": ["feature_name", "importance", "category"],
+    "ai_grid_search_results": ["success", "hidden_size", "accuracy"],
+    "ai_dni_tracker": ["hour", "max_dni"],
+    "ai_model_weights": ["weight_type", "weight_data"],
+    "physics_learning_config": ["albedo", "system_efficiency"],
+    "physics_calibration_groups": ["group_name", "global_factor"],
+    "physics_calibration_hourly": ["group_name", "hour", "factor"],
+    "physics_calibration_buckets": ["group_name", "bucket_name", "global_factor"],
+    "physics_calibration_history": ["date", "group_name", "avg_ratio"],
+    "weather_forecast": ["forecast_date", "hour", "temperature", "clouds"],
+    "weather_expert_weights": ["cloud_type", "expert_name", "weight"],
+    "weather_source_weights": ["source_name", "weight"],
+    "hourly_predictions": ["prediction_id", "target_date", "prediction_kwh"],
+    "daily_forecasts": ["forecast_type", "forecast_date", "prediction_kwh"],
+    "daily_summaries": ["date", "predicted_total_kwh", "actual_total_kwh"],
+    "astronomy_cache": ["cache_date", "hour", "sun_elevation_deg"],
+    "coordinator_state": ["expected_daily_production", "last_set_date"],
+    "production_time_state": ["date", "accumulated_hours"],
+    "panel_group_sensor_state": ["group_name", "last_value"],
+    "yield_cache": ["value", "time", "date"],
+    "visibility_learning": ["visibility_threshold_m", "fog_visibility_threshold_m"],
+}
 
-    This validator uses the Single Source of Truth pattern:
-    - All schemas are defined in data_schemas.py
-    - Uses get_schema() to get current schemas
-    - Self-healing adds missing fields based on the central schema
+# Default values for singleton config tables @zara
+DEFAULT_PHYSICS_LEARNING_CONFIG = {
+    "albedo": 0.2,
+    "system_efficiency": 0.9,
+    "learned_efficiency_factor": 1.0,
+    "rolling_window_days": 21,
+    "min_samples": 1,
+}
 
-    Directories (30 JSON files total):
-    - / (root): .migrations_completed.json
-    - ai/: dni_tracker.json, grid_search_results.json, learned_weights.json, seasonal.json
-    - data/: bright_sky_cache.json, coordinator_state.json, open_meteo_cache.json,
-             pirate_weather_cache.json, production_time_state.json,
-             weather_expert_weights.json, weather_source_weights.json, wttr_in_cache.json
-    - physics/: calibration_history.json, learning_config.json
-    - stats/: astronomy_cache.json, daily_forecasts.json, daily_summaries.json,
-              forecast_drift_log.json, hourly_predictions.json, hourly_weather_actual.json,
-              multi_day_hourly_forecast.json, panel_group_sensor_state.json,
-              panel_group_today_cache.json, retrospective_forecast.json,
-              weather_expert_learning.json, weather_forecast_corrected.json,
-              weather_precision_daily.json, weather_source_learning.json, yield_cache.json
+DEFAULT_VISIBILITY_LEARNING = {
+    "visibility_threshold_m": 10000,
+    "fog_visibility_threshold_m": 1000,
+    "samples_below_threshold": 0,
+    "samples_above_threshold": 0,
+}
+
+
+class DataSchemaValidator(DataManagerIO):
+    """Validates database schema and ensures required tables exist. @zara
+
+    Replaces the old JSON file validation with database table validation.
+    On startup, ensures all required tables exist and have proper structure.
     """
 
-    def __init__(self, hass: HomeAssistant, data_dir: Path):
-        """Initialize the schema validator."""
-        self.hass = hass
-        self.data_dir = data_dir
-        self.migration_log = []
-        self.healed_files = []
+    def __init__(self, hass: HomeAssistant, db_manager: DatabaseManager):
+        """Initialize the schema validator. @zara
+
+        Args:
+            hass: Home Assistant instance
+            db_manager: DatabaseManager instance for DB operations
+        """
+        super().__init__(hass, db_manager)
+        self.migration_log: List[str] = []
+        self.healed_tables: List[str] = []
+        _LOGGER.debug("DataSchemaValidator initialized with DatabaseManager")
 
     async def validate_and_migrate_all(self) -> bool:
-        """Validate and create all JSON files on startup.
+        """Validate all database tables and ensure schema integrity. @zara
 
-        Uses centralized schemas from data_schemas.py.
-        Iterates over SCHEMA_FILE_PATHS to validate all files.
+        This method:
+        1. Verifies all required tables exist
+        2. Checks essential columns are present
+        3. Initializes singleton config tables with defaults if empty
+        4. Logs all validation actions
+
+        Returns:
+            True if all validations pass, False otherwise
         """
         try:
-            _LOGGER.info("=== JSON Schema Validation Starting ===")
-
-            await self._ensure_directories()
+            _LOGGER.info("=== Database Schema Validation Starting ===")
 
             success = True
 
-            # Validate all files using centralized schemas
-            for schema_name, relative_path in SCHEMA_FILE_PATHS.items():
-                # Special handling for learned_weights (AI model architecture)
-                if schema_name == "learned_weights":
-                    success &= await self._validate_learned_weights()
-                    continue
+            # Validate all required tables exist
+            for table_name, required_columns in REQUIRED_TABLES.items():
+                table_valid = await self._validate_table(table_name, required_columns)
+                if not table_valid:
+                    success = False
+                    self._log(f"Table validation failed: {table_name}")
 
-                file_path = self.data_dir / relative_path
-                file_name = relative_path.split("/")[-1]
-                schema = get_schema(schema_name)
+            # Initialize singleton config tables if needed
+            await self._ensure_physics_learning_config()
+            await self._ensure_visibility_learning()
+            await self._ensure_coordinator_state()
 
-                success &= await self._validate_and_heal(file_path, schema, file_name)
-
+            # Log summary
             if self.migration_log:
                 _LOGGER.info("=== Schema Validation Summary ===")
                 for entry in self.migration_log:
-                    _LOGGER.info(f"  {entry}")
+                    _LOGGER.info("  %s", entry)
             else:
-                _LOGGER.info("All JSON files valid - no changes needed")
+                _LOGGER.info("All database tables valid - no changes needed")
 
-            if self.healed_files:
-                _LOGGER.info(f"Self-healed {len(self.healed_files)} file(s): {', '.join(self.healed_files)}")
+            if self.healed_tables:
+                _LOGGER.info(
+                    "Initialized %d table(s): %s",
+                    len(self.healed_tables),
+                    ", ".join(self.healed_tables)
+                )
 
-            _LOGGER.info("=== JSON Schema Validation Complete ===")
+            _LOGGER.info("=== Database Schema Validation Complete ===")
             return success
 
         except Exception as e:
-            _LOGGER.error(f"Schema validation failed: {e}", exc_info=True)
+            _LOGGER.error("Schema validation failed: %s", e, exc_info=True)
             return False
 
     def _log(self, message: str) -> None:
-        """Log a validation action."""
+        """Log a validation action. @zara"""
         self.migration_log.append(message)
-        _LOGGER.info(f"SCHEMA: {message}")
+        _LOGGER.info("SCHEMA: %s", message)
 
-    def _ensure_schema(
+    async def _validate_table(
         self,
-        data: Dict[str, Any],
-        schema: Dict[str, Any],
-        file_name: str,
-        path: str = ""
-    ) -> tuple[Dict[str, Any], bool]:
-        """Recursively ensure data matches schema, adding missing fields.
-
-        Self-healing logic:
-        - If a key exists in schema but not in data -> add it with default value
-        - If both exist and are dicts -> recurse to check nested structure
-        - Never overwrite existing values
-        - Returns (healed_data, was_healed)
-
-        Args:
-            data: The existing data to heal
-            schema: The expected schema with default values
-            file_name: Name of the file (for logging)
-            path: Current path in the nested structure (for logging)
-
-        Returns:
-            Tuple of (healed_data, was_healed_flag)
-        """
-        healed = False
-
-        for key, default_value in schema.items():
-            current_path = f"{path}.{key}" if path else key
-
-            if key not in data:
-                # Key missing - add it with default value
-                data[key] = default_value
-                healed = True
-                _LOGGER.debug(f"Self-heal {file_name}: added missing '{current_path}'")
-
-            elif isinstance(default_value, dict) and isinstance(data[key], dict):
-                # Both are dicts - recurse to check nested structure
-                data[key], nested_healed = self._ensure_schema(
-                    data[key], default_value, file_name, current_path
-                )
-                if nested_healed:
-                    healed = True
-
-        return data, healed
-
-    async def _validate_and_heal(
-        self,
-        file_path: Path,
-        schema: Dict[str, Any],
-        file_name: str
+        table_name: str,
+        required_columns: List[str]
     ) -> bool:
-        """Validate file exists and heal missing fields.
+        """Validate that a table exists and has required columns. @zara
 
         Args:
-            file_path: Path to the JSON file
-            schema: Expected schema with default values
-            file_name: Display name for logging
+            table_name: Name of the table to validate
+            required_columns: List of required column names
 
         Returns:
-            True if validation/healing succeeded
+            True if table is valid, False otherwise
         """
-        data = await self._read_json(file_path)
-
-        if data is None:
-            # File doesn't exist - create with full schema
-            self._log(f"Creating {file_name}")
-            return await self._write_json(file_path, schema)
-
-        # File exists - check and heal missing fields
-        healed_data, was_healed = self._ensure_schema(data, schema, file_name)
-
-        if was_healed:
-            self._log(f"Self-healed {file_name} (added missing fields)")
-            self.healed_files.append(file_name)
-            return await self._write_json(file_path, healed_data)
-
-        return True
-
-    async def _ensure_directories(self) -> None:
-        """Ensure all directories exist."""
-        dirs = [
-            self.data_dir / "ai",
-            self.data_dir / "data",
-            self.data_dir / "stats",
-            self.data_dir / "physics",
-            self.data_dir / "logs",
-            self.data_dir / "backups" / "auto",
-        ]
-        for d in dirs:
-            if not d.exists():
-                await self.hass.async_add_executor_job(d.mkdir, True, True)
-
-    async def _read_json(self, file_path: Path) -> Optional[Dict[str, Any]]:
-        """Read JSON file."""
         try:
-            import json
-            import aiofiles
+            # Check if table exists
+            row = await self.fetch_one(
+                """SELECT name FROM sqlite_master
+                   WHERE type='table' AND name=?""",
+                (table_name,)
+            )
 
-            if not file_path.exists():
-                return None
+            if not row:
+                _LOGGER.warning("Table %s does not exist", table_name)
+                return False
 
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-                return json.loads(content)
-        except Exception as e:
-            _LOGGER.warning(f"Failed to read {file_path.name}: {e}")
-            return None
+            # Check columns using PRAGMA
+            columns = await self.fetch_all(
+                f"PRAGMA table_info({table_name})"
+            )
 
-    async def _write_json(self, file_path: Path, data: Dict[str, Any]) -> bool:
-        """Write JSON file atomically."""
-        try:
-            import json
-            import aiofiles
+            existing_columns = {col[1] for col in columns}  # col[1] is column name
 
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            temp_file = file_path.with_suffix(".tmp")
+            # Check for missing required columns
+            missing = set(required_columns) - existing_columns
+            if missing:
+                _LOGGER.warning(
+                    "Table %s missing columns: %s",
+                    table_name, ", ".join(missing)
+                )
+                return False
 
-            async with aiofiles.open(temp_file, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(data, indent=2, ensure_ascii=False))
-
-            await self.hass.async_add_executor_job(temp_file.replace, file_path)
             return True
+
         except Exception as e:
-            _LOGGER.error(f"Failed to write {file_path.name}: {e}")
+            _LOGGER.error(
+                "Failed to validate table %s: %s",
+                table_name, e
+            )
             return False
 
-    # =========================================================================
-    # SPECIAL CASE: LEARNED_WEIGHTS
-    # =========================================================================
+    async def _ensure_physics_learning_config(self) -> None:
+        """Ensure physics_learning_config has default values. @zara"""
+        try:
+            row = await self.fetch_one(
+                "SELECT id FROM physics_learning_config WHERE id = 1"
+            )
 
-    async def _validate_learned_weights(self) -> bool:
-        """Validate ai/learned_weights.json.
+            if not row:
+                await self.execute_query(
+                    """INSERT INTO physics_learning_config
+                       (id, albedo, system_efficiency, learned_efficiency_factor,
+                        rolling_window_days, min_samples, updated_at)
+                       VALUES (1, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        DEFAULT_PHYSICS_LEARNING_CONFIG["albedo"],
+                        DEFAULT_PHYSICS_LEARNING_CONFIG["system_efficiency"],
+                        DEFAULT_PHYSICS_LEARNING_CONFIG["learned_efficiency_factor"],
+                        DEFAULT_PHYSICS_LEARNING_CONFIG["rolling_window_days"],
+                        DEFAULT_PHYSICS_LEARNING_CONFIG["min_samples"],
+                        datetime.now(),
+                    )
+                )
+                self._log("Created default physics_learning_config")
+                self.healed_tables.append("physics_learning_config")
 
-        IMPORTANT: Do NOT create a default file here!
-        The AI model architecture (input_size, num_outputs) depends on the
-        panel_groups configuration which is not available in this validator.
+        except Exception as e:
+            _LOGGER.error("Failed to ensure physics_learning_config: %s", e)
 
-        If the file doesn't exist, the AI predictor will:
-        1. Initialize with the correct architecture based on panel_groups
-        2. Set state to UNTRAINED
-        3. Train when sufficient data is available
+    async def _ensure_visibility_learning(self) -> None:
+        """Ensure visibility_learning has default values. @zara"""
+        try:
+            row = await self.fetch_one(
+                "SELECT id FROM visibility_learning WHERE id = 1"
+            )
 
-        Creating a default file with wrong input_size/num_outputs causes
-        "Model architecture mismatch" errors on startup.
+            if not row:
+                await self.execute_query(
+                    """INSERT INTO visibility_learning
+                       (id, visibility_threshold_m, fog_visibility_threshold_m,
+                        samples_below_threshold, samples_above_threshold, last_updated)
+                       VALUES (1, ?, ?, ?, ?, ?)""",
+                    (
+                        DEFAULT_VISIBILITY_LEARNING["visibility_threshold_m"],
+                        DEFAULT_VISIBILITY_LEARNING["fog_visibility_threshold_m"],
+                        DEFAULT_VISIBILITY_LEARNING["samples_below_threshold"],
+                        DEFAULT_VISIBILITY_LEARNING["samples_above_threshold"],
+                        datetime.now(),
+                    )
+                )
+                self._log("Created default visibility_learning")
+                self.healed_tables.append("visibility_learning")
+
+        except Exception as e:
+            _LOGGER.error("Failed to ensure visibility_learning: %s", e)
+
+    async def _ensure_coordinator_state(self) -> None:
+        """Ensure coordinator_state has default values. @zara"""
+        try:
+            row = await self.fetch_one(
+                "SELECT id FROM coordinator_state WHERE id = 1"
+            )
+
+            if not row:
+                await self.execute_query(
+                    """INSERT INTO coordinator_state
+                       (id, expected_daily_production, last_set_date, last_updated)
+                       VALUES (1, 0, ?, ?)""",
+                    (
+                        datetime.now().date(),
+                        datetime.now(),
+                    )
+                )
+                self._log("Created default coordinator_state")
+                self.healed_tables.append("coordinator_state")
+
+        except Exception as e:
+            _LOGGER.error("Failed to ensure coordinator_state: %s", e)
+
+    async def validate_table_integrity(self, table_name: str) -> Dict[str, Any]:
+        """Check integrity of a specific table. @zara
+
+        Args:
+            table_name: Name of table to check
+
+        Returns:
+            Dictionary with integrity check results
         """
-        file_path = self.data_dir / "ai" / "learned_weights.json"
-        data = await self._read_json(file_path)
+        result = {
+            "table": table_name,
+            "exists": False,
+            "row_count": 0,
+            "columns": [],
+            "indexes": [],
+            "issues": [],
+        }
 
-        if data is None:
-            # Do NOT create - let AIPredictor handle this
-            self._log("learned_weights.json missing (AI will train when ready)")
+        try:
+            # Check table exists
+            row = await self.fetch_one(
+                """SELECT name FROM sqlite_master
+                   WHERE type='table' AND name=?""",
+                (table_name,)
+            )
+
+            if not row:
+                result["issues"].append("Table does not exist")
+                return result
+
+            result["exists"] = True
+
+            # Get row count
+            count_row = await self.fetch_one(
+                f"SELECT COUNT(*) FROM {table_name}"
+            )
+            result["row_count"] = count_row[0] if count_row else 0
+
+            # Get column info
+            columns = await self.fetch_all(
+                f"PRAGMA table_info({table_name})"
+            )
+            result["columns"] = [
+                {
+                    "name": col[1],
+                    "type": col[2],
+                    "notnull": bool(col[3]),
+                    "default": col[4],
+                    "pk": bool(col[5]),
+                }
+                for col in columns
+            ]
+
+            # Get index info
+            indexes = await self.fetch_all(
+                f"PRAGMA index_list({table_name})"
+            )
+            result["indexes"] = [idx[1] for idx in indexes]
+
+            return result
+
+        except Exception as e:
+            _LOGGER.error(
+                "Failed to check integrity of %s: %s",
+                table_name, e
+            )
+            result["issues"].append(f"Error: {str(e)}")
+            return result
+
+    async def get_schema_report(self) -> Dict[str, Any]:
+        """Generate a comprehensive schema report. @zara
+
+        Returns:
+            Dictionary with schema validation report
+        """
+        report = {
+            "timestamp": datetime.now().isoformat(),
+            "tables_checked": 0,
+            "tables_valid": 0,
+            "tables_missing": [],
+            "table_details": {},
+        }
+
+        for table_name in REQUIRED_TABLES.keys():
+            report["tables_checked"] += 1
+
+            integrity = await self.validate_table_integrity(table_name)
+            report["table_details"][table_name] = integrity
+
+            if integrity["exists"]:
+                report["tables_valid"] += 1
+            else:
+                report["tables_missing"].append(table_name)
+
+        return report
+
+    async def check_foreign_keys(self) -> Dict[str, Any]:
+        """Check foreign key integrity. @zara
+
+        Returns:
+            Dictionary with foreign key check results
+        """
+        try:
+            # Enable foreign key checks
+            await self.execute_query("PRAGMA foreign_keys = ON")
+
+            # Run foreign key check
+            violations = await self.fetch_all("PRAGMA foreign_key_check")
+
+            return {
+                "valid": len(violations) == 0,
+                "violations_count": len(violations),
+                "violations": [
+                    {
+                        "table": v[0],
+                        "rowid": v[1],
+                        "parent_table": v[2],
+                        "fk_index": v[3],
+                    }
+                    for v in violations
+                ],
+            }
+
+        except Exception as e:
+            _LOGGER.error("Failed to check foreign keys: %s", e)
+            return {
+                "valid": False,
+                "error": str(e),
+                "violations_count": -1,
+            }
+
+    async def vacuum_database(self) -> bool:
+        """Vacuum database to reclaim space. @zara
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            await self.db.vacuum()
+            self._log("Database vacuumed successfully")
             return True
+        except Exception as e:
+            _LOGGER.error("Failed to vacuum database: %s", e)
+            return False
 
-        # Validate existing file has required structure
-        # If corrupted, delete it so AIPredictor creates fresh
-        required_keys = ["hidden_size"]
-        if not all(key in data for key in required_keys):
-            self._log("learned_weights.json corrupted, removing for fresh training")
-            await self.hass.async_add_executor_job(file_path.unlink)
-            return True
+    async def get_database_stats(self) -> Dict[str, Any]:
+        """Get database statistics. @zara
 
-        return True
+        Returns:
+            Dictionary with database statistics
+        """
+        try:
+            stats = await self.get_db_stats()
+
+            # Count rows in main tables
+            table_counts = {}
+            for table_name in [
+                "hourly_predictions",
+                "daily_summaries",
+                "weather_forecast",
+                "astronomy_cache",
+            ]:
+                row = await self.fetch_one(
+                    f"SELECT COUNT(*) FROM {table_name}"
+                )
+                table_counts[table_name] = row[0] if row else 0
+
+            stats["table_row_counts"] = table_counts
+            return stats
+
+        except Exception as e:
+            _LOGGER.error("Failed to get database stats: %s", e)
+            return {
+                "error": str(e),
+                "connected": False,
+            }
