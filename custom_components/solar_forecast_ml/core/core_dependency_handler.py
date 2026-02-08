@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Dependency Handler for Solar Forecast ML V16.0.0.
+Dependency Handler for Solar Forecast ML V16.2.0.
 Checks required Python dependencies without performing installation.
 Pure utility functions with no database dependencies.
 """

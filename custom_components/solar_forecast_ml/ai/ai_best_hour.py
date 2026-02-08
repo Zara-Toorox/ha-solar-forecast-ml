@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Best Hour Calculator for Solar Forecast ML V16.0.0.
+Best Hour Calculator for Solar Forecast ML V16.2.0.
 
 Calculates the hour with highest predicted production.
 Uses database instead of JSON files.

@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Core Helper Utilities for Solar Forecast ML V16.0.0.
+Core Helper Utilities for Solar Forecast ML V16.2.0.
 Provides SafeDateTimeUtil for timezone-aware datetime operations.
 Pure utility functions with no database dependencies.
 """

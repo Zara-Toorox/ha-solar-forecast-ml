@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Solar Forecast ML V16.0.0 - Sensor Platform.
+Solar Forecast ML V16.2.0 - Sensor Platform.
 
 async_setup_entry for sensor platform - creates all sensor entities.
 All data operations use DatabaseManager (no JSON).
@@ -67,6 +67,7 @@ from .sensors.sensor_states import (
 from .sensors.sensor_system_status import SystemStatusSensor
 
 from .sensors.sensor_shadow_detection import SHADOW_DETECTION_SENSORS
+from .sensors.sensor_drift_detection import DRIFT_DETECTION_SENSORS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -161,6 +162,15 @@ async def async_setup_entry(
     entities_to_add.extend(shadow_detection_entities)
     _LOGGER.info(
         f"Shadow Detection enabled - Adding {len(shadow_detection_entities)} shadow detection sensors"
+    )
+
+    # V17.0.0: Drift detection sensor (diagnostic, always created) @zara
+    drift_detection_entities = [
+        sensor_class(coordinator, entry) for sensor_class in DRIFT_DETECTION_SENSORS
+    ]
+    entities_to_add.extend(drift_detection_entities)
+    _LOGGER.info(
+        f"Drift Detection enabled - Adding {len(drift_detection_entities)} drift detection sensors"
     )
 
     async_add_entities(entities_to_add, True)

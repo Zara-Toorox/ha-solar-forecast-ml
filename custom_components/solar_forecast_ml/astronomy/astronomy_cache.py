@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Astronomy Cache Module for Solar Forecast ML V16.0.0.
+Astronomy Cache Module for Solar Forecast ML V16.2.0.
 Calculates and caches solar position data using pvlib-style calculations.
 All data is stored in SQLite database via DatabaseManager.
 """

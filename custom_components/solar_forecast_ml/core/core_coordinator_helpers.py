@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Coordinator Helper Functions for Solar Forecast ML V16.0.0.
+Coordinator Helper Functions for Solar Forecast ML V16.2.0.
 Provides utility functions for the data update coordinator.
 Pure utility functions with minimal database dependencies.
 """

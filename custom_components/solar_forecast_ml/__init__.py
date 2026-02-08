@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Solar Forecast ML V16.0.0 - Main Integration Entry Point.
+Solar Forecast ML V16.2.0 - Main Integration Entry Point.
 
 Setup, Unload, Remove, and Migration Entry Points.
 Service Registration and File Logging Setup.

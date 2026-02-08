@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Max Peak Tracker for Solar Forecast ML V16.0.0.
+Max Peak Tracker for Solar Forecast ML V16.2.0.
 Tracks and updates maximum PV output records per hour using database storage.
 """
 

@@ -34,9 +34,13 @@
         <header class="header">
             <h1>SFML Hybrid-AI Dashboard by Zara</h1>
             <div class="header-controls">
-                <button @click="toggleDashboardStyle" class="style-toggle" :class="{'active-3d': dashboardStyle === '3d', 'active-2d': dashboardStyle === '2d'}" :title="dashboardStyle === '3d' ? 'Zu 2D wechseln' : 'Zu 3D wechseln'">
+                <button @click="toggleDashboardStyle" class="style-toggle" :class="{'active-3d': dashboardStyle === '3d', 'active-2d': dashboardStyle === '2d', 'active-list': dashboardStyle === 'list'}" :title="dashboardStyle === '3d' ? 'Zu 2D wechseln' : dashboardStyle === '2d' ? 'Zur Liste wechseln' : 'Zu 3D wechseln'">
                     <span class="style-toggle-icon">{{ getDashboardStyleIcon() }}</span>
                     <span>{{ getDashboardStyleLabel() }}</span>
+                </button>
+                <button @click="goToLcars" class="lcars-toggle" title="LCARS Interface (Star Trek)">
+                    <span>🖖</span>
+                    <span>LCARS</span>
                 </button>
                 <button @click="toggleTheme" class="theme-toggle" :title="isDarkTheme ? 'Zu Hell wechseln' : 'Zu Dunkel wechseln'">
                     {{ isDarkTheme ? '☀️' : '🌙' }}
@@ -1025,6 +1029,86 @@
                 </svg>
 
                 <!-- ========== LIST VIEW (Kompakte Listenansicht) ========== -->
+                <div v-show="!isSectionCollapsed('energyFlow') && dashboardStyle === 'list'" class="energy-list-view">
+                    <div class="energy-list-grid">
+                        <!-- Solar -->
+                        <div class="energy-list-card" @click="openSolarModal" style="cursor: pointer; border-color: #ffdd00;">
+                            <div class="energy-list-icon">☀️</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Solar-Produktion</div>
+                                <div class="energy-list-value" style="color: #ffdd00;">{{ energyFlow.flows.solar_power?.toFixed(0) || '0' }} W</div>
+                                <div class="energy-list-sub">Heute: {{ energyFlow.statistics.solar_yield_daily?.toFixed(2) || '0' }} kWh</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.flows.solar_to_house > 0">→ Haus: {{ energyFlow.flows.solar_to_house?.toFixed(0) }} W</div>
+                                <div v-if="hasBattery && energyFlow.flows.solar_to_battery > 0">→ Akku: {{ energyFlow.flows.solar_to_battery?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+
+                        <!-- Batterie -->
+                        <div v-if="hasBattery" class="energy-list-card" @click="openBatteryModal" style="cursor: pointer; border-color: #22c55e;">
+                            <div class="energy-list-icon">🔋</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Batterie</div>
+                                <div class="energy-list-value" style="color: #22c55e;">{{ energyFlow.battery.soc?.toFixed(0) || '—' }}%</div>
+                                <div class="energy-list-sub">{{ energyFlow.battery.power?.toFixed(0) || '0' }} W</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.flows.battery_to_house > 0" style="color: #22c55e;">→ Haus: {{ energyFlow.flows.battery_to_house?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.flows.solar_to_battery > 0" style="color: #ffdd00;">← Solar: {{ energyFlow.flows.solar_to_battery?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+
+                        <!-- Haus -->
+                        <div class="energy-list-card" @click="openHouseModal" style="cursor: pointer; border-color: #00d4ff;">
+                            <div class="energy-list-icon">🏠</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Hausverbrauch</div>
+                                <div class="energy-list-value" style="color: #00d4ff;">{{ energyFlow.home.consumption?.toFixed(0) || '0' }} W</div>
+                                <div class="energy-list-sub">Netz heute: {{ energyFlow.statistics.grid_import_daily?.toFixed(2) || '0' }} kWh</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.flows.solar_to_house > 0" style="color: #ffdd00;">← Solar: {{ energyFlow.flows.solar_to_house?.toFixed(0) }} W</div>
+                                <div v-if="hasBattery && energyFlow.flows.battery_to_house > 0" style="color: #22c55e;">← Akku: {{ energyFlow.flows.battery_to_house?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.flows.grid_to_house > 0" style="color: #8b5cf6;">← Netz: {{ energyFlow.flows.grid_to_house?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+
+                        <!-- Netz -->
+                        <div class="energy-list-card" @click="openGridModal" style="cursor: pointer; border-color: #8b5cf6;">
+                            <div class="energy-list-icon">⚡</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Stromnetz</div>
+                                <div class="energy-list-value" :style="{color: energyFlow.flows.house_to_grid > 0 ? '#00ffff' : '#8b5cf6'}">
+                                    {{ energyFlow.flows.house_to_grid > 0 ? '-' : '' }}{{ Math.abs(energyFlow.flows.grid_to_house - energyFlow.flows.house_to_grid)?.toFixed(0) || '0' }} W
+                                </div>
+                                <div class="energy-list-sub">{{ energyFlow.flows.house_to_grid > 0 ? 'Einspeisung' : 'Bezug' }}</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.flows.grid_to_house > 0" style="color: #8b5cf6;">Import: {{ energyFlow.flows.grid_to_house?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.flows.house_to_grid > 0" style="color: #00ffff;">Export: {{ energyFlow.flows.house_to_grid?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+
+                        <!-- Verbraucher (falls vorhanden) -->
+                        <div v-if="energyFlow.consumers && (energyFlow.consumers.heatpump || energyFlow.consumers.heatingrod || energyFlow.consumers.wallbox)"
+                             class="energy-list-card" @click="openConsumerModal" style="cursor: pointer; border-color: #ec4899;">
+                            <div class="energy-list-icon">🔌</div>
+                            <div class="energy-list-content">
+                                <div class="energy-list-label">Verbraucher</div>
+                                <div class="energy-list-value" style="color: #ec4899;">
+                                    {{ ((energyFlow.consumers.heatpump?.power || 0) + (energyFlow.consumers.heatingrod?.power || 0) + (energyFlow.consumers.wallbox?.power || 0)).toFixed(0) }} W
+                                </div>
+                                <div class="energy-list-sub">Gesamtverbrauch</div>
+                            </div>
+                            <div class="energy-list-flows">
+                                <div v-if="energyFlow.consumers.heatpump?.power > 0">WP: {{ energyFlow.consumers.heatpump.power?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.consumers.heatingrod?.power > 0">Heizstab: {{ energyFlow.consumers.heatingrod.power?.toFixed(0) }} W</div>
+                                <div v-if="energyFlow.consumers.wallbox?.power > 0">Wallbox: {{ energyFlow.consumers.wallbox.power?.toFixed(0) }} W</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Solar Power Live Card - Header klickbar für Modal -->
@@ -2974,7 +3058,7 @@
 
                 // Dashboard Style Toggle (2D/3D)
                 const dashboardStyle = ref(localStorage.getItem('sfml-dashboard-style') || '3d');
-                const dashboardStyles = ['3d', '2d'];
+                const dashboardStyles = ['3d', '2d', 'list'];
 
                 function toggleDashboardStyle() {
                     const currentIndex = dashboardStyles.indexOf(dashboardStyle.value);
@@ -2985,12 +3069,20 @@
 
                 function getDashboardStyleIcon() {
                     if (dashboardStyle.value === '3d') return '🎲';
-                    return '⬜';
+                    if (dashboardStyle.value === '2d') return '⬜';
+                    return '📋';
                 }
 
                 function getDashboardStyleLabel() {
                     if (dashboardStyle.value === '3d') return '3D';
-                    return '2D';
+                    if (dashboardStyle.value === '2d') return '2D';
+                    return 'Liste';
+                }
+
+                // LCARS Navigation
+                function goToLcars() {
+                    localStorage.setItem('sfml-dashboard-style', 'lcars');
+                    window.location.href = '/api/sfml_stats/lcars';
                 }
 
                 // Collapsible Sections
@@ -7473,7 +7565,7 @@
 
                 return {
                     lastUpdate, isDarkTheme, toggleTheme, dashboardStyle, toggleDashboardStyle, hasBattery, isNightTime,
-                    getDashboardStyleIcon, getDashboardStyleLabel,
+                    getDashboardStyleIcon, getDashboardStyleLabel, goToLcars,
                     collapsedSections, toggleSection, isSectionCollapsed,
                     sortableContainer, resetSectionOrder,
                     panelGroupsValidation, hasSinglePanelGroup,

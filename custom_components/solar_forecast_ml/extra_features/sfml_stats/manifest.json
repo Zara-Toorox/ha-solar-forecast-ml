@@ -9,7 +9,7 @@
     "matplotlib==3.9.2",
     "aiofiles>=23.0.0"
   ],
-  "version": "10.0.0",
+  "version": "10.2.0",
   "iot_class": "local_polling",
   "documentation": "https://github.com/Zara-Toorox/sfml_stats",
   "issue_tracker": "https://github.com/Zara-Toorox/sfml_stats/issues"

@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-State Handler for Solar Forecast ML V16.0.0.
+State Handler for Solar Forecast ML V16.2.0.
 Manages coordinator state and production time state via database.
 All operations use DatabaseManager for SQLite access.
 

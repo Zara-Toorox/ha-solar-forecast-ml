@@ -1,0 +1,106 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ML Weather Setup",
+        "description": "Configure the ML Weather integration that provides corrected weather data from Solar Forecast ML.",
+        "data": {
+          "name": "Name",
+          "data_path": "Path to Solar Forecast ML database"
+        },
+        "data_description": {
+          "name": "Display name for the weather entity",
+          "data_path": "Relative path to the Solar Forecast ML database file (e.g., solar_forecast_ml/solar_forecast.db)"
+        }
+      }
+    },
+    "error": {
+      "db_not_found": "The database file was not found. Please check the path.",
+      "not_a_file": "The specified path is not a file.",
+      "not_a_database": "The specified file is not a .db database file.",
+      "missing_weather_table": "The database does not contain the required weather_forecast table.",
+      "invalid_database": "The file is not a valid SQLite database.",
+      "permission_denied": "Permission denied. Cannot read the database file.",
+      "cannot_read": "Cannot read the file. Please check permissions.",
+      "path_not_allowed": "Path must be within /config/ or /share/ directory.",
+      "unknown": "An unknown error occurred."
+    },
+    "abort": {
+      "already_configured": "This weather source is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ML Weather Options",
+        "data": {
+          "data_path": "Path to Solar Forecast ML database"
+        }
+      }
+    },
+    "error": {
+      "db_not_found": "The database file was not found. Please check the path.",
+      "not_a_file": "The specified path is not a file.",
+      "not_a_database": "The specified file is not a .db database file.",
+      "missing_weather_table": "The database does not contain the required weather_forecast table.",
+      "invalid_database": "The file is not a valid SQLite database.",
+      "permission_denied": "Permission denied. Cannot read the database file.",
+      "cannot_read": "Cannot read the file. Please check permissions.",
+      "path_not_allowed": "Path must be within /config/ or /share/ directory."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "humidity": {
+        "name": "Humidity"
+      },
+      "pressure": {
+        "name": "Pressure"
+      },
+      "wind_speed": {
+        "name": "Wind Speed"
+      },
+      "cloud_coverage": {
+        "name": "Cloud Coverage"
+      },
+      "precipitation": {
+        "name": "Precipitation"
+      },
+      "solar_radiation": {
+        "name": "Solar Radiation (GHI)"
+      },
+      "direct_radiation": {
+        "name": "Direct Radiation (DNI)"
+      },
+      "diffuse_radiation": {
+        "name": "Diffuse Radiation (DHI)"
+      },
+      "cloud_cover_low": {
+        "name": "Cloud Cover Low"
+      },
+      "cloud_cover_mid": {
+        "name": "Cloud Cover Mid"
+      },
+      "cloud_cover_high": {
+        "name": "Cloud Cover High"
+      },
+      "visibility": {
+        "name": "Visibility"
+      },
+      "fog_detected": {
+        "name": "Fog Detected"
+      },
+      "fog_type": {
+        "name": "Fog Type"
+      }
+    },
+    "weather": {
+      "ml_weather": {
+        "name": "ML Weather"
+      }
+    }
+  }
+}

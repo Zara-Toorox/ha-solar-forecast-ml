@@ -92,6 +92,8 @@ from ..const import (
     CONF_SENSOR_GRID_TO_HOUSE,
     CONF_SENSOR_GRID_TO_BATTERY,
     CONF_SENSOR_HOUSE_TO_GRID,
+    CONF_SENSOR_SMARTMETER_IMPORT,
+    CONF_SENSOR_SMARTMETER_EXPORT,
     CONF_SENSOR_BATTERY_SOC,
     CONF_SENSOR_BATTERY_POWER,
     CONF_SENSOR_HOME_CONSUMPTION,
@@ -1309,6 +1311,11 @@ class EnergyFlowView(HomeAssistantView):
         if solar_power is not None and solar_to_house is not None:
             solar_to_house = min(solar_to_house, solar_power)
 
+        # Fallback: solar_to_house berechnen wenn kein Sensor konfiguriert
+        if solar_to_house is None and solar_power is not None and solar_power > 0:
+            solar_to_battery_val = solar_to_battery or 0
+            solar_to_house = max(0, solar_power - solar_to_battery_val)
+
         battery_configured = config.get(CONF_SENSOR_BATTERY_SOC) is not None
         battery_soc = _get_sensor_value(config.get(CONF_SENSOR_BATTERY_SOC)) if battery_configured else None
         battery_power = _get_sensor_value(config.get(CONF_SENSOR_BATTERY_POWER)) if battery_configured else None
@@ -1321,6 +1328,15 @@ class EnergyFlowView(HomeAssistantView):
         solar_yield_daily_db = await _get_today_yield_from_db()
         solar_yield_daily = solar_yield_daily_db if solar_yield_daily_db is not None else sfml_reader.get_live_yield()
 
+        # grid_to_house / house_to_grid: Fallback auf Smartmeter-Sensoren
+        grid_to_house = _get_sensor_value(config.get(CONF_SENSOR_GRID_TO_HOUSE))
+        if grid_to_house is None:
+            grid_to_house = _get_sensor_value(config.get(CONF_SENSOR_SMARTMETER_IMPORT))
+
+        house_to_grid = _get_sensor_value(config.get(CONF_SENSOR_HOUSE_TO_GRID))
+        if house_to_grid is None:
+            house_to_grid = _get_sensor_value(config.get(CONF_SENSOR_SMARTMETER_EXPORT))
+
         result = {
             "success": True,
             "timestamp": datetime.now().isoformat(),
@@ -1329,9 +1345,9 @@ class EnergyFlowView(HomeAssistantView):
                 "solar_to_house": solar_to_house,
                 "solar_to_battery": solar_to_battery,
                 "battery_to_house": battery_to_house,
-                "grid_to_house": _get_sensor_value(config.get(CONF_SENSOR_GRID_TO_HOUSE)),
+                "grid_to_house": grid_to_house,
                 "grid_to_battery": grid_to_battery,
-                "house_to_grid": _get_sensor_value(config.get(CONF_SENSOR_HOUSE_TO_GRID)),
+                "house_to_grid": house_to_grid,
             },
             "battery": {
                 "soc": battery_soc,

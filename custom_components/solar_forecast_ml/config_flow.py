@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Solar Forecast ML V16.0.0 - Config Flow.
+Solar Forecast ML V16.2.0 - Config Flow.
 
 Config Flow and Options Flow for Home Assistant Integration setup.
 Panel groups are required (min 1, max 4).
@@ -42,9 +42,13 @@ from .const import (
     CONF_LUX_SENSOR,
     CONF_ML_ALGORITHM,
     CONF_NOTIFY_FORECAST,
+    CONF_NOTIFY_FOG,
+    CONF_NOTIFY_FROST,
     CONF_NOTIFY_LEARNING,
+    CONF_NOTIFY_SNOW_COVERED,
     CONF_NOTIFY_STARTUP,
     CONF_NOTIFY_SUCCESSFUL_LEARNING,
+    CONF_NOTIFY_WEATHER_ALERT,
     CONF_PANEL_GROUP_AZIMUTH,
     CONF_PANEL_GROUP_ENERGY_SENSOR,
     CONF_PANEL_GROUP_NAME,
@@ -700,6 +704,10 @@ class SolarForecastMLOptionsFlow(OptionsFlow):
                 CONF_NOTIFY_FORECAST,
                 CONF_NOTIFY_LEARNING,
                 CONF_NOTIFY_SUCCESSFUL_LEARNING,
+                CONF_NOTIFY_FOG,
+                CONF_NOTIFY_FROST,
+                CONF_NOTIFY_WEATHER_ALERT,
+                CONF_NOTIFY_SNOW_COVERED,
                 CONF_ML_ALGORITHM,
                 CONF_ENABLE_TINY_LSTM,
                 CONF_PIRATE_WEATHER_API_KEY,
@@ -774,6 +782,22 @@ class SolarForecastMLOptionsFlow(OptionsFlow):
                 vol.Optional(
                     CONF_NOTIFY_SUCCESSFUL_LEARNING,
                     default=current_options.get(CONF_NOTIFY_SUCCESSFUL_LEARNING, True),
+                ): bool,
+                vol.Optional(
+                    CONF_NOTIFY_FOG,
+                    default=current_options.get(CONF_NOTIFY_FOG, True),
+                ): bool,
+                vol.Optional(
+                    CONF_NOTIFY_FROST,
+                    default=current_options.get(CONF_NOTIFY_FROST, True),
+                ): bool,
+                vol.Optional(
+                    CONF_NOTIFY_WEATHER_ALERT,
+                    default=current_options.get(CONF_NOTIFY_WEATHER_ALERT, True),
+                ): bool,
+                vol.Optional(
+                    CONF_NOTIFY_SNOW_COVERED,
+                    default=current_options.get(CONF_NOTIFY_SNOW_COVERED, True),
                 ): bool,
                 vol.Optional(
                     CONF_ML_ALGORITHM,

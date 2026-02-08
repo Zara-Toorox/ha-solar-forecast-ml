@@ -120,6 +120,10 @@
           "notify_forecast": "Prognose-Benachrichtigungen",
           "notify_learning": "Trainings-Benachrichtigungen",
           "notify_successful_learning": "Erfolgs-Benachrichtigungen",
+          "notify_fog": "Nebel-Benachrichtigungen",
+          "notify_frost": "Frost-Benachrichtigungen",
+          "notify_weather_alert": "Wetterwarnung-Benachrichtigungen",
+          "notify_snow_covered_panels": "Schneebedeckung-Benachrichtigungen",
           "ml_algorithm": "Modus",
           "enable_tiny_lstm": "KI aktivieren / deaktivieren",
           "adaptive_forecast_mode": "Adaptive Prognose",
@@ -137,6 +141,10 @@
           "notify_forecast": "Bei Prognose-Updates benachrichtigen",
           "notify_learning": "Bei Trainingsstart benachrichtigen",
           "notify_successful_learning": "Bei erfolgreichem Training benachrichtigen",
+          "notify_fog": "Benachrichtigung bei Nebelerkennung anzeigen",
+          "notify_frost": "Benachrichtigung bei Frosterkennung anzeigen",
+          "notify_weather_alert": "Benachrichtigung bei Wetterwarnungen (Regen, Sturm)",
+          "notify_snow_covered_panels": "Benachrichtigung bei Schneebedeckung der Module",
           "ml_algorithm": "Wähle den Algorithmus: 'Automatisch' entscheidet basierend auf der Datenmenge (empfohlen). 'Ridge' ist schnell und stabil. 'Neuronales Netz' bietet 5-10% bessere Genauigkeit ab 100+ Samples.",
           "enable_tiny_lstm": "Erlaubt Nutzung des Neuronalen Netzes (benötigt 100+ Samples, 200+ MB RAM). Fällt automatisch auf Ridge zurück wenn Anforderungen nicht erfüllt. Empfehlung: Aktiviert lassen.",
           "adaptive_forecast_mode": "Bei starken Abweichungen (>35%) zwischen Vormittags-Prognose und IST-Produktion passt SFML die Nachmittagsprognose um 12:30 Uhr automatisch an. SFML entscheidet autonom ob eine Korrektur sinnvoll ist - basierend auf frischen Wetterdaten und objektiven Kriterien. Standard: AUS",
@@ -386,6 +394,16 @@
       },
       "next_production_start": {
         "name": "Nächster Produktionsbeginn"
+      },
+      "drift_status": {
+        "name": "KI Drift Status",
+        "state": {
+          "stable": "Stabil",
+          "warning": "Warnung",
+          "critical": "Kritisch",
+          "recovering": "Erholung",
+          "unknown": "Unbekannt"
+        }
       }
     }
   },

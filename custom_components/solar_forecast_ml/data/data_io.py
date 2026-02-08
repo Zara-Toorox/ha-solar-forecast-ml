@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Data IO Operations for Solar Forecast ML V16.0.0.
+Data IO Operations for Solar Forecast ML V16.2.0.
 Provides base class for async database operations.
 All file I/O replaced with database operations via DatabaseManager.
 

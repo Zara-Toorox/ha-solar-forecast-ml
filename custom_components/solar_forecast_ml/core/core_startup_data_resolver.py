@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Startup Data Resolver for Solar Forecast ML V16.0.0.
+Startup Data Resolver for Solar Forecast ML V16.2.0.
 Non-blocking startup data resolution with DB-first approach and background sensor retry.
 """
 

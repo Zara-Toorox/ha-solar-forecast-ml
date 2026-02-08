@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Data Adapter for Solar Forecast ML V16.0.0.
+Data Adapter for Solar Forecast ML V16.2.0.
 Converts data between database rows and typed dataclasses.
 Provides type-safe conversion for legacy structure compatibility.
 

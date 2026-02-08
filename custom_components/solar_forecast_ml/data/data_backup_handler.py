@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Backup Handler for Solar Forecast ML V16.0.0.
+Backup Handler for Solar Forecast ML V16.2.0.
 Manages database backup creation, cleanup, and restoration.
 Uses DatabaseManager for all database operations.
 

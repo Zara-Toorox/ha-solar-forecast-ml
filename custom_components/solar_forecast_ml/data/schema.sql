@@ -453,6 +453,10 @@ CREATE TABLE IF NOT EXISTS prediction_panel_groups (
     lstm_kwh REAL,
     ridge_kwh REAL,
     actual_kwh REAL,
+    exclude_from_learning_group BOOLEAN DEFAULT FALSE,  -- V17.0.0: Per-group learning exclusion @zara
+    exclusion_reason_group TEXT,                         -- V17.0.0: Reason for per-group exclusion @zara
+    snow_covered_group BOOLEAN DEFAULT FALSE,            -- V17.0.0: Per-group snow status @zara
+    shadow_type_group TEXT,                              -- V17.0.0: Per-group shadow type @zara
     FOREIGN KEY (prediction_id) REFERENCES hourly_predictions(prediction_id) ON DELETE CASCADE,
     UNIQUE(prediction_id, group_name)
 );
@@ -562,7 +566,8 @@ CREATE TABLE IF NOT EXISTS method_performance_learning (
     ai_advantage_factor REAL DEFAULT 1.0,
     sample_count INTEGER DEFAULT 0,
     last_updated TIMESTAMP,
-    UNIQUE(cloud_bucket, hour_bucket)
+    season TEXT DEFAULT NULL,                            -- V17.0.0: Seasonal bucket separation @zara
+    UNIQUE(cloud_bucket, hour_bucket, season)
 );
 
 CREATE TABLE IF NOT EXISTS ensemble_group_weights (
@@ -576,7 +581,8 @@ CREATE TABLE IF NOT EXISTS ensemble_group_weights (
     ridge_mae REAL DEFAULT 0.0,
     sample_count INTEGER DEFAULT 0,
     last_updated TIMESTAMP,
-    UNIQUE(group_name, cloud_bucket, hour_bucket)
+    season TEXT DEFAULT NULL,                            -- V17.0.0: Seasonal bucket separation @zara
+    UNIQUE(group_name, cloud_bucket, hour_bucket, season)
 );
 
 CREATE TABLE IF NOT EXISTS astronomy_cache (
@@ -756,6 +762,20 @@ CREATE TABLE IF NOT EXISTS snow_tracking (
     melt_hours REAL DEFAULT 0,  -- V16.1: Accumulated melt hours (temp > 0°C) @zara
     detection_source TEXT DEFAULT 'unknown',  -- V16.1: How snow was detected (weather_code, overnight, heuristic) @zara
     cleared_at TIMESTAMP,       -- V16.1: When panels were cleared @zara
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- V17.0.0: Per-group snow tracking with tilt-based melt physics @zara
+CREATE TABLE IF NOT EXISTS snow_tracking_groups (
+    group_name TEXT NOT NULL UNIQUE,
+    tilt_deg REAL NOT NULL DEFAULT 30.0,
+    last_snow_event TIMESTAMP,
+    panels_covered_since TIMESTAMP,
+    estimated_depth_mm REAL DEFAULT 0,
+    melt_hours REAL DEFAULT 0,
+    tilt_melt_factor REAL DEFAULT 1.0,
+    detection_source TEXT DEFAULT 'unknown',
+    cleared_at TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -1155,6 +1175,26 @@ CREATE TABLE IF NOT EXISTS hourly_shadow_detection (
     FOREIGN KEY (prediction_id) REFERENCES hourly_predictions(prediction_id) ON DELETE CASCADE
 );
 
+-- V17.0.0: Per-group shadow detection details @zara
+CREATE TABLE IF NOT EXISTS shadow_detection_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prediction_id TEXT NOT NULL,
+    group_name TEXT NOT NULL,
+    shadow_type TEXT,
+    shadow_percent REAL,
+    confidence REAL,
+    root_cause TEXT,
+    efficiency_ratio REAL,
+    loss_kwh REAL,
+    theoretical_max_kwh REAL,
+    actual_kwh REAL,
+    FOREIGN KEY (prediction_id) REFERENCES hourly_predictions(prediction_id) ON DELETE CASCADE,
+    UNIQUE(prediction_id, group_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_shadow_detection_groups_prediction
+    ON shadow_detection_groups(prediction_id);
+
 -- Production metrics (production_metrics from hourly_predictions.json)
 CREATE TABLE IF NOT EXISTS hourly_production_metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1459,6 +1499,7 @@ CREATE INDEX IF NOT EXISTS idx_stats_forecast_comparison_date ON stats_forecast_
 -- Hourly shadow patterns - learned occurrence rates and characteristics per hour
 CREATE TABLE IF NOT EXISTS shadow_pattern_hourly (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_name TEXT NOT NULL DEFAULT '_system_',     -- V17.0.0: Per-group patterns @zara
     hour INTEGER NOT NULL CHECK(hour >= 0 AND hour <= 23),
     -- Occurrence statistics
     shadow_occurrence_rate REAL DEFAULT 0.0,        -- % of days with shadow at this hour
@@ -1481,12 +1522,13 @@ CREATE TABLE IF NOT EXISTS shadow_pattern_hourly (
     -- Timing
     first_learned DATE,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(hour)
+    UNIQUE(group_name, hour)
 );
 
 -- Seasonal shadow patterns - patterns vary by month due to sun position
 CREATE TABLE IF NOT EXISTS shadow_pattern_seasonal (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_name TEXT NOT NULL DEFAULT '_system_',     -- V17.0.0: Per-group patterns @zara
     month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
     hour INTEGER NOT NULL CHECK(hour >= 0 AND hour <= 23),
     -- Seasonal adjustments to hourly patterns
@@ -1500,12 +1542,13 @@ CREATE TABLE IF NOT EXISTS shadow_pattern_seasonal (
     shadow_days INTEGER DEFAULT 0,
     confidence REAL DEFAULT 0.0,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(month, hour)
+    UNIQUE(group_name, month, hour)
 );
 
 -- Shadow learning history - raw daily learning data for analysis
 CREATE TABLE IF NOT EXISTS shadow_learning_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_name TEXT NOT NULL DEFAULT '_system_',     -- V17.0.0: Per-group history @zara
     date DATE NOT NULL,
     hour INTEGER NOT NULL CHECK(hour >= 0 AND hour <= 23),
     -- Detection results for this hour
@@ -1522,7 +1565,7 @@ CREATE TABLE IF NOT EXISTS shadow_learning_history (
     efficiency_ratio REAL,
     -- Metadata
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(date, hour)
+    UNIQUE(group_name, date, hour)
 );
 
 CREATE INDEX IF NOT EXISTS idx_shadow_learning_history_date
@@ -1547,6 +1590,85 @@ CREATE TABLE IF NOT EXISTS shadow_pattern_config (
     fixed_obstructions_detected INTEGER DEFAULT 0,
     -- Version tracking
     version TEXT DEFAULT '1.0',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- V17.0.0: DRIFT DETECTION & MONITORING TABLES
+-- Rolling metrics, CUSUM state, events and response config @zara
+-- ============================================================================
+
+-- Rolling-window drift metrics per scope and time window
+CREATE TABLE IF NOT EXISTS drift_metrics_rolling (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL,                             -- 'global' or group_name
+    window_days INTEGER NOT NULL,                    -- 7, 14, 30, 60
+    season TEXT,                                     -- 'winter','spring','summer','autumn' or NULL
+    mae REAL,
+    rmse REAL,
+    bias REAL,                                       -- mean(predicted - actual)
+    coverage_10 REAL,                                -- % within +-10%
+    coverage_20 REAL,                                -- % within +-20%
+    sample_count INTEGER,
+    calculated_at TIMESTAMP,
+    UNIQUE(scope, window_days, season)
+);
+
+-- Bucket-specific drift metrics (cloud x hour x season)
+CREATE TABLE IF NOT EXISTS drift_metrics_bucket (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL,                              -- 'global' or group_name
+    cloud_bucket TEXT NOT NULL,                       -- 'clear','partly_cloudy','overcast'
+    hour_bucket TEXT NOT NULL,                        -- 'morning','midday','afternoon'
+    season TEXT,
+    mae REAL,
+    mae_baseline REAL,                               -- 90-day reference
+    mae_ratio REAL,                                  -- mae / mae_baseline (>1.15 = drift)
+    bias REAL,
+    sample_count INTEGER,
+    calculated_at TIMESTAMP,
+    UNIQUE(scope, cloud_bucket, hour_bucket, season)
+);
+
+-- Detected drift events
+CREATE TABLE IF NOT EXISTS drift_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_date DATE NOT NULL,
+    scope TEXT NOT NULL,                              -- 'global' or group_name
+    drift_type TEXT NOT NULL,                         -- 'mae_above_baseline','bias_shift','cusum_alert','coverage_drop'
+    severity TEXT NOT NULL,                           -- 'info','warning','critical'
+    bucket_detail TEXT,                               -- e.g. 'clear/midday' or NULL
+    metric_value REAL,
+    threshold_value REAL,
+    description TEXT,
+    response_action TEXT,                             -- 'light_retrain','physics_boost','full_reset','none'
+    response_executed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_drift_events_date ON drift_events(event_date);
+CREATE INDEX IF NOT EXISTS idx_drift_events_scope ON drift_events(scope);
+
+-- CUSUM algorithm persistent state
+CREATE TABLE IF NOT EXISTS drift_cusum_state (
+    scope TEXT NOT NULL UNIQUE,
+    cusum_pos REAL DEFAULT 0,
+    cusum_neg REAL DEFAULT 0,
+    target_mean REAL DEFAULT 0,
+    last_reset DATE,
+    alert_count INTEGER DEFAULT 0
+);
+
+-- Configurable drift response thresholds (singleton)
+CREATE TABLE IF NOT EXISTS drift_response_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    mae_ratio_warning REAL DEFAULT 1.15,
+    mae_ratio_critical REAL DEFAULT 1.25,
+    bias_threshold REAL DEFAULT 0.15,
+    cusum_threshold REAL DEFAULT 5.0,
+    coverage_20_min REAL DEFAULT 0.60,
+    physics_boost_amount REAL DEFAULT 0.20,
+    physics_boost_max_days INTEGER DEFAULT 7,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

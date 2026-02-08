@@ -118,6 +118,10 @@
           "notify_forecast": "Forecast Notifications",
           "notify_learning": "Training Notifications",
           "notify_successful_learning": "Success Notifications",
+          "notify_fog": "Fog Notifications",
+          "notify_frost": "Frost Notifications",
+          "notify_weather_alert": "Weather Alert Notifications",
+          "notify_snow_covered_panels": "Snow Coverage Notifications",
           "ml_algorithm": "Mode",
           "enable_tiny_lstm": "Enable / Disable AI",
           "pirate_weather_api_key": "Pirate Weather API Key",
@@ -134,6 +138,10 @@
           "notify_forecast": "Notify on forecast updates",
           "notify_learning": "Notify on training start",
           "notify_successful_learning": "Notify on training success",
+          "notify_fog": "Show notification when fog is detected",
+          "notify_frost": "Show notification when frost is detected",
+          "notify_weather_alert": "Show notification on weather alerts (rain, storm)",
+          "notify_snow_covered_panels": "Show notification when panels are snow-covered",
           "ml_algorithm": "Choose algorithm: 'Automatic' lets system decide based on available data (recommended). 'Ridge' is fast and stable. 'Neural Network' provides 5-10% better accuracy with 100+ samples.",
           "enable_tiny_lstm": "Allow use of Neural Network (requires 100+ samples, 200+ MB RAM). Falls back to Ridge automatically if requirements not met. Recommended: Keep enabled.",
           "pirate_weather_api_key": "Optional: Free API key from https://pirate-weather.apiable.io/ - Enables NOAA GFS/HRRR weather model for improved cloud cover blending.",
@@ -301,6 +309,16 @@
       },
       "performance_loss_today": {
         "name": "Performance Loss Today"
+      },
+      "drift_status": {
+        "name": "AI Drift Status",
+        "state": {
+          "stable": "Stable",
+          "warning": "Warning",
+          "critical": "Critical",
+          "recovering": "Recovering",
+          "unknown": "Unknown"
+        }
       }
     }
   },

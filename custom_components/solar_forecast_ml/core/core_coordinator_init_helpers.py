@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Coordinator Initialization Helpers for Solar Forecast ML V16.0.0.
+Coordinator Initialization Helpers for Solar Forecast ML V16.2.0.
 Provides helper methods for coordinator initialization and configuration extraction.
 Pure utility functions with no database dependencies.
 """

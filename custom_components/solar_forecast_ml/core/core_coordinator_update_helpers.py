@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Coordinator Update Helpers for Solar Forecast ML V16.0.0.
+Coordinator Update Helpers for Solar Forecast ML V16.2.0.
 Provides helper methods for coordinator data updates and forecast generation.
 Uses DatabaseManager for state operations.
 """

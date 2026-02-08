@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Data Persistence Layer for Solar Forecast ML V16.0.0.
+Data Persistence Layer for Solar Forecast ML V16.2.0.
 Handles database backup, restore, and data migration.
 All operations use DatabaseManager for SQLite access.
 

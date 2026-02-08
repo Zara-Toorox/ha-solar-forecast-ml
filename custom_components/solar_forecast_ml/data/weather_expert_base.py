@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Weather Expert Base - Abstract Base Class for Weather Experts V16.0.0
+Weather Expert Base - Abstract Base Class for Weather Experts V16.2.0
 
 Provides the foundation for weather data expert implementations.
 Each expert fetches data from a specific weather API/source.

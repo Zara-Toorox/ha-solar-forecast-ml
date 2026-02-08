@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Panel Group Sensor Reader for Solar Forecast ML V16.0.0.
+Panel Group Sensor Reader for Solar Forecast ML V16.2.0.
 Reads energy sensors for panel groups to enable per-group learning.
 Uses database operations via panel_group_sensor_state table.
 

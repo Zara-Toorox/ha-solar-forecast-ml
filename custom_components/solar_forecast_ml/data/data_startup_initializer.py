@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Startup Initializer for Solar Forecast ML V16.0.0.
+Startup Initializer for Solar Forecast ML V16.2.0.
 Synchronous initializer - guarantees database and directories exist before async startup.
 Initializes database schema and default data.
 

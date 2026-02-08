@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-Solar Forecast ML V16.0.0 - Main Coordinator.
+Solar Forecast ML V16.2.0 - Main Coordinator.
 
 SolarForecastMLCoordinator class - central data update coordinator.
 Uses DataManager for all database operations (no JSON).
@@ -195,6 +195,10 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
         # Physics calibrator @zara
         self.physics_calibrator: Optional[PhysicsCalibrator] = None
 
+        # V17.0.0: Drift monitor @zara
+        self.drift_monitor = None
+        self._drift_status_cache: Dict[str, Any] = {}
+
         # Unsubscribe callbacks @zara
         self._unsub_power_peak_listener: Optional[callable] = None
         self._unsub_weekly_retraining_listener: Optional[callable] = None
@@ -296,12 +300,24 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                 )
                 if strategy and weather_actual_tracker:
                     strategy.set_weather_actual_tracker(weather_actual_tracker)
+                    # V17.0.0: Set panel groups for per-group snow tracking @zara
+                    if self.panel_groups:
+                        weather_actual_tracker.set_panel_groups(self.panel_groups)
                     _LOGGER.info(
                         "WeatherActualTracker passed to RuleBasedStrategy - "
                         "SNOWY bucket detection enabled"
                     )
             except Exception as e:
                 _LOGGER.warning(f"Could not connect WeatherActualTracker: {e}")
+
+        # V17.0.0: Initialize DriftMonitor @zara
+        try:
+            from .ai.ai_drift_monitor import DriftMonitor
+            db_mgr = self.data_manager._db_manager
+            self.drift_monitor = DriftMonitor(db_mgr, self.panel_groups or [])
+            _LOGGER.info("DriftMonitor initialized")
+        except Exception as e:
+            _LOGGER.warning(f"Could not initialize DriftMonitor: {e}")
 
     async def async_setup(self) -> bool:
         """Setup coordinator and start tracking. @zara"""

@@ -1,9 +1,13 @@
 {
   "domain": "solar_forecast_ml",
   "name": "Solar Forecast ML",
-  "codeowners": ["@Zara-Toorox"],
+  "codeowners": [
+    "@Zara-Toorox"
+  ],
   "config_flow": true,
-  "dependencies": ["recorder"],
+  "dependencies": [
+    "recorder"
+  ],
   "documentation": "https://github.com/Zara-Toorox/ha-solar-forecast-ml",
   "integration_type": "service",
   "iot_class": "local_polling",
@@ -13,5 +17,5 @@
     "aiosqlite>=0.17.0",
     "numpy>=1.21.0"
   ],
-  "version": "16.0.0"
+  "version": "16.2.0"
 }

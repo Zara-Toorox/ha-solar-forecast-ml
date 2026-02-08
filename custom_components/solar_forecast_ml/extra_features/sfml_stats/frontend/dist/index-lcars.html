@@ -6,930 +6,613 @@
     <title>SFML Stats - LCARS Interface</title>
     <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
     <link rel="stylesheet" href="/api/sfml_stats/assets/css/lcars.css">
+    <style>
+        body.lcars-theme {
+            font-family: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+            background: #000;
+            color: #FFCC99;
+            margin: 0; padding: 0;
+            min-height: 100vh;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            overflow-x: hidden;
+        }
+        #lcars-error {
+            display: none;
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: #000; color: #FF6666; z-index: 100000;
+            padding: 40px; font-family: monospace; font-size: 14px;
+            overflow: auto; text-transform: none; letter-spacing: normal;
+        }
+        #lcars-error h2 { color: #FF9966; margin-bottom: 20px; }
+        #lcars-error pre { white-space: pre-wrap; word-break: break-all; }
+        .lcars-modal-overlay { z-index: 10001 !important; }
+        #lcars-loading {
+            display: flex; align-items: center; justify-content: center;
+            height: 100vh; color: #FF9966; font-size: 18px;
+            font-family: 'Arial Narrow', Arial, sans-serif;
+            text-transform: uppercase; letter-spacing: 0.2em;
+            animation: lcars-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes lcars-pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+    </style>
 </head>
 <body class="lcars-theme">
     <div class="lcars-scanlines"></div>
 
     <div id="app">
-        <div class="lcars-frame">
-            <!-- HEADER ROW -->
-            <div class="lcars-header-row">
-                <div class="lcars-header-left desktop-only" @click="switchToDashboard" style="cursor: pointer;" title="Zum Standard-Dashboard">
-                </div>
-                <div class="lcars-header-center">
-                    <div class="lcars-header-bar desktop-only"></div>
-                    <div class="lcars-title-area">
-                        <div>
-                            <div class="lcars-title">SFML LCARS</div>
-                            <div class="lcars-subtitle">ENERGY MANAGEMENT SYSTEM</div>
-                        </div>
-                        <div class="lcars-header-stats">
-                            <div class="lcars-stat">
-                                <div class="lcars-stat-label">PROGNOSE</div>
-                                <div class="lcars-stat-value forecast">{{ forecast.todayTotal?.toFixed(1) || '0' }} kWh</div>
-                            </div>
-                            <div class="lcars-stat">
-                                <div class="lcars-stat-label">ERTRAG</div>
-                                <div class="lcars-stat-value solar">{{ solarYieldToday?.toFixed(2) || '0' }} kWh</div>
-                            </div>
-                            <div class="lcars-stat">
-                                <div class="lcars-stat-label">TEMPERATUR</div>
-                                <div class="lcars-stat-value temp">{{ weather.temperature?.toFixed(1) || '--' }}°C</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div id="lcars-loading">LCARS INTERFACE WIRD INITIALISIERT...</div>
+    </div>
 
-            <!-- LEFT SIDEBAR -->
-            <div class="lcars-sidebar-left desktop-only">
-                <button class="lcars-btn yellow" @click="openSolarModal">SOLAR</button>
-                <button class="lcars-btn green" @click="openBatteryModal">WARP CORE</button>
-                <button class="lcars-btn purple" @click="openGridModal">POWER GRID</button>
-                <button class="lcars-btn blue" @click="openWeatherModal">SENSORS</button>
-                <div style="flex: 1;"></div>
-                <button class="lcars-btn" @click="openStatsModal">STATISTICS</button>
-                <button class="lcars-btn blue" @click="openForecastModal">FORECAST</button>
-                <button class="lcars-btn purple" @click="openBillingModal">BILLING</button>
-            </div>
-
-            <!-- MAIN MONITOR -->
-            <div class="lcars-main">
-                <div class="lcars-monitor-header">
-                    <div class="lcars-monitor-title">DISTRIBUTION NETWORK</div>
-                </div>
-
-                <div class="lcars-monitor-content">
-                    <svg class="lcars-energy-svg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
-                        <defs>
-                            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                                <feGaussianBlur stdDeviation="2" result="blur"/>
-                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                            </filter>
-                        </defs>
-
-                        <!-- ========== SOLAR PANEL (Top Left) ========== -->
-                        <g class="lcars-node" @click="openSolarModal" transform="translate(80, 60)">
-                            <rect class="lcars-node-bg solar" x="0" y="0" width="120" height="100" rx="10"/>
-                            <!-- Panel cells -->
-                            <rect x="10" y="25" width="45" height="30" fill="#1a3a5a" stroke="#FFCC66" stroke-width="1" rx="3"/>
-                            <rect x="65" y="25" width="45" height="30" fill="#1a3a5a" stroke="#FFCC66" stroke-width="1" rx="3"/>
-                            <rect x="10" y="60" width="45" height="30" fill="#1a3a5a" stroke="#FFCC66" stroke-width="1" rx="3"/>
-                            <rect x="65" y="60" width="45" height="30" fill="#1a3a5a" stroke="#FFCC66" stroke-width="1" rx="3"/>
-                            <text class="lcars-node-title" x="60" y="18">SOLAR ARRAY</text>
-                        </g>
-                        <text x="140" y="175" fill="#FFCC66" font-size="16" font-weight="bold" text-anchor="middle" filter="url(#glow)">
-                            {{ solarPower }} W
-                        </text>
-
-                        <!-- ========== HABITAT (Center) ========== -->
-                        <g class="lcars-node" @click="openHouseModal" transform="translate(400, 200)">
-                            <!-- Outer rotating ring -->
-                            <circle cx="0" cy="0" r="85" class="lcars-habitat-ring-outer" style="transform-origin: center;"/>
-                            <!-- Main ring -->
-                            <circle cx="0" cy="0" r="75" class="lcars-habitat-ring"/>
-                            <!-- Background -->
-                            <circle cx="0" cy="0" r="70" class="lcars-habitat-bg"/>
-                            <!-- Logo -->
-                            <image href="/api/sfml_stats/assets/fleetlogo.webp" x="-50" y="-50" width="100" height="100"/>
-                            <!-- Label -->
-                            <text x="0" y="-95" fill="#9999FF" font-size="12" font-weight="bold" text-anchor="middle" letter-spacing="0.2em">HABITAT</text>
-                            <!-- Power value -->
-                            <text x="0" y="105" fill="#9999FF" font-size="20" font-weight="bold" text-anchor="middle" filter="url(#glow)">
-                                {{ housePower }} W
-                            </text>
-                            <text x="0" y="120" fill="#666" font-size="9" text-anchor="middle">VERBRAUCH</text>
-                        </g>
-
-                        <!-- ========== WARP CORE / BATTERY (Bottom Left) ========== -->
-                        <g v-if="hasBattery" class="lcars-node" @click="openBatteryModal" transform="translate(80, 250)">
-                            <rect class="lcars-node-bg battery" x="0" y="0" width="120" height="100" rx="10"/>
-                            <!-- SOC Bar background -->
-                            <rect x="15" y="30" width="90" height="35" fill="#0a2a20" stroke="#99CC99" stroke-width="1" rx="5"/>
-                            <!-- SOC Fill -->
-                            <rect x="17" y="32" :width="86 * (batterySoc / 100)" height="31" rx="4"
-                                  :fill="batterySoc < 20 ? '#CC6666' : (batterySoc < 50 ? '#FFCC66' : '#99CC99')"/>
-                            <!-- SOC Text -->
-                            <text x="60" y="55" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">
-                                {{ batterySoc?.toFixed(0) || '0' }}%
-                            </text>
-                            <!-- Status -->
-                            <rect x="20" y="72" width="80" height="18" rx="9"
-                                  :fill="batteryPower > 0 ? '#99CC99' : (batteryPower < 0 ? '#FFCC66' : '#666')"/>
-                            <text x="60" y="85" fill="#000" font-size="9" font-weight="bold" text-anchor="middle">
-                                {{ batteryStatus }}
-                            </text>
-                            <text class="lcars-node-title" x="60" y="18">WARP CORE</text>
-                        </g>
-                        <text v-if="hasBattery" x="140" y="365" fill="#99CC99" font-size="14" font-weight="bold" text-anchor="middle" filter="url(#glow)">
-                            {{ Math.abs(batteryPower) }} W
-                        </text>
-
-                        <!-- ========== POWER MATRIX / GRID (Right) ========== -->
-                        <g class="lcars-node" @click="openGridModal" transform="translate(600, 130)">
-                            <rect class="lcars-node-bg grid" x="0" y="0" width="120" height="140" rx="10"/>
-                            <!-- Tower structure -->
-                            <line x1="60" y1="25" x2="60" y2="95" stroke="#CC99CC" stroke-width="4"/>
-                            <line x1="30" y1="45" x2="90" y2="45" stroke="#CC99CC" stroke-width="3"/>
-                            <line x1="25" y1="70" x2="95" y2="70" stroke="#CC99CC" stroke-width="3"/>
-                            <!-- Power lines -->
-                            <line x1="10" y1="45" x2="30" y2="45" stroke="#CC99CC" stroke-width="2"/>
-                            <line x1="90" y1="45" x2="110" y2="45" stroke="#CC99CC" stroke-width="2"/>
-                            <!-- Status box -->
-                            <rect x="15" y="100" width="90" height="25" rx="8"
-                                  :fill="gridPower > 50 ? '#CC99CC' : (gridPower < -50 ? '#66CCCC' : '#444')"/>
-                            <text x="60" y="118" fill="#000" font-size="10" font-weight="bold" text-anchor="middle">
-                                {{ gridStatus }}
-                            </text>
-                            <text class="lcars-node-title" x="60" y="18">POWER MATRIX</text>
-                        </g>
-                        <text x="660" y="285" fill="#CC99CC" font-size="16" font-weight="bold" text-anchor="middle" filter="url(#glow)">
-                            {{ Math.abs(gridPower) }} W
-                        </text>
-
-                        <!-- ========== ENERGY FLOW PIPES ========== -->
-
-                        <!-- Solar to Habitat -->
-                        <g v-if="flows.solar_to_house > 0">
-                            <path class="lcars-pipe-bg" d="M200,110 L280,110 L280,200 L325,200"/>
-                            <path class="lcars-pipe solar lcars-pipe-flow" d="M200,110 L280,110 L280,200 L325,200" filter="url(#glow)"/>
-                            <rect x="235" y="140" width="50" height="18" rx="4" fill="#000"/>
-                            <text x="260" y="153" class="lcars-flow-label" fill="#FFCC66">{{ flows.solar_to_house }} W</text>
-                        </g>
-
-                        <!-- Solar to Battery -->
-                        <g v-if="flows.solar_to_battery > 0">
-                            <path class="lcars-pipe-bg" d="M140,160 L140,250"/>
-                            <path class="lcars-pipe solar lcars-pipe-flow" d="M140,160 L140,250" filter="url(#glow)"/>
-                            <rect x="95" y="195" width="50" height="18" rx="4" fill="#000"/>
-                            <text x="120" y="208" class="lcars-flow-label" fill="#FFCC66">{{ flows.solar_to_battery }} W</text>
-                        </g>
-
-                        <!-- Battery to Habitat -->
-                        <g v-if="flows.battery_to_house > 0">
-                            <path class="lcars-pipe-bg" d="M200,300 L280,300 L280,220 L325,220"/>
-                            <path class="lcars-pipe battery lcars-pipe-flow" d="M200,300 L280,300 L280,220 L325,220" filter="url(#glow)"/>
-                            <rect x="225" y="250" width="50" height="18" rx="4" fill="#000"/>
-                            <text x="250" y="263" class="lcars-flow-label" fill="#99CC99">{{ flows.battery_to_house }} W</text>
-                        </g>
-
-                        <!-- Grid to Habitat (Import) -->
-                        <g v-if="flows.grid_to_house > 0">
-                            <path class="lcars-pipe-bg" d="M600,200 L520,200 L520,200 L475,200"/>
-                            <path class="lcars-pipe grid lcars-pipe-flow" d="M600,200 L520,200 L520,200 L475,200" filter="url(#glow)"/>
-                            <rect x="505" y="180" width="50" height="18" rx="4" fill="#000"/>
-                            <text x="530" y="193" class="lcars-flow-label" fill="#CC99CC">{{ flows.grid_to_house }} W</text>
-                        </g>
-
-                        <!-- Grid to Battery -->
-                        <g v-if="flows.grid_to_battery > 0">
-                            <path class="lcars-pipe-bg" d="M600,270 L500,270 L500,340 L200,340 L200,300"/>
-                            <path class="lcars-pipe grid lcars-pipe-flow" d="M600,270 L500,270 L500,340 L200,340 L200,300" filter="url(#glow)"/>
-                            <rect x="340" y="320" width="50" height="18" rx="4" fill="#000"/>
-                            <text x="365" y="333" class="lcars-flow-label" fill="#CC99CC">{{ flows.grid_to_battery }} W</text>
-                        </g>
-
-                        <!-- Solar to Grid (Export) -->
-                        <g v-if="flows.solar_to_grid > 0">
-                            <path class="lcars-pipe-bg" d="M200,90 L400,90 L400,50 L660,50 L660,130"/>
-                            <path class="lcars-pipe solar lcars-pipe-flow" d="M200,90 L400,90 L400,50 L660,50 L660,130" filter="url(#glow)"/>
-                            <rect x="490" y="35" width="60" height="18" rx="4" fill="#000"/>
-                            <text x="520" y="48" class="lcars-flow-label" fill="#66CCCC">{{ flows.solar_to_grid }} W</text>
-                        </g>
-                    </svg>
-                </div>
-            </div>
-
-            <!-- RIGHT SIDEBAR -->
-            <div class="lcars-sidebar-right">
-                <!-- DateTime Card -->
-                <div class="lcars-sidebar-card datetime">
-                    <div class="lcars-card-label">STARDATE</div>
-                    <div class="lcars-card-value" style="font-size: 14px;">{{ currentTime }}</div>
-                    <div style="font-size: 9px; color: var(--lcars-orange); margin-top: 3px;">
-                        {{ currentDate }}
-                    </div>
-                </div>
-
-                <!-- Weather Card -->
-                <div class="lcars-sidebar-card weather" @click="openWeatherModal">
-                    <div class="lcars-card-label">ENVIRONMENTAL</div>
-                    <div class="lcars-card-value">{{ weather.temperature?.toFixed(1) || '--' }}°C</div>
-                    <div style="font-size: 9px; color: #6699CC; margin-top: 3px;">
-                        {{ weather.clouds?.toFixed(0) || '--' }}% Wolken
-                    </div>
-                </div>
-
-                <!-- Grid Card -->
-                <div class="lcars-sidebar-card grid" @click="openGridModal">
-                    <div class="lcars-card-label">GRID STATUS</div>
-                    <div class="lcars-card-value">{{ Math.abs(gridPower) }} W</div>
-                    <div class="lcars-card-status" :class="{ importing: gridPower > 50, exporting: gridPower < -50, standby: Math.abs(gridPower) <= 50 }">
-                        {{ gridStatus }}
-                    </div>
-                </div>
-
-                <!-- Battery Card -->
-                <div v-if="hasBattery" class="lcars-sidebar-card battery" @click="openBatteryModal">
-                    <div class="lcars-card-label">WARP CORE</div>
-                    <div class="lcars-card-value">{{ batterySoc?.toFixed(0) || '0' }}%</div>
-                    <div class="lcars-soc-bar">
-                        <div class="lcars-soc-fill" :class="{ low: batterySoc < 20, medium: batterySoc >= 20 && batterySoc < 50 }" :style="{ width: (batterySoc || 0) + '%' }"></div>
-                    </div>
-                    <div class="lcars-card-status" :class="{ charging: batteryPower > 0, discharging: batteryPower < 0, standby: batteryPower === 0 }">
-                        {{ batteryStatus }}
-                    </div>
-                </div>
-
-                <div style="flex: 1;"></div>
-
-                <button class="lcars-btn" @click="openHouseModal">HABITAT</button>
-                <button class="lcars-btn blue" @click="openPowerSourcesModal">SOURCES</button>
-                <button class="lcars-btn purple" @click="openClothingModal">AWAY TEAM</button>
-                <button class="lcars-btn green" @click="switchToDashboard">CYBERPUNK</button>
-            </div>
-
-            <!-- FOOTER ROW -->
-            <div class="lcars-footer-row desktop-only">
-                <div class="lcars-footer-left"></div>
-                <div class="lcars-footer-center">
-                    <div class="lcars-footer-bar"></div>
-                    <div class="lcars-footer-text">LCARS v24.02 • ZARA-TOOROX SYSTEMS • {{ lastUpdate }}</div>
-                </div>
-                <div class="lcars-footer-right"></div>
-            </div>
-        </div>
-
-        <!-- MOBILE NAVIGATION -->
-        <nav class="lcars-mobile-nav mobile-only">
-            <div class="lcars-mobile-nav-inner">
-                <button class="lcars-mobile-btn yellow" @click="openSolarModal">
-                    <span class="lcars-mobile-btn-icon">&#9728;</span>
-                    SOLAR
-                </button>
-                <button class="lcars-mobile-btn green" @click="openBatteryModal">
-                    <span class="lcars-mobile-btn-icon">&#9889;</span>
-                    WARP CORE
-                </button>
-                <button class="lcars-mobile-btn purple" @click="openGridModal">
-                    <span class="lcars-mobile-btn-icon">&#8942;</span>
-                    POWER GRID
-                </button>
-                <button class="lcars-mobile-btn blue" @click="openWeatherModal">
-                    <span class="lcars-mobile-btn-icon">&#127777;</span>
-                    SENSORS
-                </button>
-                <button class="lcars-mobile-btn blue" @click="openHouseModal">
-                    <span class="lcars-mobile-btn-icon">&#8962;</span>
-                    HABITAT
-                </button>
-                <button class="lcars-mobile-btn" @click="openStatsModal">
-                    <span class="lcars-mobile-btn-icon">&#128202;</span>
-                    STATISTICS
-                </button>
-                <button class="lcars-mobile-btn blue" @click="openForecastModal">
-                    <span class="lcars-mobile-btn-icon">&#128200;</span>
-                    FORECAST
-                </button>
-                <button class="lcars-mobile-btn purple" @click="openBillingModal">
-                    <span class="lcars-mobile-btn-icon">&#128181;</span>
-                    BILLING
-                </button>
-                <button class="lcars-mobile-btn cyan" @click="switchToDashboard">
-                    <span class="lcars-mobile-btn-icon">&#127760;</span>
-                    CYBERPUNK
-                </button>
-            </div>
-        </nav>
-
-        <!-- ========== MODALS ========== -->
-
-        <!-- Solar Modal -->
-        <div v-if="showSolarModal" class="lcars-modal-overlay" @click.self="closeSolarModal">
-            <div class="lcars-modal">
-                <div class="lcars-modal-header" style="background: var(--lcars-yellow);">
-                    <span class="lcars-modal-title">SOLAR ARRAY STATUS</span>
-                    <button class="lcars-modal-close" @click="closeSolarModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header yellow">PRODUCTION DATA</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Current Output</span>
-                                <span class="lcars-data-value">{{ solarPower }} W</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Today Production</span>
-                                <span class="lcars-data-value">{{ solarYieldToday?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Forecast Today</span>
-                                <span class="lcars-data-value">{{ forecast.todayTotal?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header orange">ENERGY DISTRIBUTION</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">To House</span>
-                                <span class="lcars-data-value">{{ flows.solar_to_house || 0 }} W</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">To Battery</span>
-                                <span class="lcars-data-value">{{ flows.solar_to_battery || 0 }} W</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">To Grid (Export)</span>
-                                <span class="lcars-data-value">{{ flows.solar_to_grid || 0 }} W</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Battery Modal -->
-        <div v-if="showBatteryModal" class="lcars-modal-overlay" @click.self="closeBatteryModal">
-            <div class="lcars-modal">
-                <div class="lcars-modal-header" style="background: var(--lcars-green);">
-                    <span class="lcars-modal-title">WARP CORE STATUS</span>
-                    <button class="lcars-modal-close" @click="closeBatteryModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header green">CORE METRICS</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Power Level</span>
-                                <span class="lcars-data-value">{{ Math.abs(batteryPower) }} W</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Core Charge</span>
-                                <span class="lcars-data-value">{{ batterySoc?.toFixed(1) || '0' }}%</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Status</span>
-                                <span class="lcars-data-value">{{ batteryStatus }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Grid Modal -->
-        <div v-if="showGridModal" class="lcars-modal-overlay" @click.self="closeGridModal">
-            <div class="lcars-modal">
-                <div class="lcars-modal-header" style="background: var(--lcars-purple);">
-                    <span class="lcars-modal-title">POWER MATRIX STATUS</span>
-                    <button class="lcars-modal-close" @click="closeGridModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header purple">GRID METRICS</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Power</span>
-                                <span class="lcars-data-value">{{ Math.abs(gridPower) }} W</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Status</span>
-                                <span class="lcars-data-value">{{ gridStatus }}</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Current Price</span>
-                                <span class="lcars-data-value">{{ price.current?.toFixed(2) || '0.00' }} ct/kWh</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Weather Modal -->
-        <div v-if="showWeatherModal" class="lcars-modal-overlay" @click.self="closeWeatherModal">
-            <div class="lcars-modal">
-                <div class="lcars-modal-header" style="background: var(--lcars-weather);">
-                    <span class="lcars-modal-title">ENVIRONMENTAL SENSORS</span>
-                    <button class="lcars-modal-close" @click="closeWeatherModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header" style="background: #6699CC;">SENSOR DATA</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Temperature</span>
-                                <span class="lcars-data-value">{{ weather.temperature?.toFixed(1) || '---' }}°C</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Radiation</span>
-                                <span class="lcars-data-value">{{ weather.radiation?.toFixed(0) || '0' }} W/m²</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Humidity</span>
-                                <span class="lcars-data-value">{{ weather.humidity?.toFixed(0) || '---' }}%</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Wind Speed</span>
-                                <span class="lcars-data-value">{{ weather.wind?.toFixed(1) || '---' }} m/s</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Cloud Coverage</span>
-                                <span class="lcars-data-value">{{ weather.clouds?.toFixed(0) || '---' }}%</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- House Modal -->
-        <div v-if="showHouseModal" class="lcars-modal-overlay" @click.self="closeHouseModal">
-            <div class="lcars-modal">
-                <div class="lcars-modal-header" style="background: var(--lcars-blue);">
-                    <span class="lcars-modal-title">HABITAT CONSUMPTION</span>
-                    <button class="lcars-modal-close" @click="closeHouseModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header">CONSUMPTION DATA</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Current Draw</span>
-                                <span class="lcars-data-value">{{ housePower }} W</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header orange">POWER SOURCES</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">From Solar</span>
-                                <span class="lcars-data-value">{{ flows.solar_to_house || 0 }} W</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">From Battery</span>
-                                <span class="lcars-data-value">{{ flows.battery_to_house || 0 }} W</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">From Grid</span>
-                                <span class="lcars-data-value">{{ flows.grid_to_house || 0 }} W</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Statistics Modal -->
-        <div v-if="showStatsModal" class="lcars-modal-overlay" @click.self="closeStatsModal">
-            <div class="lcars-modal lcars-modal-wide">
-                <div class="lcars-modal-header" style="background: var(--lcars-orange);">
-                    <span class="lcars-modal-title">ENERGY STATISTICS ANALYSIS</span>
-                    <button class="lcars-modal-close" @click="closeStatsModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <!-- Peak Power Records -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header yellow">PEAK POWER RECORDS</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-stats-grid">
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">TODAY'S PEAK</div>
-                                    <div class="lcars-stats-card-value yellow">
-                                        {{ statistics.peaks.today.power_w ? (statistics.peaks.today.power_w / 1000).toFixed(2) : '0.00' }} kW
-                                    </div>
-                                    <div class="lcars-stats-card-meta">
-                                        {{ statistics.peaks.today.at || 'N/A' }}
-                                    </div>
-                                </div>
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">ALL-TIME PEAK</div>
-                                    <div class="lcars-stats-card-value orange">
-                                        {{ statistics.peaks.all_time.power_w ? (statistics.peaks.all_time.power_w / 1000).toFixed(2) : '0.00' }} kW
-                                    </div>
-                                    <div class="lcars-stats-card-meta">
-                                        {{ statistics.peaks.all_time.date || 'N/A' }} {{ statistics.peaks.all_time.at || '' }}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Production Overview -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header green">PRODUCTION OVERVIEW</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Today Forecast</span>
-                                <span class="lcars-data-value">{{ statistics.production.today.forecast_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Today Actual Yield</span>
-                                <span class="lcars-data-value">{{ statistics.production.today.yield_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Tomorrow Forecast</span>
-                                <span class="lcars-data-value">{{ statistics.production.tomorrow.forecast_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div v-if="statistics.best_hour.hour !== null" class="lcars-data-row">
-                                <span class="lcars-data-label">Best Hour Today</span>
-                                <span class="lcars-data-value">{{ statistics.best_hour.hour }}:00 ({{ statistics.best_hour.prediction_kwh?.toFixed(2) || '0.00' }} kWh)</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Period Statistics -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header purple">PERIOD STATISTICS</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Current Week</span>
-                                <span class="lcars-data-value">
-                                    {{ statistics.stats.current_week.yield_kwh?.toFixed(2) || '0.00' }} kWh
-                                    <span style="font-size: 0.85em; color: #999; margin-left: 8px;">
-                                        (Ø {{ statistics.stats.current_week.days ? (statistics.stats.current_week.yield_kwh / statistics.stats.current_week.days).toFixed(2) : '0.00' }} kWh/d)
-                                    </span>
-                                </span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Current Month</span>
-                                <span class="lcars-data-value">
-                                    {{ statistics.stats.current_month.yield_kwh?.toFixed(2) || '0.00' }} kWh
-                                    <span style="font-size: 0.85em; color: #999; margin-left: 8px;">
-                                        (Ø {{ statistics.stats.current_month.days ? (statistics.stats.current_month.yield_kwh / statistics.stats.current_month.days).toFixed(2) : '0.00' }} kWh/d)
-                                    </span>
-                                </span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Last 7 Days</span>
-                                <span class="lcars-data-value">
-                                    {{ statistics.stats.last_7_days.total_yield_kwh?.toFixed(2) || '0.00' }} kWh
-                                    <span style="font-size: 0.85em; color: #999; margin-left: 8px;">
-                                        (Ø {{ statistics.stats.last_7_days.avg_yield_kwh?.toFixed(2) || '0.00' }} kWh/d)
-                                    </span>
-                                </span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Last 30 Days</span>
-                                <span class="lcars-data-value">
-                                    {{ statistics.stats.last_30_days.total_yield_kwh?.toFixed(2) || '0.00' }} kWh
-                                    <span style="font-size: 0.85em; color: #999; margin-left: 8px;">
-                                        (Ø {{ statistics.stats.last_30_days.avg_yield_kwh?.toFixed(2) || '0.00' }} kWh/d)
-                                    </span>
-                                </span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Last 365 Days</span>
-                                <span class="lcars-data-value">
-                                    {{ statistics.stats.last_365_days.total_yield_kwh?.toFixed(2) || '0.00' }} kWh
-                                    <span style="font-size: 0.85em; color: #999; margin-left: 8px;">
-                                        (Ø {{ statistics.stats.last_365_days.avg_yield_kwh?.toFixed(2) || '0.00' }} kWh/d)
-                                    </span>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Forecast Modal -->
-        <div v-if="showForecastModal" class="lcars-modal-overlay" @click.self="closeForecastModal">
-            <div class="lcars-modal lcars-modal-wide">
-                <div class="lcars-modal-header" style="background: var(--lcars-blue);">
-                    <span class="lcars-modal-title">SOLAR FORECAST ANALYSIS</span>
-                    <button class="lcars-modal-close" @click="closeForecastModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <!-- Current Forecast -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header yellow">CURRENT FORECAST</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Today Total</span>
-                                <span class="lcars-data-value">{{ forecast.todayTotal?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Today Remaining</span>
-                                <span class="lcars-data-value">{{ forecast.todayRemaining?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Current Yield</span>
-                                <span class="lcars-data-value">{{ solarYieldToday?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Forecast Comparison (Last 7 Days) -->
-                    <div v-if="forecastComparison.length > 0" class="lcars-modal-section">
-                        <div class="lcars-modal-section-header purple">FORECAST VS ACTUAL (LAST 7 DAYS)</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-forecast-table">
-                                <div class="lcars-forecast-table-header">
-                                    <div class="lcars-forecast-table-cell">DATE</div>
-                                    <div class="lcars-forecast-table-cell">FORECAST</div>
-                                    <div class="lcars-forecast-table-cell">ACTUAL</div>
-                                    <div class="lcars-forecast-table-cell">ACCURACY</div>
-                                </div>
-                                <div v-for="(day, index) in forecastComparison" :key="index" class="lcars-forecast-table-row">
-                                    <div class="lcars-forecast-table-cell">{{ day.date || 'N/A' }}</div>
-                                    <div class="lcars-forecast-table-cell">{{ day.forecast_kwh?.toFixed(2) || 'N/A' }} kWh</div>
-                                    <div class="lcars-forecast-table-cell">{{ day.actual_kwh?.toFixed(2) || 'N/A' }} kWh</div>
-                                    <div class="lcars-forecast-table-cell" :class="{
-                                        'accuracy-good': day.accuracy_percent >= 90,
-                                        'accuracy-medium': day.accuracy_percent >= 70 && day.accuracy_percent < 90,
-                                        'accuracy-poor': day.accuracy_percent < 70
-                                    }">
-                                        {{ day.accuracy_percent?.toFixed(1) || 'N/A' }}%
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- No Data Message -->
-                    <div v-else class="lcars-modal-section">
-                        <div class="lcars-modal-section-header">FORECAST COMPARISON</div>
-                        <div class="lcars-modal-section-content" style="text-align: center; padding: 30px; color: #999;">
-                            <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
-                            <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em;">
-                                NO FORECAST COMPARISON DATA AVAILABLE YET
-                            </div>
-                            <div style="font-size: 10px; margin-top: 10px; color: #666;">
-                                Data is collected daily at 23:50
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Billing Modal -->
-        <div v-if="showBillingModal" class="lcars-modal-overlay" @click.self="closeBillingModal">
-            <div class="lcars-modal lcars-modal-wide">
-                <div class="lcars-modal-header" style="background: var(--lcars-purple);">
-                    <span class="lcars-modal-title">ANNUAL ENERGY BALANCE & BILLING</span>
-                    <button class="lcars-modal-close" @click="closeBillingModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <!-- Period Info -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header purple">BILLING PERIOD</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Period</span>
-                                <span class="lcars-data-value">{{ billing.period.start }} - {{ billing.period.end }}</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Progress</span>
-                                <span class="lcars-data-value">{{ billing.period.progress_percent?.toFixed(1) || '0' }}% ({{ billing.period.days_elapsed || 0 }} / {{ billing.period.days_total || 365 }} days)</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Energy Overview -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header yellow">ENERGY OVERVIEW</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-stats-grid">
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">SOLAR PRODUCTION</div>
-                                    <div class="lcars-stats-card-value yellow">{{ billing.solar.total_kwh?.toFixed(2) || '0.00' }} kWh</div>
-                                    <div class="lcars-stats-card-meta">Total Generated</div>
-                                </div>
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">HOME CONSUMPTION</div>
-                                    <div class="lcars-stats-card-value">{{ billing.household.total_kwh?.toFixed(2) || '0.00' }} kWh</div>
-                                    <div class="lcars-stats-card-meta">Total Usage</div>
-                                </div>
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">GRID IMPORT</div>
-                                    <div class="lcars-stats-card-value" style="color: var(--lcars-purple);">{{ billing.grid.total_import_kwh?.toFixed(2) || '0.00' }} kWh</div>
-                                    <div class="lcars-stats-card-meta">Purchased</div>
-                                </div>
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">GRID EXPORT</div>
-                                    <div class="lcars-stats-card-value" style="color: var(--lcars-cyan);">{{ billing.grid.export_kwh?.toFixed(2) || '0.00' }} kWh</div>
-                                    <div class="lcars-stats-card-meta">Fed Back</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Household Sources -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header orange">HOUSEHOLD ENERGY SOURCES</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">From Solar</span>
-                                <span class="lcars-data-value">{{ billing.household.from_solar_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">From Battery</span>
-                                <span class="lcars-data-value">{{ billing.household.from_battery_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">From Grid</span>
-                                <span class="lcars-data-value">{{ billing.household.from_grid_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Self-Sufficiency</span>
-                                <span class="lcars-data-value" style="color: var(--lcars-green); font-size: 14px;">{{ billing.autarkie_percent?.toFixed(1) || '0' }}%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Battery -->
-                    <div v-if="hasBattery" class="lcars-modal-section">
-                        <div class="lcars-modal-section-header green">BATTERY CHARGING</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Total Charge</span>
-                                <span class="lcars-data-value">{{ billing.battery.total_charge_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">From Solar</span>
-                                <span class="lcars-data-value">{{ billing.battery.from_solar_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">From Grid</span>
-                                <span class="lcars-data-value">{{ billing.battery.from_grid_kwh?.toFixed(2) || '0.00' }} kWh</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Financial Overview -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header" style="background: var(--lcars-red);">FINANCIAL SUMMARY</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-stats-grid">
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">GRID COST</div>
-                                    <div class="lcars-stats-card-value" style="color: var(--lcars-red);">{{ billing.finance.grid_cost_eur?.toFixed(2) || '0.00' }} €</div>
-                                    <div class="lcars-stats-card-meta">Electricity Bill</div>
-                                </div>
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">SAVINGS</div>
-                                    <div class="lcars-stats-card-value" style="color: var(--lcars-green);">{{ billing.finance.savings_eur?.toFixed(2) || '0.00' }} €</div>
-                                    <div class="lcars-stats-card-meta">Solar Benefit</div>
-                                </div>
-                                <div class="lcars-stats-card">
-                                    <div class="lcars-stats-card-label">AVG PRICE</div>
-                                    <div class="lcars-stats-card-value">{{ billing.finance.avg_price_ct?.toFixed(2) || '0.00' }} ct/kWh</div>
-                                    <div class="lcars-stats-card-meta">Average Rate</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Consumer Costs (if available) -->
-                    <div v-if="billing.consumers.total_cost_eur > 0" class="lcars-modal-section">
-                        <div class="lcars-modal-section-header">CONSUMER COSTS</div>
-                        <div class="lcars-modal-section-content">
-                            <div v-if="billing.consumers.heatpump?.cost_eur" class="lcars-data-row">
-                                <span class="lcars-data-label">Heat Pump</span>
-                                <span class="lcars-data-value">{{ billing.consumers.heatpump.cost_eur?.toFixed(2) || '0.00' }} €</span>
-                            </div>
-                            <div v-if="billing.consumers.heatingrod?.cost_eur" class="lcars-data-row">
-                                <span class="lcars-data-label">Heating Rod</span>
-                                <span class="lcars-data-value">{{ billing.consumers.heatingrod.cost_eur?.toFixed(2) || '0.00' }} €</span>
-                            </div>
-                            <div v-if="billing.consumers.wallbox?.cost_eur" class="lcars-data-row">
-                                <span class="lcars-data-label">Wallbox</span>
-                                <span class="lcars-data-value">{{ billing.consumers.wallbox.cost_eur?.toFixed(2) || '0.00' }} €</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Total Consumer Costs</span>
-                                <span class="lcars-data-value" style="font-weight: bold;">{{ billing.consumers.total_cost_eur?.toFixed(2) || '0.00' }} €</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Clothing / Away Team Modal -->
-        <div v-if="showClothingModal" class="lcars-modal-overlay" @click.self="closeClothingModal">
-            <div class="lcars-modal">
-                <div class="lcars-modal-header" style="background: var(--lcars-orange);">
-                    <span class="lcars-modal-title">AWAY TEAM EQUIPMENT RECOMMENDATION</span>
-                    <button class="lcars-modal-close" @click="closeClothingModal">CLOSE</button>
-                </div>
-                <div class="lcars-modal-content">
-                    <!-- Recommendation Summary -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header orange">MISSION BRIEFING</div>
-                        <div class="lcars-modal-section-content">
-                            <div style="padding: 15px; background: rgba(255, 153, 102, 0.1); border-radius: 10px; margin-bottom: 15px;">
-                                <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--lcars-text-bright);">
-                                    {{ clothing.text_de || 'Analyzing environmental conditions...' }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Equipment Loadout -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header yellow">EQUIPMENT LOADOUT</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-clothing-grid">
-                                <!-- Unterbekleidung -->
-                                <div class="lcars-clothing-item">
-                                    <div class="lcars-clothing-icon">{{ clothing.unterbekleidung.icon || '👕' }}</div>
-                                    <div class="lcars-clothing-label">BASE LAYER</div>
-                                    <div class="lcars-clothing-name">{{ clothing.unterbekleidung.name || 'N/A' }}</div>
-                                </div>
-
-                                <!-- Oberbekleidung -->
-                                <div class="lcars-clothing-item">
-                                    <div class="lcars-clothing-icon">{{ clothing.oberbekleidung.icon || '👔' }}</div>
-                                    <div class="lcars-clothing-label">UPPER LAYER</div>
-                                    <div class="lcars-clothing-name">{{ clothing.oberbekleidung.name || 'N/A' }}</div>
-                                </div>
-
-                                <!-- Jacke -->
-                                <div class="lcars-clothing-item">
-                                    <div class="lcars-clothing-icon">{{ clothing.jacke.icon || '🧥' }}</div>
-                                    <div class="lcars-clothing-label">OUTER SHELL</div>
-                                    <div class="lcars-clothing-name">{{ clothing.jacke.name || 'N/A' }}</div>
-                                </div>
-
-                                <!-- Kopfbedeckung -->
-                                <div class="lcars-clothing-item">
-                                    <div class="lcars-clothing-icon">{{ clothing.kopfbedeckung.icon || '🎩' }}</div>
-                                    <div class="lcars-clothing-label">HEAD PROTECTION</div>
-                                    <div class="lcars-clothing-name">{{ clothing.kopfbedeckung.name || 'N/A' }}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Additional Equipment -->
-                    <div v-if="clothing.zusaetze.length > 0" class="lcars-modal-section">
-                        <div class="lcars-modal-section-header green">ADDITIONAL EQUIPMENT</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-clothing-extras">
-                                <div v-for="(item, index) in clothing.zusaetze" :key="index" class="lcars-clothing-extra-item">
-                                    <span class="lcars-clothing-extra-icon">{{ item.icon }}</span>
-                                    <span class="lcars-clothing-extra-name">{{ item.name }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Environmental Status -->
-                    <div class="lcars-modal-section">
-                        <div class="lcars-modal-section-header" style="background: #6699CC;">ENVIRONMENTAL STATUS</div>
-                        <div class="lcars-modal-section-content">
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Temperature</span>
-                                <span class="lcars-data-value">{{ weather.temperature?.toFixed(1) || '--' }}°C</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Humidity</span>
-                                <span class="lcars-data-value">{{ weather.humidity?.toFixed(0) || '--' }}%</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Wind Speed</span>
-                                <span class="lcars-data-value">{{ weather.wind?.toFixed(1) || '--' }} m/s</span>
-                            </div>
-                            <div class="lcars-data-row">
-                                <span class="lcars-data-label">Cloud Coverage</span>
-                                <span class="lcars-data-value">{{ weather.clouds?.toFixed(0) || '--' }}%</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div id="lcars-error">
+        <h2>&#9888; LCARS SYSTEM FEHLER</h2>
+        <pre id="lcars-error-msg"></pre>
+        <br>
+        <a href="/api/sfml_stats/dashboard" style="color:#FF9966;">Zurueck zum Dashboard</a>
     </div>
 
     <script>
-        const { createApp, ref, reactive, computed, onMounted, onUnmounted } = Vue;
+    window.onerror = function(msg, url, line, col, err) {
+        var el = document.getElementById('lcars-error');
+        var msgEl = document.getElementById('lcars-error-msg');
+        if (el && msgEl) {
+            el.style.display = 'block';
+            msgEl.textContent += 'ERROR: ' + msg + '\nFile: ' + url + ':' + line + '\n';
+            if (err && err.stack) msgEl.textContent += err.stack + '\n\n';
+        }
+    };
 
-        createApp({
-            setup() {
-                const isConnected = ref(false);
-                const lastUpdate = ref('---');
+    (function() {
+        var { createApp, ref, reactive, computed, onMounted, onUnmounted, getCurrentInstance } = Vue;
 
-                const weather = reactive({ temperature: null, radiation: 0, humidity: null, wind: null, clouds: null });
-                const forecast = reactive({ todayTotal: 0, todayRemaining: 0 });
-                const price = reactive({ current: 0 });
-                const flows = reactive({
+        var app = createApp({
+            template:
+            '<div id="lcars-root">' +
+            '<div class="lcars-frame">' +
+
+                '<!-- HEADER ROW -->' +
+                '<div class="lcars-header-row">' +
+                    '<div class="lcars-header-left desktop-only" @click="switchToDashboard" style="cursor:pointer" title="Zum Standard-Dashboard"></div>' +
+                    '<div class="lcars-header-center">' +
+                        '<div class="lcars-header-bar desktop-only"></div>' +
+                        '<div class="lcars-title-area">' +
+                            '<div>' +
+                                '<div class="lcars-title">SFML LCARS</div>' +
+                                '<div class="lcars-subtitle">ENERGY MANAGEMENT SYSTEM</div>' +
+                            '</div>' +
+                            '<div class="lcars-header-stats">' +
+                                '<div class="lcars-stat">' +
+                                    '<div class="lcars-stat-label">PROGNOSE</div>' +
+                                    '<div class="lcars-stat-value forecast">{{ forecastTotal }} kWh</div>' +
+                                '</div>' +
+                                '<div class="lcars-stat">' +
+                                    '<div class="lcars-stat-label">ERTRAG</div>' +
+                                    '<div class="lcars-stat-value solar">{{ yieldToday }} kWh</div>' +
+                                '</div>' +
+                                '<div class="lcars-stat">' +
+                                    '<div class="lcars-stat-label">TEMPERATUR</div>' +
+                                    '<div class="lcars-stat-value temp">{{ tempDisplay }}&deg;C</div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+
+                '<!-- LEFT SIDEBAR -->' +
+                '<div class="lcars-sidebar-left desktop-only">' +
+                    '<button class="lcars-btn yellow" @click="setModal(\'solar\')">SOLAR</button>' +
+                    '<button class="lcars-btn green" @click="setModal(\'battery\')">WARP CORE</button>' +
+                    '<button class="lcars-btn purple" @click="setModal(\'grid\')">POWER GRID</button>' +
+                    '<button class="lcars-btn blue" @click="setModal(\'weather\')">SENSORS</button>' +
+                    '<div style="flex:1"></div>' +
+                    '<button class="lcars-btn" @click="openStats">STATISTICS</button>' +
+                    '<button class="lcars-btn blue" @click="openForecast">FORECAST</button>' +
+                    '<button class="lcars-btn purple" @click="openBilling">BILLING</button>' +
+                '</div>' +
+
+                '<!-- MAIN MONITOR -->' +
+                '<div class="lcars-main">' +
+                    '<div class="lcars-monitor-header">' +
+                        '<div class="lcars-monitor-title">DISTRIBUTION NETWORK</div>' +
+                    '</div>' +
+                    '<div class="lcars-monitor-content">' +
+                        '<svg class="lcars-energy-svg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">' +
+                            '<defs>' +
+                                '<filter id="glow" x="-50%" y="-50%" width="200%" height="200%">' +
+                                    '<feGaussianBlur stdDeviation="2" result="blur"/>' +
+                                    '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>' +
+                                '</filter>' +
+                            '</defs>' +
+
+                            '<!-- SOLAR PANEL -->' +
+                            '<g class="lcars-node" @click="setModal(\'solar\')" transform="translate(80,60)">' +
+                                '<rect class="lcars-node-bg solar" x="0" y="0" width="120" height="100" rx="10"/>' +
+                                '<rect x="10" y="25" width="45" height="30" fill="#1a3a5a" stroke="#FFCC66" stroke-width="1" rx="3"/>' +
+                                '<rect x="65" y="25" width="45" height="30" fill="#1a3a5a" stroke="#FFCC66" stroke-width="1" rx="3"/>' +
+                                '<rect x="10" y="60" width="45" height="30" fill="#1a3a5a" stroke="#FFCC66" stroke-width="1" rx="3"/>' +
+                                '<rect x="65" y="60" width="45" height="30" fill="#1a3a5a" stroke="#FFCC66" stroke-width="1" rx="3"/>' +
+                                '<text class="lcars-node-title" x="60" y="18">SOLAR ARRAY</text>' +
+                            '</g>' +
+                            '<text x="140" y="175" fill="#FFCC66" font-size="16" font-weight="bold" text-anchor="middle" filter="url(#glow)">{{ solarPower }} W</text>' +
+
+                            '<!-- HABITAT -->' +
+                            '<g class="lcars-node" @click="setModal(\'house\')" transform="translate(400,200)">' +
+                                '<circle cx="0" cy="0" r="85" class="lcars-habitat-ring-outer" style="transform-origin:center"/>' +
+                                '<circle cx="0" cy="0" r="75" class="lcars-habitat-ring"/>' +
+                                '<circle cx="0" cy="0" r="70" class="lcars-habitat-bg"/>' +
+                                '<image href="/api/sfml_stats/assets/fleetlogo.webp" x="-50" y="-50" width="100" height="100"/>' +
+                                '<text x="0" y="-95" fill="#9999FF" font-size="12" font-weight="bold" text-anchor="middle" letter-spacing="0.2em">HABITAT</text>' +
+                                '<text x="0" y="105" fill="#9999FF" font-size="20" font-weight="bold" text-anchor="middle" filter="url(#glow)">{{ housePower }} W</text>' +
+                                '<text x="0" y="120" fill="#666" font-size="9" text-anchor="middle">VERBRAUCH</text>' +
+                            '</g>' +
+
+                            '<!-- WARP CORE / BATTERY -->' +
+                            '<g v-if="hasBattery" class="lcars-node" @click="setModal(\'battery\')" transform="translate(80,250)">' +
+                                '<rect class="lcars-node-bg battery" x="0" y="0" width="120" height="100" rx="10"/>' +
+                                '<rect x="15" y="30" width="90" height="35" fill="#0a2a20" stroke="#99CC99" stroke-width="1" rx="5"/>' +
+                                '<rect x="17" y="32" :width="86*(batterySoc/100)" height="31" rx="4" :fill="batterySoc<20?\'#CC6666\':(batterySoc<50?\'#FFCC66\':\'#99CC99\')"/>' +
+                                '<text x="60" y="55" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{{ socDisplay }}%</text>' +
+                                '<rect x="20" y="72" width="80" height="18" rx="9" :fill="batteryPower>0?\'#99CC99\':(batteryPower<0?\'#FFCC66\':\'#666\')"/>' +
+                                '<text x="60" y="85" fill="#000" font-size="9" font-weight="bold" text-anchor="middle">{{ batteryStatus }}</text>' +
+                                '<text class="lcars-node-title" x="60" y="18">WARP CORE</text>' +
+                            '</g>' +
+                            '<text v-if="hasBattery" x="140" y="365" fill="#99CC99" font-size="14" font-weight="bold" text-anchor="middle" filter="url(#glow)">{{ Math.abs(batteryPower) }} W</text>' +
+
+                            '<!-- POWER MATRIX / GRID -->' +
+                            '<g class="lcars-node" @click="setModal(\'grid\')" transform="translate(600,130)">' +
+                                '<rect class="lcars-node-bg grid" x="0" y="0" width="120" height="140" rx="10"/>' +
+                                '<line x1="60" y1="25" x2="60" y2="95" stroke="#CC99CC" stroke-width="4"/>' +
+                                '<line x1="30" y1="45" x2="90" y2="45" stroke="#CC99CC" stroke-width="3"/>' +
+                                '<line x1="25" y1="70" x2="95" y2="70" stroke="#CC99CC" stroke-width="3"/>' +
+                                '<line x1="10" y1="45" x2="30" y2="45" stroke="#CC99CC" stroke-width="2"/>' +
+                                '<line x1="90" y1="45" x2="110" y2="45" stroke="#CC99CC" stroke-width="2"/>' +
+                                '<rect x="15" y="100" width="90" height="25" rx="8" :fill="gridPower>50?\'#CC99CC\':(gridPower<-50?\'#66CCCC\':\'#444\')"/>' +
+                                '<text x="60" y="118" fill="#000" font-size="10" font-weight="bold" text-anchor="middle">{{ gridStatus }}</text>' +
+                                '<text class="lcars-node-title" x="60" y="18">POWER MATRIX</text>' +
+                            '</g>' +
+                            '<text x="660" y="285" fill="#CC99CC" font-size="16" font-weight="bold" text-anchor="middle" filter="url(#glow)">{{ Math.abs(gridPower) }} W</text>' +
+
+                            '<!-- ENERGY FLOW PIPES -->' +
+                            '<g v-if="flows.solar_to_house>0">' +
+                                '<path class="lcars-pipe-bg" d="M200,110 L280,110 L280,200 L325,200"/>' +
+                                '<path class="lcars-pipe solar lcars-pipe-flow" d="M200,110 L280,110 L280,200 L325,200" filter="url(#glow)"/>' +
+                                '<rect x="235" y="140" width="50" height="18" rx="4" fill="#000"/>' +
+                                '<text x="260" y="153" class="lcars-flow-label" fill="#FFCC66">{{ flows.solar_to_house }} W</text>' +
+                            '</g>' +
+                            '<g v-if="flows.solar_to_battery>0">' +
+                                '<path class="lcars-pipe-bg" d="M140,160 L140,250"/>' +
+                                '<path class="lcars-pipe solar lcars-pipe-flow" d="M140,160 L140,250" filter="url(#glow)"/>' +
+                                '<rect x="95" y="195" width="50" height="18" rx="4" fill="#000"/>' +
+                                '<text x="120" y="208" class="lcars-flow-label" fill="#FFCC66">{{ flows.solar_to_battery }} W</text>' +
+                            '</g>' +
+                            '<g v-if="flows.battery_to_house>0">' +
+                                '<path class="lcars-pipe-bg" d="M200,300 L280,300 L280,220 L325,220"/>' +
+                                '<path class="lcars-pipe battery lcars-pipe-flow" d="M200,300 L280,300 L280,220 L325,220" filter="url(#glow)"/>' +
+                                '<rect x="225" y="250" width="50" height="18" rx="4" fill="#000"/>' +
+                                '<text x="250" y="263" class="lcars-flow-label" fill="#99CC99">{{ flows.battery_to_house }} W</text>' +
+                            '</g>' +
+                            '<g v-if="flows.grid_to_house>0">' +
+                                '<path class="lcars-pipe-bg" d="M600,200 L520,200 L520,200 L475,200"/>' +
+                                '<path class="lcars-pipe grid lcars-pipe-flow" d="M600,200 L520,200 L520,200 L475,200" filter="url(#glow)"/>' +
+                                '<rect x="505" y="180" width="50" height="18" rx="4" fill="#000"/>' +
+                                '<text x="530" y="193" class="lcars-flow-label" fill="#CC99CC">{{ flows.grid_to_house }} W</text>' +
+                            '</g>' +
+                            '<g v-if="flows.grid_to_battery>0">' +
+                                '<path class="lcars-pipe-bg" d="M600,270 L500,270 L500,340 L200,340 L200,300"/>' +
+                                '<path class="lcars-pipe grid lcars-pipe-flow" d="M600,270 L500,270 L500,340 L200,340 L200,300" filter="url(#glow)"/>' +
+                                '<rect x="340" y="320" width="50" height="18" rx="4" fill="#000"/>' +
+                                '<text x="365" y="333" class="lcars-flow-label" fill="#CC99CC">{{ flows.grid_to_battery }} W</text>' +
+                            '</g>' +
+                            '<g v-if="flows.solar_to_grid>0">' +
+                                '<path class="lcars-pipe-bg" d="M200,90 L400,90 L400,50 L660,50 L660,130"/>' +
+                                '<path class="lcars-pipe solar lcars-pipe-flow" d="M200,90 L400,90 L400,50 L660,50 L660,130" filter="url(#glow)"/>' +
+                                '<rect x="490" y="35" width="60" height="18" rx="4" fill="#000"/>' +
+                                '<text x="520" y="48" class="lcars-flow-label" fill="#66CCCC">{{ flows.solar_to_grid }} W</text>' +
+                            '</g>' +
+                        '</svg>' +
+                    '</div>' +
+                '</div>' +
+
+                '<!-- RIGHT SIDEBAR -->' +
+                '<div class="lcars-sidebar-right">' +
+                    '<div class="lcars-sidebar-card datetime">' +
+                        '<div class="lcars-card-label">STARDATE</div>' +
+                        '<div class="lcars-card-value" style="font-size:14px">{{ currentTime }}</div>' +
+                        '<div style="font-size:9px;color:var(--lcars-orange,#FF9966);margin-top:3px">{{ currentDate }}</div>' +
+                    '</div>' +
+                    '<div class="lcars-sidebar-card weather" @click="setModal(\'weather\')">' +
+                        '<div class="lcars-card-label">ENVIRONMENTAL</div>' +
+                        '<div class="lcars-card-value">{{ tempDisplay }}&deg;C</div>' +
+                        '<div style="font-size:9px;color:#6699CC;margin-top:3px">{{ cloudsDisplay }}% Wolken</div>' +
+                    '</div>' +
+                    '<div class="lcars-sidebar-card grid" @click="setModal(\'grid\')">' +
+                        '<div class="lcars-card-label">GRID STATUS</div>' +
+                        '<div class="lcars-card-value">{{ Math.abs(gridPower) }} W</div>' +
+                        '<div class="lcars-card-status" :class="{importing:gridPower>50,exporting:gridPower<-50,standby:Math.abs(gridPower)<=50}">{{ gridStatus }}</div>' +
+                    '</div>' +
+                    '<div v-if="hasBattery" class="lcars-sidebar-card battery" @click="setModal(\'battery\')">' +
+                        '<div class="lcars-card-label">WARP CORE</div>' +
+                        '<div class="lcars-card-value">{{ socDisplay }}%</div>' +
+                        '<div class="lcars-soc-bar"><div class="lcars-soc-fill" :class="{low:batterySoc<20,medium:batterySoc>=20&&batterySoc<50}" :style="{width:(batterySoc||0)+\'%\'}"></div></div>' +
+                        '<div class="lcars-card-status" :class="{charging:batteryPower>0,discharging:batteryPower<0,standby:batteryPower===0}">{{ batteryStatus }}</div>' +
+                    '</div>' +
+                    '<div style="flex:1"></div>' +
+                    '<button class="lcars-btn" @click="setModal(\'house\')">HABITAT</button>' +
+                    '<button class="lcars-btn blue" @click="setModal(\'sources\')">SOURCES</button>' +
+                    '<button class="lcars-btn purple" @click="openClothing">AWAY TEAM</button>' +
+                    '<button class="lcars-btn green" @click="switchToDashboard">CYBERPUNK</button>' +
+                '</div>' +
+
+                '<!-- FOOTER ROW -->' +
+                '<div class="lcars-footer-row desktop-only">' +
+                    '<div class="lcars-footer-left"></div>' +
+                    '<div class="lcars-footer-center">' +
+                        '<div class="lcars-footer-bar"></div>' +
+                        '<div class="lcars-footer-text">LCARS v24.02 &bull; ZARA-TOOROX SYSTEMS &bull; {{ lastUpdate }}</div>' +
+                    '</div>' +
+                    '<div class="lcars-footer-right"></div>' +
+                '</div>' +
+
+            '</div>' +
+
+            '<!-- MOBILE NAVIGATION -->' +
+            '<nav class="lcars-mobile-nav mobile-only">' +
+                '<div class="lcars-mobile-nav-inner">' +
+                    '<button class="lcars-mobile-btn yellow" @click="setModal(\'solar\')"><span class="lcars-mobile-btn-icon">&#9728;</span>SOLAR</button>' +
+                    '<button class="lcars-mobile-btn green" @click="setModal(\'battery\')"><span class="lcars-mobile-btn-icon">&#9889;</span>WARP CORE</button>' +
+                    '<button class="lcars-mobile-btn purple" @click="setModal(\'grid\')"><span class="lcars-mobile-btn-icon">&#8942;</span>POWER GRID</button>' +
+                    '<button class="lcars-mobile-btn blue" @click="setModal(\'weather\')"><span class="lcars-mobile-btn-icon">&#127777;</span>SENSORS</button>' +
+                    '<button class="lcars-mobile-btn blue" @click="setModal(\'house\')"><span class="lcars-mobile-btn-icon">&#8962;</span>HABITAT</button>' +
+                    '<button class="lcars-mobile-btn" @click="openStats"><span class="lcars-mobile-btn-icon">&#128202;</span>STATISTICS</button>' +
+                    '<button class="lcars-mobile-btn blue" @click="openForecast"><span class="lcars-mobile-btn-icon">&#128200;</span>FORECAST</button>' +
+                    '<button class="lcars-mobile-btn purple" @click="openBilling"><span class="lcars-mobile-btn-icon">&#128181;</span>BILLING</button>' +
+                    '<button class="lcars-mobile-btn cyan" @click="switchToDashboard"><span class="lcars-mobile-btn-icon">&#127760;</span>CYBERPUNK</button>' +
+                '</div>' +
+            '</nav>' +
+
+            '<!-- ===== MODALS ===== -->' +
+
+            '<!-- Solar Modal -->' +
+            '<div v-if="modal===\'solar\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-yellow,#FFCC66)">' +
+                        '<span class="lcars-modal-title">SOLAR ARRAY STATUS</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header yellow">PRODUCTION DATA</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Current Output</span><span class="lcars-data-value">{{ solarPower }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Today Production</span><span class="lcars-data-value">{{ yieldToday }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Forecast Today</span><span class="lcars-data-value">{{ forecastTotal }} kWh</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header orange">ENERGY DISTRIBUTION</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">To House</span><span class="lcars-data-value">{{ flows.solar_to_house }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">To Battery</span><span class="lcars-data-value">{{ flows.solar_to_battery }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">To Grid (Export)</span><span class="lcars-data-value">{{ flows.solar_to_grid }} W</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- Battery Modal -->' +
+            '<div v-if="modal===\'battery\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-green,#99CC99)">' +
+                        '<span class="lcars-modal-title">WARP CORE STATUS</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header green">CORE METRICS</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Power Level</span><span class="lcars-data-value">{{ Math.abs(batteryPower) }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Core Charge</span><span class="lcars-data-value">{{ socDisplay }}%</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Status</span><span class="lcars-data-value">{{ batteryStatus }}</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- Grid Modal -->' +
+            '<div v-if="modal===\'grid\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-purple,#CC99CC)">' +
+                        '<span class="lcars-modal-title">POWER MATRIX STATUS</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header purple">GRID METRICS</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Power</span><span class="lcars-data-value">{{ Math.abs(gridPower) }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Status</span><span class="lcars-data-value">{{ gridStatus }}</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Current Price</span><span class="lcars-data-value">{{ priceDisplay }} ct/kWh</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- Weather Modal -->' +
+            '<div v-if="modal===\'weather\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-weather,#6699CC)">' +
+                        '<span class="lcars-modal-title">ENVIRONMENTAL SENSORS</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header" style="background:#6699CC">SENSOR DATA</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Temperature</span><span class="lcars-data-value">{{ tempDisplay }}&deg;C</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Radiation</span><span class="lcars-data-value">{{ weather.radiation ? Number(weather.radiation).toFixed(0) : "0" }} W/m&sup2;</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Humidity</span><span class="lcars-data-value">{{ weather.humidity ? Number(weather.humidity).toFixed(0) : "---" }}%</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Wind Speed</span><span class="lcars-data-value">{{ weather.wind ? Number(weather.wind).toFixed(1) : "---" }} m/s</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Cloud Coverage</span><span class="lcars-data-value">{{ cloudsDisplay }}%</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- House Modal -->' +
+            '<div v-if="modal===\'house\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-blue,#9999FF)">' +
+                        '<span class="lcars-modal-title">HABITAT CONSUMPTION</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header">CONSUMPTION DATA</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Current Draw</span><span class="lcars-data-value">{{ housePower }} W</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header orange">POWER SOURCES</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">From Solar</span><span class="lcars-data-value">{{ flows.solar_to_house }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">From Battery</span><span class="lcars-data-value">{{ flows.battery_to_house }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">From Grid</span><span class="lcars-data-value">{{ flows.grid_to_house }} W</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- Sources Modal -->' +
+            '<div v-if="modal===\'sources\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-blue,#9999FF)">' +
+                        '<span class="lcars-modal-title">POWER SOURCES</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header">SOURCE OVERVIEW</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Solar</span><span class="lcars-data-value">{{ solarPower }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Battery</span><span class="lcars-data-value">{{ Math.abs(batteryPower) }} W</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Grid</span><span class="lcars-data-value">{{ Math.abs(gridPower) }} W</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- Statistics Modal -->' +
+            '<div v-if="modal===\'stats\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal lcars-modal-wide">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-orange,#FF9966)">' +
+                        '<span class="lcars-modal-title">ENERGY STATISTICS ANALYSIS</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header yellow">PEAK POWER RECORDS</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-stats-grid">' +
+                                    '<div class="lcars-stats-card">' +
+                                        '<div class="lcars-stats-card-label">TODAY PEAK</div>' +
+                                        '<div class="lcars-stats-card-value yellow">{{ stats.peaks.today.power_w ? (Number(stats.peaks.today.power_w)/1000).toFixed(2) : "0.00" }} kW</div>' +
+                                        '<div class="lcars-stats-card-meta">{{ stats.peaks.today.at || "N/A" }}</div>' +
+                                    '</div>' +
+                                    '<div class="lcars-stats-card">' +
+                                        '<div class="lcars-stats-card-label">ALL-TIME PEAK</div>' +
+                                        '<div class="lcars-stats-card-value orange">{{ stats.peaks.all_time.power_w ? (Number(stats.peaks.all_time.power_w)/1000).toFixed(2) : "0.00" }} kW</div>' +
+                                        '<div class="lcars-stats-card-meta">{{ stats.peaks.all_time.date || "N/A" }}</div>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header green">PRODUCTION OVERVIEW</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Today Forecast</span><span class="lcars-data-value">{{ stats.production.today.forecast_kwh ? Number(stats.production.today.forecast_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Today Actual</span><span class="lcars-data-value">{{ stats.production.today.yield_kwh ? Number(stats.production.today.yield_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Tomorrow Forecast</span><span class="lcars-data-value">{{ stats.production.tomorrow.forecast_kwh ? Number(stats.production.tomorrow.forecast_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header purple">PERIOD STATISTICS</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Current Week</span><span class="lcars-data-value">{{ stats.stats.current_week.yield_kwh ? Number(stats.stats.current_week.yield_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Current Month</span><span class="lcars-data-value">{{ stats.stats.current_month.yield_kwh ? Number(stats.stats.current_month.yield_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Last 7 Days</span><span class="lcars-data-value">{{ stats.stats.last_7_days.total_yield_kwh ? Number(stats.stats.last_7_days.total_yield_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Last 30 Days</span><span class="lcars-data-value">{{ stats.stats.last_30_days.total_yield_kwh ? Number(stats.stats.last_30_days.total_yield_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Last 365 Days</span><span class="lcars-data-value">{{ stats.stats.last_365_days.total_yield_kwh ? Number(stats.stats.last_365_days.total_yield_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- Forecast Modal -->' +
+            '<div v-if="modal===\'forecast\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal lcars-modal-wide">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-blue,#9999FF)">' +
+                        '<span class="lcars-modal-title">SOLAR FORECAST ANALYSIS</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header yellow">CURRENT FORECAST</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Today Total</span><span class="lcars-data-value">{{ forecastTotal }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Today Remaining</span><span class="lcars-data-value">{{ forecastRemaining }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Current Yield</span><span class="lcars-data-value">{{ yieldToday }} kWh</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div v-if="forecastComparison.length>0" class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header purple">FORECAST VS ACTUAL (LAST 7 DAYS)</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-forecast-table">' +
+                                    '<div class="lcars-forecast-table-header">' +
+                                        '<div class="lcars-forecast-table-cell">DATE</div>' +
+                                        '<div class="lcars-forecast-table-cell">FORECAST</div>' +
+                                        '<div class="lcars-forecast-table-cell">ACTUAL</div>' +
+                                        '<div class="lcars-forecast-table-cell">ACCURACY</div>' +
+                                    '</div>' +
+                                    '<div v-for="(day,i) in forecastComparison" :key="i" class="lcars-forecast-table-row">' +
+                                        '<div class="lcars-forecast-table-cell">{{ day.date || "N/A" }}</div>' +
+                                        '<div class="lcars-forecast-table-cell">{{ day.forecast_kwh ? Number(day.forecast_kwh).toFixed(2) : "N/A" }} kWh</div>' +
+                                        '<div class="lcars-forecast-table-cell">{{ day.actual_kwh ? Number(day.actual_kwh).toFixed(2) : "N/A" }} kWh</div>' +
+                                        '<div class="lcars-forecast-table-cell" :class="{\'accuracy-good\':day.accuracy_percent>=90,\'accuracy-medium\':day.accuracy_percent>=70&&day.accuracy_percent<90,\'accuracy-poor\':day.accuracy_percent<70}">{{ day.accuracy_percent ? Number(day.accuracy_percent).toFixed(1) : "N/A" }}%</div>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- Billing Modal -->' +
+            '<div v-if="modal===\'billing\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal lcars-modal-wide">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-purple,#CC99CC)">' +
+                        '<span class="lcars-modal-title">ANNUAL ENERGY BALANCE &amp; BILLING</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header purple">BILLING PERIOD</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Period</span><span class="lcars-data-value">{{ billing.period.start }} - {{ billing.period.end }}</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Progress</span><span class="lcars-data-value">{{ billing.period.progress_percent ? Number(billing.period.progress_percent).toFixed(1) : "0" }}%</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header yellow">ENERGY OVERVIEW</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-stats-grid">' +
+                                    '<div class="lcars-stats-card"><div class="lcars-stats-card-label">SOLAR</div><div class="lcars-stats-card-value yellow">{{ billing.solar.total_kwh ? Number(billing.solar.total_kwh).toFixed(2) : "0.00" }} kWh</div></div>' +
+                                    '<div class="lcars-stats-card"><div class="lcars-stats-card-label">CONSUMPTION</div><div class="lcars-stats-card-value">{{ billing.household.total_kwh ? Number(billing.household.total_kwh).toFixed(2) : "0.00" }} kWh</div></div>' +
+                                    '<div class="lcars-stats-card"><div class="lcars-stats-card-label">IMPORT</div><div class="lcars-stats-card-value" style="color:#CC99CC">{{ billing.grid.total_import_kwh ? Number(billing.grid.total_import_kwh).toFixed(2) : "0.00" }} kWh</div></div>' +
+                                    '<div class="lcars-stats-card"><div class="lcars-stats-card-label">EXPORT</div><div class="lcars-stats-card-value" style="color:#66CCCC">{{ billing.grid.export_kwh ? Number(billing.grid.export_kwh).toFixed(2) : "0.00" }} kWh</div></div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header orange">HOUSEHOLD SOURCES</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">From Solar</span><span class="lcars-data-value">{{ billing.household.from_solar_kwh ? Number(billing.household.from_solar_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">From Battery</span><span class="lcars-data-value">{{ billing.household.from_battery_kwh ? Number(billing.household.from_battery_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">From Grid</span><span class="lcars-data-value">{{ billing.household.from_grid_kwh ? Number(billing.household.from_grid_kwh).toFixed(2) : "0.00" }} kWh</span></div>' +
+                                '<div class="lcars-data-row"><span class="lcars-data-label">Self-Sufficiency</span><span class="lcars-data-value" style="color:#99CC99">{{ billing.autarkie_percent ? Number(billing.autarkie_percent).toFixed(1) : "0" }}%</span></div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header" style="background:#CC6666">FINANCIAL SUMMARY</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-stats-grid">' +
+                                    '<div class="lcars-stats-card"><div class="lcars-stats-card-label">GRID COST</div><div class="lcars-stats-card-value" style="color:#CC6666">{{ billing.finance.grid_cost_eur ? Number(billing.finance.grid_cost_eur).toFixed(2) : "0.00" }} &euro;</div></div>' +
+                                    '<div class="lcars-stats-card"><div class="lcars-stats-card-label">SAVINGS</div><div class="lcars-stats-card-value" style="color:#99CC99">{{ billing.finance.savings_eur ? Number(billing.finance.savings_eur).toFixed(2) : "0.00" }} &euro;</div></div>' +
+                                    '<div class="lcars-stats-card"><div class="lcars-stats-card-label">AVG PRICE</div><div class="lcars-stats-card-value">{{ billing.finance.avg_price_ct ? Number(billing.finance.avg_price_ct).toFixed(2) : "0.00" }} ct/kWh</div></div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<!-- Clothing Modal -->' +
+            '<div v-if="modal===\'clothing\'" class="lcars-modal-overlay" @click.self="closeModal()">' +
+                '<div class="lcars-modal">' +
+                    '<div class="lcars-modal-header" style="background:var(--lcars-orange,#FF9966)">' +
+                        '<span class="lcars-modal-title">AWAY TEAM EQUIPMENT</span>' +
+                        '<button class="lcars-modal-close" @click="closeModal()">CLOSE</button>' +
+                    '</div>' +
+                    '<div class="lcars-modal-content">' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header orange">MISSION BRIEFING</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div style="padding:15px;background:rgba(255,153,102,0.1);border-radius:10px">' +
+                                    '<p style="margin:0;font-size:12px;line-height:1.6;color:#fff;text-transform:none;letter-spacing:normal">{{ clothing.text_de || "Analyzing environmental conditions..." }}</p>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header yellow">EQUIPMENT LOADOUT</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-clothing-grid">' +
+                                    '<div class="lcars-clothing-item"><div class="lcars-clothing-icon">{{ clothing.unterbekleidung.icon || "&#128085;" }}</div><div class="lcars-clothing-label">BASE LAYER</div><div class="lcars-clothing-name">{{ clothing.unterbekleidung.name || "N/A" }}</div></div>' +
+                                    '<div class="lcars-clothing-item"><div class="lcars-clothing-icon">{{ clothing.oberbekleidung.icon || "&#128084;" }}</div><div class="lcars-clothing-label">UPPER LAYER</div><div class="lcars-clothing-name">{{ clothing.oberbekleidung.name || "N/A" }}</div></div>' +
+                                    '<div class="lcars-clothing-item"><div class="lcars-clothing-icon">{{ clothing.jacke.icon || "&#129509;" }}</div><div class="lcars-clothing-label">OUTER SHELL</div><div class="lcars-clothing-name">{{ clothing.jacke.name || "N/A" }}</div></div>' +
+                                    '<div class="lcars-clothing-item"><div class="lcars-clothing-icon">{{ clothing.kopfbedeckung.icon || "&#127913;" }}</div><div class="lcars-clothing-label">HEAD PROTECTION</div><div class="lcars-clothing-name">{{ clothing.kopfbedeckung.name || "N/A" }}</div></div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div v-if="clothing.zusaetze && clothing.zusaetze.length>0" class="lcars-modal-section">' +
+                            '<div class="lcars-modal-section-header green">ADDITIONAL EQUIPMENT</div>' +
+                            '<div class="lcars-modal-section-content">' +
+                                '<div class="lcars-clothing-extras">' +
+                                    '<div v-for="(item,i) in clothing.zusaetze" :key="i" class="lcars-clothing-extra-item"><span class="lcars-clothing-extra-icon">{{ item.icon }}</span><span class="lcars-clothing-extra-name">{{ item.name }}</span></div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '</div>',
+
+            setup: function() {
+                var vueInstance = getCurrentInstance();
+                var modal = ref(null);
+                var lastUpdate = ref('---');
+                var currentDate = ref('');
+                var currentTime = ref('');
+
+                var solarPower = ref(0);
+                var housePower = ref(0);
+                var gridPower = ref(0);
+                var batteryPower = ref(0);
+                var batterySoc = ref(0);
+                var solarYieldToday = ref(0);
+                var hasBattery = ref(true);
+
+                var weather = reactive({ temperature: null, radiation: 0, humidity: null, wind: null, clouds: null });
+                var forecast = reactive({ todayTotal: 0, todayRemaining: 0 });
+                var price = reactive({ current: 0 });
+                var flows = reactive({
                     solar_to_house: 0, solar_to_battery: 0, solar_to_grid: 0,
                     battery_to_house: 0, grid_to_house: 0, grid_to_battery: 0
                 });
-                const statistics = reactive({
+                var stats = reactive({
                     peaks: { today: {}, all_time: {} },
                     production: { today: {}, tomorrow: {} },
                     best_hour: {},
                     stats: { current_week: {}, current_month: {}, last_7_days: {}, last_30_days: {}, last_365_days: {} }
                 });
-                const forecastComparison = ref([]);
-                const billing = reactive({
+                var forecastComparison = ref([]);
+                var billing = reactive({
                     period: { start: '', end: '', progress_percent: 0, days_elapsed: 0, days_total: 365 },
                     household: { total_kwh: 0, from_solar_kwh: 0, from_battery_kwh: 0, from_grid_kwh: 0 },
                     battery: { total_charge_kwh: 0, from_solar_kwh: 0, from_grid_kwh: 0 },
@@ -939,402 +622,298 @@
                     autarkie_percent: 0,
                     consumers: { heatpump: {}, heatingrod: {}, wallbox: {}, total_cost_eur: 0 }
                 });
-                const clothing = reactive({
+                var clothing = reactive({
                     unterbekleidung: { name: '', icon: '' },
                     oberbekleidung: { name: '', icon: '' },
                     jacke: { name: '', icon: '' },
                     kopfbedeckung: { name: '', icon: '' },
                     zusaetze: [],
-                    text_de: '',
-                    text_en: ''
+                    text_de: '', text_en: ''
                 });
 
-                const solarPower = ref(0);
-                const housePower = ref(0);
-                const gridPower = ref(0);
-                const batteryPower = ref(0);
-                const batterySoc = ref(0);
-                const solarYieldToday = ref(0);
-                const hasBattery = ref(true);
-
-                const gridStatus = computed(() => {
+                var gridStatus = computed(function() {
                     if (gridPower.value > 50) return 'IMPORT';
                     if (gridPower.value < -50) return 'EXPORT';
                     return 'IDLE';
                 });
-
-                const batteryStatus = computed(() => {
+                var batteryStatus = computed(function() {
                     if (batteryPower.value > 50) return 'CHARGING';
                     if (batteryPower.value < -50) return 'DISCHARGING';
                     return 'STANDBY';
                 });
-
-                const stardate = computed(() => {
-                    const now = new Date();
-                    const year = now.getFullYear() - 2000;
-                    const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
-                    const fraction = (dayOfYear / 365).toFixed(1).substring(2);
-                    return `${year}${fraction}.${now.getHours().toString().padStart(2, '0')}`;
+                var forecastTotal = computed(function() {
+                    var v = Number(forecast.todayTotal);
+                    return v ? v.toFixed(1) : '0';
+                });
+                var forecastRemaining = computed(function() {
+                    var v = Number(forecast.todayRemaining);
+                    return v ? v.toFixed(2) : '0.00';
+                });
+                var yieldToday = computed(function() {
+                    var v = Number(solarYieldToday.value);
+                    return v ? v.toFixed(2) : '0.00';
+                });
+                var tempDisplay = computed(function() {
+                    var v = Number(weather.temperature);
+                    return (weather.temperature !== null && !isNaN(v)) ? v.toFixed(1) : '--';
+                });
+                var cloudsDisplay = computed(function() {
+                    var v = Number(weather.clouds);
+                    return (weather.clouds !== null && !isNaN(v)) ? v.toFixed(0) : '--';
+                });
+                var socDisplay = computed(function() {
+                    var v = Number(batterySoc.value);
+                    return v ? v.toFixed(0) : '0';
+                });
+                var priceDisplay = computed(function() {
+                    var v = Number(price.current);
+                    return v ? v.toFixed(2) : '0.00';
                 });
 
-                // Current date and time
-                const currentDate = ref('');
-                const currentTime = ref('');
+                function updateDateTime() {
+                    var now = new Date();
+                    var days = ['SO','MO','DI','MI','DO','FR','SA'];
+                    var d = now.getDate().toString().padStart(2,'0');
+                    var m = (now.getMonth()+1).toString().padStart(2,'0');
+                    currentDate.value = days[now.getDay()] + ' ' + d + '.' + m + '.' + now.getFullYear();
+                    currentTime.value = now.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+                }
 
-                const updateDateTime = () => {
-                    const now = new Date();
-                    const days = ['SO', 'MO', 'DI', 'MI', 'DO', 'FR', 'SA'];
-                    const day = days[now.getDay()];
-                    const date = now.getDate().toString().padStart(2, '0');
-                    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-                    const year = now.getFullYear();
-                    currentDate.value = `${day} ${date}.${month}.${year}`;
-                    currentTime.value = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                };
+                function fetchData() {
+                    fetch('/api/sfml_stats/summary').then(function(r) { return r.json(); }).then(function(data) {
+                        if (data.kpis && data.kpis.price_current !== undefined) {
+                            price.current = data.kpis.price_current;
+                        }
+                    }).catch(function() {});
 
-                // Modal states
-                const showSolarModal = ref(false);
-                const showBatteryModal = ref(false);
-                const showGridModal = ref(false);
-                const showWeatherModal = ref(false);
-                const showHouseModal = ref(false);
-                const showStatsModal = ref(false);
-                const showForecastModal = ref(false);
-                const showBillingModal = ref(false);
-                const showClothingModal = ref(false);
+                    fetch('/api/sfml_stats/energy_flow').then(function(r) { return r.json(); }).then(function(flow) {
+                        solarPower.value = Math.round(flow.flows ? flow.flows.solar_power || 0 : 0);
+                        housePower.value = Math.round(flow.home ? flow.home.consumption || 0 : 0);
 
-                const openSolarModal = () => showSolarModal.value = true;
-                const closeSolarModal = () => showSolarModal.value = false;
-                const openBatteryModal = () => showBatteryModal.value = true;
-                const closeBatteryModal = () => showBatteryModal.value = false;
-                const openGridModal = () => showGridModal.value = true;
-                const closeGridModal = () => showGridModal.value = false;
-                const openWeatherModal = () => showWeatherModal.value = true;
-                const closeWeatherModal = () => showWeatherModal.value = false;
-                const openHouseModal = () => showHouseModal.value = true;
-                const closeHouseModal = () => showHouseModal.value = false;
+                        var g2h = flow.flows ? flow.flows.grid_to_house || 0 : 0;
+                        var h2g = flow.flows ? flow.flows.house_to_grid || 0 : 0;
+                        gridPower.value = Math.round(g2h - h2g);
 
-                const openStatsModal = async () => {
-                    try {
-                        const response = await fetch('/api/sfml_stats/statistics');
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.peaks) {
-                                statistics.peaks.today = data.peaks.today || {};
-                                statistics.peaks.all_time = data.peaks.all_time || {};
+                        if (flow.battery) {
+                            batteryPower.value = Math.round(flow.battery.power || 0);
+                            batterySoc.value = flow.battery.soc || 0;
+                            hasBattery.value = flow.battery.soc !== null;
+                        }
+
+                        if (flow.flows) {
+                            flows.solar_to_house = Math.round(flow.flows.solar_to_house || 0);
+                            flows.solar_to_battery = Math.round(flow.flows.solar_to_battery || 0);
+                            flows.solar_to_grid = Math.round(h2g || 0);
+                            flows.battery_to_house = Math.round(flow.flows.battery_to_house || 0);
+                            flows.grid_to_house = Math.round(g2h || 0);
+                            flows.grid_to_battery = Math.round(flow.flows.grid_to_battery || 0);
+                        }
+
+                        if (flow.statistics) {
+                            solarYieldToday.value = flow.statistics.solar_yield_daily || 0;
+                        }
+
+                        if (flow.weather_ha) {
+                            weather.temperature = flow.weather_ha.temperature;
+                            weather.humidity = flow.weather_ha.humidity;
+                            weather.wind = flow.weather_ha.wind_speed;
+                            weather.clouds = flow.weather_ha.cloud_coverage;
+                        }
+
+                        if (!price.current && flow.current_price) {
+                            price.current = flow.current_price.net_price || flow.current_price.total_price || 0;
+                        }
+
+                        lastUpdate.value = new Date().toLocaleTimeString('de-DE');
+                    }).catch(function(err) {
+                        console.error('Energy flow fetch error:', err);
+                    });
+
+                    fetch('/api/sfml_stats/solar').then(function(r) { return r.json(); }).then(function(solar) {
+                        if (solar.success && solar.data) {
+                            var hourly = solar.data.hourly || [];
+                            var now = new Date();
+                            var todayStr = now.toISOString().split('T')[0];
+                            var currentHour = now.getHours();
+
+                            var todayPreds = hourly.filter(function(h) {
+                                return h.target_date === todayStr && h.target_hour >= 6 && h.target_hour <= 20;
+                            });
+
+                            if (todayPreds.length > 0) {
+                                forecast.todayTotal = todayPreds.reduce(function(s, h) { return s + (h.prediction_kwh || 0); }, 0);
+                                forecast.todayRemaining = todayPreds.filter(function(h) { return h.target_hour > currentHour; })
+                                    .reduce(function(s, h) { return s + (h.prediction_kwh || 0); }, 0);
                             }
-                            if (data.production) {
-                                statistics.production.today = data.production.today || {};
-                                statistics.production.tomorrow = data.production.tomorrow || {};
-                            }
-                            if (data.best_hour) {
-                                statistics.best_hour = data.best_hour;
-                            }
-                            if (data.statistics) {
-                                statistics.stats.current_week = data.statistics.current_week || {};
-                                statistics.stats.current_month = data.statistics.current_month || {};
-                                statistics.stats.last_7_days = data.statistics.last_7_days || {};
-                                statistics.stats.last_30_days = data.statistics.last_30_days || {};
-                                statistics.stats.last_365_days = data.statistics.last_365_days || {};
+
+                            var corrected = solar.data.forecasts && solar.data.forecasts.today ? solar.data.forecasts.today.prediction_kwh_display : null;
+                            if (corrected && corrected > 0) forecast.todayTotal = corrected;
+
+                            if (forecast.todayTotal === 0 && solar.data.forecasts && solar.data.forecasts.today && solar.data.forecasts.today.prediction_kwh) {
+                                forecast.todayTotal = solar.data.forecasts.today.prediction_kwh;
                             }
                         }
-                    } catch (error) {
-                        console.error('Failed to fetch statistics:', error);
-                    }
-                    showStatsModal.value = true;
-                };
-                const closeStatsModal = () => showStatsModal.value = false;
-                const openForecastModal = async () => {
-                    try {
-                        const response = await fetch('/api/sfml_stats/forecast_comparison?days=7');
-                        if (response.ok) {
-                            const result = await response.json();
-                            if (result.success && result.data) {
-                                forecastComparison.value = result.data;
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to fetch forecast comparison:', error);
-                    }
-                    showForecastModal.value = true;
-                };
-                const closeForecastModal = () => showForecastModal.value = false;
-                const openBillingModal = async () => {
-                    try {
-                        const response = await fetch('/api/sfml_stats/billing');
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.success) {
-                                if (data.period) Object.assign(billing.period, data.period);
-                                if (data.household) Object.assign(billing.household, data.household);
-                                if (data.battery) Object.assign(billing.battery, data.battery);
-                                if (data.solar) Object.assign(billing.solar, data.solar);
-                                if (data.grid) Object.assign(billing.grid, data.grid);
-                                if (data.finance) Object.assign(billing.finance, data.finance);
-                                if (data.autarkie_percent !== undefined) billing.autarkie_percent = data.autarkie_percent;
-                                if (data.consumers) Object.assign(billing.consumers, data.consumers);
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to fetch billing data:', error);
-                    }
-                    showBillingModal.value = true;
-                };
-                const closeBillingModal = () => showBillingModal.value = false;
-                const openPowerSourcesModal = () => alert('Power Sources - Coming Soon');
-                const openClothingModal = async () => {
-                    try {
-                        const response = await fetch('/api/sfml_stats/clothing_recommendation');
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.success && data.recommendation) {
-                                const rec = data.recommendation;
-                                clothing.unterbekleidung = rec.unterbekleidung || {};
-                                clothing.oberbekleidung = rec.oberbekleidung || {};
-                                clothing.jacke = rec.jacke || {};
-                                clothing.kopfbedeckung = rec.kopfbedeckung || {};
-                                clothing.zusaetze = rec.zusaetze || [];
-                                clothing.text_de = rec.text_de || '';
-                                clothing.text_en = rec.text_en || '';
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to fetch clothing recommendation:', error);
-                    }
-                    showClothingModal.value = true;
-                };
-                const closeClothingModal = () => showClothingModal.value = false;
+                    }).catch(function() {});
+                }
 
-                const switchToDashboard = () => {
-                    // Reset to 3D view when leaving LCARS
+                function forceUpdate() {
+                    if (vueInstance && vueInstance.proxy) vueInstance.proxy.$forceUpdate();
+                }
+
+                function openStats() {
+                    fetch('/api/sfml_stats/statistics').then(function(r) { return r.json(); }).then(function(data) {
+                        if (data.peaks) { stats.peaks.today = data.peaks.today || {}; stats.peaks.all_time = data.peaks.all_time || {}; }
+                        if (data.production) { stats.production.today = data.production.today || {}; stats.production.tomorrow = data.production.tomorrow || {}; }
+                        if (data.best_hour) stats.best_hour = data.best_hour;
+                        if (data.statistics) {
+                            stats.stats.current_week = data.statistics.current_week || {};
+                            stats.stats.current_month = data.statistics.current_month || {};
+                            stats.stats.last_7_days = data.statistics.last_7_days || {};
+                            stats.stats.last_30_days = data.statistics.last_30_days || {};
+                            stats.stats.last_365_days = data.statistics.last_365_days || {};
+                        }
+                    }).catch(function() {});
+                    modal.value = 'stats';
+                    forceUpdate();
+                }
+
+                function openForecast() {
+                    fetch('/api/sfml_stats/forecast_comparison?days=7').then(function(r) { return r.json(); }).then(function(result) {
+                        if (result.success && result.data) forecastComparison.value = result.data;
+                    }).catch(function() {});
+                    modal.value = 'forecast';
+                    forceUpdate();
+                }
+
+                function openBilling() {
+                    fetch('/api/sfml_stats/billing').then(function(r) { return r.json(); }).then(function(data) {
+                        if (data.success) {
+                            if (data.period) Object.assign(billing.period, data.period);
+                            if (data.household) Object.assign(billing.household, data.household);
+                            if (data.battery) Object.assign(billing.battery, data.battery);
+                            if (data.solar) Object.assign(billing.solar, data.solar);
+                            if (data.grid) Object.assign(billing.grid, data.grid);
+                            if (data.finance) Object.assign(billing.finance, data.finance);
+                            if (data.autarkie_percent !== undefined) billing.autarkie_percent = data.autarkie_percent;
+                            if (data.consumers) Object.assign(billing.consumers, data.consumers);
+                        }
+                    }).catch(function() {});
+                    modal.value = 'billing';
+                    forceUpdate();
+                }
+
+                function openClothing() {
+                    fetch('/api/sfml_stats/clothing_recommendation').then(function(r) { return r.json(); }).then(function(data) {
+                        if (data.success && data.recommendation) {
+                            var rec = data.recommendation;
+                            clothing.unterbekleidung = rec.unterbekleidung || {};
+                            clothing.oberbekleidung = rec.oberbekleidung || {};
+                            clothing.jacke = rec.jacke || {};
+                            clothing.kopfbedeckung = rec.kopfbedeckung || {};
+                            clothing.zusaetze = rec.zusaetze || [];
+                            clothing.text_de = rec.text_de || '';
+                        }
+                    }).catch(function() {});
+                    modal.value = 'clothing';
+                    forceUpdate();
+                }
+
+                function setModal(name) {
+                    modal.value = name;
+                    if (vueInstance && vueInstance.proxy) vueInstance.proxy.$forceUpdate();
+                }
+                function closeModal() {
+                    modal.value = null;
+                    if (vueInstance && vueInstance.proxy) vueInstance.proxy.$forceUpdate();
+                }
+
+                function switchToDashboard() {
                     localStorage.setItem('sfml-dashboard-style', '3d');
                     window.location.href = '/api/sfml_stats/dashboard';
-                };
+                }
 
-                const fetchData = async () => {
-                    try {
-                        const summaryRes = await fetch('/api/sfml_stats/summary');
-                        if (summaryRes.ok) {
-                            const summary = await summaryRes.json();
+                var pollInterval = null;
+                var timeInterval = null;
 
-                            // Price aus summary.kpis
-                            if (summary.kpis && summary.kpis.price_current !== undefined) {
-                                price.current = summary.kpis.price_current;
-                            }
-                        }
-
-                        const flowRes = await fetch('/api/sfml_stats/energy_flow');
-                        if (flowRes.ok) {
-                            const flow = await flowRes.json();
-
-                            // Solar Power
-                            solarPower.value = Math.round(flow.flows?.solar_power || 0);
-
-                            // House Power
-                            housePower.value = Math.round(flow.home?.consumption || 0);
-
-                            // Grid Power = grid_to_house - house_to_grid (positiv = Import, negativ = Export)
-                            const gridToHouse = flow.flows?.grid_to_house || 0;
-                            const houseToGrid = flow.flows?.house_to_grid || 0;
-                            gridPower.value = Math.round(gridToHouse - houseToGrid);
-
-                            // Battery
-                            batteryPower.value = Math.round(flow.battery?.power || 0);
-                            batterySoc.value = flow.battery?.soc || 0;
-                            hasBattery.value = flow.battery?.soc !== null;
-
-                            // Flows
-                            if (flow.flows) {
-                                flows.solar_to_house = Math.round(flow.flows.solar_to_house || 0);
-                                flows.solar_to_battery = Math.round(flow.flows.solar_to_battery || 0);
-                                flows.solar_to_grid = Math.round(houseToGrid || 0); // house_to_grid = solar export
-                                flows.battery_to_house = Math.round(flow.flows.battery_to_house || 0);
-                                flows.grid_to_house = Math.round(gridToHouse || 0);
-                                flows.grid_to_battery = Math.round(flow.flows.grid_to_battery || 0);
-                            }
-
-                            // Statistics
-                            if (flow.statistics) {
-                                solarYieldToday.value = flow.statistics.solar_yield_daily || 0;
-                            }
-
-                            // Weather from HA
-                            if (flow.weather_ha) {
-                                weather.temperature = flow.weather_ha.temperature;
-                                weather.humidity = flow.weather_ha.humidity;
-                                weather.wind = flow.weather_ha.wind_speed;
-                                weather.clouds = flow.weather_ha.cloud_coverage;
-                            }
-
-                            // Price from energy_flow (falls nicht in summary)
-                            if (!price.current && flow.current_price) {
-                                price.current = flow.current_price.net_price || flow.current_price.total_price || 0;
-                            }
-                        }
-
-                        // Forecast-Daten aus /solar laden (wie im normalen Dashboard)
-                        const solarRes = await fetch('/api/sfml_stats/solar');
-                        if (solarRes.ok) {
-                            const solar = await solarRes.json();
-
-                            if (solar.success && solar.data) {
-                                // API returns "hourly" not "hourly_predictions"
-                                const hourly = solar.data.hourly || [];
-                                const now = new Date();
-                                const currentHour = now.getHours();
-                                const todayStr = now.toISOString().split('T')[0];
-
-                                // Filter predictions for today (6:00 - 20:00)
-                                const todayPreds = hourly.filter(h =>
-                                    h.target_date === todayStr &&
-                                    h.target_hour >= 6 &&
-                                    h.target_hour <= 20
-                                );
-
-                                // Calculate todayTotal from hourly predictions
-                                if (todayPreds.length > 0) {
-                                    forecast.todayTotal = todayPreds.reduce((sum, h) =>
-                                        sum + (h.prediction_kwh || 0), 0
-                                    );
-
-                                    // Calculate todayRemaining (hours after current hour)
-                                    forecast.todayRemaining = todayPreds
-                                        .filter(h => h.target_hour > currentHour)
-                                        .reduce((sum, h) => sum + (h.prediction_kwh || 0), 0);
-                                }
-
-                                // Fallback: Use corrected forecast from daily_forecasts if available
-                                const correctedForecast = solar.data.forecasts?.today?.prediction_kwh_display;
-                                if (correctedForecast && correctedForecast > 0) {
-                                    forecast.todayTotal = correctedForecast;
-                                }
-
-                                // Additional fallback: Use prediction_kwh from forecasts.today
-                                if (forecast.todayTotal === 0 && solar.data.forecasts?.today?.prediction_kwh) {
-                                    forecast.todayTotal = solar.data.forecasts.today.prediction_kwh;
-                                }
-                            }
-                        }
-
-                        isConnected.value = true;
-                        lastUpdate.value = new Date().toLocaleTimeString('de-DE');
-                    } catch (error) {
-                        console.error('Failed to fetch data:', error);
-                        isConnected.value = false;
-                    }
-                };
-
-                // Preload modal data on mount
-                const preloadModalData = async () => {
-                    // Preload statistics
-                    try {
-                        const response = await fetch('/api/sfml_stats/statistics');
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.peaks) {
-                                statistics.peaks.today = data.peaks.today || {};
-                                statistics.peaks.all_time = data.peaks.all_time || {};
-                            }
-                            if (data.production) {
-                                statistics.production.today = data.production.today || {};
-                                statistics.production.tomorrow = data.production.tomorrow || {};
-                            }
-                            if (data.best_hour) {
-                                statistics.best_hour = data.best_hour;
-                            }
-                            if (data.statistics) {
-                                statistics.stats.current_week = data.statistics.current_week || {};
-                                statistics.stats.current_month = data.statistics.current_month || {};
-                                statistics.stats.last_7_days = data.statistics.last_7_days || {};
-                                statistics.stats.last_30_days = data.statistics.last_30_days || {};
-                                statistics.stats.last_365_days = data.statistics.last_365_days || {};
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to preload statistics:', error);
-                    }
-
-                    // Preload forecast comparison
-                    try {
-                        const response = await fetch('/api/sfml_stats/forecast_comparison?days=7');
-                        if (response.ok) {
-                            const result = await response.json();
-                            if (result.success && result.data) {
-                                forecastComparison.value = result.data;
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to preload forecast comparison:', error);
-                    }
-
-                    // Preload billing
-                    try {
-                        const response = await fetch('/api/sfml_stats/billing');
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.success) {
-                                if (data.period) Object.assign(billing.period, data.period);
-                                if (data.household) Object.assign(billing.household, data.household);
-                                if (data.battery) Object.assign(billing.battery, data.battery);
-                                if (data.solar) Object.assign(billing.solar, data.solar);
-                                if (data.grid) Object.assign(billing.grid, data.grid);
-                                if (data.finance) Object.assign(billing.finance, data.finance);
-                                if (data.autarkie_percent !== undefined) billing.autarkie_percent = data.autarkie_percent;
-                                if (data.consumers) Object.assign(billing.consumers, data.consumers);
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to preload billing:', error);
-                    }
-
-                    // Preload clothing recommendation
-                    try {
-                        const response = await fetch('/api/sfml_stats/clothing_recommendation');
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.success && data.recommendation) {
-                                const rec = data.recommendation;
-                                clothing.unterbekleidung = rec.unterbekleidung || {};
-                                clothing.oberbekleidung = rec.oberbekleidung || {};
-                                clothing.jacke = rec.jacke || {};
-                                clothing.kopfbedeckung = rec.kopfbedeckung || {};
-                                clothing.zusaetze = rec.zusaetze || [];
-                                clothing.text_de = rec.text_de || '';
-                                clothing.text_en = rec.text_en || '';
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to preload clothing:', error);
-                    }
-                };
-
-                let pollInterval = null;
-                let timeInterval = null;
-                onMounted(() => {
-                    fetchData();
-                    preloadModalData();
+                onMounted(function() {
                     updateDateTime();
+                    fetchData();
                     pollInterval = setInterval(fetchData, 5000);
                     timeInterval = setInterval(updateDateTime, 1000);
                 });
-                onUnmounted(() => {
+
+                onUnmounted(function() {
                     if (pollInterval) clearInterval(pollInterval);
                     if (timeInterval) clearInterval(timeInterval);
                 });
 
                 return {
-                    isConnected, lastUpdate, weather, forecast, price, flows, statistics, forecastComparison, billing, clothing,
-                    solarPower, housePower, gridPower, batteryPower, batterySoc, solarYieldToday, hasBattery,
-                    gridStatus, batteryStatus, stardate, currentDate, currentTime,
-                    showSolarModal, showBatteryModal, showGridModal, showWeatherModal, showHouseModal, showStatsModal, showForecastModal, showBillingModal, showClothingModal,
-                    openSolarModal, closeSolarModal, openBatteryModal, closeBatteryModal,
-                    openGridModal, closeGridModal, openWeatherModal, closeWeatherModal,
-                    openHouseModal, closeHouseModal, openStatsModal, closeStatsModal,
-                    openForecastModal, closeForecastModal, openBillingModal, closeBillingModal, openPowerSourcesModal, openClothingModal, closeClothingModal,
-                    switchToDashboard
+                    modal: modal,
+                    lastUpdate: lastUpdate,
+                    currentDate: currentDate,
+                    currentTime: currentTime,
+                    solarPower: solarPower,
+                    housePower: housePower,
+                    gridPower: gridPower,
+                    batteryPower: batteryPower,
+                    batterySoc: batterySoc,
+                    hasBattery: hasBattery,
+                    weather: weather,
+                    forecast: forecast,
+                    price: price,
+                    flows: flows,
+                    stats: stats,
+                    forecastComparison: forecastComparison,
+                    billing: billing,
+                    clothing: clothing,
+                    gridStatus: gridStatus,
+                    batteryStatus: batteryStatus,
+                    forecastTotal: forecastTotal,
+                    forecastRemaining: forecastRemaining,
+                    yieldToday: yieldToday,
+                    tempDisplay: tempDisplay,
+                    cloudsDisplay: cloudsDisplay,
+                    socDisplay: socDisplay,
+                    priceDisplay: priceDisplay,
+                    updateDateTime: updateDateTime,
+                    fetchData: fetchData,
+                    openStats: openStats,
+                    openForecast: openForecast,
+                    openBilling: openBilling,
+                    openClothing: openClothing,
+                    setModal: setModal,
+                    closeModal: closeModal,
+                    switchToDashboard: switchToDashboard
                 };
             }
-        }).mount('#app');
+        });
+
+        app.config.errorHandler = function(err, vm, info) {
+            console.error('Vue runtime error:', err, info);
+            var el = document.getElementById('lcars-error');
+            var msgEl = document.getElementById('lcars-error-msg');
+            if (el && msgEl) {
+                el.style.display = 'block';
+                msgEl.textContent += 'Vue Runtime Error: ' + err.message + '\nInfo: ' + info + '\n\n';
+            }
+        };
+        app.config.warnHandler = function(msg) {
+            console.warn('Vue warning:', msg);
+        };
+
+        try {
+            app.mount('#app');
+        } catch(e) {
+            console.error('Mount failed:', e);
+            var el = document.getElementById('lcars-error');
+            var msgEl = document.getElementById('lcars-error-msg');
+            if (el && msgEl) {
+                el.style.display = 'block';
+                msgEl.textContent += 'Mount Error: ' + e.message + '\n' + e.stack;
+            }
+        }
+    })();
+
     </script>
 </body>
 </html>

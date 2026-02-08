@@ -8,7 +8,7 @@
 # ******************************************************************************
 
 """
-In-Memory Astronomy Cache Manager for Solar Forecast ML V16.0.0.
+In-Memory Astronomy Cache Manager for Solar Forecast ML V16.2.0.
 Provides fast, thread-safe synchronous access to astronomy data from database.
 """
 
