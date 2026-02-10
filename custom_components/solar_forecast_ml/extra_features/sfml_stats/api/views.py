@@ -138,6 +138,10 @@ from ..const import (
     CONF_SENSOR_WALLBOX_STATE,
     DEFAULT_HEATPUMP_COP,
     SOLAR_FORECAST_DB,
+    CONF_FORECAST_ENTITY_1_NAME,
+    CONF_FORECAST_ENTITY_2_NAME,
+    DEFAULT_FORECAST_ENTITY_1_NAME,
+    DEFAULT_FORECAST_ENTITY_2_NAME,
 )
 from ..utils import get_json_cache, read_json_safe
 from ..readers.solar_reader import SolarDataReader, DailyForecast
@@ -235,6 +239,8 @@ async def async_setup_views(hass: HomeAssistant) -> None:
 
     hass.http.register_view(ForecastComparisonView())
     hass.http.register_view(ForecastComparisonChartView())
+    hass.http.register_view(ShadowAnalyticsView())
+    hass.http.register_view(AIStatusView())
 
     hass.http.register_view(DashboardSettingsView())
 
@@ -1617,13 +1623,27 @@ class StatisticsView(HomeAssistantView):
             _LOGGER.debug("Could not load yield from SFML: %s", e)
 
         try:
-            summaries = await reader.async_get_daily_summaries(days=1)
-            if summaries:
-                today_summary = summaries[0]
-                result["peaks"]["today"] = {
-                    "power_w": today_summary.raw_data.get("peak_power_w"),
-                    "at": f"{today_summary.peak_hour}:00" if today_summary.peak_hour else None,
-                }
+            import aiosqlite
+            db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
+            async with aiosqlite.connect(str(db_path)) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute(
+                    "SELECT peak_power_w, peak_power_time, peak_record_w, peak_record_date, peak_record_time, production_time_today FROM production_time_state WHERE id = 1"
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        result["peaks"]["today"] = {
+                            "power_w": row["peak_power_w"],
+                            "at": row["peak_power_time"],
+                        }
+                        result["peaks"]["record"] = {
+                            "power_w": row["peak_record_w"],
+                            "date": row["peak_record_date"],
+                            "at": row["peak_record_time"],
+                        }
+                        result["production_time"] = row["production_time_today"]
+                    else:
+                        result["peaks"]["today"] = {"power_w": None, "at": None}
         except Exception as e:
             _LOGGER.debug("Could not load today's peak from database: %s", e)
             result["peaks"]["today"] = {"power_w": None, "at": None}
@@ -1709,30 +1729,57 @@ class StatisticsView(HomeAssistantView):
         try:
             async with reader._get_db_connection() as conn:
                 async with conn.execute(
-                    """SELECT date, predicted_kwh, actual_kwh, accuracy, peak_power,
-                              consumption_kwh, autarky, production_hours
-                       FROM forecast_history
+                    """SELECT date, predicted_total_kwh, actual_total_kwh,
+                              accuracy_percent, peak_power_w, peak_hour,
+                              peak_power_time, production_hours
+                       FROM daily_summaries
+                       WHERE date < date('now')
                        ORDER BY date DESC
                        LIMIT 365"""
                 ) as cursor:
                     rows = await cursor.fetchall()
-                    result["history"] = [
-                        {
+                    history = []
+                    for row in rows:
+                        predicted = row["predicted_total_kwh"] or 0
+                        actual = row["actual_total_kwh"] or 0
+                        acc = row["accuracy_percent"]
+                        if not acc or acc <= 0:
+                            if predicted > 0 and actual > 0:
+                                acc = max(0, min(100, 100 - abs((actual - predicted) / predicted) * 100))
+                            else:
+                                acc = 0
+                        history.append({
                             "date": row["date"],
-                            "predicted_kwh": row["predicted_kwh"],
-                            "actual_kwh": row["actual_kwh"],
-                            "accuracy": row["accuracy"],
-                            "peak_power_w": row["peak_power"],
-                            "consumption_kwh": row["consumption_kwh"],
-                            "autarky": row["autarky"],
+                            "predicted_kwh": predicted,
+                            "actual_kwh": actual,
+                            "accuracy": round(acc, 1),
+                            "peak_power_w": row["peak_power_w"],
+                            "peak_hour": row["peak_hour"],
+                            "peak_at": row["peak_power_time"],
                             "production_hours": row["production_hours"],
-                        }
-                        for row in rows
-                        if row["actual_kwh"] is not None
-                    ]
+                        })
+                    result["history"] = history
+
+                # Hourly production data for heatmap
+                async with conn.execute(
+                    """SELECT target_date, target_hour, actual_kwh
+                       FROM hourly_predictions
+                       WHERE actual_kwh IS NOT NULL
+                         AND target_date >= date('now', '-365 days')
+                       ORDER BY target_date, target_hour"""
+                ) as cursor:
+                    hourly_rows = await cursor.fetchall()
+                    hourly_data: dict[str, dict[int, float]] = {}
+                    for row in hourly_rows:
+                        date_str = row["target_date"]
+                        if date_str not in hourly_data:
+                            hourly_data[date_str] = {}
+                        hourly_data[date_str][row["target_hour"]] = row["actual_kwh"]
+                    result["hourly_production"] = hourly_data
         except Exception as e:
             _LOGGER.debug("Could not load history from database: %s", e)
             result["history"] = []
+            result["hourly_production"] = {}
 
         result["panel_groups"] = await self._get_panel_group_data()
 
@@ -2179,10 +2226,13 @@ class PowerSourcesHistoryView(HomeAssistantView):
             processed_data = self._process_history(history_data, sensors, start_time, end_time)
             data_source = "recorder"
 
-            has_data = any(
-                any(d.get(k) is not None for k in ['solar_power', 'solar_to_house', 'solar_to_battery', 'battery_to_house', 'grid_to_house', 'home_consumption'])
-                for d in processed_data
+            # Check flow sensors specifically (not just solar_power)
+            flow_keys = ['solar_to_house', 'grid_to_house', 'home_consumption']
+            flow_data_count = sum(
+                1 for d in processed_data
+                if any(d.get(k) is not None and d.get(k, 0) > 0 for k in flow_keys)
             )
+            has_data = flow_data_count >= 3  # Need at least 3 valid data points
 
             if not has_data:
                 collector_data = await self._get_power_sources_collector_data(hours)
@@ -2577,12 +2627,55 @@ class EnergySourcesDailyStatsView(HomeAssistantView):
                 "home_consumption": _get_sensor_value(config.get(CONF_SENSOR_HOME_CONSUMPTION)),
             }
 
+            # Hourly data from stats_hourly_billing + prices from GPM
+            hourly_profile = {}
+            hourly_grid = {}
+            daily_prices = {}
+            try:
+                import aiosqlite
+                db_path = Path(HASS.config.path()) / "solar_forecast_ml" / "solar_forecast.db"
+                if db_path.exists():
+                    async with aiosqlite.connect(str(db_path)) as conn:
+                        conn.row_factory = aiosqlite.Row
+                        cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+                        # Hourly consumption + grid import profile
+                        async with conn.execute(
+                            """SELECT date, hour,
+                                      COALESCE(grid_to_house_kwh, 0) + COALESCE(solar_to_house_kwh, 0)
+                                      + COALESCE(battery_to_house_kwh, 0) AS consumption_kwh,
+                                      COALESCE(grid_to_house_kwh, 0) + COALESCE(grid_to_battery_kwh, 0) AS grid_import_kwh
+                               FROM stats_hourly_billing
+                               WHERE date >= ?
+                               ORDER BY date, hour""",
+                            (cutoff_date,)
+                        ) as cursor:
+                            for row in await cursor.fetchall():
+                                d = row["date"]
+                                h = row["hour"]
+                                hourly_profile.setdefault(d, {})[h] = round(row["consumption_kwh"], 4)
+                                hourly_grid.setdefault(d, {})[h] = round(row["grid_import_kwh"], 4)
+
+                        # Daily average prices from GPM
+                        async with conn.execute(
+                            """SELECT date, average_total FROM GPM_daily_averages
+                               WHERE date >= ? ORDER BY date""",
+                            (cutoff_date,)
+                        ) as cursor:
+                            for row in await cursor.fetchall():
+                                daily_prices[row["date"]] = round(row["average_total"], 2)
+            except Exception as e:
+                _LOGGER.debug("Could not load hourly/price data: %s", e)
+
             return web.json_response({
                 "success": True,
                 "timestamp": datetime.now().isoformat(),
                 "days_requested": days,
                 "daily_stats": daily_stats.get("days", {}),
                 "current_values": current_values,
+                "hourly_consumption": hourly_profile,
+                "hourly_grid": hourly_grid,
+                "daily_prices": daily_prices,
             })
 
         except Exception as err:
@@ -3296,8 +3389,12 @@ class ForecastComparisonView(HomeAssistantView):
                     "error": "Home Assistant not initialized"
                 }, status=500)
 
-            config_path = Path(HASS.config.path())
-            reader = ForecastComparisonReader(config_path)
+            db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
+            config = _get_config()
+            ext1_name = config.get(CONF_FORECAST_ENTITY_1_NAME, DEFAULT_FORECAST_ENTITY_1_NAME)
+            ext2_name = config.get(CONF_FORECAST_ENTITY_2_NAME, DEFAULT_FORECAST_ENTITY_2_NAME)
+
+            reader = ForecastComparisonReader(db_path, ext1_name, ext2_name)
 
             if not reader.is_available:
                 return web.json_response({
@@ -3413,6 +3510,269 @@ class ForecastComparisonChartView(HomeAssistantView):
             query = {"days": str(days)}
 
         return await self.get(MockRequest())
+
+
+class ShadowAnalyticsView(HomeAssistantView):
+    """Get shadow analytics data from DB. @zara"""
+
+    url = "/api/sfml_stats/shadow_analytics"
+    name = "api:sfml_stats:shadow_analytics"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: web.Request) -> web.Response:
+        """Return shadow analytics data as JSON. @zara"""
+        try:
+            import aiosqlite
+
+            if HASS is None:
+                return web.json_response({"success": False, "error": "HASS not initialized"}, status=500)
+
+            db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
+            if not db_path.exists():
+                return web.json_response({"success": False, "error": "DB not found"}, status=404)
+
+            days = int(request.query.get("days", "30"))
+            days = min(max(days, 7), 365)
+            cutoff = (date.today() - timedelta(days=days)).isoformat()
+
+            async with aiosqlite.connect(str(db_path)) as conn:
+                conn.row_factory = aiosqlite.Row
+
+                # --- Heatmap: shadow_percent per date/hour ---
+                heatmap: dict[str, dict[int, dict]] = {}
+                async with conn.execute(
+                    """SELECT p.target_date, p.target_hour,
+                              h.shadow_percent, h.shadow_type, h.root_cause,
+                              h.efficiency_ratio, h.loss_kwh, h.confidence
+                       FROM hourly_shadow_detection h
+                       JOIN hourly_predictions p ON h.prediction_id = p.prediction_id
+                       WHERE p.target_date >= ?
+                         AND p.target_hour >= 7 AND p.target_hour <= 18
+                       ORDER BY p.target_date, p.target_hour""",
+                    (cutoff,),
+                ) as cursor:
+                    for row in await cursor.fetchall():
+                        d = row["target_date"]
+                        hr = row["target_hour"]
+                        if d not in heatmap:
+                            heatmap[d] = {}
+                        heatmap[d][hr] = {
+                            "pct": round(row["shadow_percent"] or 0, 1),
+                            "type": row["shadow_type"],
+                            "cause": row["root_cause"],
+                            "eff": round(row["efficiency_ratio"] or 0, 2),
+                            "loss": round(row["loss_kwh"] or 0, 3),
+                        }
+
+                # --- Causes distribution ---
+                causes: dict[str, int] = {}
+                async with conn.execute(
+                    """SELECT h.root_cause, COUNT(*) as cnt
+                       FROM hourly_shadow_detection h
+                       JOIN hourly_predictions p ON h.prediction_id = p.prediction_id
+                       WHERE p.target_date >= ?
+                         AND p.target_hour >= 7 AND p.target_hour <= 18
+                         AND h.shadow_type <> 'none'
+                       GROUP BY h.root_cause
+                       ORDER BY cnt DESC""",
+                    (cutoff,),
+                ) as cursor:
+                    for row in await cursor.fetchall():
+                        cause = row["root_cause"] or "unknown"
+                        if cause != "night":
+                            causes[cause] = row["cnt"]
+
+                # --- Daily loss from daily_summary_shadow_analysis ---
+                daily_loss: list[dict] = []
+                async with conn.execute(
+                    """SELECT date, shadow_hours_count, cumulative_loss_kwh
+                       FROM daily_summary_shadow_analysis
+                       WHERE date >= ?
+                       ORDER BY date""",
+                    (cutoff,),
+                ) as cursor:
+                    for row in await cursor.fetchall():
+                        daily_loss.append({
+                            "date": row["date"],
+                            "hours": row["shadow_hours_count"],
+                            "loss_kwh": round(row["cumulative_loss_kwh"] or 0, 3),
+                        })
+
+                # --- Aggregate stats ---
+                total_loss = sum(d["loss_kwh"] for d in daily_loss)
+                total_shadow_hours = sum(d["hours"] for d in daily_loss)
+                days_with_shadow = sum(1 for d in daily_loss if d["hours"] > 0)
+
+                avg_efficiency = None
+                async with conn.execute(
+                    """SELECT AVG(h.efficiency_ratio) as avg_eff
+                       FROM hourly_shadow_detection h
+                       JOIN hourly_predictions p ON h.prediction_id = p.prediction_id
+                       WHERE p.target_date >= ?
+                         AND p.target_hour >= 7 AND p.target_hour <= 18
+                         AND h.shadow_type <> 'none'""",
+                    (cutoff,),
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row and row["avg_eff"] is not None:
+                        avg_efficiency = round(row["avg_eff"], 3)
+
+                dominant_cause = max(causes, key=causes.get) if causes else None
+
+                # --- Hourly pattern (avg shadow per hour of day) ---
+                hourly_pattern: dict[int, dict] = {}
+                async with conn.execute(
+                    """SELECT p.target_hour,
+                              AVG(h.shadow_percent) as avg_pct,
+                              COUNT(*) as total,
+                              SUM(CASE WHEN h.shadow_type <> 'none' THEN 1 ELSE 0 END) as shadow_cnt
+                       FROM hourly_shadow_detection h
+                       JOIN hourly_predictions p ON h.prediction_id = p.prediction_id
+                       WHERE p.target_date >= ?
+                         AND p.target_hour >= 7 AND p.target_hour <= 18
+                       GROUP BY p.target_hour
+                       ORDER BY p.target_hour""",
+                    (cutoff,),
+                ) as cursor:
+                    for row in await cursor.fetchall():
+                        hr = row["target_hour"]
+                        hourly_pattern[hr] = {
+                            "avg_pct": round(row["avg_pct"] or 0, 1),
+                            "occurrence_rate": round(row["shadow_cnt"] / row["total"] * 100, 1) if row["total"] > 0 else 0,
+                        }
+
+                # --- Learning state ---
+                learning = {}
+                async with conn.execute("SELECT * FROM shadow_pattern_config WHERE id = 1") as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        learning = {
+                            "days_learned": row["total_days_learned"],
+                            "hours_learned": row["total_hours_learned"],
+                            "last_date": row["last_learning_date"],
+                            "patterns_detected": row["patterns_detected"],
+                        }
+
+            return web.json_response({
+                "success": True,
+                "data": {
+                    "stats": {
+                        "total_loss_kwh": round(total_loss, 2),
+                        "shadow_hours": total_shadow_hours,
+                        "days_with_shadow": days_with_shadow,
+                        "days_analyzed": len(daily_loss),
+                        "avg_efficiency": avg_efficiency,
+                        "dominant_cause": dominant_cause,
+                    },
+                    "heatmap": heatmap,
+                    "causes": causes,
+                    "daily_loss": daily_loss,
+                    "hourly_pattern": hourly_pattern,
+                    "learning": learning,
+                },
+            })
+
+        except Exception as err:
+            _LOGGER.error("Error getting shadow analytics: %s", err)
+            return web.json_response({"success": False, "error": str(err)}, status=500)
+
+
+class AIStatusView(HomeAssistantView):
+    """Get basic AI/ML model status. @zara"""
+
+    url = "/api/sfml_stats/ai_status"
+    name = "api:sfml_stats:ai_status"
+    requires_auth = False
+
+    @local_only
+    async def get(self, request: web.Request) -> web.Response:
+        """Return AI model status as JSON. @zara"""
+        try:
+            import aiosqlite
+
+            if HASS is None:
+                return web.json_response({"success": False, "error": "HASS not initialized"}, status=500)
+
+            db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
+            if not db_path.exists():
+                return web.json_response({"success": False, "error": "DB not found"}, status=404)
+
+            async with aiosqlite.connect(str(db_path)) as conn:
+                conn.row_factory = aiosqlite.Row
+
+                # Active model info
+                model_info = {}
+                async with conn.execute(
+                    "SELECT * FROM ai_learned_weights_meta WHERE id = 1"
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        model_info = {
+                            "active_model": row["active_model"],
+                            "training_samples": row["training_samples"],
+                            "accuracy": round((row["accuracy"] or 0) * 100, 1),
+                            "rmse": round(row["rmse"] or 0, 4),
+                            "last_trained": row["last_trained"],
+                        }
+
+                # Grid search history
+                grid_search = {}
+                async with conn.execute(
+                    "SELECT COUNT(*) as runs, MAX(accuracy) as best_acc FROM ai_grid_search_results"
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        grid_search = {
+                            "total_runs": row["runs"],
+                            "best_accuracy": round((row["best_acc"] or 0) * 100, 1),
+                        }
+
+                # Shadow learning state
+                shadow_learning = {}
+                async with conn.execute(
+                    "SELECT * FROM shadow_pattern_config WHERE id = 1"
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        shadow_learning = {
+                            "days_learned": row["total_days_learned"],
+                            "patterns_detected": row["patterns_detected"],
+                            "last_date": row["last_learning_date"],
+                        }
+
+                # Drift events count
+                drift_count = 0
+                async with conn.execute(
+                    "SELECT COUNT(*) as cnt FROM drift_events WHERE event_date >= date('now', '-7 days')"
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        drift_count = row["cnt"]
+
+                # Training data size
+                hourly_count = 0
+                async with conn.execute(
+                    "SELECT COUNT(*) as cnt FROM hourly_predictions WHERE actual_kwh IS NOT NULL"
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        hourly_count = row["cnt"]
+
+            return web.json_response({
+                "success": True,
+                "data": {
+                    "model": model_info,
+                    "grid_search": grid_search,
+                    "shadow_learning": shadow_learning,
+                    "drift_events_7d": drift_count,
+                    "training_data_points": hourly_count,
+                },
+            })
+
+        except Exception as err:
+            _LOGGER.error("Error getting AI status: %s", err)
+            return web.json_response({"success": False, "error": str(err)}, status=500)
 
 
 class DashboardSettingsView(HomeAssistantView):

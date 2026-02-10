@@ -272,6 +272,175 @@ class PanelGroupSensorReader(DataManagerIO):
 
         return results
 
+    async def backfill_missing_actuals_from_recorder(
+        self,
+        days: int = 30,
+    ) -> int:
+        """Backfill missing per-group actuals from HA Recorder history. @zara"""
+        if not self.has_any_sensor():
+            return 0
+
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import (
+                state_changes_during_period,
+            )
+        except ImportError:
+            _LOGGER.debug("Recorder not available for backfill")
+            return 0
+
+        from datetime import timedelta
+
+        cutoff = (datetime.now() - timedelta(days=days)).date().isoformat()
+        filled = 0
+
+        for group in self.get_groups_with_sensors():
+            group_name = group.get("name", "")
+            entity_id = group.get("energy_sensor", "")
+            if not entity_id:
+                continue
+
+            try:
+                missing = await self.fetch_all(
+                    """SELECT hp.prediction_id, hp.target_date, hp.target_hour
+                       FROM hourly_predictions hp
+                       JOIN prediction_panel_groups ppg
+                         ON ppg.prediction_id = hp.prediction_id
+                       WHERE ppg.group_name = ?
+                         AND ppg.actual_kwh IS NULL
+                         AND hp.target_date >= ?
+                         AND hp.target_date < date('now')
+                       ORDER BY hp.target_date, hp.target_hour""",
+                    (group_name, cutoff),
+                )
+
+                if not missing:
+                    continue
+
+                first_date = missing[0][1]
+                start_time = datetime.fromisoformat(f"{first_date}T00:00:00")
+                end_time = datetime.now()
+
+                instance = get_instance(self.hass)
+                states = await instance.async_add_executor_job(
+                    state_changes_during_period,
+                    self.hass,
+                    start_time,
+                    end_time,
+                    entity_id,
+                    False,
+                    True,
+                    None,
+                )
+
+                entity_states = states.get(entity_id, [])
+                if len(entity_states) < 2:
+                    _LOGGER.debug(
+                        "Backfill %s: insufficient recorder data (%d states)",
+                        group_name, len(entity_states),
+                    )
+                    continue
+
+                readings = []
+                unit_wh = False
+                for s in entity_states:
+                    if s.state in ("unavailable", "unknown", ""):
+                        continue
+                    try:
+                        val = float(s.state)
+                        if not unit_wh and hasattr(s, "attributes"):
+                            unit = s.attributes.get("unit_of_measurement", "")
+                            if unit.lower() == "wh":
+                                unit_wh = True
+                        if unit_wh:
+                            val = val / 1000.0
+                        readings.append((s.last_changed, val))
+                    except (ValueError, TypeError):
+                        continue
+
+                if len(readings) < 2:
+                    continue
+
+                readings.sort(key=lambda x: x[0])
+
+                group_filled = 0
+                for prediction_id, target_date, target_hour in missing:
+                    hour_start = datetime.fromisoformat(
+                        f"{target_date}T{target_hour:02d}:00:00"
+                    )
+                    hour_end = datetime.fromisoformat(
+                        f"{target_date}T{target_hour:02d}:59:59"
+                    )
+
+                    val_before = None
+                    val_at_end = None
+
+                    for ts, val in readings:
+                        ts_naive = ts.replace(tzinfo=None) if ts.tzinfo else ts
+                        if ts_naive <= hour_start:
+                            val_before = val
+                        if ts_naive <= hour_end:
+                            val_at_end = val
+
+                    if val_before is None or val_at_end is None:
+                        continue
+
+                    delta = val_at_end - val_before
+
+                    if delta < -0.001:
+                        continue
+
+                    delta = max(0.0, delta)
+
+                    if delta > 10.0:
+                        continue
+
+                    await self.execute_query(
+                        """UPDATE prediction_panel_groups
+                           SET actual_kwh = ?
+                           WHERE prediction_id = ? AND group_name = ?
+                             AND actual_kwh IS NULL""",
+                        (round(delta, 4), prediction_id, group_name),
+                    )
+                    group_filled += 1
+
+                if group_filled > 0:
+                    _LOGGER.info(
+                        "Backfill %s: %d hours recovered from recorder",
+                        group_name, group_filled,
+                    )
+                    filled += group_filled
+
+            except Exception as e:
+                _LOGGER.warning("Backfill failed for group %s: %s", group_name, e)
+
+        if filled > 0:
+            try:
+                await self.execute_query(
+                    """UPDATE hourly_predictions SET actual_kwh = (
+                           SELECT ROUND(SUM(ppg.actual_kwh), 4)
+                           FROM prediction_panel_groups ppg
+                           WHERE ppg.prediction_id = hourly_predictions.prediction_id
+                             AND ppg.actual_kwh IS NOT NULL
+                       )
+                       WHERE actual_kwh IS NULL
+                         AND target_date >= ?
+                         AND target_date < date('now')
+                         AND EXISTS (
+                             SELECT 1 FROM prediction_panel_groups ppg
+                             WHERE ppg.prediction_id = hourly_predictions.prediction_id
+                               AND ppg.actual_kwh IS NOT NULL
+                         )""",
+                    (cutoff,),
+                )
+                await self.db.commit()
+            except Exception as e:
+                _LOGGER.warning("Backfill hourly_predictions update failed: %s", e)
+
+            _LOGGER.info("Backfill: %d per-group actuals recovered from recorder", filled)
+
+        return filled
+
     async def validate_sensors(self) -> Dict[str, Dict[str, Any]]:
         """Validate all configured energy sensors. @zara
 

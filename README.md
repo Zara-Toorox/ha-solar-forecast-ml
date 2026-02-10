@@ -1,8 +1,8 @@
-# Solar Forecast ML V16.2.0 "Sarpeidon" — Full AI & DB-Version
+# Solar Forecast ML V16.4.0 "Sarpeidon" — Full AI & DB-Version
 
 ### The 1st Hybrid-AI Solar Forecast for Home Assistant — 100% Local, 100% Private
 
-[![Version](https://img.shields.io/badge/version-16.2.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-16.4.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM%20%7C%20RPi-lightgrey.svg)]()

@@ -107,6 +107,10 @@ const SFMLApi = {
         return this.fetch('/api/sfml_stats/forecast_comparison', { forceRefresh, ttl: 300000 });
     },
 
+    async getShadowAnalytics(days = 30, forceRefresh = false) {
+        return this.fetch(`/api/sfml_stats/shadow_analytics?days=${days}`, { forceRefresh, ttl: 300000 });
+    },
+
     // Clear cache (useful for forcing refresh)
     clearCache(endpoint = null) {
         if (endpoint) {

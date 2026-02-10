@@ -425,7 +425,10 @@ class PowerSourcesCollector:
                 db.row_factory = aiosqlite.Row
                 async with db.execute("""
                     SELECT date, solar_yield_kwh, solar_to_house_kwh, solar_to_battery_kwh,
-                           battery_to_house_kwh, grid_to_house_kwh, home_consumption_kwh,
+                           battery_to_house_kwh, battery_charge_solar_kwh, battery_charge_grid_kwh,
+                           grid_to_house_kwh, grid_to_battery_kwh,
+                           grid_export_kwh, smartmeter_import_kwh, smartmeter_export_kwh,
+                           home_consumption_kwh,
                            autarkie_percent, self_consumption_kwh, peak_solar_w, peak_solar_time
                     FROM stats_daily_energy
                     WHERE date >= ?
@@ -435,16 +438,38 @@ class PowerSourcesCollector:
 
             filtered_days = {}
             for row in rows:
+                solar_to_house = row["solar_to_house_kwh"] or 0
+                solar_to_battery = row["solar_to_battery_kwh"] or 0
+                solar_yield = row["solar_yield_kwh"] or 0
+                self_cons_pct = (
+                    ((solar_to_house + solar_to_battery) / solar_yield * 100)
+                    if solar_yield > 0 else 0
+                )
+                grid_to_house = row["grid_to_house_kwh"] or 0
+                # Use accumulator value, fall back to sensor value
+                grid_to_battery = row["grid_to_battery_kwh"] or row["battery_charge_grid_kwh"] or 0
+                grid_export = row["grid_export_kwh"] or row["smartmeter_export_kwh"] or 0
+                battery_to_house = row["battery_to_house_kwh"] or 0
+                # Charge from solar: accumulator or sensor
+                charge_solar = solar_to_battery or row["battery_charge_solar_kwh"] or 0
+                total_charged = charge_solar + grid_to_battery
                 filtered_days[row["date"]] = {
                     "date": row["date"],
-                    "solar_total_kwh": row["solar_yield_kwh"] or 0,
-                    "solar_to_house_kwh": row["solar_to_house_kwh"] or 0,
-                    "solar_to_battery_kwh": row["solar_to_battery_kwh"] or 0,
-                    "battery_to_house_kwh": row["battery_to_house_kwh"] or 0,
-                    "grid_to_house_kwh": row["grid_to_house_kwh"] or 0,
-                    "consumption_kwh": row["home_consumption_kwh"] or 0,
+                    "solar_total_kwh": solar_yield,
+                    "solar_yield_kwh": solar_yield,
+                    "solar_to_house_kwh": solar_to_house,
+                    "solar_to_battery_kwh": solar_to_battery,
+                    "battery_to_house_kwh": battery_to_house,
+                    "battery_charge_solar_kwh": charge_solar,
+                    "battery_charge_grid_kwh": grid_to_battery,
+                    "battery_total_charged_kwh": total_charged,
+                    "grid_to_house_kwh": grid_to_house,
+                    "grid_to_battery_kwh": grid_to_battery,
+                    "grid_import_kwh": grid_to_house + grid_to_battery,
+                    "grid_export_kwh": grid_export,
+                    "home_consumption_kwh": row["home_consumption_kwh"] or 0,
                     "autarky_percent": row["autarkie_percent"] or 0,
-                    "self_consumption_percent": 0,
+                    "self_consumption_percent": min(100, self_cons_pct),
                     "peak_solar_w": row["peak_solar_w"] or 0,
                     "peak_solar_time": row["peak_solar_time"],
                 }

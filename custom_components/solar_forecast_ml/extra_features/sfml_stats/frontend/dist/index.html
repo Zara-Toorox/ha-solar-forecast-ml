@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SFML Hybrid-AI Dashboard by Zara</title>
+    <title>SFML STATS Dashboard by Zara</title>
 
     <!-- ECharts for Charts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -32,7 +32,7 @@
 
     <div id="app">
         <header class="header">
-            <h1>SFML Hybrid-AI Dashboard by Zara</h1>
+            <h1>SFML STATS Dashboard by Zara</h1>
             <div class="header-controls">
                 <button @click="toggleDashboardStyle" class="style-toggle" :class="{'active-3d': dashboardStyle === '3d', 'active-2d': dashboardStyle === '2d', 'active-list': dashboardStyle === 'list'}" :title="dashboardStyle === '3d' ? 'Zu 2D wechseln' : dashboardStyle === '2d' ? 'Zur Liste wechseln' : 'Zu 3D wechseln'">
                     <span class="style-toggle-icon">{{ getDashboardStyleIcon() }}</span>
@@ -1118,10 +1118,13 @@
                         <div class="power-sources-title">
                             <span>☀️</span>
                             <span>Deflektorschild-Kollektor</span>
-                            <span v-if="energyFlow.flows.solar_power !== null" style="margin-left: 12px; font-size: 1.3rem; color: #FFB74D;">{{ Math.round(energyFlow.flows.solar_power || 0) }} W</span>
+                            <span v-if="energyFlow.flows.solar_power !== null" style="margin-left: 12px; font-size: 1.3rem; color: #facc15;">{{ Math.round(energyFlow.flows.solar_power || 0) }} W</span>
                             <span v-if="stats.peaks.today?.power_w" style="margin-left: 16px; font-size: 0.85rem; color: #94a3b8;">
                                 Peak: <span style="color: #4ade80;">{{ Math.round(stats.peaks.today.power_w) }} W</span>
-                                <span v-if="stats.peaks.today?.at" style="color: #64748b;"> ({{ formatTime(stats.peaks.today.at) }})</span>
+                                <span v-if="stats.peaks.today?.at" style="color: #64748b;"> ({{ formatTimeShort(stats.peaks.today.at) }})</span>
+                            </span>
+                            <span v-if="stats.production_time" style="margin-left: 16px; font-size: 0.85rem; color: #94a3b8;">
+                                ⏱️ <span style="color: #38bdf8;">{{ stats.production_time }}</span>
                             </span>
                         </div>
                         <div class="power-sources-subtitle">Klicken für Kollektor-Diagnostik • Live-Daten</div>
@@ -1166,6 +1169,10 @@
                         <div class="forecast-overview-title">📡 Langstrecken-Scanner</div>
                         <div class="forecast-overview-subtitle">Energievorhersage für die nächsten 3 Sternentage</div>
                     </div>
+                    <button class="forecast-comparison-btn" @click="openShadowAnalyticsModal" title="Schatten-Analyse anzeigen" style="background: linear-gradient(135deg, rgba(100,100,120,0.3), rgba(60,60,80,0.3)); border-color: #8b8ba0;">
+                        <span>🌑</span>
+                        <span>Schatten</span>
+                    </button>
                     <button class="forecast-comparison-btn" @click="openForecastComparisonModal" title="7-Tage Prognose-Vergleich anzeigen">
                         <span>📊</span>
                         <span>7-Tage Vergleich</span>
@@ -1687,14 +1694,46 @@
                 </div>
             </section>
 
-            <!-- Erweiterte Analyse-Charts -->
-            <section class="charts-grid collapsible-section sortable-item" data-section="extendedCharts" style="margin-top: var(--spacing-lg);">
-                <div class="section-header" @click="toggleSection('charts')" style="grid-column: 1 / -1;">
-                    <span class="section-title">📊 Erweiterte Analyse-Charts</span>
-                    <span class="section-toggle">{{ isSectionCollapsed('charts') ? '+' : '−' }}</span>
+            <!-- KI-Status -->
+            <section v-if="aiStatus.loaded" class="collapsible-section sortable-item" data-section="aiStatus" style="margin-top: var(--spacing-lg);">
+                <div class="section-header" @click="toggleSection('aiStatus')">
+                    <span class="section-title">🧠 KI-Status</span>
+                    <span class="section-toggle">{{ isSectionCollapsed('aiStatus') ? '+' : '−' }}</span>
                 </div>
-
-
+                <div v-show="!isSectionCollapsed('aiStatus')" class="ai-status-bar">
+                    <div class="ai-status-item">
+                        <span class="ai-status-label">Modell</span>
+                        <span class="ai-status-value" style="color: #a78bfa;">{{ aiStatus.model }}</span>
+                    </div>
+                    <div class="ai-status-item">
+                        <span class="ai-status-label">Genauigkeit</span>
+                        <span class="ai-status-value" style="color: #10b981;">{{ aiStatus.accuracy }}%</span>
+                    </div>
+                    <div class="ai-status-item">
+                        <span class="ai-status-label">RMSE</span>
+                        <span class="ai-status-value">{{ aiStatus.rmse }}</span>
+                    </div>
+                    <div class="ai-status-item">
+                        <span class="ai-status-label">Samples</span>
+                        <span class="ai-status-value" style="color: #38bdf8;">{{ aiStatus.samples }}</span>
+                    </div>
+                    <div class="ai-status-item">
+                        <span class="ai-status-label">Datenpunkte</span>
+                        <span class="ai-status-value">{{ aiStatus.dataPoints }}</span>
+                    </div>
+                    <div class="ai-status-item">
+                        <span class="ai-status-label">Letztes Training</span>
+                        <span class="ai-status-value">{{ aiStatus.lastTrained }}</span>
+                    </div>
+                    <div class="ai-status-item">
+                        <span class="ai-status-label">Grid Search</span>
+                        <span class="ai-status-value">{{ aiStatus.gridRuns }} Runs</span>
+                    </div>
+                    <div class="ai-status-item">
+                        <span class="ai-status-label">Drift-Events (7d)</span>
+                        <span class="ai-status-value" :style="{ color: aiStatus.driftEvents > 0 ? '#f59e0b' : '#10b981' }">{{ aiStatus.driftEvents }}</span>
+                    </div>
+                </div>
             </section>
         </main>
 
@@ -1827,7 +1866,7 @@
                         </div>
                         <div class="modal-stat-card">
                             <div class="modal-stat-value">{{ batteryModal.stats.avgSOC?.toFixed(0) || '—' }}%</div>
-                            <div class="modal-stat-label">Ø SOC</div>
+                            <div class="modal-stat-label">Aktueller SOC</div>
                         </div>
                         <div class="modal-stat-card">
                             <div class="modal-stat-value">{{ batteryModal.stats.efficiency?.toFixed(1) || '—' }}%</div>
@@ -1838,8 +1877,8 @@
                             <div class="modal-stat-label">Zyklen (Monat)</div>
                         </div>
                         <div class="modal-stat-card">
-                            <div class="modal-stat-value">{{ batteryModal.stats.peakPower?.toFixed(0) || '—' }} W</div>
-                            <div class="modal-stat-label">Peak Leistung</div>
+                            <div class="modal-stat-value">{{ batteryModal.stats.solarShare?.toFixed(0) || '—' }}%</div>
+                            <div class="modal-stat-label">Solar-Anteil</div>
                         </div>
                     </div>
 
@@ -1858,11 +1897,11 @@
 
                     <!-- Charts -->
                     <div class="modal-chart-grid">
-                        <!-- SOC Chart -->
+                        <!-- Charge Sources Chart -->
                         <div class="modal-chart-container">
                             <div class="modal-chart-title">
                                 <span>📊</span>
-                                <span>SOC Verlauf</span>
+                                <span>Ladequellen (Solar vs Netz)</span>
                             </div>
                             <div id="battery-soc-chart" style="height: 350px;"></div>
                         </div>
@@ -1885,11 +1924,11 @@
                             <div id="battery-efficiency-chart" style="height: 350px;"></div>
                         </div>
 
-                        <!-- Power Distribution -->
+                        <!-- Charge/Discharge Sources per Day -->
                         <div class="modal-chart-container">
                             <div class="modal-chart-title">
                                 <span>📈</span>
-                                <span>Leistungsverteilung</span>
+                                <span>Lade-/Entlade-Verlauf</span>
                             </div>
                             <div id="battery-power-chart" style="height: 350px;"></div>
                         </div>
@@ -1938,8 +1977,8 @@
                             <div class="modal-stat-label">Solar-Abdeckung</div>
                         </div>
                         <div class="modal-stat-card">
-                            <div class="modal-stat-value">{{ houseModal.stats.peakPower?.toFixed(0) || '—' }} W</div>
-                            <div class="modal-stat-label">Peak Verbrauch</div>
+                            <div class="modal-stat-value">{{ houseModal.stats.peakPower?.toFixed(0) || '—' }} Wh</div>
+                            <div class="modal-stat-label">Peak Stunde</div>
                         </div>
                     </div>
 
@@ -2245,7 +2284,7 @@
                             <div class="modal-stat-label">Solar gesamt</div>
                         </div>
                         <div class="modal-stat-card">
-                            <div class="modal-stat-value" style="color: #FFB74D;">{{ powerSourcesModal.stats.solarToHouse?.toFixed(2) || '—' }} kWh</div>
+                            <div class="modal-stat-value" style="color: #facc15;">{{ powerSourcesModal.stats.solarToHouse?.toFixed(2) || '—' }} kWh</div>
                             <div class="modal-stat-label">Solar → Haus</div>
                         </div>
                         <div v-if="hasBattery" class="modal-stat-card">
@@ -2711,6 +2750,78 @@
                         <div v-if="forecastComparisonModal.stats.ext2Name" style="display: flex; align-items: center; gap: 8px;">
                             <div style="width: 24px; height: 3px; background: #ff9500; border-radius: 2px;"></div>
                             <span style="color: var(--text-muted); font-size: 0.85rem;">{{ forecastComparisonModal.stats.ext2Name }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== SHADOW ANALYTICS MODAL ===== -->
+        <div v-if="shadowModal.isOpen" class="modal-overlay" @click.self="closeShadowAnalyticsModal">
+            <div class="modal-container shadow-analytics-modal">
+                <div class="modal-header">
+                    <h2 class="modal-title" style="background: linear-gradient(135deg, #8b8ba0, #c0c0d0); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                        <span style="-webkit-text-fill-color: initial;">🌑</span>
+                        <span>Schatten-Analyse</span>
+                    </h2>
+                    <button class="modal-close" @click="closeShadowAnalyticsModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Quick Stats -->
+                    <div class="modal-stats-grid">
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-value" style="color: #ef4444;">{{ shadowModal.stats.totalLoss?.toFixed(1) || '—' }}</div>
+                            <div class="modal-stat-label">Verlust kWh</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-value" style="color: #f59e0b;">{{ shadowModal.stats.shadowHours || '—' }}</div>
+                            <div class="modal-stat-label">Schatten-Stunden</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-value" style="color: #8b8ba0;">{{ shadowModal.stats.avgEfficiency != null ? (shadowModal.stats.avgEfficiency * 100).toFixed(0) + '%' : '—' }}</div>
+                            <div class="modal-stat-label">&Oslash; Effizienz</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-value" style="color: #a78bfa;">{{ shadowModal.stats.dominantCauseLabel || '—' }}</div>
+                            <div class="modal-stat-label">Hauptursache</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-value" style="color: #64748b;">{{ shadowModal.stats.daysWithShadow || '—' }} / {{ shadowModal.stats.daysAnalyzed || '—' }}</div>
+                            <div class="modal-stat-label">Tage mit Schatten</div>
+                        </div>
+                        <div class="modal-stat-card">
+                            <div class="modal-stat-value" style="color: #06b6d4;">{{ shadowModal.stats.daysLearned || '—' }}</div>
+                            <div class="modal-stat-label">KI Lerntage</div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Grid -->
+                    <div class="modal-chart-grid">
+                        <!-- Heatmap -->
+                        <div class="modal-chart-container" style="grid-column: 1 / -1;">
+                            <div class="modal-chart-title">
+                                <span>🗺️</span>
+                                <span>Schatten-Intensit&auml;t (Stunde &times; Tag)</span>
+                            </div>
+                            <div id="shadow-heatmap-chart" style="height: 350px;"></div>
+                        </div>
+
+                        <!-- Causes Donut -->
+                        <div class="modal-chart-container">
+                            <div class="modal-chart-title">
+                                <span>🔍</span>
+                                <span>Schatten-Ursachen</span>
+                            </div>
+                            <div id="shadow-causes-chart" style="height: 280px;"></div>
+                        </div>
+
+                        <!-- Daily Loss -->
+                        <div class="modal-chart-container">
+                            <div class="modal-chart-title">
+                                <span>📉</span>
+                                <span>T&auml;glicher Verlust</span>
+                            </div>
+                            <div id="shadow-daily-loss-chart" style="height: 280px;"></div>
                         </div>
                     </div>
                 </div>
@@ -3329,37 +3440,36 @@
                 const currentPrice = reactive({ total_price: null, net_price: null, hour: null });
                 const hasBattery = ref(false);  // True if battery sensor is configured
 
+                // Helper: Parse sunrise/sunset time string to minutes since midnight
+                function parseSunMinutes(timeStr) {
+                    if (!timeStr) return null;
+                    const parts = timeStr.includes('T') ? timeStr.split('T')[1].split(':') : timeStr.split(':');
+                    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+                }
+
+                // Helper: Parse hour from sunrise/sunset time string
+                function parseSunHour(timeStr) {
+                    if (!timeStr) return null;
+                    return parseInt(timeStr.includes('T') ? timeStr.split('T')[1].split(':')[0] : timeStr.split(':')[0]);
+                }
+
+                // Helper: Get production hour range from sunrise/sunset (±2h buffer)
+                function getProductionHourRange() {
+                    let startHour = 6, endHour = 20; // Fallbacks
+                    const sunriseH = parseSunHour(sunPosition.sunrise);
+                    const sunsetH = parseSunHour(sunPosition.sunset);
+                    if (sunriseH !== null) startHour = Math.max(0, sunriseH - 2);
+                    if (sunsetH !== null) endHour = Math.min(23, sunsetH + 2);
+                    return { startHour, endHour };
+                }
+
                 // Day/Night mode based on sunrise/sunset
                 const isNightTime = computed(() => {
-                    if (!sunPosition.sunrise || !sunPosition.sunset) return false;
-
-                    const now = new Date();
-                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-                    // Parse sunrise
-                    let sunriseMinutes;
-                    const sunriseStr = sunPosition.sunrise;
-                    if (sunriseStr.includes('T')) {
-                        const parts = sunriseStr.split('T')[1].split(':');
-                        sunriseMinutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
-                    } else {
-                        const parts = sunriseStr.split(':');
-                        sunriseMinutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
-                    }
-
-                    // Parse sunset
-                    let sunsetMinutes;
-                    const sunsetStr = sunPosition.sunset;
-                    if (sunsetStr.includes('T')) {
-                        const parts = sunsetStr.split('T')[1].split(':');
-                        sunsetMinutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
-                    } else {
-                        const parts = sunsetStr.split(':');
-                        sunsetMinutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
-                    }
-
-                    // Night = before sunrise OR after sunset
-                    return currentMinutes < sunriseMinutes || currentMinutes > sunsetMinutes;
+                    const sunriseMin = parseSunMinutes(sunPosition.sunrise);
+                    const sunsetMin = parseSunMinutes(sunPosition.sunset);
+                    if (sunriseMin === null || sunsetMin === null) return false;
+                    const currentMin = new Date().getHours() * 60 + new Date().getMinutes();
+                    return currentMin < sunriseMin || currentMin > sunsetMin;
                 });
                 const forecast = reactive({ todayTotal: 0, todayTotalCorrected: null, todayRemaining: 0, tomorrowTotal: 0, dayAfterTomorrowTotal: 0, todayHours: [], tomorrowHours: [], dayAfterTomorrowHours: [], maxHourly: 0.5 });
                 const todayAccuracy = ref(null);  // Tagesgenauigkeit in %
@@ -3390,7 +3500,8 @@
                 const stats = reactive({
                     peaks: { today: {}, all_time: {} },
                     production: { today: {}, tomorrow: {} },
-                    statistics: { current_week: {}, current_month: {}, last_7_days: {}, last_30_days: {}, last_365_days: {} }
+                    statistics: { current_week: {}, current_month: {}, last_7_days: {}, last_30_days: {}, last_365_days: {} },
+                    production_time: null
                 });
 
                 // Panel Groups (Prognose + IST pro Gruppe)
@@ -3493,7 +3604,8 @@
                         peakPower: 0,
                         avgDaily: 0
                     },
-                    historicalData: []
+                    historicalData: [],
+                    hourlyProduction: {}
                 });
                 const solarProductionChart = ref(null);
                 const solarHeatmapChart = ref(null);
@@ -3517,6 +3629,62 @@
                 });
                 const forecastComparisonChart = ref(null);
 
+                // Shadow Analytics Modal
+                const shadowModal = reactive({
+                    isOpen: false,
+                    stats: {
+                        totalLoss: null,
+                        shadowHours: 0,
+                        avgEfficiency: null,
+                        dominantCauseLabel: null,
+                        daysWithShadow: 0,
+                        daysAnalyzed: 0,
+                        daysLearned: 0
+                    },
+                    data: null
+                });
+                const shadowCharts = { heatmap: null, causes: null, dailyLoss: null };
+
+                // KI-Status
+                const aiStatus = reactive({
+                    loaded: false,
+                    model: '—',
+                    accuracy: '—',
+                    rmse: '—',
+                    samples: '—',
+                    dataPoints: '—',
+                    lastTrained: '—',
+                    gridRuns: '—',
+                    driftEvents: 0
+                });
+
+                async function loadAIStatus() {
+                    try {
+                        const response = await fetch('/api/sfml_stats/ai_status');
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            const d = result.data;
+                            const m = d.model || {};
+                            const gs = d.grid_search || {};
+                            const MODEL_LABELS = { 'tiny_lstm': 'Hybrid-KI', 'tinylstm': 'Hybrid-KI', 'ridge': 'Ridge', 'lstm': 'LSTM' };
+                            aiStatus.model = MODEL_LABELS[m.active_model] || m.active_model || '—';
+                            aiStatus.accuracy = m.accuracy != null ? m.accuracy.toFixed(1) : '—';
+                            aiStatus.rmse = m.rmse != null ? m.rmse.toFixed(2) : '—';
+                            aiStatus.samples = m.training_samples != null ? m.training_samples.toLocaleString('de-DE') : '—';
+                            aiStatus.dataPoints = d.training_data_points != null ? d.training_data_points.toLocaleString('de-DE') : '—';
+                            if (m.last_trained) {
+                                const dt = new Date(m.last_trained);
+                                aiStatus.lastTrained = isNaN(dt) ? m.last_trained : dt.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                            }
+                            aiStatus.gridRuns = gs.total_runs ?? '—';
+                            aiStatus.driftEvents = d.drift_events_7d ?? 0;
+                            aiStatus.loaded = true;
+                        }
+                    } catch (err) {
+                        console.error('Error loading AI status:', err);
+                    }
+                }
+
                 // Battery Analytics Modal
                 const batteryModal = reactive({
                     isOpen: false,
@@ -3528,7 +3696,7 @@
                         avgSOC: 0,
                         efficiency: 0,
                         cycles: 0,
-                        peakPower: 0
+                        solarShare: 0
                     },
                     historicalData: []
                 });
@@ -3550,7 +3718,8 @@
                         solarCoverage: 0,
                         peakPower: 0
                     },
-                    historicalData: []
+                    historicalData: [],
+                    hourlyConsumption: {}
                 });
                 const houseConsumptionChart = ref(null);
                 const houseAutarkyChart = ref(null);
@@ -3570,7 +3739,8 @@
                         costs: 0,
                         revenue: 0
                     },
-                    historicalData: []
+                    historicalData: [],
+                    hourlyGrid: {}
                 });
                 const gridFlowChart = ref(null);
                 const gridPriceChart = ref(null);
@@ -3908,7 +4078,6 @@
 
                 async function updateBatteryCharts() {
                     try {
-                        // Fetch real daily stats from API
                         const days = batteryModal.activeTab === 'week' ? 7 : batteryModal.activeTab === 'month' ? 30 : 365;
                         const response = await fetch(`/api/sfml_stats/energy_sources_daily_stats?days=${days}`);
                         const result = await response.json();
@@ -3916,42 +4085,36 @@
                         const history = [];
 
                         if (result.success && result.daily_stats) {
-                            // Convert daily_stats object to array sorted by date
                             const dailyStats = result.daily_stats;
                             const sortedDates = Object.keys(dailyStats).sort();
 
                             for (const dateStr of sortedDates) {
                                 const dayData = dailyStats[dateStr];
-                                // Charged = solar_to_battery + grid charging (from history)
-                                const chargedFromSolar = dayData.solar_to_battery_kwh || 0;
-                                const chargedFromGrid = dayData.battery_charge_grid_kwh || 0;
+                                const chargedFromSolar = dayData.battery_charge_solar_kwh || dayData.solar_to_battery_kwh || 0;
+                                const chargedFromGrid = dayData.battery_charge_grid_kwh || dayData.grid_to_battery_kwh || 0;
                                 const chargedKwh = chargedFromSolar + chargedFromGrid;
-                                // Discharged = battery_to_house
                                 const dischargedKwh = dayData.battery_to_house_kwh || 0;
-                                // Efficiency = discharged / charged (if both > 0)
                                 const efficiency = chargedKwh > 0 ? (dischargedKwh / chargedKwh) * 100 : 0;
 
                                 history.push({
                                     date: dateStr,
-                                    soc: dayData.avg_soc || 0, // Not available yet
                                     charged_kwh: chargedKwh,
+                                    charged_solar_kwh: chargedFromSolar,
+                                    charged_grid_kwh: chargedFromGrid,
                                     discharged_kwh: dischargedKwh,
                                     efficiency: Math.min(100, efficiency),
-                                    peak_power_w: dayData.peak_battery_power_w || 0
                                 });
                             }
                         }
 
-                        // Fallback if no data
                         if (history.length === 0) {
                             console.warn('No battery stats available, showing empty data');
                         }
 
                         batteryModal.historicalData = history;
 
-                        // Calculate stats - week is Monday-Sunday of current week
                         const now = new Date();
-                        const dayOfWeek = now.getDay(); // 0=Sunday, 1=Monday, ...
+                        const dayOfWeek = now.getDay();
                         const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
                         const monday = new Date(now);
                         monday.setDate(now.getDate() + mondayOffset);
@@ -3963,17 +4126,21 @@
                         const mondayStr = monday.toISOString().slice(0, 10);
                         const sundayStr = sundayEnd.toISOString().slice(0, 10);
 
-                        // Filter data for current week (Monday-Sunday)
                         const weekData = history.filter(d => d.date >= mondayStr && d.date <= sundayStr);
 
                         batteryModal.stats.weekCharged = weekData.reduce((sum, d) => sum + d.charged_kwh, 0);
                         batteryModal.stats.weekDischarged = weekData.reduce((sum, d) => sum + d.discharged_kwh, 0);
-                        batteryModal.stats.avgSOC = history.length > 0 ? history.reduce((sum, d) => sum + d.soc, 0) / history.length : 0;
+                        // SOC from live data
+                        batteryModal.stats.avgSOC = energyFlow.battery?.soc || 0;
                         const totalCharged = history.reduce((sum, d) => sum + d.charged_kwh, 0);
                         const totalDischarged = history.reduce((sum, d) => sum + d.discharged_kwh, 0);
                         batteryModal.stats.efficiency = totalCharged > 0 ? (totalDischarged / totalCharged) * 100 : 0;
-                        batteryModal.stats.cycles = batteryModal.stats.weekDischarged / 10; // Assume 10kWh capacity
-                        batteryModal.stats.peakPower = history.length > 0 ? Math.max(...history.map(d => d.peak_power_w)) : 0;
+                        // Estimate capacity from max daily discharge
+                        const maxDailyDischarge = history.length > 0 ? Math.max(...history.map(d => d.discharged_kwh)) : 10;
+                        const estimatedCapacity = Math.max(5, Math.ceil(maxDailyDischarge));
+                        batteryModal.stats.cycles = batteryModal.stats.weekDischarged / estimatedCapacity;
+                        const totalSolarCharge = history.reduce((sum, d) => sum + d.charged_solar_kwh, 0);
+                        batteryModal.stats.solarShare = totalCharged > 0 ? (totalSolarCharge / totalCharged) * 100 : 0;
 
                         renderBatteryCharts();
                     } catch (error) {
@@ -3989,22 +4156,26 @@
 
                     const dates = data.map(d => d.date.slice(5));
 
-                    // SOC Chart
+                    // Charge Sources Chart (Solar vs Grid)
                     if (batterySOCChart.value) {
+                        const totalSolarCharge = data.reduce((sum, d) => sum + d.charged_solar_kwh, 0);
+                        const totalGridCharge = data.reduce((sum, d) => sum + d.charged_grid_kwh, 0);
                         batterySOCChart.value.setOption({
-                            tooltip: { trigger: 'axis', backgroundColor: 'rgba(30, 30, 62, 0.95)', borderColor: '#22c55e', textStyle: { color: '#fff' } },
-                            xAxis: { type: 'category', data: dates, axisLabel: { color: '#888', rotate: data.length > 20 ? 45 : 0 }, axisLine: { lineStyle: { color: '#444' } } },
-                            yAxis: { type: 'value', name: 'SOC (%)', min: 0, max: 100, nameTextStyle: { color: '#fff' }, axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#333' } } },
+                            tooltip: { trigger: 'item', backgroundColor: 'rgba(30, 30, 62, 0.95)', borderColor: '#22c55e', textStyle: { color: '#fff' },
+                                formatter: params => `${params.name}: ${params.value.toFixed(2)} kWh (${params.percent}%)` },
+                            legend: { top: '5%', left: 'center', textStyle: { color: '#fff' } },
                             series: [{
-                                name: 'SOC',
-                                type: 'line',
-                                data: data.map(d => d.soc),
-                                smooth: true,
-                                itemStyle: { color: '#22c55e' },
-                                lineStyle: { width: 2 },
-                                areaStyle: { color: 'rgba(34, 197, 94, 0.2)' }
-                            }],
-                            grid: { left: 60, right: 30, top: 40, bottom: 50 }
+                                name: 'Ladequellen',
+                                type: 'pie',
+                                radius: ['40%', '70%'],
+                                center: ['50%', '55%'],
+                                itemStyle: { borderRadius: 10, borderColor: '#1a1a2e', borderWidth: 2 },
+                                label: { show: true, color: '#fff' },
+                                data: [
+                                    { value: totalSolarCharge, name: 'Solar', itemStyle: { color: '#fbbf24' } },
+                                    { value: totalGridCharge, name: 'Netz', itemStyle: { color: '#8b5cf6' } }
+                                ]
+                            }]
                         });
                     }
 
@@ -4039,19 +4210,19 @@
                         });
                     }
 
-                    // Power Chart - Peak Battery Power per day
+                    // Charge source breakdown per day (Solar vs Grid charging + Discharge)
                     if (batteryPowerChart.value) {
                         batteryPowerChart.value.setOption({
                             tooltip: { trigger: 'axis', backgroundColor: 'rgba(30, 30, 62, 0.95)', borderColor: '#22c55e', textStyle: { color: '#fff' } },
+                            legend: { data: ['Solar-Ladung', 'Netz-Ladung', 'Entladung'], textStyle: { color: '#fff' } },
                             xAxis: { type: 'category', data: dates, axisLabel: { color: '#888', rotate: data.length > 20 ? 45 : 0 }, axisLine: { lineStyle: { color: '#444' } } },
-                            yAxis: { type: 'value', name: 'W', nameTextStyle: { color: '#fff' }, axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#333' } } },
-                            series: [{
-                                name: 'Peak Leistung',
-                                type: 'bar',
-                                data: data.map(d => d.peak_battery_power_w || 0),
-                                itemStyle: { color: '#22c55e' }
-                            }],
-                            grid: { left: 60, right: 30, top: 40, bottom: 50 }
+                            yAxis: { type: 'value', name: 'kWh', nameTextStyle: { color: '#fff' }, axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#333' } } },
+                            series: [
+                                { name: 'Solar-Ladung', type: 'bar', stack: 'charge', data: data.map(d => d.charged_solar_kwh), itemStyle: { color: '#fbbf24' } },
+                                { name: 'Netz-Ladung', type: 'bar', stack: 'charge', data: data.map(d => d.charged_grid_kwh), itemStyle: { color: '#8b5cf6' } },
+                                { name: 'Entladung', type: 'bar', data: data.map(d => -d.discharged_kwh), itemStyle: { color: '#fb923c' } }
+                            ],
+                            grid: { left: 60, right: 30, top: 60, bottom: 50 }
                         });
                     }
                 }
@@ -4134,6 +4305,7 @@
                         const result = await response.json();
 
                         const history = [];
+                        const hourlyConsumption = result.hourly_consumption || {};
 
                         if (result.success && result.daily_stats) {
                             // Convert daily_stats object to array sorted by date
@@ -4142,32 +4314,44 @@
 
                             for (const dateStr of sortedDates) {
                                 const dayData = dailyStats[dateStr];
-                                const solarKwh = (dayData.solar_to_house_kwh || 0) + (dayData.solar_to_battery_kwh || 0);
+                                const solarToHouse = dayData.solar_to_house_kwh || 0;
+                                const solarToBattery = dayData.solar_to_battery_kwh || 0;
                                 const batteryKwh = dayData.battery_to_house_kwh || 0;
                                 const gridKwh = dayData.grid_to_house_kwh || 0;
-                                const consumptionKwh = dayData.home_consumption_kwh || (solarKwh + batteryKwh + gridKwh);
+                                const consumptionKwh = dayData.home_consumption_kwh || (solarToHouse + batteryKwh + gridKwh);
 
                                 // Use API values if available, otherwise calculate
                                 let autarky = dayData.autarky_percent;
                                 if (autarky === undefined || autarky === null) {
-                                    // Autarkie = (Verbrauch - Netzbezug) / Verbrauch = 1 - (Netz / Verbrauch)
                                     autarky = consumptionKwh > 0 ? Math.max(0, (1 - gridKwh / consumptionKwh) * 100) : 0;
                                 }
                                 let selfConsumption = dayData.self_consumption_percent;
-                                if (selfConsumption === undefined || selfConsumption === null) {
-                                    const totalSolar = (dayData.solar_yield_kwh || solarKwh);
-                                    selfConsumption = totalSolar > 0 ? (solarKwh / totalSolar) * 100 : 0;
+                                if (selfConsumption === undefined || selfConsumption === null || selfConsumption === 0) {
+                                    const totalSolar = dayData.solar_yield_kwh || dayData.solar_total_kwh || (solarToHouse + solarToBattery);
+                                    selfConsumption = totalSolar > 0 ? ((solarToHouse + solarToBattery) / totalSolar) * 100 : 0;
+                                }
+
+                                // Find peak hour from hourly data
+                                const dayHourly = hourlyConsumption[dateStr] || {};
+                                let peakHour = null;
+                                let peakWh = 0;
+                                for (const [hour, kwh] of Object.entries(dayHourly)) {
+                                    if (kwh > peakWh) {
+                                        peakWh = kwh;
+                                        peakHour = parseInt(hour);
+                                    }
                                 }
 
                                 history.push({
                                     date: dateStr,
                                     consumption_kwh: consumptionKwh,
-                                    solar_kwh: solarKwh,
+                                    solar_kwh: solarToHouse,
                                     battery_kwh: batteryKwh,
                                     grid_kwh: gridKwh,
                                     autarky: Math.min(100, autarky),
                                     self_consumption: Math.min(100, selfConsumption),
-                                    peak_power_w: dayData.peak_consumption_w || dayData.peak_battery_power_w || 0
+                                    peak_hour: peakHour,
+                                    peak_wh: Math.round(peakWh * 1000),
                                 });
                             }
                         }
@@ -4178,6 +4362,7 @@
                         }
 
                         houseModal.historicalData = history;
+                        houseModal.hourlyConsumption = hourlyConsumption;
 
                         // Calculate stats - weekConsumption is Monday-Sunday of current week
                         const now = new Date();
@@ -4203,7 +4388,7 @@
                         const totalSolar = history.reduce((sum, d) => sum + d.solar_kwh, 0);
                         const totalConsumption = history.reduce((sum, d) => sum + d.consumption_kwh, 0);
                         houseModal.stats.solarCoverage = totalConsumption > 0 ? (totalSolar / totalConsumption) * 100 : 0;
-                        houseModal.stats.peakPower = history.length > 0 ? Math.max(...history.map(d => d.peak_power_w)) : 0;
+                        houseModal.stats.peakPower = history.length > 0 ? Math.max(...history.map(d => d.peak_wh || 0)) : 0;
 
                         renderHouseCharts();
                     } catch (error) {
@@ -4273,19 +4458,45 @@
                         });
                     }
 
-                    // Peak Chart
+                    // Peak Times Chart - Average consumption by hour of day
                     if (housePeakChart.value) {
+                        const hourlyConsumption = houseModal.hourlyConsumption || {};
+                        // Calculate average consumption per hour across all days in view
+                        const hourSums = new Array(24).fill(0);
+                        const hourCounts = new Array(24).fill(0);
+                        for (const d of data) {
+                            const dayHourly = hourlyConsumption[d.date] || {};
+                            for (let h = 0; h < 24; h++) {
+                                const val = dayHourly[h] || 0;
+                                if (val > 0) {
+                                    hourSums[h] += val * 1000; // kWh → Wh
+                                    hourCounts[h]++;
+                                }
+                            }
+                        }
+                        const hourAvgs = hourSums.map((sum, i) => hourCounts[i] > 0 ? Math.round(sum / hourCounts[i]) : 0);
+                        const peakHour = hourAvgs.indexOf(Math.max(...hourAvgs));
+                        const hourLabels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+
                         housePeakChart.value.setOption({
-                            tooltip: { trigger: 'axis', backgroundColor: 'rgba(30, 30, 62, 0.95)', borderColor: '#00ffff', textStyle: { color: '#fff' } },
-                            xAxis: { type: 'category', data: dates, axisLabel: { color: '#888', rotate: data.length > 20 ? 45 : 0 }, axisLine: { lineStyle: { color: '#444' } } },
-                            yAxis: { type: 'value', name: 'W', nameTextStyle: { color: '#fff' }, axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#333' } } },
+                            tooltip: {
+                                trigger: 'axis',
+                                backgroundColor: 'rgba(30, 30, 62, 0.95)',
+                                borderColor: '#00ffff',
+                                textStyle: { color: '#fff' },
+                                formatter: params => `${params[0].axisValue}<br/>Ø ${params[0].value} Wh`
+                            },
+                            xAxis: { type: 'category', data: hourLabels, axisLabel: { color: '#888', interval: 1, rotate: 45 }, axisLine: { lineStyle: { color: '#444' } } },
+                            yAxis: { type: 'value', name: 'Wh', nameTextStyle: { color: '#fff' }, axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#333' } } },
                             series: [{
-                                name: 'Peak Verbrauch',
+                                name: 'Ø Verbrauch',
                                 type: 'bar',
-                                data: data.map(d => d.peak_power_w),
-                                itemStyle: { color: '#00ffff' }
+                                data: hourAvgs.map((val, i) => ({
+                                    value: val,
+                                    itemStyle: { color: i === peakHour ? '#ff6b6b' : '#00ffff' }
+                                })),
                             }],
-                            grid: { left: 60, right: 30, top: 40, bottom: 50 }
+                            grid: { left: 60, right: 30, top: 40, bottom: 60 }
                         });
                     }
                 }
@@ -4368,39 +4579,47 @@
                         const result = await response.json();
 
                         const history = [];
+                        const dailyPrices = result.daily_prices || {};
+                        const hourlyGrid = result.hourly_grid || {};
 
                         if (result.success && result.daily_stats) {
-                            // Convert daily_stats object to array sorted by date
                             const dailyStats = result.daily_stats;
                             const sortedDates = Object.keys(dailyStats).sort();
 
                             for (const dateStr of sortedDates) {
                                 const dayData = dailyStats[dateStr];
-                                const importKwh = dayData.grid_to_house_kwh || 0;
+                                // Total grid import = grid_to_house + grid_to_battery
+                                const gridToHouse = dayData.grid_to_house_kwh || 0;
+                                const gridToBattery = dayData.grid_to_battery_kwh || 0;
+                                const importKwh = dayData.grid_import_kwh || (gridToHouse + gridToBattery);
                                 const exportKwh = Math.abs(dayData.grid_export_kwh || 0);
-                                const avgPrice = dayData.price_ct_kwh || dayData.avg_price_ct || 35; // Default 35 ct/kWh
+                                // Use real GPM price, fallback to collector price
+                                const avgPrice = dailyPrices[dateStr] || dayData.price_ct_kwh || dayData.avg_price_ct || 0;
+                                const feedInTariff = energyFlow.feed_in_tariff || 8.1;
 
                                 history.push({
                                     date: dateStr,
                                     import_kwh: importKwh,
+                                    grid_to_house_kwh: gridToHouse,
+                                    grid_to_battery_kwh: gridToBattery,
                                     export_kwh: exportKwh,
                                     avg_price_ct: avgPrice,
                                     costs_eur: (importKwh * avgPrice) / 100,
-                                    revenue_eur: (exportKwh * (energyFlow.feed_in_tariff || 8.1)) / 100
+                                    revenue_eur: (exportKwh * feedInTariff) / 100
                                 });
                             }
                         }
 
-                        // Fallback if no data
                         if (history.length === 0) {
                             console.warn('No grid stats available, showing empty data');
                         }
 
                         gridModal.historicalData = history;
+                        gridModal.hourlyGrid = hourlyGrid;
 
                         // Calculate stats - week is Monday-Sunday of current week
                         const now = new Date();
-                        const dayOfWeek = now.getDay(); // 0=Sunday, 1=Monday, ...
+                        const dayOfWeek = now.getDay();
                         const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
                         const monday = new Date(now);
                         monday.setDate(now.getDate() + mondayOffset);
@@ -4412,14 +4631,13 @@
                         const mondayStr = monday.toISOString().slice(0, 10);
                         const sundayStr = sundayEnd.toISOString().slice(0, 10);
 
-                        // Filter data for current week (Monday-Sunday)
                         const weekData = history.filter(d => d.date >= mondayStr && d.date <= sundayStr);
-                        const monthData = history.slice(-30);
 
                         gridModal.stats.weekImport = weekData.reduce((sum, d) => sum + d.import_kwh, 0);
                         gridModal.stats.weekExport = weekData.reduce((sum, d) => sum + d.export_kwh, 0);
                         gridModal.stats.netBalance = gridModal.stats.weekImport - gridModal.stats.weekExport;
-                        gridModal.stats.avgPrice = history.length > 0 ? history.reduce((sum, d) => sum + d.avg_price_ct, 0) / history.length : 0;
+                        const pricesWithData = history.filter(d => d.avg_price_ct > 0);
+                        gridModal.stats.avgPrice = pricesWithData.length > 0 ? pricesWithData.reduce((sum, d) => sum + d.avg_price_ct, 0) / pricesWithData.length : 0;
                         gridModal.stats.costs = weekData.reduce((sum, d) => sum + d.costs_eur, 0);
                         gridModal.stats.revenue = weekData.reduce((sum, d) => sum + d.revenue_eur, 0);
 
@@ -4481,22 +4699,44 @@
                         });
                     }
 
-                    // Pattern Chart
+                    // Pattern Chart - Average grid import by hour of day
                     if (gridPatternChart.value) {
-                        const netFlow = data.map(d => d.import_kwh - d.export_kwh);
-                        gridPatternChart.value.setOption({
-                            tooltip: { trigger: 'axis', backgroundColor: 'rgba(30, 30, 62, 0.95)', borderColor: '#8b5cf6', textStyle: { color: '#fff' } },
-                            xAxis: { type: 'category', data: dates, axisLabel: { color: '#888', rotate: data.length > 20 ? 45 : 0 }, axisLine: { lineStyle: { color: '#444' } } },
-                            yAxis: { type: 'value', name: 'kWh', nameTextStyle: { color: '#fff' }, axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#333' } } },
-                            series: [{
-                                name: 'Netto-Energiefluss',
-                                type: 'bar',
-                                data: netFlow,
-                                itemStyle: {
-                                    color: (params) => params.value > 0 ? '#ef4444' : '#22c55e'
+                        const hourlyGrid = gridModal.hourlyGrid || {};
+                        const hourSums = new Array(24).fill(0);
+                        const hourCounts = new Array(24).fill(0);
+                        for (const d of data) {
+                            const dayHourly = hourlyGrid[d.date] || {};
+                            for (let h = 0; h < 24; h++) {
+                                const val = dayHourly[h] || 0;
+                                if (val > 0) {
+                                    hourSums[h] += val * 1000; // kWh → Wh
+                                    hourCounts[h]++;
                                 }
+                            }
+                        }
+                        const hourAvgs = hourSums.map((sum, i) => hourCounts[i] > 0 ? Math.round(sum / hourCounts[i]) : 0);
+                        const peakHour = hourAvgs.indexOf(Math.max(...hourAvgs));
+                        const hourLabels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+
+                        gridPatternChart.value.setOption({
+                            tooltip: {
+                                trigger: 'axis',
+                                backgroundColor: 'rgba(30, 30, 62, 0.95)',
+                                borderColor: '#8b5cf6',
+                                textStyle: { color: '#fff' },
+                                formatter: params => `${params[0].axisValue}<br/>Ø ${params[0].value} Wh Netzbezug`
+                            },
+                            xAxis: { type: 'category', data: hourLabels, axisLabel: { color: '#888', interval: 1, rotate: 45 }, axisLine: { lineStyle: { color: '#444' } } },
+                            yAxis: { type: 'value', name: 'Wh', nameTextStyle: { color: '#fff' }, axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#333' } } },
+                            series: [{
+                                name: 'Ø Netzbezug',
+                                type: 'bar',
+                                data: hourAvgs.map((val, i) => ({
+                                    value: val,
+                                    itemStyle: { color: i === peakHour ? '#ef4444' : '#8b5cf6' }
+                                })),
                             }],
-                            grid: { left: 60, right: 30, top: 40, bottom: 50 }
+                            grid: { left: 60, right: 30, top: 40, bottom: 60 }
                         });
                     }
                 }
@@ -4573,11 +4813,18 @@
                 function calculatePowerSourcesStats(data) {
                     if (!data || data.length === 0) return;
 
-                    // Calculate totals
-                    // Data is in Watt (W), we need kWh
-                    // Formula: kWh = W * hours / 1000
-                    // With 5-minute intervals: kWh = W * (5/60) / 1000 = W / 12000
-                    const intervalHours = 5 / 60;  // 0.0833 hours per interval
+                    // Calculate actual interval from timestamps
+                    let intervalHours = 5 / 60;  // default 5min
+                    if (data.length >= 2) {
+                        const t0 = new Date(data[0].timestamp).getTime();
+                        const tN = new Date(data[data.length - 1].timestamp).getTime();
+                        const totalMs = tN - t0;
+                        if (totalMs > 0 && data.length > 1) {
+                            intervalHours = (totalMs / (data.length - 1)) / 3600000;
+                        }
+                    }
+
+                    // Data is in Watt (W), we need kWh: sum(W) * intervalHours / 1000
                     let solarToHouseSum = 0, solarToBatterySum = 0, batterySum = 0, gridSum = 0, consumptionSum = 0;
 
                     data.forEach(d => {
@@ -4588,7 +4835,7 @@
                         consumptionSum += (d.home_consumption || 0);
                     });
 
-                    // Convert W to kWh: W * intervalHours / 1000
+                    // Convert W to kWh
                     powerSourcesModal.stats.solarToHouse = (solarToHouseSum * intervalHours) / 1000;
                     powerSourcesModal.stats.solarToBattery = (solarToBatterySum * intervalHours) / 1000;
                     powerSourcesModal.stats.solarTotal = powerSourcesModal.stats.solarToHouse + powerSourcesModal.stats.solarToBattery;
@@ -4698,7 +4945,7 @@
                                     stack: 'sources',
                                     areaStyle: { opacity: 0.8 },
                                     data: solarToHouse,
-                                    itemStyle: { color: '#FFB74D' },
+                                    itemStyle: { color: '#facc15' },
                                     smooth: true,
                                     showSymbol: false
                                 },
@@ -4821,9 +5068,9 @@
                                     formatter: '{b}\n{d}%'
                                 },
                                 data: [
-                                    { value: stats.solarToHouse.toFixed(2), name: 'Solar → Haus', itemStyle: { color: '#FFB74D' } },
-                                    { value: stats.batteryTotal.toFixed(2), name: 'Batterie → Haus', itemStyle: { color: '#4DD0E1' } },
-                                    { value: stats.gridTotal.toFixed(2), name: 'Netz → Haus', itemStyle: { color: '#90CAF9' } }
+                                    { value: Math.round(stats.solarToHouse * 100) / 100, name: 'Solar → Haus', itemStyle: { color: '#facc15' } },
+                                    { value: Math.round(stats.batteryTotal * 100) / 100, name: 'Batterie → Haus', itemStyle: { color: '#4DD0E1' } },
+                                    { value: Math.round(stats.gridTotal * 100) / 100, name: 'Netz → Haus', itemStyle: { color: '#90CAF9' } }
                                 ]
                             }]
                         });
@@ -5389,6 +5636,250 @@
                     forecastComparisonChart.value.setOption(option);
                 }
 
+                // ===== SHADOW ANALYTICS =====
+                const SHADOW_CAUSE_LABELS = {
+                    'building_tree_obstruction': 'Gebäude/Baum',
+                    'low_sun_angle': 'Tiefer Sonnenstand',
+                    'panel_frost_snow': 'Schnee/Frost',
+                    'weather_clouds': 'Wolken',
+                    'weather_better_than_forecast': 'Besser als Prognose',
+                    'night': 'Nacht',
+                    'unknown': 'Unbekannt'
+                };
+
+                async function openShadowAnalyticsModal() {
+                    shadowModal.isOpen = true;
+
+                    setTimeout(async () => {
+                        // Init charts
+                        const heatEl = document.getElementById('shadow-heatmap-chart');
+                        const causeEl = document.getElementById('shadow-causes-chart');
+                        const lossEl = document.getElementById('shadow-daily-loss-chart');
+                        if (heatEl && heatEl.offsetWidth > 0) shadowCharts.heatmap = echarts.init(heatEl);
+                        if (causeEl && causeEl.offsetWidth > 0) shadowCharts.causes = echarts.init(causeEl);
+                        if (lossEl && lossEl.offsetWidth > 0) shadowCharts.dailyLoss = echarts.init(lossEl);
+
+                        try {
+                            const response = await fetch('/api/sfml_stats/shadow_analytics?days=60');
+                            const result = await response.json();
+                            console.log('Shadow analytics response:', result);
+                            if (result.success && result.data) {
+                                const d = result.data;
+                                shadowModal.data = d;
+
+                                // Stats
+                                shadowModal.stats.totalLoss = d.stats.total_loss_kwh;
+                                shadowModal.stats.shadowHours = d.stats.shadow_hours;
+                                shadowModal.stats.avgEfficiency = d.stats.avg_efficiency;
+                                shadowModal.stats.daysWithShadow = d.stats.days_with_shadow;
+                                shadowModal.stats.daysAnalyzed = d.stats.days_analyzed;
+                                shadowModal.stats.daysLearned = d.learning?.days_learned || 0;
+                                shadowModal.stats.dominantCauseLabel = SHADOW_CAUSE_LABELS[d.stats.dominant_cause] || d.stats.dominant_cause || '—';
+
+                                renderShadowHeatmap(d.heatmap);
+                                renderShadowCauses(d.causes);
+                                renderShadowDailyLoss(d.daily_loss);
+                            }
+                        } catch (err) {
+                            console.error('Shadow analytics error:', err);
+                        }
+                    }, 300);
+                }
+
+                function closeShadowAnalyticsModal() {
+                    shadowModal.isOpen = false;
+                    Object.values(shadowCharts).forEach(c => { if (c) c.dispose(); });
+                    shadowCharts.heatmap = null;
+                    shadowCharts.causes = null;
+                    shadowCharts.dailyLoss = null;
+                }
+
+                function renderShadowHeatmap(heatmap) {
+                    if (!shadowCharts.heatmap) return;
+
+                    const dates = Object.keys(heatmap).sort();
+                    const hours = [];
+                    for (let h = 7; h <= 18; h++) hours.push(h);
+
+                    const data = [];
+                    let maxPct = 0;
+                    dates.forEach((d, yi) => {
+                        hours.forEach((h, xi) => {
+                            const val = heatmap[d]?.[h];
+                            const pct = val ? val.pct : null;
+                            if (pct !== null) {
+                                data.push([xi, yi, pct]);
+                                if (pct > maxPct) maxPct = pct;
+                            }
+                        });
+                    });
+
+                    shadowCharts.heatmap.setOption({
+                        backgroundColor: 'transparent',
+                        tooltip: {
+                            position: 'top',
+                            backgroundColor: 'rgba(30,30,62,0.95)',
+                            borderColor: '#8b8ba0',
+                            textStyle: { color: '#fff' },
+                            formatter: function(p) {
+                                const d = dates[p.value[1]];
+                                const h = hours[p.value[0]];
+                                const info = heatmap[d]?.[h];
+                                if (!info) return '';
+                                const cause = SHADOW_CAUSE_LABELS[info.cause] || info.cause;
+                                return `<div style="font-weight:600">${d.slice(5).replace('-','.')} ${h}:00</div>
+                                    <div>Schatten: <b>${info.pct}%</b> (${info.type})</div>
+                                    <div>Ursache: ${cause}</div>
+                                    <div>Effizienz: ${(info.eff * 100).toFixed(0)}%</div>
+                                    <div>Verlust: ${(info.loss * 1000).toFixed(0)} Wh</div>`;
+                            }
+                        },
+                        grid: { left: 70, right: 20, top: 10, bottom: 40 },
+                        xAxis: {
+                            type: 'category',
+                            data: hours.map(h => h + ':00'),
+                            splitArea: { show: true, areaStyle: { color: ['rgba(255,255,255,0.02)', 'transparent'] } },
+                            axisLabel: { color: '#94a3b8', fontSize: 11 }
+                        },
+                        yAxis: {
+                            type: 'category',
+                            data: dates.map(d => d.slice(5).replace('-', '.')),
+                            axisLabel: { color: '#94a3b8', fontSize: 10 }
+                        },
+                        visualMap: {
+                            min: 0,
+                            max: 100,
+                            calculable: true,
+                            orient: 'horizontal',
+                            left: 'center',
+                            bottom: 0,
+                            itemWidth: 12,
+                            itemHeight: 120,
+                            textStyle: { color: '#94a3b8' },
+                            inRange: {
+                                color: ['#10b981', '#86efac', '#fde047', '#fb923c', '#ef4444', '#991b1b']
+                            },
+                            formatter: function(val) { return Math.round(val) + '%'; }
+                        },
+                        series: [{
+                            type: 'heatmap',
+                            data: data,
+                            label: { show: false },
+                            emphasis: {
+                                itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' }
+                            }
+                        }]
+                    });
+                }
+
+                function renderShadowCauses(causes) {
+                    if (!shadowCharts.causes) return;
+
+                    const colors = {
+                        'building_tree_obstruction': '#ef4444',
+                        'low_sun_angle': '#f59e0b',
+                        'panel_frost_snow': '#38bdf8',
+                        'weather_clouds': '#94a3b8',
+                        'weather_better_than_forecast': '#10b981',
+                        'unknown': '#64748b'
+                    };
+
+                    const pieData = Object.entries(causes)
+                        .filter(([k]) => k !== 'night')
+                        .map(([k, v]) => ({
+                            name: SHADOW_CAUSE_LABELS[k] || k,
+                            value: v,
+                            itemStyle: { color: colors[k] || '#64748b' }
+                        }))
+                        .sort((a, b) => b.value - a.value);
+
+                    shadowCharts.causes.setOption({
+                        backgroundColor: 'transparent',
+                        tooltip: {
+                            backgroundColor: 'rgba(30,30,62,0.95)',
+                            borderColor: '#8b8ba0',
+                            textStyle: { color: '#fff' },
+                            formatter: function(p) {
+                                return `${p.marker} ${p.name}: <b>${p.value}</b> Stunden (${p.percent}%)`;
+                            }
+                        },
+                        series: [{
+                            type: 'pie',
+                            radius: ['40%', '70%'],
+                            center: ['50%', '50%'],
+                            avoidLabelOverlap: true,
+                            itemStyle: { borderRadius: 6, borderColor: '#1a1a2e', borderWidth: 2 },
+                            label: {
+                                color: '#e2e8f0',
+                                fontSize: 11,
+                                formatter: '{b}\n{d}%'
+                            },
+                            emphasis: {
+                                label: { fontSize: 13, fontWeight: 'bold' }
+                            },
+                            data: pieData
+                        }]
+                    });
+                }
+
+                function renderShadowDailyLoss(dailyLoss) {
+                    if (!shadowCharts.dailyLoss) return;
+
+                    const filtered = dailyLoss.filter(d => d.loss_kwh > 0 || d.hours > 0);
+                    if (filtered.length === 0) {
+                        shadowCharts.dailyLoss.setOption({
+                            backgroundColor: 'transparent',
+                            title: { text: 'Keine Verlustdaten', left: 'center', top: 'center', textStyle: { color: '#64748b', fontSize: 14 } }
+                        });
+                        return;
+                    }
+
+                    shadowCharts.dailyLoss.setOption({
+                        backgroundColor: 'transparent',
+                        tooltip: {
+                            trigger: 'axis',
+                            backgroundColor: 'rgba(30,30,62,0.95)',
+                            borderColor: '#ef4444',
+                            textStyle: { color: '#fff' },
+                            formatter: function(params) {
+                                const d = filtered[params[0].dataIndex];
+                                return `<div style="font-weight:600">${d.date.slice(5).replace('-','.')}</div>
+                                    <div>Verlust: <b>${d.loss_kwh.toFixed(2)} kWh</b></div>
+                                    <div>Schatten-Stunden: ${d.hours}</div>`;
+                            }
+                        },
+                        grid: { left: 50, right: 15, top: 10, bottom: 30 },
+                        xAxis: {
+                            type: 'category',
+                            data: filtered.map(d => d.date.slice(5).replace('-', '.')),
+                            axisLabel: { color: '#94a3b8', fontSize: 10, rotate: 45 },
+                            axisLine: { lineStyle: { color: '#4a5568' } }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: 'kWh',
+                            nameTextStyle: { color: '#94a3b8', fontSize: 10 },
+                            axisLabel: { color: '#94a3b8', fontSize: 10 },
+                            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: filtered.map(d => d.loss_kwh),
+                            itemStyle: {
+                                color: {
+                                    type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                    colorStops: [
+                                        { offset: 0, color: '#ef4444' },
+                                        { offset: 1, color: '#991b1b' }
+                                    ]
+                                },
+                                borderRadius: [4, 4, 0, 0]
+                            },
+                            barMaxWidth: 30
+                        }]
+                    });
+                }
+
                 async function exportWeatherAnalytics() {
                     try {
                         weatherModal.exporting = true;
@@ -5922,26 +6413,20 @@
                         }
 
                         // Transform API data to expected format
-                        const history = result.history.map(d => {
-                            // Extract hour from peak_at (format: "HH:MM:SS")
-                            let peak_hour = 12;
-                            if (d.peak_at) {
-                                const hourMatch = d.peak_at.match(/^(\d+):/);
-                                if (hourMatch) peak_hour = parseInt(hourMatch[1]);
-                            }
-
-                            return {
-                                date: d.date,
-                                actual_kwh: d.actual_kwh || 0,
-                                predicted_kwh: d.predicted_kwh || 0,
-                                accuracy: d.accuracy || 0,
-                                peak_power_w: d.peak_power_w || 0,
-                                peak_hour: peak_hour
-                            };
-                        });
+                        const history = result.history.map(d => ({
+                            date: d.date,
+                            actual_kwh: d.actual_kwh || 0,
+                            predicted_kwh: d.predicted_kwh || 0,
+                            accuracy: d.accuracy || 0,
+                            peak_power_w: d.peak_power_w || 0,
+                            peak_hour: d.peak_hour || 12,
+                            peak_at: d.peak_at || null,
+                            production_hours: d.production_hours || 0
+                        }));
 
                         console.log('Solar data loaded:', history.length, 'days', history.slice(0, 3));
                         solarModal.historicalData = history;
+                        solarModal.hourlyProduction = result.hourly_production || {};
                         calculateSolarStats(history);
                         renderSolarCharts();
                     } catch (error) {
@@ -6062,18 +6547,19 @@
                 function renderHeatmapChart(data) {
                     if (!solarHeatmapChart.value) return;
 
-                    // Group data by hour to create heatmap
+                    const hourlyProduction = solarModal.hourlyProduction || {};
+
+                    // Build heatmap from real hourly production data
                     const hourlyData = [];
+                    let maxVal = 0;
                     for (let hour = 6; hour <= 20; hour++) {
-                        const hourData = data.map((d, idx) => {
-                            // Use peak_hour if available, otherwise estimate from data
-                            const peakHour = d.peak_hour || 12;
-                            const power = d.peak_power_w || 0;
-                            // Simulate hourly distribution (bell curve around peak hour)
-                            const hourFactor = Math.max(0, 1 - Math.abs(hour - peakHour) / 7);
-                            return [idx, hour - 6, Math.round(power * hourFactor)];
+                        data.forEach((d, idx) => {
+                            const dayData = hourlyProduction[d.date] || {};
+                            const kwh = dayData[hour] || 0;
+                            const wh = Math.round(kwh * 1000);
+                            if (wh > maxVal) maxVal = wh;
+                            hourlyData.push([idx, hour - 6, wh]);
                         });
-                        hourlyData.push(...hourData);
                     }
 
                     const dates = data.map(d => d.date.slice(5));
@@ -6087,7 +6573,7 @@
                             borderColor: '#ffdd0033',
                             textStyle: { color: '#e2e8f0' },
                             formatter: params => {
-                                return `${dates[params.value[0]]}<br/>${hours[params.value[1]]}: ${params.value[2]} W`;
+                                return `${dates[params.value[0]]}<br/>${hours[params.value[1]]}: ${params.value[2]} Wh`;
                             }
                         },
                         grid: { left: '10%', right: '4%', bottom: '10%', top: '5%' },
@@ -6105,7 +6591,7 @@
                         },
                         visualMap: {
                             min: 0,
-                            max: Math.max(...hourlyData.map(d => d[2])),
+                            max: maxVal || 100,
                             calculable: true,
                             orient: 'horizontal',
                             left: 'center',
@@ -6373,21 +6859,39 @@
                     return;
                 }
 
+                // Differential fetching: energy_flow every poll, others less frequently
+                const _fetchTimestamps = {};
+                const _fetchIntervals = { statistics: 30000, summary: 30000, solar: 60000, prices: 300000 };
+                function _needsFetch(key) {
+                    const now = Date.now();
+                    if (!_fetchTimestamps[key] || (now - _fetchTimestamps[key]) >= _fetchIntervals[key]) {
+                        _fetchTimestamps[key] = now;
+                        return true;
+                    }
+                    return false;
+                }
+
                 async function fetchData() {
                     try {
-                        const [summaryRes, solarRes, priceRes, energyFlowRes, statsRes] = await Promise.all([
-                            fetch('/api/sfml_stats/summary'),
-                            fetch('/api/sfml_stats/solar?days=7'),
-                            fetch('/api/sfml_stats/prices?days=2'),
+                        // energy_flow: always (real-time), others: conditional
+                        const doStats = _needsFetch('statistics');
+                        const doSummary = _needsFetch('summary');
+                        const doSolar = _needsFetch('solar');
+                        const doPrices = _needsFetch('prices');
+
+                        const [energyFlowRes, statsRes, summaryRes, solarRes, priceRes] = await Promise.all([
                             fetch('/api/sfml_stats/energy_flow'),
-                            fetch('/api/sfml_stats/statistics')
+                            doStats ? fetch('/api/sfml_stats/statistics') : Promise.resolve(null),
+                            doSummary ? fetch('/api/sfml_stats/summary') : Promise.resolve(null),
+                            doSolar ? fetch('/api/sfml_stats/solar?days=7') : Promise.resolve(null),
+                            doPrices ? fetch('/api/sfml_stats/prices?days=2') : Promise.resolve(null),
                         ]);
 
-                        const summary = await summaryRes.json();
-                        const solar = await solarRes.json();
-                        const prices = await priceRes.json();
                         const energyFlowData = await energyFlowRes.json();
-                        const statsData = await statsRes.json();
+                        const statsData = statsRes ? await statsRes.json() : null;
+                        const summary = summaryRes ? await summaryRes.json() : null;
+                        const solar = solarRes ? await solarRes.json() : null;
+                        const prices = priceRes ? await priceRes.json() : null;
 
                         // Energy Flow
                         if (energyFlowData.success) {
@@ -6457,11 +6961,12 @@
                             updateEnergyBalanceFromSensors(energyFlowData, gridImportYearly);
                         }
 
-                        // Statistics
-                        if (statsData.success) {
+                        // Statistics (conditional: every 30s)
+                        if (statsData?.success) {
                             Object.assign(stats.peaks, statsData.peaks);
                             Object.assign(stats.production, statsData.production);
                             Object.assign(stats.statistics, statsData.statistics);
+                            stats.production_time = statsData.production_time || null;
 
                             // Beste Stunde (aus daily_forecasts.json)
                             if (statsData.best_hour) {
@@ -6476,7 +6981,7 @@
                             }
                         }
 
-                        if (summary.success) {
+                        if (summary?.success) {
                             kpis.weekProduction = summary.week?.total_production || 0;
                             kpis.avgAccuracy = summary.week?.avg_accuracy || 0;
                             kpis.priceMin = summary.kpis?.price_min || 0;
@@ -6492,7 +6997,7 @@
                             }
                         }
 
-                        if (solar.success && solar.data) {
+                        if (solar?.success && solar?.data) {
                             const hourly = solar.data.hourly || [];
                             const now = new Date();
                             // Lokales Datum verwenden (nicht UTC!)
@@ -6644,7 +7149,7 @@
                             }
                         }
 
-                        if (prices.success && prices.data?.prices && energyBalance.priceMode === 'dynamic') {
+                        if (prices?.success && prices?.data?.prices && energyBalance.priceMode === 'dynamic') {
                             updatePriceChart(prices.data.prices, prices.data.statistics);
                         }
 
@@ -6985,27 +7490,99 @@
 
                 function updateTimelineChart(hourly) {
                     if (!charts.timeline) return;
-                    const sorted = [...hourly].sort((a,b) => new Date(a.target_datetime) - new Date(b.target_datetime)).slice(-72);
+
+                    // Volle 7 Tage, nur Produktionsstunden (7-18h)
+                    const sorted = [...hourly]
+                        .filter(h => h.target_hour >= 7 && h.target_hour <= 18)
+                        .sort((a,b) => new Date(a.target_datetime) - new Date(b.target_datetime));
+
+                    // Tagesgrenzen für markArea berechnen
+                    const dayDates = [...new Set(sorted.map(h => h.target_date))];
+                    const markAreas = dayDates
+                        .filter((_, i) => i % 2 === 1)
+                        .map(d => {
+                            const first = sorted.findIndex(h => h.target_date === d);
+                            const last = sorted.filter(h => h.target_date === d).length + first - 1;
+                            if (first < 0) return null;
+                            return [{ xAxis: first }, { xAxis: last }];
+                        })
+                        .filter(Boolean);
+
                     charts.timeline.setOption({
                         backgroundColor: 'transparent',
-                        tooltip: { trigger: 'axis', backgroundColor: '#1e1e3e', borderColor: '#00ffff33', textStyle: { color: '#e2e8f0' } },
+                        tooltip: {
+                            trigger: 'axis',
+                            backgroundColor: 'rgba(30, 30, 62, 0.95)',
+                            borderColor: '#00ffff33',
+                            textStyle: { color: '#e2e8f0' },
+                            formatter: function(params) {
+                                const h = sorted[params[0].dataIndex];
+                                const dateStr = h?.target_date ? h.target_date.slice(5).replace('-', '.') : '';
+                                let html = `<div style="font-weight:600;margin-bottom:6px;">${dateStr} ${h?.target_hour || ''}:00</div>`;
+                                params.forEach(p => {
+                                    if (p.value !== null && p.value !== undefined) {
+                                        html += `<div style="display:flex;justify-content:space-between;gap:16px;">
+                                            <span>${p.marker} ${p.seriesName}</span>
+                                            <span style="font-weight:600;">${(p.value * 1000).toFixed(0)} Wh</span>
+                                        </div>`;
+                                    }
+                                });
+                                return html;
+                            }
+                        },
                         legend: { data: ['Tatsächlich', 'Vorhersage'], textStyle: { color: '#94a3b8' }, top: 0 },
-                        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
-                        dataZoom: [{ type: 'slider', start: 60, end: 100, textStyle: { color: '#94a3b8' } }],
-                        xAxis: { type: 'category', data: sorted.map(h => (h.target_date?.slice(5)||'') + ' ' + h.target_hour + 'h'), axisLabel: { color: '#94a3b8', rotate: 45 } },
+                        grid: { left: '3%', right: '4%', bottom: '12%', containLabel: true },
+                        xAxis: {
+                            type: 'category',
+                            data: sorted.map(h => {
+                                const d = h.target_date?.slice(5).replace('-', '.') || '';
+                                return h.target_hour === 12 ? d : h.target_hour + 'h';
+                            }),
+                            axisLabel: { color: '#94a3b8', fontSize: 10, rotate: 0 },
+                            axisLine: { lineStyle: { color: '#4a5568' } }
+                        },
                         yAxis: {
                             type: 'value',
+                            name: 'kWh',
+                            nameTextStyle: { color: '#94a3b8' },
                             min: 0,
                             max: function(value) {
-                                // Dynamische Skalierung: Max + 15% Puffer, mindestens 0.5 kWh
-                                return Math.max(0.5, Math.ceil(value.max * 1.15 * 10) / 10);
+                                return Math.max(0.3, Math.ceil(value.max * 1.15 * 10) / 10);
                             },
                             axisLabel: { color: '#94a3b8' },
                             splitLine: { lineStyle: { color: '#1a1a3a' } }
                         },
                         series: [
-                            { name: 'Tatsächlich', type: 'bar', data: sorted.map(h => h.actual_kwh), itemStyle: { color: '#00ff88' } },
-                            { name: 'Vorhersage', type: 'line', data: sorted.map(h => h.prediction_kwh), smooth: true, lineStyle: { color: '#3b82f6' }, symbol: 'none' }
+                            {
+                                name: 'Tatsächlich',
+                                type: 'bar',
+                                data: sorted.map(h => h.actual_kwh != null ? h.actual_kwh : null),
+                                itemStyle: { color: '#00ff88' },
+                                barMaxWidth: 12,
+                                markArea: {
+                                    silent: true,
+                                    itemStyle: { color: 'rgba(255,255,255,0.03)' },
+                                    data: markAreas
+                                }
+                            },
+                            {
+                                name: 'Vorhersage',
+                                type: 'line',
+                                data: sorted.map(h => h.prediction_kwh),
+                                smooth: true,
+                                lineStyle: { color: '#3b82f6', width: 2 },
+                                itemStyle: { color: '#3b82f6' },
+                                symbol: 'none',
+                                areaStyle: {
+                                    color: {
+                                        type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                        colorStops: [
+                                            { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
+                                            { offset: 1, color: 'rgba(59, 130, 246, 0.02)' }
+                                        ]
+                                    }
+                                }
+                            }
                         ]
                     });
                 }
@@ -7061,9 +7638,9 @@
                         charts.powerSourcesPreview.setOption({
                             tooltip: {
                                 trigger: 'axis',
-                                axisPointer: { type: 'line', lineStyle: { color: '#FFB74D' } },
+                                axisPointer: { type: 'line', lineStyle: { color: '#facc15' } },
                                 backgroundColor: 'rgba(30, 30, 62, 0.95)',
-                                borderColor: '#FFB74D',
+                                borderColor: '#facc15',
                                 textStyle: { color: '#fff' },
                                 formatter: function(params) {
                                     var html = '<div style="font-weight:bold; margin-bottom:5px;">' + params[0].axisValue + '</div>';
@@ -7092,8 +7669,8 @@
                                     name: 'PV-Leistung',
                                     type: 'line',
                                     data: solarPower,
-                                    itemStyle: { color: '#FFB74D' },
-                                    lineStyle: { width: 2, color: '#FFB74D' },
+                                    itemStyle: { color: '#facc15' },
+                                    lineStyle: { width: 2, color: '#facc15' },
                                     areaStyle: {
                                         color: {
                                             type: 'linear',
@@ -7128,31 +7705,7 @@
                         .filter(h => h.target_date === todayStr)
                         .sort((a, b) => a.target_hour - b.target_hour);
 
-                    // Produktionszeit dynamisch aus Astrodaten (±2 Stunden)
-                    let START_HOUR = 6;  // Fallback
-                    let END_HOUR = 20;   // Fallback
-
-                    // Versuche sunrise/sunset aus sunPosition zu lesen (Format: "08:15" oder "2025-12-15T08:15:00+01:00")
-                    if (sunPosition.sunrise) {
-                        const sunriseStr = sunPosition.sunrise;
-                        let sunriseHour;
-                        if (sunriseStr.includes('T')) {
-                            sunriseHour = parseInt(sunriseStr.split('T')[1].split(':')[0]);
-                        } else {
-                            sunriseHour = parseInt(sunriseStr.split(':')[0]);
-                        }
-                        START_HOUR = Math.max(0, sunriseHour - 2);
-                    }
-                    if (sunPosition.sunset) {
-                        const sunsetStr = sunPosition.sunset;
-                        let sunsetHour;
-                        if (sunsetStr.includes('T')) {
-                            sunsetHour = parseInt(sunsetStr.split('T')[1].split(':')[0]);
-                        } else {
-                            sunsetHour = parseInt(sunsetStr.split(':')[0]);
-                        }
-                        END_HOUR = Math.min(23, sunsetHour + 2);
-                    }
+                    const { startHour: START_HOUR, endHour: END_HOUR } = getProductionHourRange();
 
                     const hours = Array.from({length: END_HOUR - START_HOUR + 1}, (_, i) => i + START_HOUR);
 
@@ -7291,30 +7844,7 @@
                 function updatePanelGroupCharts() {
                     if (!panelGroups.available || !panelGroups.groups) return;
 
-                    // Produktionszeit dynamisch aus Astrodaten (±2 Stunden)
-                    let START_HOUR = 6;  // Fallback
-                    let END_HOUR = 20;   // Fallback
-
-                    if (sunPosition.sunrise) {
-                        const sunriseStr = sunPosition.sunrise;
-                        let sunriseHour;
-                        if (sunriseStr.includes('T')) {
-                            sunriseHour = parseInt(sunriseStr.split('T')[1].split(':')[0]);
-                        } else {
-                            sunriseHour = parseInt(sunriseStr.split(':')[0]);
-                        }
-                        START_HOUR = Math.max(0, sunriseHour - 2);
-                    }
-                    if (sunPosition.sunset) {
-                        const sunsetStr = sunPosition.sunset;
-                        let sunsetHour;
-                        if (sunsetStr.includes('T')) {
-                            sunsetHour = parseInt(sunsetStr.split('T')[1].split(':')[0]);
-                        } else {
-                            sunsetHour = parseInt(sunsetStr.split(':')[0]);
-                        }
-                        END_HOUR = Math.min(23, sunsetHour + 2);
-                    }
+                    const { startHour: START_HOUR, endHour: END_HOUR } = getProductionHourRange();
 
                     const hours = Array.from({length: END_HOUR - START_HOUR + 1}, (_, i) => i + START_HOUR);
 
@@ -7529,30 +8059,50 @@
                 }
 
 
+                // Debounced resize handler
+                let _resizeTimer;
+                function _resizeAllCharts() {
+                    Object.values(charts).forEach(c => c?.resize());
+                    [batterySOCChart, batteryChargeChart, batteryEfficiencyChart, batteryPowerChart,
+                     houseConsumptionChart, houseAutarkyChart, houseSourcesChart, housePeakChart,
+                     gridFlowChart, gridPriceChart, gridMoneyChart, gridPatternChart,
+                     solarProductionChart, solarHeatmapChart, solarAccuracyChart, solarPanelGroupChart,
+                     weatherTempChart, weatherRadiationChart, weatherRainChart, weatherWindChart,
+                     weatherTempComparisonChart, weatherRadiationComparisonChart, weatherCloudsComparisonChart, weatherAccuracyChart,
+                     powerSourcesMainChart, powerSourcesSOCChart, powerSourcesPieChart,
+                     consumerBarChart, forecastComparisonChart
+                    ].forEach(c => c.value?.resize());
+                    Object.values(panelGroupCharts).forEach(c => c?.resize());
+                }
+
+                // Visibility-based polling: 5s active, 30s background
+                let _pollInterval = 5000;
                 let interval;
+                function _startPolling() {
+                    clearInterval(interval);
+                    interval = setInterval(fetchData, _pollInterval);
+                }
+
                 onMounted(() => {
                     initCharts();
-                    fetchBillingData();  // Lade Jahresbilanz-Daten
+                    fetchBillingData();
                     fetchData();
-                    // Initialize power sources preview chart
                     setTimeout(() => updatePowerSourcesPreviewChart(), 1500);
-                    interval = setInterval(fetchData, 5000);
+                    loadAIStatus();
+                    _startPolling();
                     window.addEventListener('resize', () => {
-                        Object.values(charts).forEach(c => c?.resize());
-                        // Resize all modal charts
-                        [batterySOCChart, batteryChargeChart, batteryEfficiencyChart, batteryPowerChart,
-                         houseConsumptionChart, houseAutarkyChart, houseSourcesChart, housePeakChart,
-                         gridFlowChart, gridPriceChart, gridMoneyChart, gridPatternChart,
-                         solarProductionChart, solarHeatmapChart, solarAccuracyChart, solarPanelGroupChart,
-                         weatherTempChart, weatherRadiationChart, weatherRainChart, weatherWindChart,
-                         weatherTempComparisonChart, weatherRadiationComparisonChart, weatherCloudsComparisonChart, weatherAccuracyChart,
-                         powerSourcesMainChart, powerSourcesSOCChart, powerSourcesPieChart,
-                         consumerBarChart, forecastComparisonChart
-                        ].forEach(c => c.value?.resize());
-                        // Resize panel group charts
-                        Object.values(panelGroupCharts).forEach(c => c?.resize());
+                        clearTimeout(_resizeTimer);
+                        _resizeTimer = setTimeout(_resizeAllCharts, 200);
                     });
-                    // Initialize SortableJS for section reordering
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) {
+                            _pollInterval = 30000;
+                        } else {
+                            _pollInterval = 5000;
+                            fetchData(); // Sofort aktualisieren wenn Tab wieder sichtbar
+                        }
+                        _startPolling();
+                    });
                     setTimeout(() => {
                         initSortable();
                         initDragHoldFeedback();
@@ -7587,7 +8137,9 @@
                     weatherModal, openWeatherModal, closeWeatherModal, exportWeatherAnalytics,
                     powerSourcesModal, openPowerSourcesModal, closePowerSourcesModal, exportPowerSourcesAnalytics, changePowerSourcesTab, loadPowerSourcesCustomRange,
                     clothingModal, openClothingModal, closeClothingModal,
-                    forecastComparisonModal, openForecastComparisonModal, closeForecastComparisonModal
+                    forecastComparisonModal, openForecastComparisonModal, closeForecastComparisonModal,
+                    shadowModal, openShadowAnalyticsModal, closeShadowAnalyticsModal,
+                    aiStatus
                 };
             }
         }).mount('#app');

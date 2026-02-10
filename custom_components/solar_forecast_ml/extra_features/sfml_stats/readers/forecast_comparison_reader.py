@@ -7,32 +7,37 @@
 # * Full license terms: https://github.com/Zara-Toorox/ha-solar-forecast-ml/blob/main/LICENSE
 # ******************************************************************************
 
-"""Forecast comparison data reader for SFML Stats. @zara"""
+"""Forecast comparison data reader for SFML Stats (DB-only). @zara"""
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-import aiofiles
+import aiosqlite
 
-from ..const import (
-    SFML_STATS_DATA,
-    EXTERNAL_FORECASTS_HISTORY,
-    FORECAST_COMPARISON_CHART_DAYS,
-)
+from ..const import FORECAST_COMPARISON_CHART_DAYS
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _compute_accuracy(actual: float | None, forecast: float | None) -> float | None:
+    """Compute accuracy percent from actual and forecast values. @zara"""
+    if actual is None or forecast is None:
+        return None
+    if actual <= 0 and forecast <= 0:
+        return 100.0
+    if actual <= 0 or forecast <= 0:
+        return 0.0
+    return round(max(0, min(100, 100 - abs((actual - forecast) / actual) * 100)), 1)
 
 
 @dataclass
 class ExternalForecast:
     """External forecast data for a day. @zara"""
 
-    entity_id: str
     name: str
     forecast_kwh: float | None
     error_kwh: float | None = None
@@ -50,7 +55,6 @@ class ForecastComparisonDay:
     sfml_accuracy_percent: float | None = None
     external_1: ExternalForecast | None = None
     external_2: ExternalForecast | None = None
-    timestamp: datetime | None = None
 
     @property
     def has_data(self) -> bool:
@@ -80,35 +84,23 @@ class ForecastComparisonStats:
 
 
 class ForecastComparisonReader:
-    """Reads forecast comparison data for charts and analysis. @zara"""
+    """Reads forecast comparison data from stats_forecast_comparison DB table. @zara"""
 
-    def __init__(self, config_path: Path) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        external_1_name: str = "Externe Prognose 1",
+        external_2_name: str = "Externe Prognose 2",
+    ) -> None:
         """Initialize the forecast comparison reader. @zara"""
-        self._config_path = config_path
-        self._data_path = config_path / SFML_STATS_DATA
-        self._history_file = self._data_path / EXTERNAL_FORECASTS_HISTORY
+        self._db_path = db_path
+        self._ext1_name = external_1_name
+        self._ext2_name = external_2_name
 
     @property
     def is_available(self) -> bool:
         """Check if forecast comparison data is available. @zara"""
-        return self._history_file.exists()
-
-    async def _read_json_file(self, file_path: Path) -> dict | None:
-        """Read a JSON file asynchronously. @zara"""
-        if not file_path.exists():
-            _LOGGER.debug("File not found: %s", file_path)
-            return None
-
-        try:
-            async with aiofiles.open(file_path, mode="r", encoding="utf-8") as f:
-                content = await f.read()
-                return json.loads(content)
-        except json.JSONDecodeError as err:
-            _LOGGER.error("JSON parsing error in %s: %s", file_path, err)
-            return None
-        except Exception as err:
-            _LOGGER.error("Error reading %s: %s", file_path, err)
-            return None
+        return self._db_path.exists()
 
     async def async_get_comparison_days(
         self,
@@ -116,10 +108,8 @@ class ForecastComparisonReader:
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> list[ForecastComparisonDay]:
-        """Get forecast comparison data for a date range. @zara"""
-        data = await self._read_json_file(self._history_file)
-
-        if not data or "days" not in data:
+        """Get forecast comparison data for a date range from DB. @zara"""
+        if not self._db_path.exists():
             return []
 
         if end_date is None:
@@ -127,15 +117,75 @@ class ForecastComparisonReader:
         if start_date is None:
             start_date = end_date - timedelta(days=days - 1)
 
-        result: list[ForecastComparisonDay] = []
+        start_str = start_date.isoformat()
+        end_str = end_date.isoformat()
 
+        # Read from stats_forecast_comparison + enrich actual from daily_summaries
+        db_rows: dict[str, dict[str, Any]] = {}
+
+        try:
+            async with aiosqlite.connect(str(self._db_path)) as conn:
+                conn.row_factory = aiosqlite.Row
+
+                # Main forecast comparison data
+                async with conn.execute(
+                    """SELECT date, actual_kwh, sfml_forecast_kwh,
+                              sfml_accuracy_percent,
+                              external_1_kwh, external_1_accuracy_percent,
+                              external_2_kwh, external_2_accuracy_percent,
+                              best_source
+                       FROM stats_forecast_comparison
+                       WHERE date >= ? AND date <= ?
+                       ORDER BY date""",
+                    (start_str, end_str),
+                ) as cursor:
+                    for row in await cursor.fetchall():
+                        db_rows[row["date"]] = dict(row)
+
+                # Enrich with daily_summaries for actual + sfml forecast
+                async with conn.execute(
+                    """SELECT date, actual_total_kwh, predicted_total_kwh
+                       FROM daily_summaries
+                       WHERE date >= ? AND date <= ?
+                       ORDER BY date""",
+                    (start_str, end_str),
+                ) as cursor:
+                    for row in await cursor.fetchall():
+                        d = row["date"]
+                        if d not in db_rows:
+                            # Day exists in daily_summaries but not in forecast_comparison
+                            db_rows[d] = {
+                                "date": d,
+                                "actual_kwh": row["actual_total_kwh"],
+                                "sfml_forecast_kwh": row["predicted_total_kwh"],
+                                "sfml_accuracy_percent": None,
+                                "external_1_kwh": None,
+                                "external_1_accuracy_percent": None,
+                                "external_2_kwh": None,
+                                "external_2_accuracy_percent": None,
+                                "best_source": None,
+                            }
+                        else:
+                            # Fill missing actual_kwh from daily_summaries
+                            if db_rows[d].get("actual_kwh") is None and row["actual_total_kwh"] is not None:
+                                db_rows[d]["actual_kwh"] = row["actual_total_kwh"]
+                            # Fill missing sfml_forecast from daily_summaries
+                            if db_rows[d].get("sfml_forecast_kwh") is None and row["predicted_total_kwh"] is not None:
+                                db_rows[d]["sfml_forecast_kwh"] = row["predicted_total_kwh"]
+
+        except Exception as err:
+            _LOGGER.error("Error reading forecast comparison from DB: %s", err)
+            return []
+
+        # Build result for each day in range
+        result: list[ForecastComparisonDay] = []
         current = start_date
         while current <= end_date:
             day_str = current.isoformat()
 
-            if day_str in data["days"]:
-                raw = data["days"][day_str]
-                comparison_day = self._parse_day(current, raw)
+            if day_str in db_rows:
+                raw = db_rows[day_str]
+                comparison_day = self._build_day(current, raw)
             else:
                 comparison_day = ForecastComparisonDay(
                     date=current,
@@ -144,51 +194,66 @@ class ForecastComparisonReader:
                 )
 
             result.append(comparison_day)
-            current = current + timedelta(days=1)
+            current += timedelta(days=1)
 
         return result
 
-    def _parse_day(self, day_date: date, raw: dict[str, Any]) -> ForecastComparisonDay:
-        """Parse a single day's data from JSON. @zara"""
+    def _build_day(self, day_date: date, raw: dict[str, Any]) -> ForecastComparisonDay:
+        """Build a ForecastComparisonDay from DB row data. @zara"""
+        actual = raw.get("actual_kwh")
+        sfml_forecast = raw.get("sfml_forecast_kwh")
+
+        # Compute SFML accuracy if missing/zero
+        sfml_acc = raw.get("sfml_accuracy_percent")
+        if (not sfml_acc or sfml_acc <= 0) and actual is not None and sfml_forecast is not None:
+            sfml_acc = _compute_accuracy(actual, sfml_forecast)
+
+        sfml_error = None
+        if actual is not None and sfml_forecast is not None:
+            sfml_error = round(sfml_forecast - actual, 3)
+
+        # External 1
         external_1 = None
-        external_2 = None
-
-        if "external_1" in raw:
-            ext1 = raw["external_1"]
+        ext1_kwh = raw.get("external_1_kwh")
+        if ext1_kwh is not None:
+            ext1_acc = raw.get("external_1_accuracy_percent")
+            if (not ext1_acc or ext1_acc <= 0) and actual is not None:
+                ext1_acc = _compute_accuracy(actual, ext1_kwh)
+            ext1_error = None
+            if actual is not None:
+                ext1_error = round(ext1_kwh - actual, 3)
             external_1 = ExternalForecast(
-                entity_id=ext1.get("entity_id", ""),
-                name=ext1.get("name", "External 1"),
-                forecast_kwh=ext1.get("forecast_kwh"),
-                error_kwh=ext1.get("error_kwh"),
-                accuracy_percent=ext1.get("accuracy_percent"),
+                name=self._ext1_name,
+                forecast_kwh=ext1_kwh,
+                error_kwh=ext1_error,
+                accuracy_percent=ext1_acc,
             )
 
-        if "external_2" in raw:
-            ext2 = raw["external_2"]
+        # External 2
+        external_2 = None
+        ext2_kwh = raw.get("external_2_kwh")
+        if ext2_kwh is not None:
+            ext2_acc = raw.get("external_2_accuracy_percent")
+            if (not ext2_acc or ext2_acc <= 0) and actual is not None:
+                ext2_acc = _compute_accuracy(actual, ext2_kwh)
+            ext2_error = None
+            if actual is not None:
+                ext2_error = round(ext2_kwh - actual, 3)
             external_2 = ExternalForecast(
-                entity_id=ext2.get("entity_id", ""),
-                name=ext2.get("name", "External 2"),
-                forecast_kwh=ext2.get("forecast_kwh"),
-                error_kwh=ext2.get("error_kwh"),
-                accuracy_percent=ext2.get("accuracy_percent"),
+                name=self._ext2_name,
+                forecast_kwh=ext2_kwh,
+                error_kwh=ext2_error,
+                accuracy_percent=ext2_acc,
             )
-
-        timestamp = None
-        if raw.get("timestamp"):
-            try:
-                timestamp = datetime.fromisoformat(raw["timestamp"])
-            except ValueError:
-                pass
 
         return ForecastComparisonDay(
             date=day_date,
-            actual_kwh=raw.get("actual_kwh"),
-            sfml_forecast_kwh=raw.get("sfml_forecast_kwh"),
-            sfml_error_kwh=raw.get("sfml_error_kwh"),
-            sfml_accuracy_percent=raw.get("sfml_accuracy_percent"),
+            actual_kwh=actual,
+            sfml_forecast_kwh=sfml_forecast,
+            sfml_error_kwh=sfml_error,
+            sfml_accuracy_percent=sfml_acc,
             external_1=external_1,
             external_2=external_2,
-            timestamp=timestamp,
         )
 
     async def async_get_statistics(
@@ -203,14 +268,17 @@ class ForecastComparisonReader:
         stats = ForecastComparisonStats(
             days_count=len(comparison_days),
             days_with_actual=days_with_actual,
+            external_1_name=self._ext1_name,
+            external_2_name=self._ext2_name,
         )
 
         if days_with_actual == 0:
             return stats
 
+        # SFML accuracies
         sfml_accuracies = [
             d.sfml_accuracy_percent for d in comparison_days
-            if d.sfml_accuracy_percent is not None
+            if d.sfml_accuracy_percent is not None and d.sfml_accuracy_percent > 0
         ]
         sfml_errors = [
             d.sfml_error_kwh for d in comparison_days
@@ -222,45 +290,52 @@ class ForecastComparisonReader:
         if sfml_errors:
             stats.sfml_total_error_kwh = round(sum(sfml_errors), 2)
 
+        # External 1 accuracies
         ext1_accuracies = []
         ext1_errors = []
+        has_ext1 = False
         for d in comparison_days:
             if d.external_1:
-                if d.external_1.accuracy_percent is not None:
+                has_ext1 = True
+                if d.external_1.accuracy_percent is not None and d.external_1.accuracy_percent > 0:
                     ext1_accuracies.append(d.external_1.accuracy_percent)
                 if d.external_1.error_kwh is not None:
                     ext1_errors.append(d.external_1.error_kwh)
-                if d.external_1.name and not stats.external_1_name:
-                    stats.external_1_name = d.external_1.name
 
         if ext1_accuracies:
             stats.external_1_avg_accuracy = round(sum(ext1_accuracies) / len(ext1_accuracies), 1)
         if ext1_errors:
             stats.external_1_total_error_kwh = round(sum(ext1_errors), 2)
+        if not has_ext1:
+            stats.external_1_name = None
 
+        # External 2 accuracies
         ext2_accuracies = []
         ext2_errors = []
+        has_ext2 = False
         for d in comparison_days:
             if d.external_2:
-                if d.external_2.accuracy_percent is not None:
+                has_ext2 = True
+                if d.external_2.accuracy_percent is not None and d.external_2.accuracy_percent > 0:
                     ext2_accuracies.append(d.external_2.accuracy_percent)
                 if d.external_2.error_kwh is not None:
                     ext2_errors.append(d.external_2.error_kwh)
-                if d.external_2.name and not stats.external_2_name:
-                    stats.external_2_name = d.external_2.name
 
         if ext2_accuracies:
             stats.external_2_avg_accuracy = round(sum(ext2_accuracies) / len(ext2_accuracies), 1)
         if ext2_errors:
             stats.external_2_total_error_kwh = round(sum(ext2_errors), 2)
+        if not has_ext2:
+            stats.external_2_name = None
 
+        # Determine best forecast
         accuracies = {}
         if stats.sfml_avg_accuracy is not None:
             accuracies["SFML"] = stats.sfml_avg_accuracy
         if stats.external_1_avg_accuracy is not None:
-            accuracies[stats.external_1_name or "External 1"] = stats.external_1_avg_accuracy
+            accuracies[stats.external_1_name or "Extern 1"] = stats.external_1_avg_accuracy
         if stats.external_2_avg_accuracy is not None:
-            accuracies[stats.external_2_name or "External 2"] = stats.external_2_avg_accuracy
+            accuracies[stats.external_2_name or "Extern 2"] = stats.external_2_avg_accuracy
 
         if accuracies:
             stats.best_forecast = max(accuracies, key=accuracies.get)
@@ -279,6 +354,7 @@ class ForecastComparisonReader:
         actual = [d.actual_kwh for d in comparison_days]
         sfml = [d.sfml_forecast_kwh for d in comparison_days]
 
+        # External forecasts
         external_1 = None
         external_1_name = None
         external_2 = None

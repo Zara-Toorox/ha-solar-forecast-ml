@@ -830,6 +830,7 @@ CREATE TABLE IF NOT EXISTS hourly_weather_actual (
     snow_confidence REAL,
     snow_event_detected BOOLEAN DEFAULT 0,
     snow_clearing_progress REAL,
+    outlier_severity REAL DEFAULT NULL,                  -- V16.4.0: Outlier severity 0.0-1.0 @zara
     version TEXT DEFAULT '1.1',
     UNIQUE(date, hour)
 );

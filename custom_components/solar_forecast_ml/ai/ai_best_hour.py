@@ -37,10 +37,10 @@ class BestHourCalculator:
             today = datetime.now().date().isoformat()
 
             rows = await self.db_manager.fetchall(
-                """SELECT target_hour, predicted_kwh
+                """SELECT target_hour, prediction_kwh
                    FROM hourly_predictions
-                   WHERE target_date = ? AND predicted_kwh > 0
-                   ORDER BY predicted_kwh DESC
+                   WHERE target_date = ? AND prediction_kwh > 0
+                   ORDER BY prediction_kwh DESC
                    LIMIT 1""",
                 (today,)
             )

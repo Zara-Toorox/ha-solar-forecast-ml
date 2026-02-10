@@ -1311,7 +1311,7 @@ body {
     border-radius: 3px;
 }
 
-.power-sources-legend-dot.solar { background: #FFB74D; }
+.power-sources-legend-dot.solar { background: #facc15; }
 .power-sources-legend-dot.battery { background: #4DD0E1; }
 .power-sources-legend-dot.grid { background: #90CAF9; }
 .power-sources-legend-dot.consumption { background: #1a1a1a; border: 2px solid #ffffff; }
@@ -1665,6 +1665,12 @@ body {
 .top-row > * {
     min-width: 0;
 }
+.collapsible-section > .top-row {
+    background: rgba(0, 212, 255, 0.06);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+}
 
 @media (max-width: 900px) {
     .top-row {
@@ -1922,6 +1928,10 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
     gap: var(--spacing-md);
     margin-bottom: var(--spacing-lg);
+    background: rgba(0, 212, 255, 0.06);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
 }
 
 .kpi-card {
@@ -1959,6 +1969,10 @@ body {
     grid-template-columns: 1fr 1fr;
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
+    background: rgba(0, 212, 255, 0.06);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
 }
 .charts-grid > * {
     min-width: 0;
@@ -3406,4 +3420,50 @@ body {
         transform: translate(-50%, -50%) scale(1.5);
         opacity: 0;
     }
+}
+
+/* ============================================================
+   KI-Status Bar
+   ============================================================ */
+.ai-status-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    background: rgba(167, 139, 250, 0.12);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    border-radius: var(--radius-lg);
+}
+
+.ai-status-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 90px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background 0.2s ease;
+}
+
+.ai-status-item:hover {
+    background: rgba(167, 139, 250, 0.08);
+}
+
+.ai-status-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.ai-status-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
 }
