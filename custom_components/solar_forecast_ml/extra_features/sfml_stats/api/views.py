@@ -15,10 +15,12 @@ import functools
 import ipaddress
 import json
 import logging
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
+import aiosqlite
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
@@ -190,6 +192,20 @@ GRID_PATH: Path | None = None
 HASS: HomeAssistant | None = None
 
 
+@asynccontextmanager
+async def _get_db() -> AsyncIterator[aiosqlite.Connection]:
+    """Get DB connection via manager with direct fallback. @zara"""
+    from ..storage.db_connection_manager import get_manager
+    manager = get_manager()
+    if manager is not None and manager.is_connected:
+        yield await manager.get_connection()
+        return
+    db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
+    async with aiosqlite.connect(str(db_path)) as conn:
+        conn.row_factory = aiosqlite.Row
+        yield conn
+
+
 async def async_setup_views(hass: HomeAssistant) -> None:
     """Register all API views. @zara"""
     global SOLAR_PATH, GRID_PATH, HASS
@@ -277,12 +293,7 @@ def _get_solar_reader() -> SolarDataReader:
 async def _get_today_yield_from_db() -> float | None:
     """Get today's solar yield from prediction_panel_groups (sum of all panels). @zara"""
     try:
-        reader = _get_solar_reader()
-        import aiosqlite
-        db_path = reader._db_path
-
-        async with aiosqlite.connect(db_path) as db:
-            db.row_factory = aiosqlite.Row
+        async with _get_db() as db:
             async with db.execute(
                 """SELECT SUM(ppg.actual_kwh) as total
                    FROM prediction_panel_groups ppg
@@ -949,12 +960,9 @@ class PriceDataView(HomeAssistantView):
         }
 
         try:
-            import aiosqlite
-            reader = _get_solar_reader()
             cutoff_date = (date.today() - timedelta(days=days)).isoformat()
 
-            async with aiosqlite.connect(reader._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with _get_db() as db:
                 async with db.execute("""
                     SELECT timestamp, hour, price_net, total_price,
                            date(timestamp, '+1 hour') as price_date
@@ -1030,10 +1038,7 @@ class SummaryDataView(HomeAssistantView):
             _LOGGER.error("Error loading daily summaries from database: %s", e)
 
         try:
-            import aiosqlite
-            db_path = _get_solar_reader()._db_path
-            async with aiosqlite.connect(db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with _get_db() as db:
                 async with db.execute("""
                     SELECT price_net, total_price
                     FROM GPM_price_history
@@ -1147,13 +1152,10 @@ class RealtimeDataView(HomeAssistantView):
             _LOGGER.error("Error loading realtime prediction from database: %s", e)
 
         try:
-            import aiosqlite
-            db_path = _get_solar_reader()._db_path
             now = datetime.now()
             today_str = now.strftime("%Y-%m-%d")
             current_hour = now.hour
-            async with aiosqlite.connect(db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with _get_db() as db:
                 async with db.execute("""
                     SELECT price_net, hour
                     FROM GPM_price_history
@@ -1331,6 +1333,14 @@ class EnergyFlowView(HomeAssistantView):
         if not battery_configured:
             solar_to_battery = None
 
+        if battery_configured and (battery_power is None or battery_power == 0):
+            charge_power = (solar_to_battery or 0) + (grid_to_battery or 0)
+            discharge_power = battery_to_house or 0
+            if charge_power > 0:
+                battery_power = charge_power
+            elif discharge_power > 0:
+                battery_power = -discharge_power
+
         solar_yield_daily_db = await _get_today_yield_from_db()
         solar_yield_daily = solar_yield_daily_db if solar_yield_daily_db is not None else sfml_reader.get_live_yield()
 
@@ -1397,13 +1407,10 @@ class EnergyFlowView(HomeAssistantView):
     async def _get_current_price(self) -> dict[str, Any] | None:
         """Read current electricity price from GPM_price_history DB. @zara"""
         try:
-            import aiosqlite
-            db_path = _get_solar_reader()._db_path
             today_str = date.today().isoformat()
             current_hour = datetime.now().hour
 
-            async with aiosqlite.connect(db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with _get_db() as db:
                 async with db.execute("""
                     SELECT price_net, total_price, hour
                     FROM GPM_price_history
@@ -1623,10 +1630,7 @@ class StatisticsView(HomeAssistantView):
             _LOGGER.debug("Could not load yield from SFML: %s", e)
 
         try:
-            import aiosqlite
-            db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
-            async with aiosqlite.connect(str(db_path)) as conn:
-                conn.row_factory = aiosqlite.Row
+            async with _get_db() as conn:
                 async with conn.execute(
                     "SELECT peak_power_w, peak_power_time, peak_record_w, peak_record_date, peak_record_time, production_time_today FROM production_time_state WHERE id = 1"
                 ) as cursor:
@@ -2354,20 +2358,7 @@ class PowerSourcesHistoryView(HomeAssistantView):
     async def _get_power_sources_collector_data(self, hours: int) -> list[dict]:
         """Get data from stats_power_sources DB table. @zara"""
         try:
-            from ..storage.db_connection_manager import get_manager
-            import aiosqlite
-
-            manager = get_manager()
-            if manager and manager.is_connected:
-                conn = await manager.get_connection()
-            else:
-                db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
-                if not db_path.exists():
-                    return []
-                conn = await aiosqlite.connect(str(db_path))
-
-            try:
-                conn.row_factory = aiosqlite.Row
+            async with _get_db() as conn:
                 cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
                 async with conn.execute("""
@@ -2398,9 +2389,6 @@ class PowerSourcesHistoryView(HomeAssistantView):
                 ]
                 _LOGGER.debug("Power sources from DB: %d points", len(result))
                 return result
-            finally:
-                if not manager or not manager.is_connected:
-                    await conn.close()
 
         except Exception as e:
             _LOGGER.error("Error reading power sources from DB: %s", e)
@@ -2632,38 +2620,33 @@ class EnergySourcesDailyStatsView(HomeAssistantView):
             hourly_grid = {}
             daily_prices = {}
             try:
-                import aiosqlite
-                db_path = Path(HASS.config.path()) / "solar_forecast_ml" / "solar_forecast.db"
-                if db_path.exists():
-                    async with aiosqlite.connect(str(db_path)) as conn:
-                        conn.row_factory = aiosqlite.Row
-                        cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+                cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+                async with _get_db() as conn:
+                    # Hourly consumption + grid import profile
+                    async with conn.execute(
+                        """SELECT date, hour,
+                                  COALESCE(grid_to_house_kwh, 0) + COALESCE(solar_to_house_kwh, 0)
+                                  + COALESCE(battery_to_house_kwh, 0) AS consumption_kwh,
+                                  COALESCE(grid_to_house_kwh, 0) + COALESCE(grid_to_battery_kwh, 0) AS grid_import_kwh
+                           FROM stats_hourly_billing
+                           WHERE date >= ?
+                           ORDER BY date, hour""",
+                        (cutoff_date,)
+                    ) as cursor:
+                        for row in await cursor.fetchall():
+                            d = row["date"]
+                            h = row["hour"]
+                            hourly_profile.setdefault(d, {})[h] = round(row["consumption_kwh"], 4)
+                            hourly_grid.setdefault(d, {})[h] = round(row["grid_import_kwh"], 4)
 
-                        # Hourly consumption + grid import profile
-                        async with conn.execute(
-                            """SELECT date, hour,
-                                      COALESCE(grid_to_house_kwh, 0) + COALESCE(solar_to_house_kwh, 0)
-                                      + COALESCE(battery_to_house_kwh, 0) AS consumption_kwh,
-                                      COALESCE(grid_to_house_kwh, 0) + COALESCE(grid_to_battery_kwh, 0) AS grid_import_kwh
-                               FROM stats_hourly_billing
-                               WHERE date >= ?
-                               ORDER BY date, hour""",
-                            (cutoff_date,)
-                        ) as cursor:
-                            for row in await cursor.fetchall():
-                                d = row["date"]
-                                h = row["hour"]
-                                hourly_profile.setdefault(d, {})[h] = round(row["consumption_kwh"], 4)
-                                hourly_grid.setdefault(d, {})[h] = round(row["grid_import_kwh"], 4)
-
-                        # Daily average prices from GPM
-                        async with conn.execute(
-                            """SELECT date, average_total FROM GPM_daily_averages
-                               WHERE date >= ? ORDER BY date""",
-                            (cutoff_date,)
-                        ) as cursor:
-                            for row in await cursor.fetchall():
-                                daily_prices[row["date"]] = round(row["average_total"], 2)
+                    # Daily average prices from GPM
+                    async with conn.execute(
+                        """SELECT date, average_total FROM GPM_daily_averages
+                           WHERE date >= ? ORDER BY date""",
+                        (cutoff_date,)
+                    ) as cursor:
+                        for row in await cursor.fetchall():
+                            daily_prices[row["date"]] = round(row["average_total"], 2)
             except Exception as e:
                 _LOGGER.debug("Could not load hourly/price data: %s", e)
 
@@ -3523,22 +3506,14 @@ class ShadowAnalyticsView(HomeAssistantView):
     async def get(self, request: web.Request) -> web.Response:
         """Return shadow analytics data as JSON. @zara"""
         try:
-            import aiosqlite
-
             if HASS is None:
                 return web.json_response({"success": False, "error": "HASS not initialized"}, status=500)
-
-            db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
-            if not db_path.exists():
-                return web.json_response({"success": False, "error": "DB not found"}, status=404)
 
             days = int(request.query.get("days", "30"))
             days = min(max(days, 7), 365)
             cutoff = (date.today() - timedelta(days=days)).isoformat()
 
-            async with aiosqlite.connect(str(db_path)) as conn:
-                conn.row_factory = aiosqlite.Row
-
+            async with _get_db() as conn:
                 # --- Heatmap: shadow_percent per date/hour ---
                 heatmap: dict[str, dict[int, dict]] = {}
                 async with conn.execute(
@@ -3689,18 +3664,10 @@ class AIStatusView(HomeAssistantView):
     async def get(self, request: web.Request) -> web.Response:
         """Return AI model status as JSON. @zara"""
         try:
-            import aiosqlite
-
             if HASS is None:
                 return web.json_response({"success": False, "error": "HASS not initialized"}, status=500)
 
-            db_path = Path(HASS.config.path()) / SOLAR_FORECAST_DB
-            if not db_path.exists():
-                return web.json_response({"success": False, "error": "DB not found"}, status=404)
-
-            async with aiosqlite.connect(str(db_path)) as conn:
-                conn.row_factory = aiosqlite.Row
-
+            async with _get_db() as conn:
                 # Active model info
                 model_info = {}
                 async with conn.execute(

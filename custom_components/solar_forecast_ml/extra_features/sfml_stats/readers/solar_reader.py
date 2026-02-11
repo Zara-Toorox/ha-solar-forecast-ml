@@ -420,12 +420,11 @@ class SolarDataReader:
 
     async def async_get_weekly_stats(self, year: int, week: int) -> dict[str, Any]:
         """Calculate statistics for a specific calendar week. @zara"""
-        all_summaries = await self.async_get_daily_summaries()
-
-        week_summaries = [
-            s for s in all_summaries
-            if s.date.isocalendar()[0] == year and s.date.isocalendar()[1] == week
-        ]
+        start_date = date.fromisocalendar(year, week, 1)
+        end_date = date.fromisocalendar(year, week, 7)
+        week_summaries = await self.async_get_daily_summaries(
+            start_date=start_date, end_date=end_date
+        )
 
         if not week_summaries:
             return {"week": week, "year": year, "data_available": False}
@@ -468,12 +467,13 @@ class SolarDataReader:
 
     async def async_get_monthly_stats(self, year: int, month: int) -> dict[str, Any]:
         """Calculate statistics for a specific month. @zara"""
-        all_summaries = await self.async_get_daily_summaries()
-
-        month_summaries = [
-            s for s in all_summaries
-            if s.date.year == year and s.date.month == month
-        ]
+        import calendar as cal_mod
+        start_date = date(year, month, 1)
+        last_day = cal_mod.monthrange(year, month)[1]
+        end_date = date(year, month, last_day)
+        month_summaries = await self.async_get_daily_summaries(
+            start_date=start_date, end_date=end_date
+        )
 
         if not month_summaries:
             return {"month": month, "year": year, "data_available": False}

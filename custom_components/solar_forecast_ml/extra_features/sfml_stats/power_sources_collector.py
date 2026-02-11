@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 import aiosqlite
 
@@ -66,6 +67,18 @@ class PowerSourcesCollector:
         self._task: asyncio.Task | None = None
         self._running = False
         self._sfml_reader = SFMLDataReader(hass)
+
+    @asynccontextmanager
+    async def _get_db(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Get DB connection via manager with direct fallback. @zara"""
+        from .storage.db_connection_manager import get_manager
+        manager = get_manager()
+        if manager is not None and manager.is_connected:
+            yield await manager.get_connection()
+            return
+        async with aiosqlite.connect(str(self._db_path)) as conn:
+            conn.row_factory = aiosqlite.Row
+            yield conn
 
     @property
     def is_db_available(self) -> bool:
@@ -155,7 +168,7 @@ class PowerSourcesCollector:
             _LOGGER.debug("Calculated smartmeter_export: %.1f W", smartmeter_export)
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
+            async with self._get_db() as db:
                 await db.execute("""
                     INSERT OR REPLACE INTO stats_power_sources (
                         timestamp, date, hour,
@@ -228,8 +241,7 @@ class PowerSourcesCollector:
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT timestamp, date, hour,
                            solar_power_w, house_consumption_w,
@@ -306,7 +318,7 @@ class PowerSourcesCollector:
         solar_power = data_point.get("solar_power") or 0
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
+            async with self._get_db() as db:
                 await self._ensure_db_columns(db)
 
                 async with db.execute(
@@ -421,8 +433,7 @@ class PowerSourcesCollector:
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT date, solar_yield_kwh, solar_to_house_kwh, solar_to_battery_kwh,
                            battery_to_house_kwh, battery_charge_solar_kwh, battery_charge_grid_kwh,

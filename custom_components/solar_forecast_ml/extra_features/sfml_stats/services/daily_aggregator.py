@@ -123,19 +123,16 @@ class DailyEnergyAggregator:
         sfml_reader = SFMLDataReader(self._hass)
         daily_yield = await sfml_reader.get_daily_yield_from_hourly(today_str)
 
+        yield_groups: dict[str, float] = {}
         if daily_yield:
             solar_yield_from_sfml = daily_yield.get("yield_total_kwh", 0.0)
-            yield_gruppe1 = daily_yield.get("yield_gruppe1_kwh", 0.0)
-            yield_gruppe2 = daily_yield.get("yield_gruppe2_kwh", 0.0)
+            yield_groups = daily_yield.get("groups", {})
             _LOGGER.debug(
-                "Solar yield from SFML panel groups: %.4f kWh "
-                "(Gruppe1: %.4f, Gruppe2: %.4f)",
-                solar_yield_from_sfml, yield_gruppe1, yield_gruppe2
+                "Solar yield from SFML panel groups: %.4f kWh (%s)",
+                solar_yield_from_sfml, yield_groups
             )
         else:
             solar_yield_from_sfml = sfml_reader.get_live_yield()
-            yield_gruppe1 = None
-            yield_gruppe2 = None
             _LOGGER.debug(
                 "Solar yield from live sensor fallback: %s kWh",
                 solar_yield_from_sfml
@@ -143,8 +140,6 @@ class DailyEnergyAggregator:
 
         daily_data = {
             "solar_yield_kwh": energy_value(solar_yield_from_sfml),
-            "yield_gruppe1_kwh": energy_value(yield_gruppe1),
-            "yield_gruppe2_kwh": energy_value(yield_gruppe2),
             "grid_import_kwh": energy_value(self._get_sensor_value(
                 config.get(CONF_SENSOR_GRID_IMPORT_DAILY)
             )),
@@ -161,6 +156,11 @@ class DailyEnergyAggregator:
                 config.get(CONF_SENSOR_PRICE_TOTAL)
             ),
         }
+
+        if yield_groups:
+            daily_data["yield_groups"] = {
+                name: energy_value(kwh) for name, kwh in yield_groups.items()
+            }
 
         solar_yield = daily_data["solar_yield_kwh"] or 0
         battery_charge_solar = daily_data["battery_charge_solar_kwh"] or 0

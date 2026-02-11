@@ -11,9 +11,10 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 import aiosqlite
 
@@ -37,6 +38,18 @@ class SFMLDataReader:
             self._db_path = Path("/config/solar_forecast_ml/solar_forecast.db")
             _LOGGER.warning("SFMLDataReader initialized with None hass - using default path")
         self._sfml_config: dict[str, Any] | None = None
+
+    @asynccontextmanager
+    async def _get_db(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Get DB connection via manager with direct fallback. @zara"""
+        from .storage.db_connection_manager import get_manager
+        manager = get_manager()
+        if manager is not None and manager.is_connected:
+            yield await manager.get_connection()
+            return
+        async with aiosqlite.connect(str(self._db_path)) as conn:
+            conn.row_factory = aiosqlite.Row
+            yield conn
 
     @property
     def is_available(self) -> bool:
@@ -112,8 +125,7 @@ class SFMLDataReader:
             return {}
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT yield_today_kwh, yield_today_sensor,
                            peak_today_power_w, peak_today_at,
@@ -143,8 +155,7 @@ class SFMLDataReader:
             return {}
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT value, time, date FROM yield_cache WHERE id = 1
                 """) as cursor:
@@ -169,8 +180,7 @@ class SFMLDataReader:
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
 
                 async with db.execute("""
                     SELECT cache_date, group_name,
@@ -216,8 +226,7 @@ class SFMLDataReader:
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT date, predicted_total_kwh, actual_total_kwh,
                            accuracy_percent, peak_power_w, peak_hour,
@@ -252,8 +261,7 @@ class SFMLDataReader:
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT cache_date, hour, group_name,
                            prediction_kwh, actual_kwh
@@ -300,8 +308,7 @@ class SFMLDataReader:
             date = datetime.now().strftime("%Y-%m-%d")
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT target_hour, prediction_kwh, actual_kwh,
                            accuracy_percent, confidence
@@ -338,13 +345,13 @@ class SFMLDataReader:
         result = []
         for key in sorted(by_hour):
             groups = by_hour[key]
-            result.append({
+            entry = {
                 "date": dates_by_hour[key],
                 "hour": key[1],
                 "yield_total_kwh": sum(groups.values()),
-                "yield_gruppe1_kwh": groups.get("Gruppe 1", 0.0),
-                "yield_gruppe2_kwh": groups.get("Gruppe 2", 0.0),
-            })
+                "groups": groups,
+            }
+            result.append(entry)
         return result
 
     async def get_hourly_yield(
@@ -360,8 +367,7 @@ class SFMLDataReader:
             date = datetime.now().strftime("%Y-%m-%d")
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
 
                 query = """
                     SELECT hp.target_date, hp.target_hour,
@@ -394,8 +400,7 @@ class SFMLDataReader:
             date = datetime.now().strftime("%Y-%m-%d")
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT ppg.group_name,
                            SUM(ppg.actual_kwh) as total
@@ -413,8 +418,7 @@ class SFMLDataReader:
             return {
                 "date": date,
                 "yield_total_kwh": sum(groups.values()),
-                "yield_gruppe1_kwh": groups.get("Gruppe 1", 0.0),
-                "yield_gruppe2_kwh": groups.get("Gruppe 2", 0.0),
+                "groups": groups,
             }
         except Exception as e:
             _LOGGER.error("Error reading daily yield from prediction_panel_groups: %s", e)
@@ -431,8 +435,7 @@ class SFMLDataReader:
             return []
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT hp.target_date, hp.target_hour,
                            ppg.group_name, ppg.actual_kwh
@@ -480,8 +483,7 @@ class SFMLDataReader:
             return {}
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT group_name, last_value, last_updated
                     FROM panel_group_sensor_state
@@ -505,8 +507,7 @@ class SFMLDataReader:
             return {}
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT forecast_type, forecast_date, prediction_kwh, locked
                     FROM daily_forecasts
@@ -535,8 +536,7 @@ class SFMLDataReader:
             return {}
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
 
                 async with db.execute("""
                     SELECT * FROM daily_statistics WHERE id = 1

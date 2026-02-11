@@ -14,9 +14,10 @@ import calendar
 import csv
 import io
 import logging
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 import aiofiles
 import aiosqlite
@@ -57,6 +58,18 @@ class BillingCalculator:
         self._billing_cache: dict[str, Any] | None = None
         self._cache_timestamp: datetime | None = None
         self._cache_ttl_seconds = BILLING_CACHE_TTL_SECONDS
+
+    @asynccontextmanager
+    async def _get_db(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Get DB connection via manager with direct fallback. @zara"""
+        from ..storage.db_connection_manager import get_manager
+        manager = get_manager()
+        if manager is not None and manager.is_connected:
+            yield await manager.get_connection()
+            return
+        async with aiosqlite.connect(str(self._db_path)) as conn:
+            conn.row_factory = aiosqlite.Row
+            yield conn
 
     @property
     def is_db_available(self) -> bool:
@@ -136,9 +149,7 @@ class BillingCalculator:
         billing_start_str = billing_start.isoformat()
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
-
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT
                         COALESCE(SUM(solar_yield_kwh), 0) as solar_total_kwh,
@@ -178,9 +189,7 @@ class BillingCalculator:
         billing_start_str = billing_start.isoformat()
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
-
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT
                         COALESCE(SUM(smartmeter_import_kwh), 0) as smartmeter_import_kwh,
@@ -209,8 +218,7 @@ class BillingCalculator:
             return {}
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT
                         COALESCE(SUM(consumer_heatpump_kwh), 0) as consumer_heatpump_kwh,
@@ -424,9 +432,7 @@ class BillingCalculator:
         hourly_self_by_date: dict[str, float] = defaultdict(float)
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
-
+            async with self._get_db() as db:
                 async with db.execute("""
                     SELECT
                         hb.date,
@@ -614,9 +620,7 @@ class BillingCalculator:
         no_price = 0
 
         try:
-            async with aiosqlite.connect(self._db_path) as db:
-                db.row_factory = aiosqlite.Row
-
+            async with self._get_db() as db:
                 for hk in all_hours:
                     date_str, hour_str = hk.split("|")
                     hour = int(hour_str)

@@ -580,12 +580,12 @@
                         <rect x="33" y="65" width="24" height="10" fill="#0a0a1a" stroke="#8b5cf6" stroke-width="0.5"/>
 
                         <!-- Status display on transformer -->
-                        <text x="45" y="73" :fill="energyFlow.flows.grid_to_house > 0 ? '#ff2e97' : (energyFlow.flows.house_to_grid > 0 ? '#00ffff' : '#8b5cf6')" font-size="7" font-weight="bold" text-anchor="middle">
-                            {{ energyFlow.flows.grid_to_house > 0 ? 'IMPORT' : (energyFlow.flows.house_to_grid > 0 ? 'EXPORT' : 'IDLE') }}
+                        <text x="45" y="73" :fill="(energyFlow.flows.grid_to_house > 0 || energyFlow.flows.grid_to_battery > 0) ? '#ff2e97' : (energyFlow.flows.house_to_grid > 0 ? '#00ffff' : '#8b5cf6')" font-size="7" font-weight="bold" text-anchor="middle">
+                            {{ (energyFlow.flows.grid_to_house > 0 || energyFlow.flows.grid_to_battery > 0) ? 'IMPORT' : (energyFlow.flows.house_to_grid > 0 ? 'EXPORT' : 'IDLE') }}
                         </text>
 
                         <!-- Indicator LEDs on transformer -->
-                        <circle cx="35" cy="80" r="2.5" :fill="energyFlow.flows.grid_to_house > 0 ? '#ff2e97' : '#3a2a5a'" filter="url(#glowPurple)">
+                        <circle cx="35" cy="80" r="2.5" :fill="(energyFlow.flows.grid_to_house > 0 || energyFlow.flows.grid_to_battery > 0) ? '#ff2e97' : '#3a2a5a'" filter="url(#glowPurple)">
                             <animate attributeName="opacity" values="0.5;1;0.5" dur="0.8s" repeatCount="indefinite"/>
                         </circle>
                         <circle cx="45" cy="80" r="2.5" fill="#22c55e" opacity="0.8">
@@ -603,7 +603,7 @@
                         </g>
 
                         <!-- Electric sparks when active -->
-                        <g v-if="energyFlow.flows.grid_to_house > 0 || energyFlow.flows.house_to_grid > 0">
+                        <g v-if="energyFlow.flows.grid_to_house > 0 || energyFlow.flows.grid_to_battery > 0 || energyFlow.flows.house_to_grid > 0">
                             <circle cx="25" cy="-10" r="1.5" fill="#00ffff">
                                 <animate attributeName="opacity" values="0;1;0" dur="0.3s" repeatCount="indefinite"/>
                                 <animate attributeName="r" values="1;2.5;1" dur="0.3s" repeatCount="indefinite"/>
@@ -3890,14 +3890,14 @@
                 });
 
                 function getGridPower() {
-                    const imp = energyFlow.flows.grid_to_house || 0;
+                    const imp = (energyFlow.flows.grid_to_house || 0) + (energyFlow.flows.grid_to_battery || 0);
                     const exp = energyFlow.flows.house_to_grid || 0;
                     const net = imp - exp;
                     return Math.abs(net).toFixed(0);
                 }
 
                 function getGridLabel() {
-                    const imp = energyFlow.flows.grid_to_house || 0;
+                    const imp = (energyFlow.flows.grid_to_house || 0) + (energyFlow.flows.grid_to_battery || 0);
                     const exp = energyFlow.flows.house_to_grid || 0;
                     if (exp > imp) return 'Einspeisung';
                     if (imp > 0) return 'Bezug';

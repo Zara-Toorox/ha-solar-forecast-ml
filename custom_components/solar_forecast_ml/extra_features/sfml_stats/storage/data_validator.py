@@ -109,6 +109,7 @@ class DataValidator:
         grid_available = False
         if solar_db_exists:
             try:
+                # Direct connection intentional: runs before DatabaseConnectionManager is created
                 import aiosqlite
                 async with aiosqlite.connect(str(solar_db_path)) as db:
                     async with db.execute(

@@ -23,6 +23,7 @@ from .const import (
     DOMAIN,
     NAME,
     VERSION,
+    SOLAR_FORECAST_DB,
     CONF_SENSOR_SMARTMETER_IMPORT_KWH,
     CONF_WEATHER_ENTITY,
     DAILY_AGGREGATION_HOUR,
@@ -315,7 +316,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         try:
             from .readers.forecast_comparison_reader import ForecastComparisonReader
-            reader = ForecastComparisonReader(config_path)
+            reader = ForecastComparisonReader(config_path / SOLAR_FORECAST_DB)
 
             needs_historical = False
 

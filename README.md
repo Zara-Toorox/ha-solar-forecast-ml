@@ -1,13 +1,14 @@
-# Solar Forecast ML V16.4.0 "Sarpeidon" — Full AI & DB-Version
+# Solar Forecast ML V16.4.2 "Sarpeidon" — Full AI & DB-Version
 
 ### The 1st Hybrid-AI Solar Forecast for Home Assistant — 100% Local, 100% Private
 
-[![Version](https://img.shields.io/badge/version-16.4.0-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
+[![Version](https://img.shields.io/badge/version-16.4.2-blue.svg)](https://github.com/Zara-Toorox/ha-solar-forecast-ml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 [![License](https://img.shields.io/badge/license-Proprietary%20Non--Commercial-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM%20%7C%20RPi-lightgrey.svg)]()
 
 Fuel my late-night ideas with a coffee? I'd really appreciate it!
+
 <a href='https://ko-fi.com/Q5Q41NMZZY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Buy Me a Coffee' /></a>
 
 [Website & Documentation](https://zara-toorox.github.io/index.html)

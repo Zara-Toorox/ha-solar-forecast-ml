@@ -11,10 +11,11 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 import aiosqlite
 
@@ -97,6 +98,18 @@ class ForecastComparisonReader:
         self._ext1_name = external_1_name
         self._ext2_name = external_2_name
 
+    @asynccontextmanager
+    async def _get_db(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Get DB connection via manager with direct fallback. @zara"""
+        from ..storage.db_connection_manager import get_manager
+        manager = get_manager()
+        if manager is not None and manager.is_connected:
+            yield await manager.get_connection()
+            return
+        async with aiosqlite.connect(str(self._db_path)) as conn:
+            conn.row_factory = aiosqlite.Row
+            yield conn
+
     @property
     def is_available(self) -> bool:
         """Check if forecast comparison data is available. @zara"""
@@ -124,9 +137,7 @@ class ForecastComparisonReader:
         db_rows: dict[str, dict[str, Any]] = {}
 
         try:
-            async with aiosqlite.connect(str(self._db_path)) as conn:
-                conn.row_factory = aiosqlite.Row
-
+            async with self._get_db() as conn:
                 # Main forecast comparison data
                 async with conn.execute(
                     """SELECT date, actual_kwh, sfml_forecast_kwh,

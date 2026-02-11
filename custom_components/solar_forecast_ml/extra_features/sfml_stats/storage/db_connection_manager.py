@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncIterator
 
 import aiosqlite
 
@@ -66,6 +67,11 @@ class DatabaseConnectionManager:
                 if cls._instance is not None:
                     await cls._instance.close()
                     cls._instance = None
+
+    @property
+    def db_path(self) -> Path:
+        """Return the database file path. @zara"""
+        return self._db_path
 
     @property
     def is_available(self) -> bool:
@@ -126,3 +132,62 @@ class DatabaseConnectionManager:
         if not self.is_connected:
             raise RuntimeError("Database not connected")
         return self._connection
+
+    async def _ensure_connected(self) -> bool:
+        """Verify connection is alive, reconnect if needed. @zara"""
+        if self._connection is not None:
+            try:
+                await self._connection.execute("SELECT 1")
+                return True
+            except Exception:
+                _LOGGER.warning("Database connection lost, attempting reconnect")
+                self._connection = None
+                self._is_connected = False
+
+        return await self.connect()
+
+    async def execute_read(self, query: str, params: tuple | list | None = None) -> list[aiosqlite.Row]:
+        """Execute a read query with auto-reconnect. @zara"""
+        if params is None:
+            params = []
+
+        for attempt in range(2):
+            if not await self._ensure_connected():
+                raise RuntimeError("Database not available")
+            try:
+                async with self._connection.execute(query, params) as cursor:
+                    return await cursor.fetchall()
+            except aiosqlite.OperationalError as err:
+                if attempt == 0 and "database is locked" not in str(err):
+                    _LOGGER.warning("Read query failed (attempt 1), retrying: %s", err)
+                    self._connection = None
+                    self._is_connected = False
+                    continue
+                raise
+
+    async def execute_write(self, query: str, params: tuple | list | None = None) -> None:
+        """Execute a write query with auto-commit and auto-reconnect. @zara"""
+        if params is None:
+            params = []
+
+        for attempt in range(2):
+            if not await self._ensure_connected():
+                raise RuntimeError("Database not available")
+            try:
+                await self._connection.execute(query, params)
+                await self._connection.commit()
+                return
+            except aiosqlite.OperationalError as err:
+                if attempt == 0 and "database is locked" not in str(err):
+                    _LOGGER.warning("Write query failed (attempt 1), retrying: %s", err)
+                    self._connection = None
+                    self._is_connected = False
+                    continue
+                raise
+
+    @asynccontextmanager
+    async def get_connection_ctx(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Context manager for multi-statement operations. @zara"""
+        if not await self._ensure_connected():
+            raise RuntimeError("Database not available")
+        yield self._connection

@@ -767,9 +767,10 @@ class SolarForecastMLCoordinator(DataUpdateCoordinator):
                         # Save today's peak to production_time_state @zara
                         await self.data_manager._db_manager.execute(
                             """UPDATE production_time_state
-                               SET peak_power_w = ?, peak_power_time = ?, last_updated = ?
+                               SET peak_power_w = ?, peak_power_time = ?,
+                                   date = ?, last_updated = ?
                                WHERE id = 1""",
-                            (power_w, time_str, now.isoformat())
+                            (power_w, time_str, today, now.isoformat())
                         )
 
                         # Check and update all-time record @zara

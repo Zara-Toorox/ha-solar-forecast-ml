@@ -16,7 +16,7 @@ from homeassistant.const import Platform
 # ============================================================================
 DOMAIN = "grid_price_monitor"
 NAME = "Grid Price Monitor"
-VERSION = "8.0.0"
+VERSION = "6.4.0"
 
 # ============================================================================
 # PLATFORMS
